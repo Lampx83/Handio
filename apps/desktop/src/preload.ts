@@ -4,6 +4,16 @@ import { contextBridge, ipcRenderer } from "electron";
 contextBridge.exposeInMainWorld("neu", {
   platform: process.platform,
   call: (profile: string, method: string, args: unknown[]) => ipcRenderer.invoke("neu:call", profile, method, args),
+  auth: {
+    status: () => ipcRenderer.invoke("neu:auth", "status"),
+    login: () => ipcRenderer.invoke("neu:auth", "login"),
+    logout: () => ipcRenderer.invoke("neu:auth", "logout"),
+    onChange: (cb: (s: unknown) => void) => {
+      const h = (_e: unknown, s: unknown) => cb(s);
+      ipcRenderer.on("neu:auth-changed", h);
+      return () => ipcRenderer.removeListener("neu:auth-changed", h);
+    },
+  },
   onEvent: (cb: (profile: string, e: unknown) => void) => {
     const h = (_e: unknown, profile: string, ev: unknown) => cb(profile, ev);
     ipcRenderer.on("neu:event", h);

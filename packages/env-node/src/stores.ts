@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Settings, SettingsStore, TrustStore } from "@neu/agent-core";
+import { ID_RE, type ChatMeta, type ChatStore, type SavedChat, type Settings, type SettingsStore, type TrustStore } from "@neu/agent-core";
 
 export interface KeyCodec {
   encrypt(plain: string): string;
@@ -59,5 +59,57 @@ export class JsonTrustStore implements TrustStore {
     if (trusted) list.push(root);
     await fs.mkdir(path.dirname(this.file), { recursive: true });
     await fs.writeFile(this.file, JSON.stringify(list, null, 2), { mode: 0o600 });
+  }
+}
+
+/** Lịch sử trò chuyện ở thư mục dữ liệu của ứng dụng (KHÔNG ghi vào thư mục dự án của người dùng): <dir>/<mã dự án>/<mã cuộc>.json. */
+export class JsonChatStore implements ChatStore {
+  constructor(private dir: string, private maxPerProject = 100) {}
+  private folder(projectId: string): string {
+    if (!ID_RE.test(projectId)) throw new Error("Mã dự án không hợp lệ");
+    return path.join(this.dir, projectId);
+  }
+  private file(projectId: string, id: string): string {
+    if (!ID_RE.test(id)) throw new Error("Mã cuộc trò chuyện không hợp lệ");
+    return path.join(this.folder(projectId), id + ".json");
+  }
+  async list(projectId: string): Promise<ChatMeta[]> {
+    let names: string[];
+    try {
+      names = await fs.readdir(this.folder(projectId));
+    } catch {
+      return [];
+    }
+    const out: ChatMeta[] = [];
+    for (const n of names) {
+      if (!n.endsWith(".json")) continue;
+      try {
+        const c = JSON.parse(await fs.readFile(path.join(this.folder(projectId), n), "utf8")) as SavedChat;
+        out.push({ id: c.id, title: String(c.title ?? ""), updated: Number(c.updated) || 0, turns: Number(c.turns) || 0 });
+      } catch {
+        /* tệp hỏng: bỏ qua */
+      }
+    }
+    return out;
+  }
+  async load(projectId: string, id: string): Promise<SavedChat | null> {
+    try {
+      const c = JSON.parse(await fs.readFile(this.file(projectId, id), "utf8")) as SavedChat;
+      return c && c.id === id && Array.isArray(c.messages) ? c : null;
+    } catch {
+      return null;
+    }
+  }
+  async save(projectId: string, chat: SavedChat): Promise<void> {
+    const f = this.file(projectId, chat.id);
+    await fs.mkdir(path.dirname(f), { recursive: true, mode: 0o700 });
+    const tmp = f + ".tmp";
+    await fs.writeFile(tmp, JSON.stringify(chat), { mode: 0o600 });
+    await fs.rename(tmp, f);
+    const all = (await this.list(projectId)).sort((a, b) => b.updated - a.updated);
+    for (const old of all.slice(this.maxPerProject)) await this.remove(projectId, old.id);
+  }
+  async remove(projectId: string, id: string): Promise<void> {
+    await fs.rm(this.file(projectId, id), { force: true });
   }
 }

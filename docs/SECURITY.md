@@ -36,15 +36,33 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 - **Electron Fuses** tắt `RunAsNode`, `NODE_OPTIONS`, `--inspect`; chỉ nạp ứng dụng từ **asar có kiểm tra toàn vẹn**; mã hoá cookie.
 - Bản phát hành **không chứa mã kiểm thử/giả lập** và **không chứa khoá API**.
 - Key người dùng nhập được lưu **mã hoá bằng kho khoá hệ điều hành** (`safeStorage`: Keychain/DPAPI); nếu không có kho khoá thì **không** lưu ra đĩa.
+- **Dự án nhiều thư mục:** chỉ chọn thư mục qua hộp thoại của hệ điều hành (giao diện không tự đặt được đường dẫn qua IPC; mã dự án/cuộc trò chuyện chỉ nhận dạng `[a-z0-9-]`); **từ chối** gốc ổ đĩa, thư mục cá nhân, thư mục hệ thống và nơi chứa khoá (`~/.ssh`, `~/.aws`, `~/Library`…). “Bỏ dự án” chỉ xoá khỏi danh sách, không xoá tệp.
+- **Lịch sử trò chuyện** lưu ở thư mục dữ liệu ứng dụng (quyền 600), không ghi vào thư mục dự án (không lẫn vào kho git của người dùng); kết quả công cụ dài bị cắt khi lưu.
+- **Tab Design:** bản xem trước là iframe `sandbox=""` (không script, không cùng nguồn) trong trang có CSP không cho ra mạng. Xuất PDF/PNG chạy trong **cửa sổ ẩn riêng**: JavaScript của trang tắt, phiên riêng trong bộ nhớ, mọi yêu cầu mạng bị huỷ, chỉ đọc kích thước nội dung; tệp xuất ra tự đổi tên nếu trùng, không ghi đè.
+- **Tab Work (xem tài liệu, trộn thư, dữ liệu cá nhân):** khung xem tài liệu nhận chữ trích xuất và chỉ đưa vào bằng `textContent` (không HTML); IPC `docView`/`procedure*` chỉ nhận chuỗi có giới hạn (tên quy trình là slug), lõi tự `resolveSafe` và chặn tệp nhạy cảm. `merge_documents`, `redact_pii`, `xlsx_pivot`, `docx_replace` (suggest) đi qua cùng cơ chế xin phép có bản mô tả, luôn ghi tệp MỚI (không ghi đè; trộn thư tối đa 200 bản, tên tệp làm sạch, `/undo` cả lô). Quét dữ liệu cá nhân chạy cục bộ, chỉ trả số lượng, vị trí và giá trị đã che; nhận diện theo mẫu/từ khoá nên có thể sót.
+- **Thay đổi / Quay lại / Chạy thử:** IPC `changeDiff`, `changesRevert`, `rewind` chỉ nhận chuỗi/số có giới hạn; đường dẫn từ giao diện chỉ để *tra cứu* trong nhật ký thay đổi của phiên, không bao giờ dùng làm đường dẫn thật. Hoàn tác tự kiểm tra lại từng đường dẫn bằng `resolveSafe` (trong thư mục dự án, theo cả liên kết tượng trưng), không đụng tới tệp nhạy cảm (`.env`, khoá…) và không xoá thư mục. Theo dõi thay đổi do lệnh bash chỉ chụp tệp nhỏ trong dự án (bỏ `node_modules`, `.git`, tệp nhạy cảm, liên kết ra ngoài). `runSuggestions` chỉ đọc; nút “Chạy” gửi lời nhắc cho agent nên lệnh vẫn đi qua hệ thống xin quyền (tên tệp/script lạ không được ghép vào lệnh).
 - Chỉ mở liên kết `https://`; nút “Mở bằng ứng dụng” từ chối tệp thực thi/kịch bản (`.exe .app .sh .js .py .lnk .jar`…).
 - Tệp Office được kiểm tra **chống zip bomb** trước khi giải nén; PDF mở với chế độ không chạy mã.
 
 **Kết nối mạng**
 - Địa chỉ API **bắt buộc HTTPS** (trừ máy cục bộ); từ chối địa chỉ chứa tài khoản/mật khẩu; **không theo chuyển hướng**; báo lỗi rõ khi máy chủ trả về trang web thay vì mô hình.
 - Key tích hợp (nếu người đóng gói chọn nhúng) chỉ được gửi tới đúng máy chủ đã khai báo.
-- Không có telemetry, không báo cáo sự cố, không tự cập nhật.
+- **Chẩn đoán không chứa nội dung (mặc định BẬT, tắt được; chỉ gửi khi ứng dụng được cấu hình điểm nhận — chưa cấu hình thì không gửi gì).** Để quản trị viên tự phát hiện lỗi và cải tiến, ứng dụng gửi số liệu kỹ thuật: loại sự kiện/lỗi, mã HTTP, tên công cụ (danh sách cố định) + thành công/thất bại + nhóm thời gian, số lần chạm giới hạn bước/lặp/tràn ngữ cảnh, số lần quyền được/bị từ chối, thời lượng lượt + số token, phiên bản, nền tảng, tab, tên mô hình và một mã ngẫu nhiên theo máy cài. **Không bao giờ gửi:** câu hỏi, câu trả lời, tên/đường dẫn/nội dung tệp, dòng lệnh, URL, thông điệp lỗi của công cụ, key, email. Bộ lọc là danh sách cho phép theo từng trường (trường lạ bị bỏ), có test nhét bí mật/đường dẫn/email để chứng minh không lọt ra.
+  - **Danh tính chỉ do máy chủ gắn:** mã người dùng giả danh = HMAC của email SSO với bí mật chỉ máy chủ giữ; ứng dụng không gửi email. Giả danh không phải ẩn danh tuyệt đối: người giữ bí mật và danh sách email vẫn đối chiếu được.
+  - **Lưu ở đâu/bao lâu:** máy 220, `/var/lib/neu-agent/diag/*.jsonl` (quyền 600, tự xoá sau **90 ngày**); nhật ký truy cập nginx của `/agent/` ở dạng JSON không có query string/cookie/email/IP, giữ 14 ngày. Báo cáo tổng hợp chỉ quản trị viên (danh sách riêng) xem được.
+  - **Cách tắt:** công tắc trong Cài đặt (khi giao diện đã nối), hoặc quản trị viên ép tắt bằng `diagnostics:false` trong `policy.json`.
+  - **“Báo lỗi”:** người dùng có thể thêm một ghi chú ngắn và xem **đúng** gói sẽ gửi trước khi gửi. Ghi chú là văn bản tự do do chính người dùng gõ — đừng dán dữ liệu nhạy cảm vào đó.
+  - Chi tiết, ngưỡng phát hiện, cách đọc báo cáo: `docs/DIAGNOSTICS.md`.
+- **Báo có bản cập nhật (Desktop):** ứng dụng chỉ *hỏi* tệp `latest.json` (phiên bản + mã băm) để báo có bản mới; không tự tải, không tự cài (người dùng vẫn so mã băm). Bản web cập nhật khi máy chủ triển khai.
+- Không có quảng cáo hay phân tích của bên thứ ba.
 
-**Quản trị**: tệp `policy.json` ở vị trí chỉ quản trị viên ghi được có thể **khoá** địa chỉ máy chủ, cấm HTTP, cấm chế độ “Tự động hết”, tắt công cụ chạy lệnh, tắt mạng cho lệnh (xem `docs/INSTALL.md`).
+**Đăng nhập (SSO Microsoft 365)**
+- Mọi đường dẫn của máy chủ (web, bản tải, API) yêu cầu đăng nhập `@neu.edu.vn` hoặc `@st.neu.edu.vn`; chưa đăng nhập: trang → chuyển tới Microsoft, API → 401. Do `oauth2-proxy` + nginx đảm nhiệm (phiên cookie `HttpOnly`, `Secure`, `SameSite=Lax`, hết hạn 8 giờ).
+- Desktop: OpenID Connect + **PKCE** qua trình duyệt hệ thống (không bao giờ gõ mật khẩu trong ứng dụng); kiểm tra `state`, `nonce`, chữ ký (JWKS), issuer, audience, hạn dùng và miền email; phiên (kèm refresh token) chỉ lưu bằng **kho mã hoá của hệ điều hành** (không có thì chỉ giữ trong bộ nhớ). Token chỉ gửi tới máy chủ đã khai báo; máy chủ chuyển yêu cầu tới gateway **không kèm token**, key mô hình do máy chủ gắn và không có trong gói cài.
+- Chưa đăng nhập thì ứng dụng Desktop từ chối **mọi** lệnh nghiệp vụ (không chỉ ẩn giao diện). Đăng nhập chỉ là cổng truy cập mô hình; tệp của người dùng vẫn nằm trên máy họ.
+- Hạn chế: cổng gateway 232:8037 còn mở với ai biết key (xem docs/DEPLOY.md); mã bí mật của ứng dụng Entra nằm trên máy 220 (`/etc/neu-agent/oauth2-proxy.env`, quyền 600).
+
+**Quản trị**: tệp `policy.json` ở vị trí chỉ quản trị viên ghi được có thể **khoá** địa chỉ máy chủ, cấm HTTP, cấm chế độ “Tự động hết”, tắt công cụ chạy lệnh, tắt mạng cho lệnh, **tắt chẩn đoán** (`diagnostics:false`) (xem `docs/INSTALL.md`).
 
 ## 3. Điều CHƯA bảo vệ được (nói thẳng)
 

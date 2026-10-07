@@ -18,7 +18,7 @@ export type Block =
   | { t: "para"; runs: Run[]; align?: Align }
   | { t: "list"; items: ListItem[] }
   | { t: "table"; header: Run[][]; rows: Run[][][]; align: Align[] }
-  | { t: "code"; text: string }
+  | { t: "code"; text: string; lang?: string; info?: string }
   | { t: "quote"; runs: Run[] }
   | { t: "hr" }
   | { t: "pagebreak" };
@@ -62,13 +62,13 @@ export function parseBlocks(md: string): Block[] {
       i++;
       continue;
     }
-    const fence = /^\s*```/.exec(line);
+    const fence = /^\s*```\s*([\w-]*)[ \t]*(.*)$/.exec(line);
     if (fence) {
       const code: string[] = [];
       i++;
       while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
       i++;
-      out.push({ t: "code", text: code.join("\n") });
+      out.push({ t: "code", text: code.join("\n"), ...(fence[1] ? { lang: fence[1].toLowerCase(), info: fence[2].trim() } : {}) });
       continue;
     }
     if (/^\s*(<<<\s*(pagebreak|page-break)\s*>>>|\\pagebreak|<pagebreak\s*\/?>)\s*$/i.test(line)) {

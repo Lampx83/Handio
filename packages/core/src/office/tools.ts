@@ -1,18 +1,32 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { Env } from "../env";
 import { dirname, join } from "../path";
-import { checkFresh, relPath, remember, resolveSafe, ToolError, walk, type DiffPreview, type Tool, type ToolContext } from "../tools";
+import { checkFresh, pushUndo, relPath, remember, resolveSafe, ToolError, walk, type DiffPreview, type Tool, type ToolContext } from "../tools";
 import { createDocx, describeDocx, type Letterhead, type Signature } from "./docx-write";
 import { docxReplace } from "./docx-read";
+import { docxSuggest } from "./track";
+import { documentUnits } from "./locate";
+import { countsLine, isNotable, scanDocumentPii } from "./pii";
 import { createPptx, describePptx } from "./pptx";
+import { citeToken } from "./locate";
 import { extOf, fold, formatSections, isReadableDocument, readDocumentSections } from "./readdoc";
 import { createXlsx, describeXlsx, editXlsx, type SheetSpec } from "./xlsx";
 
 const S = { type: "string" } as const;
+
+/** Cảnh báo ngắn khi tài liệu vừa đọc có dữ liệu cá nhân đáng kể (không bao giờ nêu giá trị). */
+async function piiNote(bytes: Uint8Array, ext: string): Promise<string> {
+  try {
+    const rep = await scanDocumentPii(bytes, ext, 0, true);
+    return isNotable(rep.counts) ? `\n⚠ Có dữ liệu cá nhân (${countsLine(rep.counts)}). Nếu nội dung sẽ được gửi/chia sẻ ra ngoài: nhắc người dùng bằng một câu và đề nghị che bằng redact_pii.` : "";
+  } catch {
+    return "";
+  }
+}
 const MAX_FILE = 25 * 1024 * 1024;
 
 /** Mô hình đôi khi gửi mảng/đối tượng dưới dạng chuỗi JSON: chấp nhận cả hai. */
-function jsonArg<T>(v: unknown, what: string): T {
+export function jsonArg<T>(v: unknown, what: string): T {
   if (typeof v === "string") {
     try {
       return JSON.parse(v) as T;
@@ -23,7 +37,7 @@ function jsonArg<T>(v: unknown, what: string): T {
   return v as T;
 }
 
-async function loadBinary(ctx: ToolContext, path: unknown, exts: string[]): Promise<{ abs: string; bytes: Uint8Array }> {
+export async function loadBinary(ctx: ToolContext, path: unknown, exts: string[]): Promise<{ abs: string; bytes: Uint8Array }> {
   const abs = await resolveSafe(ctx, path);
   const st = await ctx.env.stat(abs);
   if (!st) throw new ToolError(`Không có file ${path}.`);
@@ -34,7 +48,7 @@ async function loadBinary(ctx: ToolContext, path: unknown, exts: string[]): Prom
 }
 
 /** Chuẩn bị ghi file nhị phân: đúng đuôi; nếu đã tồn tại thì phải đã được đọc (read_document) và chưa bị đổi. */
-async function prepareWrite(ctx: ToolContext, rawPath: unknown, ext: string): Promise<{ abs: string; existed: boolean }> {
+export async function prepareWrite(ctx: ToolContext, rawPath: unknown, ext: string): Promise<{ abs: string; existed: boolean }> {
   const abs = await resolveSafe(ctx, rawPath);
   if (extOf(abs) !== ext) throw new ToolError(`Đường dẫn phải có đuôi ${ext} (nhận “${rawPath}”).`);
   const st = await ctx.env.stat(abs);
@@ -46,16 +60,16 @@ async function prepareWrite(ctx: ToolContext, rawPath: unknown, ext: string): Pr
   return { abs, existed: !!st };
 }
 
-async function commit(ctx: ToolContext, abs: string, bytes: Uint8Array, existed: boolean): Promise<void> {
+export async function commit(ctx: ToolContext, abs: string, bytes: Uint8Array, existed: boolean): Promise<void> {
   const old = existed ? await ctx.env.readBytes(abs) : null;
   await ctx.env.mkdirp(dirname(abs));
   await ctx.env.writeBytes(abs, bytes);
   await remember(ctx, abs);
-  ctx.undoStack.push({ path: abs, old });
+  pushUndo(ctx, abs, old);
 }
 
-const kb = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
-const outlinePreview = async (ctx: ToolContext, rawPath: unknown, text: string): Promise<DiffPreview | null> => {
+export const kb = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
+export const outlinePreview = async (ctx: ToolContext, rawPath: unknown, text: string): Promise<DiffPreview | null> => {
   try {
     const abs = await resolveSafe(ctx, rawPath);
     return { path: relPath(ctx, abs), diff: [], isNew: !(await ctx.env.stat(abs)), outline: text };
@@ -63,6 +77,9 @@ const outlinePreview = async (ctx: ToolContext, rawPath: unknown, text: string):
     return null;
   }
 };
+
+/** Tên mặc định cho bản đề xuất: tên-dexuat.docx (cạnh tệp gốc). */
+export const suggestName = (p: unknown): string => String(p ?? "").replace(/(\.docx)?$/i, "-dexuat.docx");
 
 export function officeTools(env: Env): Tool[] {
   const tools: Tool[] = [
@@ -81,7 +98,8 @@ export function officeTools(env: Env): Tool[] {
         }
         const st = await ctx.env.stat(abs);
         if (st) ctx.readFiles.set(abs, st.mtimeMs);
-        return formatSections(r, Math.max(0, Math.floor(Number(a.offset) || 0)), Math.max(1000, Math.min(Math.floor(Number(a.max_chars) || 12000), 30000)));
+        const out = formatSections(r, Math.max(0, Math.floor(Number(a.offset) || 0)), Math.max(1000, Math.min(Math.floor(Number(a.max_chars) || 12000), 30000)), true);
+        return out + (await piiNote(bytes, extOf(abs)));
       },
     },
     {
@@ -106,22 +124,26 @@ export function officeTools(env: Env): Tool[] {
               skipped++;
               continue;
             }
-            const r = await readDocumentSections(await ctx.env.readBytes(f), extOf(f), {});
-            for (const sec of r.sections)
-              for (const line of sec.text.split("\n")) {
+            const { units } = await documentUnits(await ctx.env.readBytes(f), extOf(f));
+            for (const u of units) {
+              for (const line of u.text.split("\n")) {
                 const fl = fold(line);
                 if (words.every((w) => fl.includes(w))) {
-                  hits.push(`${relPath(ctx, f)}${sec.label ? " › " + sec.label.replace(/\s*\(.*\)$/, "") : ""}: ${line.trim().slice(0, 180)}`);
+                  // Excel: chỉ ra ô khớp (ô đầu tiên chứa một từ khoá), còn lại: vị trí của đoạn/slide/trang
+                  const cell = u.cells?.find((c) => words.some((w) => fold(c.text).includes(w)));
+                  const loc = cell ? u.loc.replace(/![A-Z]+(\d+)$/, `!${cell.addr}`) : u.loc;
+                  hits.push(`${citeToken(relPath(ctx, f), loc)} ${line.trim().slice(0, 180)}`);
                   if (++perFile >= 6 || hits.length >= 40) break;
                 }
-                if (perFile >= 6) break;
               }
+              if (perFile >= 6 || hits.length >= 40) break;
+            }
           } catch {
             skipped++;
           }
           if (hits.length >= 40) break;
         }
-        return (hits.length ? hits.join("\n") : "(không tìm thấy)") + (hits.length >= 40 ? "\n… (dừng ở 40 kết quả, hãy thu hẹp từ khoá)" : "") + (skipped ? `\n(${skipped} file không đọc được/quá lớn đã bỏ qua)` : "");
+        return (hits.length ? "Trích nguồn bằng đúng ký hiệu (cả hai dấu ngoặc vuông) ở đầu mỗi dòng.\n" + hits.join("\n") : "(không tìm thấy)") + (hits.length >= 40 ? "\n… (dừng ở 40 kết quả, hãy thu hẹp từ khoá)" : "") + (skipped ? `\n(${skipped} file không đọc được/quá lớn đã bỏ qua)` : "");
       },
     },
     {
@@ -150,13 +172,14 @@ export function officeTools(env: Env): Tool[] {
       },
     },
     {
-      name: "docx_replace", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || a.path,
-      description: "Replace text inside an existing Word file, keeping its formatting (works even when the text is split across formatting runs; also headers/footers). Read the file first. Use save_as to keep the original untouched (recommended). Each find must match exactly (case-sensitive).",
-      parameters: { type: "object", properties: { path: S, replacements: { type: "array", items: { type: "object", properties: { find: S, replace: S }, required: ["find", "replace"] } }, save_as: { type: "string", description: "new .docx path; original stays unchanged" } }, required: ["path", "replacements"] },
-      summarize: (a) => `${a.path ?? ""}${a.save_as ? " → " + a.save_as : ""}`,
+      name: "docx_replace", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || (a.suggest ? suggestName(a.path) : a.path),
+      description: "Replace text inside an existing Word file, keeping its formatting (works even when the text is split across formatting runs; also headers/footers). Read the file first. Use save_as to keep the original untouched (recommended). Each find must match exactly (case-sensitive). suggest=true writes the edits as real Word tracked changes (Track Changes: the user accepts or rejects each one in Word) into a NEW file; prefer it when proofreading or revising someone else's document.",
+      parameters: { type: "object", properties: { path: S, replacements: { type: "array", items: { type: "object", properties: { find: S, replace: S }, required: ["find", "replace"] } }, save_as: { type: "string", description: "new .docx path; original stays unchanged" }, suggest: { type: "boolean", description: "write as tracked changes (suggestions) instead of silent replacement" } }, required: ["path", "replacements"] },
+      summarize: (a) => `${a.path ?? ""}${a.save_as || a.suggest ? " → " + (a.save_as || suggestName(a.path)) : ""}${a.suggest ? " (đề xuất)" : ""}`,
       async preview(ctx, a) {
         const reps = (() => { try { return jsonArg<{ find: string; replace: string }[]>(a.replacements, "replacements") ?? []; } catch { return []; } })();
-        return outlinePreview(ctx, a.save_as || a.path, `Thay ${reps.length} chỗ trong ${a.path}${a.save_as ? ` (lưu thành ${a.save_as})` : " (ghi đè bản gốc)"}:\n` + reps.slice(0, 12).map((r) => `  “${String(r.find).slice(0, 60)}” → “${String(r.replace).slice(0, 60)}”`).join("\n"));
+        const dest = a.save_as || (a.suggest ? suggestName(a.path) : "");
+        return outlinePreview(ctx, dest || a.path, `${a.suggest ? "Đề xuất" : "Thay"} ${reps.length} chỗ trong ${a.path}${dest ? ` (lưu thành ${dest})` : " (ghi đè bản gốc)"}${a.suggest ? " — hiện dưới dạng Track Changes, bạn Chấp nhận/Từ chối trong Word" : ""}:\n` + reps.slice(0, 12).map((r) => `  “${String(r.find).slice(0, 60)}” → “${String(r.replace).slice(0, 60)}”`).join("\n"));
       },
       async run(ctx, a) {
         const reps = jsonArg<{ find: string; replace: string }[]>(a.replacements, "replacements");
@@ -165,6 +188,20 @@ export function officeTools(env: Env): Tool[] {
         if (!ctx.readFiles.has(src)) throw new ToolError(`Hãy đọc ${a.path} bằng read_document trước khi sửa.`);
         await checkFresh(ctx, src, a.path);
         const { bytes } = await loadBinary(ctx, a.path, [".docx"]);
+        if (a.suggest) {
+          let sg;
+          try {
+            sg = await docxSuggest(bytes, reps);
+          } catch (e) {
+            throw new ToolError((e as Error).message);
+          }
+          const total = sg.counts.reduce((x, y) => x + y, 0);
+          if (!total) throw new ToolError(`Không đánh dấu được chỗ nào trong ${a.path}.` + (sg.skipped.some(Boolean) ? " Chữ cần sửa nằm trong phần có định dạng phức tạp (tab, trường…); hãy dùng docx_replace không có suggest, lưu thành bản mới." : " Kiểm tra đúng từng ký tự (chữ hoa/thường, dấu cách)."));
+          const dest = await prepareWrite(ctx, a.save_as || suggestName(a.path), ".docx");
+          await commit(ctx, dest.abs, sg.bytes, dest.existed);
+          const miss = reps.filter((_r, i) => sg.counts[i] === 0 && !sg.skipped[i]);
+          return `Đã lưu ${relPath(ctx, dest.abs)} với ${total} đề xuất (Track Changes). Mở bằng Word → thẻ Review để Chấp nhận/Từ chối.\nBảng trước → sau:\n` + sg.changes.slice(0, 15).map((c, i) => `  ${i + 1}. “${c.find.slice(0, 40)}” → “${c.replace.slice(0, 40)}”  | ${c.context}`).join("\n") + (sg.changes.length > 15 ? `\n  … (+${sg.changes.length - 15} chỗ)` : "") + (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` : "") + (sg.skipped.some(Boolean) ? "\n⚠ Một số chỗ nằm trong phần định dạng phức tạp nên chưa đánh dấu được." : "");
+        }
         let res;
         try {
           res = await docxReplace(bytes, reps);
@@ -182,8 +219,8 @@ export function officeTools(env: Env): Tool[] {
     },
     {
       name: "create_xlsx", kind: "edit", readonly: false, pathArg: "path",
-      description: "Create an Excel workbook (.xlsx). sheets = [{name, rows: [[...], ...]}]; the first row is the header (bold, blue fill, frozen) unless header=false. Cells: numbers as real numbers (not '1.200.000' strings), text, or formulas as strings starting with '=' (English function names, comma separators, e.g. '=SUM(B2:B10)', '=IF(C2>=5,\"Đạt\",\"Không đạt\")'). ISO dates 'YYYY-MM-DD' become real dates shown dd/mm/yyyy. Formulas are calculated and returned so you can verify the numbers. number_formats e.g. {\"C\": \"#,##0\", \"D\": \"0.0%\"}.",
-      parameters: { type: "object", properties: { path: S, sheets: { type: "array", items: { type: "object", properties: { name: S, rows: { type: "array", items: { type: "array", items: {} } }, header: { type: "boolean" }, widths: { type: "array", items: { type: "number" } }, freeze_header: { type: "boolean" }, autofilter: { type: "boolean" }, number_formats: { type: "object" } }, required: ["name", "rows"] } } }, required: ["path", "sheets"] },
+      description: "Create an Excel workbook (.xlsx). sheets = [{name, rows: [[...], ...]}]; the first row is the header (bold, blue fill, frozen) unless header=false. Cells: numbers as real numbers (not '1.200.000' strings), text, or formulas as strings starting with '=' (English function names, comma separators, e.g. '=SUM(B2:B10)', '=IF(C2>=5,\"Đạt\",\"Không đạt\")'). ISO dates 'YYYY-MM-DD' become real dates shown dd/mm/yyyy. Formulas are calculated and returned so you can verify the numbers. number_formats e.g. {\"C\": \"#,##0\", \"D\": \"0.0%\"}. conditional colours cells: [{range: \"D2:D30\", rule: \"bars\" | \"scale\" | {op: \"lt\"|\"le\"|\"gt\"|\"ge\"|\"eq\"|\"ne\", value: 5, color: \"red\"|\"green\"|\"yellow\"}}]. Excel charts are not supported (use create_pptx for charts).",
+      parameters: { type: "object", properties: { path: S, sheets: { type: "array", items: { type: "object", properties: { name: S, rows: { type: "array", items: { type: "array", items: {} } }, header: { type: "boolean" }, widths: { type: "array", items: { type: "number" } }, freeze_header: { type: "boolean" }, autofilter: { type: "boolean" }, number_formats: { type: "object" }, conditional: { type: "array", items: { type: "object", properties: { range: S, rule: {} }, required: ["range", "rule"] } } }, required: ["name", "rows"] } } }, required: ["path", "sheets"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
         try {
@@ -241,7 +278,7 @@ export function officeTools(env: Env): Tool[] {
     },
     {
       name: "create_pptx", kind: "edit", readonly: false, pathArg: "path",
-      description: "Create a PowerPoint (.pptx) from Markdown. Slides are separated by a line containing only ---. Each slide: a '# Title' (or ##) line, then bullets (- item, nested by 2 spaces), paragraphs, tables or code. The first slide with '# Title' and a short subtitle paragraph becomes the cover. A paragraph starting 'Ghi chú:' becomes the presenter notes. Keep 3-6 short bullets per slide; split long content across slides.",
+      description: "Create a PowerPoint (.pptx) from Markdown. Slides are separated by a line containing only ---. Each slide: a '# Title' (or ##) line, then bullets (- item, nested by 2 spaces), paragraphs, tables or code. The first slide with '# Title' and a short subtitle paragraph becomes the cover. A paragraph starting 'Ghi chú:' becomes the presenter notes. A real chart: a fenced block ```chart cột (or ngang, đường, tròn, vành, vùng) with an optional 'title: ...' line and a Markdown table (first column = labels, other columns = numeric series, e.g. 7,5 or 1.200). Keep 3-6 short bullets per slide; split long content across slides.",
       parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, footer: { type: "string" } }, required: ["path", "content"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
@@ -282,7 +319,7 @@ export function officeTools(env: Env): Tool[] {
         } catch (e) {
           throw new ToolError("Không chuyển được sang PDF: " + (e as Error).message);
         }
-        ctx.undoStack.push({ path: out, old });
+        pushUndo(ctx, out, old);
         return `Đã tạo ${relPath(ctx, out)}.`;
       },
     });
@@ -290,7 +327,7 @@ export function officeTools(env: Env): Tool[] {
   return tools;
 }
 
-function reportOf(head: string, r: { formulas: { cell: string; formula: string; value: string }[]; unverified: string[]; errors: string[] }): string {
+export function reportOf(head: string, r: { formulas: { cell: string; formula: string; value: string }[]; unverified: string[]; errors: string[] }): string {
   const parts = [head];
   if (r.formulas.length) parts.push("Kết quả công thức (đã tính):\n" + r.formulas.slice(0, 25).map((f) => `  ${f.cell}  ${f.formula}  →  ${f.value}`).join("\n") + (r.formulas.length > 25 ? `\n  … (+${r.formulas.length - 25} công thức khác)` : ""));
   if (r.errors.length) parts.push("⚠ Công thức bị lỗi:\n  " + r.errors.slice(0, 15).join("\n  ") + "\nHãy sửa các công thức này.");

@@ -39,8 +39,37 @@ export async function readDocumentSections(bytes: Uint8Array, ext: string, o: Re
   throw new Error(`Chưa hỗ trợ đọc định dạng ${ext}. Hỗ trợ: .docx .xlsx .pptx .pdf và các file văn bản (.txt .md .csv …).`);
 }
 
-export function formatSections(r: { kind: string; sections: DocSection[]; note?: string }, offset = 0, maxChars = 12000): string {
-  const full = r.sections.map((s) => (s.label ? `## ${s.label}\n${s.text}` : s.text)).join("\n\n");
+/**
+ * Các "đoạn" của văn bản Markdown để trích dẫn: mỗi dòng không trống là một đoạn (tiêu đề, đoạn văn, mục danh sách),
+ * một bảng (các dòng liền nhau bắt đầu bằng "|") là một đoạn. Số thứ tự đoạn chính là "đoạn N".
+ */
+export function mdBlocks(text: string): string[] {
+  const out: string[] = [];
+  let table: string[] = [];
+  const flush = () => {
+    if (table.length) out.push(table.join("\n"));
+    table = [];
+  };
+  for (const raw of text.replace(/\r\n?/g, "\n").split("\n")) {
+    const line = raw.replace(/\s+$/, "");
+    if (/^\s*\|/.test(line)) table.push(line);
+    else {
+      flush();
+      if (line.trim()) out.push(line);
+    }
+  }
+  flush();
+  return out;
+}
+
+/** Đánh số đoạn (¶N) cho Word/văn bản để trích nguồn được: số đoạn trùng với "đoạn N" trong ký hiệu [[tệp|đoạn N]]. */
+function numberBlocks(text: string): string {
+  return mdBlocks(text).map((b, i) => `¶${i + 1}${b.includes("\n") ? "\n" : " "}${b}`).join("\n");
+}
+
+export function formatSections(r: { kind: string; sections: DocSection[]; note?: string }, offset = 0, maxChars = 12000, cite = false): string {
+  const numbered = cite && (r.kind === "Word" || r.kind === "Văn bản");
+  const full = r.sections.map((s) => (s.label ? `## ${s.label}\n${s.text}` : numbered ? numberBlocks(s.text) : s.text)).join("\n\n");
   const slice = full.slice(offset, offset + maxChars);
   const rest = full.length - (offset + slice.length);
   return (

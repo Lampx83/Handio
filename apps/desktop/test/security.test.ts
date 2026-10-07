@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { CSP, IPC_METHODS, IPC_VALIDATORS, isSafeExternalUrl, isTrustedSenderUrl, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "../src/security";
+import { AUTH_METHODS, authBlocks, CSP, IPC_METHODS, IPC_VALIDATORS, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "../src/security";
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "neu-sec-")));
 const root = path.join(tmp, "renderer");
@@ -66,6 +66,11 @@ describe("kiểm tra yêu cầu IPC", () => {
     expect(ok("saveSettings", { baseUrl: "https://x/v1", model: "m", key: "k", thinking: true, allowInsecureHttp: false })).toBe(true);
     expect(ok("saveSettings", { permissions: { allow: ["bash"] } })).toBe(false);
     expect(ok("saveSettings", { mode: "bypass" })).toBe(false);
+    expect(ok("saveSettings", { mode: "plan", temperature: 0.3, maxSteps: 40, maxOutputTokens: 4096, contextTokens: 32768 })).toBe(true);
+    expect(ok("saveSettings", { mode: "evil" })).toBe(false);
+    expect(ok("saveSettings", { temperature: 9 })).toBe(false);
+    expect(ok("saveSettings", { maxSteps: 0 })).toBe(false);
+    expect(ok("saveSettings", { contextTokens: 1e9 })).toBe(false);
     expect(ok("saveSettings", { thinking: "yes" })).toBe(false);
     expect(ok("saveSettings", { baseUrl: "x".repeat(5000) })).toBe(false);
   });
@@ -113,5 +118,113 @@ describe("IPC mới và xem trước localhost", () => {
     expect(ok("openUrl", "http://localhost:8501/")).toBe(true);
     expect(ok("searchFiles", "app")).toBe(true);
     expect(ok("searchFiles", { q: 1 })).toBe(false);
+  });
+});
+
+describe("IPC dự án / lịch sử / xuất thiết kế", () => {
+  const ok = (m: string, ...a: unknown[]) => IPC_VALIDATORS[m](a);
+  it("chỉ nhận mã dự án/cuộc trò chuyện đúng dạng (không đường dẫn)", () => {
+    expect(ok("projectOpen", "abc123-x")).toBe(true);
+    for (const bad of ["", "../x", "a/b", "A", "x".repeat(41), 5, null, "a\0b"]) {
+      expect(ok("projectOpen", bad)).toBe(false);
+      expect(ok("chatOpen", bad)).toBe(false);
+      expect(ok("projectRemove", bad)).toBe(false);
+    }
+  });
+  it("projectCreate: chỉ name + instructions, giới hạn độ dài, không có trường lạ (không đặt được đường dẫn)", () => {
+    expect(ok("projectCreate", { name: "Hồ sơ", instructions: "x" })).toBe(true);
+    expect(ok("projectCreate", { name: "Hồ sơ", path: "/etc" })).toBe(false);
+    expect(ok("projectCreate", { name: 1 })).toBe(false);
+    expect(ok("projectCreate", { name: "a", instructions: "y".repeat(20001) })).toBe(false);
+    expect(ok("projectCreate", "x")).toBe(false);
+  });
+  it("instructionsSet và exportDesign kiểm tra kiểu và biên", () => {
+    expect(ok("instructionsSet", "ok")).toBe(true);
+    expect(ok("instructionsSet", 5)).toBe(false);
+    expect(ok("exportDesign", "a.html", "pdf", 794)).toBe(true);
+    expect(ok("exportDesign", "a.html", "png", 1080, 1080)).toBe(true);
+    expect(ok("exportDesign", "a.html", "exe", 794)).toBe(false);
+    expect(ok("exportDesign", "a.html", "png", 99999)).toBe(false);
+    expect(ok("exportDesign", "a.html", "png", 800, 1)).toBe(false);
+    expect(ok("exportDesign", "a.html", "png", 800.5)).toBe(false);
+  });
+  it("mọi phương thức mới đều có trong danh sách IPC", () => {
+    for (const m of ["projectsState", "projectOpen", "projectCreate", "projectPick", "projectRemove", "projectRename", "instructionsGet", "instructionsSet", "chatList", "chatOpen", "chatRemove", "exportDesign"]) expect(IPC_METHODS.has(m)).toBe(true);
+  });
+});
+
+describe("isTooBroadFolder", () => {
+  const home = "/Users/lan";
+  it("từ chối gốc, thư mục cá nhân, thư mục hệ thống và nơi chứa khoá", () => {
+    for (const d of ["/", "/Users/lan", "/Users/lan/", "/Users", "/System/Library", "/Applications", "/usr/local", "/etc", "/Library/Application Support", "/Users/lan/.ssh", "/Users/lan/Library/Keychains", "/Users/lan/.aws/x", "/Volumes", "/private/etc"]) expect(isTooBroadFolder(d, home, "darwin"), d).toBe(true);
+  });
+  it("cho phép thư mục dự án thông thường", () => {
+    for (const d of ["/Users/lan/Documents/Code/app", "/Users/lan/Desktop/bai-tap", "/Volumes/Usb/du-an", "/tmp/x", "/private/var/folders/ab/T/x", "/Users/lan/.vibe/proj"]) expect(isTooBroadFolder(d, home, "darwin"), d).toBe(false);
+  });
+  it("Windows: ổ đĩa, Windows, Program Files, hồ sơ người dùng", () => {
+    const wh = "C:\\Users\\Lan";
+    for (const d of ["C:\\", "C:\\Windows\\System32", "C:\\Program Files\\X", "C:\\Users", "C:\\Users\\Lan", "C:\\Users\\Lan\\AppData\\Roaming", "C:\\Users\\Lan\\.ssh"]) expect(isTooBroadFolder(d, wh, "win32"), d).toBe(true);
+    for (const d of ["C:\\Users\\Lan\\Documents\\app", "D:\\code\\app"]) expect(isTooBroadFolder(d, wh, "win32"), d).toBe(false);
+  });
+});
+
+describe("IPC: thay đổi, quay lại, gợi ý chạy", () => {
+  const ok = (m: string, ...a: unknown[]) => IPC_VALIDATORS[m](a);
+  it("có trong danh sách và chỉ nhận đúng kiểu tham số", () => {
+    for (const m of ["changesList", "changeDiff", "changesRevert", "rewindPoints", "rewind", "runSuggestions"]) expect(IPC_METHODS.has(m), m).toBe(true);
+    expect(ok("changesList")).toBe(true);
+    expect(ok("changesList", "x")).toBe(false);
+    expect(ok("rewindPoints")).toBe(true);
+    expect(ok("runSuggestions", 1)).toBe(false);
+  });
+  it("changeDiff / changesRevert: chuỗi có giới hạn, không NUL; revert có thể không tham số (tất cả)", () => {
+    expect(ok("changeDiff", "src/a.js")).toBe(true);
+    expect(ok("changeDiff")).toBe(false);
+    expect(ok("changeDiff", 5)).toBe(false);
+    expect(ok("changeDiff", "a\0b")).toBe(false);
+    expect(ok("changeDiff", "x".repeat(1001))).toBe(false);
+    expect(ok("changesRevert")).toBe(true);
+    expect(ok("changesRevert", "a.txt")).toBe(true);
+    expect(ok("changesRevert", { path: "a" })).toBe(false);
+    expect(ok("changesRevert", "a", "b")).toBe(false);
+    expect(ok("changesRevert", "a\0")).toBe(false);
+  });
+  it("rewind: chỉ số nguyên trong khoảng và cờ boolean", () => {
+    expect(ok("rewind", 0, true)).toBe(true);
+    expect(ok("rewind", 12, false)).toBe(true);
+    for (const bad of [[-1, true], [1.5, true], [10_000, true], ["1", true], [1, "yes"], [1], [1, true, 2], [Number.NaN, true], [null, true]]) expect(ok("rewind", ...(bad as unknown[])), JSON.stringify(bad)).toBe(false);
+  });
+});
+
+describe("IPC: Work — xem tài liệu và quy trình của tôi", () => {
+  const ok = (m: string, ...a: unknown[]) => IPC_VALIDATORS[m](a);
+  it("có trong danh sách, đúng số tham số và kiểu", () => {
+    for (const m of ["docView", "procedureList", "procedureSave", "procedureRemove"]) expect(IPC_METHODS.has(m), m).toBe(true);
+    expect(ok("docView", "a.docx")).toBe(true);
+    expect(ok("docView", "a.xlsx", "Điểm!C5")).toBe(true);
+    for (const bad of [[], [5], ["a", 7], ["a", "b", "c"], ["a\0"], ["x".repeat(1001)], ["a", "x".repeat(201)], [{ path: "a" }], ["a", "b\0"]]) expect(ok("docView", ...(bad as unknown[])), JSON.stringify(bad)).toBe(false);
+    expect(ok("procedureList")).toBe(true);
+    expect(ok("procedureList", 1)).toBe(false);
+    expect(ok("procedureSave", "ten-lenh")).toBe(true);
+    expect(ok("procedureSave", "Tên có dấu", "mô tả")).toBe(true);
+    for (const bad of [[], [1], ["a", 2], ["a", "b", "c"], ["x".repeat(61)], ["a\0"], ["a", "d".repeat(201)]]) expect(ok("procedureSave", ...(bad as unknown[])), JSON.stringify(bad)).toBe(false);
+  });
+  it("procedureRemove chỉ nhận slug (không thể trỏ ra đường dẫn)", () => {
+    expect(ok("procedureRemove", "tom-tat-2")).toBe(true);
+    for (const bad of ["../../AGENTS", "a/b", "a.md", "A", "", "x".repeat(31), "a b", "a\0"]) expect(ok("procedureRemove", bad), bad).toBe(false);
+    expect(ok("procedureRemove")).toBe(false);
+    expect(ok("procedureRemove", "a", "b")).toBe(false);
+  });
+});
+
+describe("cổng đăng nhập SSO", () => {
+  it("SSO bật mà chưa đăng nhập thì chặn mọi lệnh; đã đăng nhập hoặc SSO tắt thì cho qua", () => {
+    expect(authBlocks(true, false)).toBe(true);
+    expect(authBlocks(true, true)).toBe(false);
+    expect(authBlocks(false, false)).toBe(false);
+  });
+  it("kênh đăng nhập chỉ có đúng ba lệnh, và không trùng lệnh nghiệp vụ", () => {
+    expect([...AUTH_METHODS].sort()).toEqual(["login", "logout", "status"]);
+    for (const m of AUTH_METHODS) expect(IPC_METHODS.has(m)).toBe(false);
   });
 });

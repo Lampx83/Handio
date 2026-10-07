@@ -38,8 +38,8 @@ Get-FileHash .\NEU-Agent-*-win-x64.exe -Algorithm SHA256
 
 ## Lần đầu sử dụng
 
-1. Mở tab **Work** hoặc **Code**; thử một gợi ý trên màn hình chào.
-2. Ứng dụng kết nối tới máy chủ mô hình theo địa chỉ cấu hình sẵn (HTTPS). Nếu được yêu cầu **key**: vào **⚙ Cài đặt** → dán key do người quản trị cấp → *Lưu và kiểm tra kết nối*. Key được lưu **mã hoá bằng kho khoá của hệ điều hành** (Keychain / Windows DPAPI).
+1. Mở ứng dụng → **Đăng nhập Microsoft** bằng tài khoản `@neu.edu.vn` (giảng viên) hoặc `@st.neu.edu.vn` (sinh viên); trình duyệt hệ thống sẽ mở để đăng nhập. Rồi mở tab **Work**, **Code** hoặc **Design**, thử một gợi ý trên màn hình chào.
+2. Ứng dụng kết nối tới máy chủ mô hình theo địa chỉ cấu hình sẵn (HTTPS) bằng phiên đăng nhập của bạn, không cần nhập key. Đăng xuất ở **⚙ Cài đặt → Tài khoản**. Key được lưu **mã hoá bằng kho khoá của hệ điều hành** (Keychain / Windows DPAPI).
 3. Mọi thay đổi tệp/chạy lệnh đều hiện hộp xác nhận kèm phần thay đổi; đọc rồi mới bấm *Cho phép*.
 
 ## Xử lý sự cố
@@ -54,7 +54,7 @@ Get-FileHash .\NEU-Agent-*-win-x64.exe -Algorithm SHA256
 
 ## Dành cho người quản trị: khoá cấu hình
 
-Tạo tệp `policy.json` (người dùng thường không sửa được) để khoá địa chỉ máy chủ, cấm HTTP, cấm chế độ “Tự động hết”, tắt công cụ chạy lệnh:
+Tạo tệp `policy.json` (người dùng thường không sửa được) để khoá địa chỉ máy chủ, cấm HTTP, cấm chế độ “Tự động hết”, tắt công cụ chạy lệnh, tắt gửi chẩn đoán không chứa nội dung (`diagnostics:false`, xem `docs/DIAGNOSTICS.md`):
 
 - macOS: `/Library/Application Support/NEU Agent/policy.json`
 - Windows: `%ProgramData%\NEU Agent\policy.json`
@@ -66,6 +66,7 @@ Tạo tệp `policy.json` (người dùng thường không sửa được) để
   "allowBypass": false,
   "bashNetwork": true,
   "disableBash": false,
+  "diagnostics": true,
   "notice": "Hỗ trợ: <liên hệ của đơn vị>"
 }
 ```

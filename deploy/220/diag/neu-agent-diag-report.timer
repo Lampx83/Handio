@@ -1,0 +1,11 @@
+[Unit]
+Description=NEU Agent - bao cao chat luong hang ngay
+
+[Timer]
+# 06:30 giờ Việt Nam mỗi ngày; chạy bù nếu máy tắt đúng giờ đó
+OnCalendar=*-*-* 06:30:00 Asia/Ho_Chi_Minh
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

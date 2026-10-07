@@ -21,6 +21,10 @@ export interface UndoEntry {
   path: string;
   /** Nội dung cũ (chữ hoặc nhị phân), null = file chưa tồn tại trước đó. */
   old: string | Uint8Array | null;
+  /** Lượt hỏi (của người dùng) đã gây ra thay đổi này; dùng cho "Thay đổi" và /rewind. */
+  turn?: number;
+  /** Các thay đổi do cùng một lệnh bash: /undo hoàn tác cả nhóm. */
+  group?: string;
 }
 
 export interface ToolContext {
@@ -30,6 +34,8 @@ export interface ToolContext {
   extraDirs: string[];
   readFiles: Map<string, number>;
   undoStack: UndoEntry[];
+  /** Số thứ tự lượt hỏi hiện tại (gắn vào mỗi thay đổi). */
+  turn?: number;
   todos: Todo[];
   onTodos?: (t: Todo[]) => void;
   signal?: AbortSignal;
@@ -117,6 +123,11 @@ export async function checkFresh(ctx: ToolContext, p: string, rel: string): Prom
   if (seen === undefined) throw new ToolError(`Hãy đọc ${rel} bằng read_file trước khi sửa/ghi đè.`);
   const st = await ctx.env.stat(p);
   if (st && st.mtimeMs !== seen) throw new ToolError(`${rel} đã thay đổi kể từ lần đọc trước. Đọc lại bằng read_file rồi thử lại.`);
+}
+
+/** Ghi lại nội dung cũ trước khi sửa (cho /undo, "Thay đổi", /rewind). */
+export function pushUndo(ctx: ToolContext, path: string, old: string | Uint8Array | null, group?: string): void {
+  ctx.undoStack.push({ path, old, turn: ctx.turn ?? 0, ...(group ? { group } : {}) });
 }
 
 export async function remember(ctx: ToolContext, p: string): Promise<void> {
@@ -307,7 +318,7 @@ export function builtinTools(env: Env): Tool[] {
         const r = await applyEdit(ctx, a, false);
         await ctx.env.writeText(r.p, r.next);
         await remember(ctx, r.p);
-        ctx.undoStack.push({ path: r.p, old: r.text });
+        pushUndo(ctx, r.p, r.text);
         return r.note;
       },
     },
@@ -339,7 +350,7 @@ export function builtinTools(env: Env): Tool[] {
         await ctx.env.mkdirp(dirname(p));
         await ctx.env.writeText(p, a.content);
         await remember(ctx, p);
-        ctx.undoStack.push({ path: p, old });
+        pushUndo(ctx, p, old);
         const lines = a.content === "" ? 0 : a.content.split("\n").length;
         return `Đã ${old !== null ? "ghi đè" : "tạo"} ${relPath(ctx, p)} (${lines} dòng).`;
       },

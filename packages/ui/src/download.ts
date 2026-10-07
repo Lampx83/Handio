@@ -68,12 +68,14 @@ function parseSums(text: string): Map<string, string> {
   return out;
 }
 
-/** Hộp “Tải ứng dụng Desktop”: các bản cài do máy chủ phục vụ ở `base` (kèm SHA256SUMS.txt để kiểm tra). */
-export async function openDownload(base: string): Promise<void> {
+const ICON: Record<Item["os"], string> = { "mac-arm64": "", "mac-x64": "", win: "" };
+const SHORT: Record<Item["os"], string> = { "mac-arm64": "macOS · chip Apple", "mac-x64": "macOS · chip Intel", win: "Windows 10/11" };
+
+/** Hộp “Tải ứng dụng Desktop”: một nút lớn cho đúng máy của bạn; bản khác và phần kiểm tra mã băm được thu gọn. */
+export async function openDownload(base: string, install?: { available(): boolean; run(): void }): Promise<void> {
   const dlg = h("dialog", { class: "dl" });
-  const body = h("div", { class: "dl-body" }, h("p", { class: "muted" }, "Đang tải danh sách…"));
-  const close = () => dlg.close();
-  dlg.append(h("div", { class: "dh" }, h("span", {}, "⬇ Tải ứng dụng NEU Agent (Desktop)"), h("button", { class: "btn sm", type: "button", onclick: close }, "Đóng")), body);
+  const body = h("div", { class: "dl-body" }, h("p", { class: "muted" }, "Đang tải…"));
+  dlg.append(h("div", { class: "dh" }, h("span", {}, "Tải NEU Agent cho máy tính"), h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")), body);
   dlg.addEventListener("close", () => dlg.remove());
   document.body.append(dlg);
   dlg.showModal();
@@ -81,63 +83,63 @@ export async function openDownload(base: string): Promise<void> {
   let sums = new Map<string, string>();
   try {
     const r = await fetch(new URL("SHA256SUMS.txt", base).href, { cache: "no-store" });
-    const ct = r.headers.get("content-type") ?? "";
-    if (r.ok && !/html/i.test(ct)) sums = parseSums(await r.text());
+    if (r.ok && !/html/i.test(r.headers.get("content-type") ?? "")) sums = parseSums(await r.text());
   } catch {
     /* hiện thông báo bên dưới */
   }
-
-  clear(body);
-  body.append(h("p", {}, "Bản Desktop làm việc trên thư mục thật của bạn (tab Code chạy lệnh thật, tab Work đọc/ghi tệp Word, Excel, PowerPoint, PDF) và luôn hỏi trước khi sửa tệp hay chạy lệnh."));
-  if (!sums.size) {
-    body.append(h("p", { class: "dl-warn" }, "Máy chủ này chưa có bản cài đặt để tải. Hãy liên hệ người quản trị."));
-    return;
+  let signed: { mac?: boolean; win?: boolean } = {};
+  let signer: { mac?: string; win?: string } = {};
+  try {
+    const r = await fetch(new URL("latest.json", base).href, { cache: "no-store" });
+    if (r.ok && !/html/i.test(r.headers.get("content-type") ?? "")) {
+      const j = (await r.json()) as { signed?: { mac?: boolean; win?: boolean }; signer?: { mac?: string; win?: string } };
+      signed = j.signed ?? {};
+      signer = j.signer ?? {};
+    }
+  } catch {
+    /* không có latest.json: coi như chưa ký */
   }
+  clear(body);
+  if (!sums.size) return void body.append(h("p", { class: "dl-warn" }, "Máy chủ này chưa có bản cài đặt để tải. Hãy liên hệ người quản trị."));
 
   const me = await detectPlatform();
   const files = ITEMS.map((it) => ({ it, name: [...sums.keys()].find((n) => it.re.test(n)) })).filter((x): x is { it: Item; name: string } => !!x.name);
-  const rank = { yes: 0, maybe: 1, no: 2 } as const;
-  files.sort((a, b) => rank[fit(a.it.os, me)] - rank[fit(b.it.os, me)]);
-  const best = files.filter((f) => fit(f.it.os, me) === "yes");
-  body.append(advice(me, best.map((f) => f.it.label)));
+  const url = (n: string) => new URL(n, base).href;
+  const sizeOf = (n: string, into: HTMLElement) => void fetch(url(n), { method: "HEAD" }).then((r) => { const len = Number(r.headers.get("content-length")); if (r.ok && len > 0) into.textContent = mb(len); }).catch(() => undefined);
+  const dlBtn = (f: { it: Item; name: string }, label: string, big = false) => h("a", { class: "btn primary" + (big ? " lg" : ""), href: url(f.name), download: f.name, rel: "noopener" }, label);
 
-  const list = h("div", { class: "dl-list" });
-  for (const { it, name } of files) {
-    const url = new URL(name, base).href;
-    const hash = sums.get(name)!;
-    const size = h("span", { class: "muted" }, "");
-    void fetch(url, { method: "HEAD" }).then((r) => {
-      const n = Number(r.headers.get("content-length"));
-      if (r.ok && n > 0) size.textContent = " · " + mb(n);
-    }).catch(() => undefined);
-    list.append(
-      h("div", { class: "dl-card" + (fit(it.os, me) === "yes" ? " rec" : fit(it.os, me) === "maybe" ? " maybe" : "") },
-        h("div", { class: "dl-row" },
-          h("div", {},
-            h("strong", {}, it.label), fit(it.os, me) === "yes" ? h("span", { class: "lp ok" }, "Phù hợp với máy bạn") : fit(it.os, me) === "maybe" ? h("span", { class: "lp" }, "Có thể phù hợp") : null,
-            h("div", { class: "muted" }, it.hint)),
-          h("a", { class: "btn primary", href: url, download: name, rel: "noopener" }, "Tải xuống")),
-        h("div", { class: "dl-meta muted" }, name, size),
-        h("div", { class: "dl-hash" }, h("span", {}, "SHA-256: "), h("code", {}, hash), h("button", { class: "btn sm", type: "button", onclick: (e: Event) => { void navigator.clipboard?.writeText(hash).then(() => { (e.target as HTMLElement).textContent = "Đã chép"; }).catch(() => undefined); } }, "Chép"))));
-  }
-  body.append(list);
+  const yes = files.filter((f) => fit(f.it.os, me) === "yes");
+  const maybe = files.filter((f) => fit(f.it.os, me) === "maybe");
+  const others = files.filter((f) => !yes.includes(f) && !maybe.includes(f));
+  const isSigned = (os: Item["os"]) => (os === "win" ? !!signed.win : !!signed.mac);
+  const trust = (os: Item["os"]): HTMLElement | null => (isSigned(os) ? h("p", { class: "dl-ok" }, "✔ Đã ký số", (os === "win" ? signer.win : signer.mac) ? " bởi " + String(os === "win" ? signer.win : signer.mac).replace(/^Developer ID Application:\s*/, "").replace(/\s*\(\w+\)$/, "") : "") : null);
+  const hero = h("div", { class: "dl-hero" });
+  if (me.os === "mobile") hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, "💻"), h("h3", {}, "Ứng dụng dành cho máy tính"), h("p", { class: "muted" }, "Hãy mở trang này trên máy tính macOS hoặc Windows. Trên điện thoại, bạn dùng ngay bản web."));
+  else if (me.os === "linux") hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, "🐧"), h("h3", {}, "Chưa có bản cho Linux"), h("p", { class: "muted" }, "Bạn vẫn dùng được bản web ngay trên trang này, hoặc tải bản Windows/macOS về máy khác."));
+  else if (yes.length) {
+    const f = yes[0];
+    const size = h("span", {});
+    sizeOf(f.name, size);
+    hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, f.it.os === "win" ? "🪟" : "🍎"), h("h3", {}, "Tải cho " + SHORT[f.it.os]), h("p", { class: "muted" }, "Phù hợp với máy của bạn · ", size), dlBtn(f, "⬇ Tải xuống", true), ...(trust(f.it.os) ? [trust(f.it.os)!] : []));
+  } else if (maybe.length) {
+    hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, "🍎"), h("h3", {}, "Tải cho máy Mac"), h("p", { class: "muted" }, "Chọn đúng chip của máy (menu  → Giới thiệu về máy Mac)."),
+      h("div", { class: "dl-duo" }, ...maybe.map((f) => h("div", {}, dlBtn(f, "⬇ " + (f.it.os === "mac-arm64" ? "Chip Apple (M1–M4)" : "Chip Intel"), true)))));
+  } else hero.append(h("h3", {}, "Chọn bản đúng với máy của bạn"));
+  body.append(hero);
+  // cài ngay từ trình duyệt (PWA): không có tệp nào được tải về nên không có cảnh báo hệ điều hành
+  if (install?.available()) body.append(h("div", { class: "dl-pwa" }, h("button", { class: "btn", type: "button", onclick: () => { install.run(); dlg.close(); } }, "Cài từ trình duyệt (không cảnh báo)")));
 
-  const verify = me.os === "win" ? `Get-FileHash .\\${files.find((f) => f.it.os === "win")?.name ?? "NEU-Agent-….exe"} -Algorithm SHA256` : "shasum -a 256 NEU-Agent-*.dmg";
+  const rest = me.os === "mobile" || me.os === "linux" || !(yes.length || maybe.length) ? files : others;
+  if (rest.length)
+    body.append(h("details", { class: "dl-more" }, h("summary", {}, "Bản cho máy khác"),
+      ...rest.map((f) => { const size = h("span", { class: "muted" }); sizeOf(f.name, size); return h("div", { class: "dl-row2" }, h("span", {}, SHORT[f.it.os], " ", size), dlBtn(f, "Tải")); })));
+
+  const verify = me.os === "win" ? "Get-FileHash .\\NEU-Agent-*-win-x64.exe -Algorithm SHA256" : "shasum -a 256 NEU-Agent-*.dmg";
   body.append(
-    h("h4", {}, "Trước khi mở"),
-    h("ol", { class: "dl-steps" },
-      h("li", {}, "Kiểm tra mã băm của tệp đã tải rồi so với dòng SHA-256 ở trên (tốt nhất so với mã do giảng viên gửi qua kênh khác):"),
+    h("details", { class: "dl-more" }, h("summary", {}, "Kiểm tra tệp (khuyến nghị)"),
+      h("p", { class: "muted" }, "So mã SHA-256 của tệp đã tải với mã dưới đây (tốt nhất so với mã do giảng viên gửi qua kênh khác):"),
       h("pre", {}, h("code", {}, verify)),
-      h("li", {}, "Bản này ", h("strong", {}, "chưa được Apple/Microsoft ký số"), ", nên lần đầu mở hệ điều hành sẽ cảnh báo “nhà phát hành không xác định”. Chỉ bỏ qua cảnh báo khi mã băm khớp. Cách mở: xem hướng dẫn bên dưới."),
-      h("li", {}, "Mở ứng dụng, vào ⚙ Cài đặt nếu được yêu cầu nhập key do người quản trị cấp.")),
-    h("p", {}, h("a", { href: new URL("HUONG-DAN-CAI-DAT.md", base).href, target: "_blank", rel: "noopener" }, "Hướng dẫn cài đặt chi tiết"), " · ", h("a", { href: new URL("BAO-MAT.md", base).href, target: "_blank", rel: "noopener" }, "Giải thích về bảo mật"), " · ", h("a", { href: new URL("SHA256SUMS.txt", base).href, target: "_blank", rel: "noopener" }, "SHA256SUMS.txt")));
+      ...files.map((f) => h("div", { class: "dl-hash" }, h("span", {}, SHORT[f.it.os]), h("code", {}, sums.get(f.name)!), h("button", { class: "btn sm", type: "button", onclick: (e: Event) => { void navigator.clipboard?.writeText(sums.get(f.name)!).then(() => { (e.target as HTMLElement).textContent = "Đã chép"; }).catch(() => undefined); } }, "Chép")))),
+    h("p", { class: "dl-foot muted" }, (files.every((f) => isSigned(f.it.os)) ? "" : "Bản chưa ký số: lần đầu mở, hệ điều hành sẽ cảnh báo. "), h("a", { href: url("HUONG-DAN-CAI-DAT.md"), target: "_blank", rel: "noopener" }, "Cách mở an toàn"), " · ", h("a", { href: url("BAO-MAT.md"), target: "_blank", rel: "noopener" }, "Bảo mật")));
 }
 
-/** Lời khuyên đầu hộp, theo máy đang dùng. */
-function advice(me: Platform, bestLabels: string[]): HTMLElement {
-  if (me.os === "mobile") return h("p", { class: "dl-warn" }, "Bạn đang dùng điện thoại/máy tính bảng. Ứng dụng Desktop chỉ dành cho máy tính (macOS, Windows): hãy mở trang này trên máy tính, hoặc dùng ngay bản web ở trang này.");
-  if (me.os === "linux") return h("p", { class: "dl-warn" }, "Chưa có bản cho Linux. Bạn vẫn dùng được bản web ngay trên trang này; hoặc tải bản Windows/macOS về máy khác.");
-  if (me.os === "mac" && !me.arch) return h("p", { class: "dl-note" }, "Đã nhận ra máy Mac nhưng trình duyệt không cho biết chip. Xem menu Apple → Giới thiệu về máy Mac: ghi “Chip: Apple M…” thì tải bản chip Apple, ghi “Bộ xử lý: Intel” thì tải bản Intel.");
-  if (bestLabels.length) return h("p", { class: "dl-note" }, "Máy của bạn: ", h("strong", {}, bestLabels[0]), ". Bản phù hợp được xếp trên cùng.");
-  return h("p", { class: "dl-note" }, "Không nhận ra hệ điều hành. Hãy chọn bản đúng với máy của bạn bên dưới.");
-}

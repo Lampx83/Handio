@@ -1,0 +1,230 @@
+{
+  "version": 1,
+  "limits": {
+    "maxBodyBytes": 16384,
+    "maxEvents": 200,
+    "maxNote": 500
+  },
+  "tools": [
+    "read_file",
+    "list_dir",
+    "glob",
+    "grep",
+    "edit_file",
+    "write_file",
+    "todo_write",
+    "bash",
+    "bash_output",
+    "kill_process",
+    "run_javascript",
+    "check_package",
+    "web_fetch",
+    "read_document",
+    "find_in_documents",
+    "create_docx",
+    "docx_replace",
+    "create_xlsx",
+    "xlsx_edit",
+    "create_pptx",
+    "convert_to_pdf",
+    "skill",
+    "task",
+    "exit_plan_mode",
+    "mcp",
+    "other"
+  ],
+  "app": {
+    "install": {
+      "k": "hex",
+      "min": 32,
+      "max": 32
+    },
+    "version": {
+      "k": "version"
+    },
+    "build": {
+      "k": "hex",
+      "min": 4,
+      "max": 16
+    },
+    "platform": {
+      "k": "enum",
+      "v": [
+        "web",
+        "mac",
+        "win",
+        "linux",
+        "other"
+      ]
+    },
+    "profile": {
+      "k": "enum",
+      "v": [
+        "work",
+        "code",
+        "design"
+      ]
+    },
+    "model": {
+      "k": "model"
+    }
+  },
+  "events": {
+    "turn": {
+      "end": {
+        "k": "enum",
+        "v": [
+          "ok",
+          "interrupted",
+          "error",
+          "step_limit",
+          "loop"
+        ],
+        "req": true
+      },
+      "dur_s": {
+        "k": "int",
+        "min": 0,
+        "max": 86400
+      },
+      "ttft_ms": {
+        "k": "int",
+        "min": 0,
+        "max": 3600000
+      },
+      "steps": {
+        "k": "int",
+        "min": 0,
+        "max": 1000
+      },
+      "tools": {
+        "k": "int",
+        "min": 0,
+        "max": 5000
+      },
+      "tool_fail": {
+        "k": "int",
+        "min": 0,
+        "max": 5000
+      },
+      "prompt_tok": {
+        "k": "int",
+        "min": 0,
+        "max": 1000000000
+      },
+      "completion_tok": {
+        "k": "int",
+        "min": 0,
+        "max": 1000000000
+      },
+      "ctx_pct": {
+        "k": "int",
+        "min": 0,
+        "max": 1000
+      },
+      "compactions": {
+        "k": "int",
+        "min": 0,
+        "max": 100
+      },
+      "perm_allow": {
+        "k": "int",
+        "min": 0,
+        "max": 5000
+      },
+      "perm_deny": {
+        "k": "int",
+        "min": 0,
+        "max": 5000
+      }
+    },
+    "tool": {
+      "name": {
+        "k": "tool",
+        "req": true
+      },
+      "ok": {
+        "k": "bool",
+        "req": true
+      },
+      "dur": {
+        "k": "enum",
+        "v": [
+          "lt1s",
+          "lt5s",
+          "lt30s",
+          "lt2m",
+          "ge2m"
+        ],
+        "req": true
+      }
+    },
+    "llm_error": {
+      "kind": {
+        "k": "enum",
+        "v": [
+          "context",
+          "auth",
+          "rate",
+          "server",
+          "network",
+          "insecure",
+          "unexpected",
+          "other"
+        ],
+        "req": true
+      },
+      "status": {
+        "k": "int",
+        "min": 0,
+        "max": 599
+      }
+    },
+    "llm_retry": {
+      "kind": {
+        "k": "enum",
+        "v": [
+          "network",
+          "rate",
+          "server"
+        ],
+        "req": true
+      }
+    },
+    "signal": {
+      "code": {
+        "k": "enum",
+        "v": [
+          "loop",
+          "step_limit",
+          "repeat_tool_fail",
+          "slow_first_token",
+          "slow_turn",
+          "ctx_high",
+          "early_interrupt",
+          "perm_denied",
+          "empty_output",
+          "invalid_tool_args",
+          "unknown_tool",
+          "truncated",
+          "context_overflow"
+        ],
+        "req": true
+      },
+      "tool": {
+        "k": "tool"
+      },
+      "n": {
+        "k": "int",
+        "min": 0,
+        "max": 100000
+      }
+    },
+    "report": {
+      "note": {
+        "k": "text",
+        "max": 500
+      }
+    }
+  }
+}

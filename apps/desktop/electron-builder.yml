@@ -29,9 +29,11 @@ electronFuses:
 mac:
   category: public.app-category.education
   icon: build/icon.png
-  # Chưa có chứng chỉ Apple Developer ID: ký "ad-hoc" (-) để chạy được trên Apple Silicon. Muốn bỏ cảnh báo Gatekeeper phải ký + notarize.
-  identity: "-"
-  hardenedRuntime: false
+  # Chế độ ký do scripts/release.mjs quyết định theo chứng chỉ có sẵn (xem docs/RELEASE-SIGNING.md):
+  #   có Developer ID + khoá notarize → ký + Hardened Runtime + notarize (tải về chạy ngay, không cảnh báo)
+  #   không có → ký "ad-hoc" (-) để vẫn chạy được trên Apple Silicon, nhưng macOS sẽ cảnh báo lần đầu mở
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
   gatekeeperAssess: false
   target:
     - { target: dmg, arch: [arm64, x64] }
@@ -48,8 +50,8 @@ dmg:
 
 win:
   icon: build/icon.png
-  # Không cần wine để đóng gói từ macOS; chưa có chứng chỉ ký số nên tệp .exe sẽ hiện "Nhà phát hành không xác định" (SmartScreen)
-  signAndEditExecutable: false
+  # Bản không ký (scripts/release.mjs thêm signAndEditExecutable=false): đóng gói được từ macOS, .exe hiện "Nhà phát hành không xác định".
+  # Bản ký số: dựng trên máy Windows/GitHub Actions (cần chứng chỉ code-signing), xem docs/RELEASE-SIGNING.md.
   target:
     - { target: nsis, arch: [x64] }
     - { target: zip, arch: [x64] }

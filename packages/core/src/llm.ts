@@ -10,6 +10,8 @@ export interface LlmConfig {
   thinking?: boolean;
   /** Cho phép http:// tới máy không phải cục bộ (mặc định KHÔNG: key và nội dung sẽ đi dạng rõ trên mạng). */
   allowInsecure?: boolean;
+  /** Token đăng nhập SSO (Bearer) cho máy chủ yêu cầu đăng nhập; chỉ được gọi khi địa chỉ API nằm trong danh sách máy chủ tin cậy của ứng dụng. */
+  authToken?: () => Promise<string | null>;
 }
 
 export interface ToolCallMsg {
@@ -69,6 +71,7 @@ function friendly(status: number, text: string): LlmError {
   const low = (text || "").toLowerCase();
   if (status === 400 && (low.includes("context length") || low.includes("maximum context") || low.includes("too long")))
     return new LlmError("Ngữ cảnh vượt giới hạn của mô hình.", status, "context");
+  if (status === 401 && low.includes("login_required")) return new LlmError("Hết phiên đăng nhập. Hãy đăng nhập lại.", status, "auth");
   if (status === 401) return new LlmError("Key sai hoặc chưa nhập. Vào Cài đặt để nhập lại.", status, "auth");
   if (status === 403) return new LlmError("Key này không được dùng mô hình chat (có thể là key chỉ dành cho embedding).", status, "auth");
   if (status === 429) return new LlmError("Vượt giới hạn số lệnh/phút của key.", status, "rate");
@@ -148,10 +151,12 @@ export function parseTextToolCalls(content: string): { text: string; calls: Pars
 export class LlmClient {
   constructor(private getConfig: () => LlmConfig, private fetchImpl: typeof fetch = (...a) => fetch(...a)) {}
 
-  private headers(accept = "text/event-stream"): Record<string, string> {
+  private async headers(accept = "text/event-stream"): Promise<Record<string, string>> {
     const c = this.getConfig();
     const h: Record<string, string> = { "Content-Type": "application/json", Accept: accept };
     if (c.key) h[c.keyHeader || "x-ollama-seckey"] = c.key;
+    const t = await c.authToken?.().catch(() => null);
+    if (t) h.Authorization = "Bearer " + t;
     return h;
   }
 
@@ -160,7 +165,7 @@ export class LlmClient {
     assertSecureEndpoint(c.baseUrl, c.allowInsecure);
     let r: Response;
     try {
-      r = await this.fetchImpl(c.baseUrl.replace(/\/+$/, "") + "/models", { headers: this.headers("application/json"), signal, redirect: "error" });
+      r = await this.fetchImpl(c.baseUrl.replace(/\/+$/, "") + "/models", { headers: await this.headers("application/json"), signal, redirect: "error" });
     } catch (e) {
       throw new LlmError("Không kết nối được máy chủ: " + (e as Error).message, 0, "network");
     }
@@ -193,7 +198,7 @@ export class LlmClient {
       if (o.signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
       let resp: Response;
       try {
-        resp = await this.fetchImpl(c.baseUrl.replace(/\/+$/, "") + "/chat/completions", { method: "POST", headers: this.headers(), body: payload, signal: o.signal, redirect: "error" });
+        resp = await this.fetchImpl(c.baseUrl.replace(/\/+$/, "") + "/chat/completions", { method: "POST", headers: await this.headers(), body: payload, signal: o.signal, redirect: "error" });
       } catch (e) {
         if (o.signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
         if (attempt <= 3) {

@@ -1,0 +1,26 @@
+[Unit]
+Description=NEU Agent - dang nhap SSO Microsoft 365 (oauth2-proxy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/neu-agent/oauth2-proxy.env
+ExecStart=/usr/local/bin/oauth2-proxy
+Restart=always
+RestartSec=3
+# chạy bằng tài khoản tạm, không quyền ghi, không quyền đặc biệt
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

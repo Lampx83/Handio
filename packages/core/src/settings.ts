@@ -77,7 +77,7 @@ export function sanitizeProjectSettings(raw: unknown): ProjectSettings {
 }
 
 export function toPublic(s: Settings, builtin?: BuiltinKey): PublicSettings {
-  const { key, ...rest } = s;
+  const { key, diagId: _diagId, ...rest } = s;
   const eff = effectiveKey(s, builtin);
   return { ...rest, hasKey: !!eff.key, keyHint: key ? "••••" + key.slice(-4) : eff.builtin ? "key tích hợp sẵn" : "" };
 }

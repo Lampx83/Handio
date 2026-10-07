@@ -3,16 +3,19 @@ import { LlmClient, LlmError, type ChatMessage, type ChatResult, type ToolSchema
 import { expandCommand, loadAgents, loadCommands, loadMemory, loadSkills, type CustomCommand, type CustomSkill } from "./memory";
 import { Permissions, type Mode, type TargetInfo } from "./permissions";
 import { toPublic, type ProjectSettings } from "./settings";
-import { builtinTools, readText, relPath, resolveSafe, ToolError, walk, type Tool, type ToolContext } from "./tools";
-import { dangerousReason } from "./shell";
+import { builtinTools, IGNORE_DIRS, readText, relPath, resolveSafe, ToolError, walk, type Tool, type ToolContext } from "./tools";
+import { dangerousReason, isReadonlySegment, parseCommand } from "./shell";
+import { listChanges, revertChanges, trackExec, type RevertResult } from "./changes";
+import { isInternalUser } from "./projects";
 import { isSensitivePath } from "./sensitive";
 import { officeTools } from "./office/tools";
+import { workTools } from "./office/work-tools";
 import { PROFILES, type Profile } from "./profiles";
 import { allowedModes, type Policy } from "./policy";
 import { ProcessManager } from "./processes";
 import { HookRunner, mergeHooks, countHooks } from "./hooks";
 import { McpManager, type McpServerSpec } from "./mcp";
-import type { PermissionRequest, PermissionResponse, SessionEvent, Settings, SlashCommandInfo } from "./types";
+import type { PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
 
 const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
 const MAX_TOOL_CHARS = 12000;
@@ -73,6 +76,11 @@ export class Session {
   calls = 0;
   charsPerToken = 3;
   lastPromptTokens = 0;
+  /** Số thứ tự lượt hỏi (để gắn thay đổi vào lượt, phục vụ "Thay đổi" và /rewind). */
+  turnNo = 0;
+  readonly turnMarks = new WeakMap<ChatMessage, number>();
+  /** Việc đã làm trong lượt hiện tại: để biết đã chạy kiểm tra sau lần sửa cuối chưa. */
+  turnLog = { seq: 0, lastEdit: 0, checks: [] as { seq: number; ok: boolean }[] };
   readonly main: Agent;
 
   private constructor(readonly o: SessionOptions, root: string) {
@@ -100,7 +108,7 @@ export class Session {
       if (Object.keys(servers).length) this.mcp = new McpManager(servers, o.env, root);
     }
     const base = builtinTools(o.env).filter((t) => (def.id === "code" || !["bash", "run_javascript"].includes(t.name)) && !(o.policy?.disableBash && t.name === "bash"));
-    for (const t of [...base, ...(def.id === "work" ? officeTools(o.env) : []), ...this.metaTools()]) this.tools.set(t.name, t);
+    for (const t of [...base, ...(def.id === "work" || def.id === "design" ? officeTools(o.env) : []), ...(def.id === "work" ? workTools(o.env) : []), ...this.metaTools()]) this.tools.set(t.name, t);
     this.main = new Agent(this);
   }
 
@@ -256,7 +264,9 @@ export class Session {
       { name: "compact", description: "Tóm tắt hội thoại để giải phóng ngữ cảnh" },
       { name: "mode", description: "Đổi chế độ quyền: " + PROFILES[this.profile].modes.join(" | ") },
       { name: "undo", description: "Hoàn tác thay đổi file gần nhất của agent" },
-      { name: "context", description: "Xem mức dùng ngữ cảnh và token" },
+      { name: "context", description: "Ngữ cảnh đang dùng vào việc gì" },
+      { name: "status", description: "Mô hình, chế độ, thư mục, ngữ cảnh" },
+      ...(this.profile === "code" ? [{ name: "diff", description: "Xem các tệp agent đã thay đổi" }, { name: "rewind", description: "Quay lại một lượt trước (hội thoại + tệp)" }] : []),
       { name: "model", description: "Xem/chọn mô hình: /model hoặc /model <tên|số>" },
       { name: "agents", description: "Danh sách subagent (có sẵn + tuỳ biến)" },
       { name: "skills", description: "Danh sách skill của dự án" },
@@ -316,7 +326,20 @@ export class Session {
         notice(this.mcp ? `Công cụ MCP: ${[...this.tools.keys()].filter((k) => k.startsWith("mcp__")).join(", ") || "(không có)"}${this.mcp.errors.length ? "\nLỗi: " + this.mcp.errors.join("; ") : ""}` : "Chưa cấu hình máy chủ MCP (mcpServers trong cài đặt người dùng; của dự án cần Tin cậy).");
         return { run: null };
       case "context":
-        notice(`Ngữ cảnh ~${this.contextPct()}% · ${this.promptTokens} token vào / ${this.completionTokens} token ra · ${this.calls} lần gọi mô hình · ${this.main.messages.length} tin nhắn`);
+        notice(this.contextReport());
+        return { run: null };
+      case "status":
+        notice(await this.statusReport());
+        return { run: null };
+      case "diff": {
+        if (this.profile !== "code") break;
+        const ch = await listChanges(this.ctx);
+        notice(ch.length ? ch.map((f) => `${f.status === "new" ? "＋" : f.status === "deleted" ? "−" : "✎"} ${f.path}${f.sensitive || f.binary || f.large ? "" : `  +${f.added} −${f.removed}`}`).join("\n") : "Chưa có thay đổi.");
+        return { run: null };
+      }
+      case "rewind":
+        if (this.profile !== "code") break;
+        notice("Bấm nút ↶ ở thanh trên, hoặc nhấn Esc hai lần.");
         return { run: null };
     }
     const custom = this.commands.find((c) => c.name === name);
@@ -338,7 +361,11 @@ export class Session {
     let out = "";
     let ok = true;
     try {
-      const r = await this.o.env.exec(command, { cwd: this.ctx.root, timeoutMs: 120_000, signal: this.ctx.signal });
+      this.ctx.turn = ++this.turnNo; // thay đổi do lệnh tự chạy cũng vào "Thay đổi"
+      const segs = parseCommand(command);
+      const readonlyCmd = !!segs && segs.length > 0 && segs.every((x) => isReadonlySegment(x, this.ctx.root));
+      const run = () => this.o.env.exec!(command, { cwd: this.ctx.root, timeoutMs: 120_000, signal: this.ctx.signal });
+      const r = readonlyCmd ? await run() : await trackExec(this.ctx, run);
       out = (r.output.trim() || "(không có đầu ra)").slice(-8000) + (r.timedOut ? "\n[Hết thời gian 120s, đã dừng lệnh]" : `\n[mã thoát ${r.code}]`);
       ok = r.code === 0 && !r.timedOut;
     } catch (e) {
@@ -377,9 +404,9 @@ export class Session {
         continue;
       }
       if (st.isDir) {
-        const items = (await this.o.env.readdir(abs)).map((e) => e.name + (e.isDir ? "/" : "")).sort().slice(0, 100);
-        blocks.push(`<dir path="${rel}">\n${items.join("\n")}\n</dir>`);
-        names.push("@" + rel + "/");
+        const items = await this.dirTree(abs, "", 0, { n: 0 });
+        blocks.push(`<dir path="${rel}">\n${items.join("\n") || "(thư mục trống)"}\n</dir>`);
+        names.push("@" + (rel === "." ? "" : rel + "/"));
         continue;
       }
       let body: string;
@@ -403,19 +430,131 @@ export class Session {
     return `${text}\n\n[Nội dung các tệp được đính kèm bằng @ (tại thời điểm gửi):]\n${blocks.join("\n")}`;
   }
 
+  /** Cây thư mục (sâu tối đa 2 cấp, tối đa 150 mục) cho `@thư_mục/`; bỏ thư mục sinh ra và tệp nhạy cảm. */
+  private async dirTree(abs: string, prefix: string, depth: number, count: { n: number }): Promise<string[]> {
+    const out: string[] = [];
+    const entries = (await this.o.env.readdir(abs)).filter((e) => !(e.isDir && IGNORE_DIRS.has(e.name)) && e.name !== ".DS_Store" && !isSensitivePath(e.name)).sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name));
+    for (const e of entries) {
+      if (count.n >= 150) {
+        out.push(prefix + "…");
+        break;
+      }
+      count.n++;
+      out.push(prefix + e.name + (e.isDir ? "/" : ""));
+      if (e.isDir && depth < 1) out.push(...(await this.dirTree(abs + "/" + e.name, prefix + "  ", depth + 1, count)));
+    }
+    return out;
+  }
+
   async undo(): Promise<string> {
     const u = this.ctx.undoStack.pop();
     if (!u) return "Không còn thay đổi nào để hoàn tác.";
-    const rel = relPath(this.ctx, u.path);
-    if (u.old === null) await this.o.env.remove(u.path);
-    else {
-      if (typeof u.old === "string") await this.o.env.writeText(u.path, u.old);
-      else await this.o.env.writeBytes(u.path, u.old);
-      const st = await this.o.env.stat(u.path);
-      if (st) this.ctx.readFiles.set(u.path, st.mtimeMs);
+    const batch = [u];
+    // thay đổi do cùng một lệnh bash: hoàn tác cả nhóm (theo thứ tự ngược)
+    while (u.group && this.ctx.undoStack.length && this.ctx.undoStack[this.ctx.undoStack.length - 1].group === u.group) batch.push(this.ctx.undoStack.pop()!);
+    const rels: string[] = [];
+    for (const e of batch) {
+      const rel = relPath(this.ctx, e.path);
+      rels.push(rel);
+      const real = await resolveSafe(this.ctx, e.path); // luôn nằm trong thư mục dự án
+      if (e.old === null) await this.o.env.remove(real);
+      else {
+        if (typeof e.old === "string") await this.o.env.writeText(real, e.old);
+        else await this.o.env.writeBytes(real, e.old);
+        const st = await this.o.env.stat(real);
+        if (st) this.ctx.readFiles.set(real, st.mtimeMs);
+      }
     }
-    this.emit({ type: "files_changed", paths: [rel] });
-    return u.old === null ? `Đã xoá file ${rel} vừa tạo.` : `Đã khôi phục ${rel} về trước lần sửa gần nhất.`;
+    this.emit({ type: "files_changed", paths: rels });
+    if (batch.length > 1) return `Đã hoàn tác ${batch.length} tệp do cùng một lệnh thay đổi.`;
+    return u.old === null ? `Đã xoá file ${rels[0]} vừa tạo.` : `Đã khôi phục ${rels[0]} về trước lần sửa gần nhất.`;
+  }
+
+  // ---------------------------------------------------------------- lượt hỏi, thay đổi, quay lại
+  /** Bắt đầu một lượt hỏi của người dùng (gắn mọi thay đổi sau đó vào lượt này). */
+  beginTurn(userMsg: ChatMessage): void {
+    this.ctx.turn = ++this.turnNo;
+    this.turnMarks.set(userMsg, this.ctx.turn);
+    this.turnLog = { seq: 0, lastEdit: 0, checks: [] };
+  }
+
+  /** Ghi nhận một công cụ vừa chạy xong (để biết đã kiểm chứng sau lần sửa cuối chưa). */
+  noteTool(name: string, passed: boolean, wrote: boolean): void {
+    const L = this.turnLog;
+    if (name === "bash" || name === "run_javascript") L.checks.push({ seq: ++L.seq, ok: passed });
+    if (wrote) L.lastEdit = ++L.seq;
+  }
+
+  /** Tóm tắt lượt vừa xong: các tệp đã đổi và đã chạy kiểm tra hay chưa. null nếu lượt này không đổi tệp nào. */
+  async turnSummary(): Promise<{ turn: number; files: Awaited<ReturnType<typeof listChanges>>; verify: "ok" | "fail" | "none" } | null> {
+    const turn = this.ctx.turn ?? 0;
+    if (!turn) return null;
+    const files = await listChanges(this.ctx, turn);
+    if (!files.length) return null;
+    const after = this.turnLog.checks.filter((c) => c.seq > this.turnLog.lastEdit);
+    return { turn, files, verify: !after.length ? "none" : after.every((c) => c.ok) ? "ok" : "fail" };
+  }
+
+  /** Các điểm quay lại = trước mỗi yêu cầu hiển thị của người dùng (`inputs`: nội dung người dùng đã gõ, nếu khớp). */
+  rewindPoints(inputs: string[] = []): { point: RewindPoint; msgIndex: number; turn?: number }[] {
+    const msgs = this.main.messages;
+    const idx = msgs.map((m, i) => (m.role === "user" && m.content && !isInternalUser(m.content) ? i : -1)).filter((i) => i >= 0);
+    const aligned = inputs.length === idx.length;
+    return idx.map((mi, k) => {
+      const turn = this.turnMarks.get(msgs[mi]);
+      const raw = aligned ? inputs[k] : (msgs[mi].content ?? "").split(/\n\n\[(?:Nội dung các tệp được đính kèm|Thông tin thêm từ hook)/)[0];
+      const files = turn === undefined ? 0 : new Set(this.ctx.undoStack.filter((e) => (e.turn ?? 0) >= turn).map((e) => e.path)).size;
+      return { point: { index: k, text: raw.replace(/\s+/g, " ").trim().slice(0, 200), files }, msgIndex: mi, turn };
+    });
+  }
+
+  /** Cắt hội thoại về trước tin nhắn `msgIndex`; nếu `files` thì khôi phục cả các tệp đã đổi từ lượt `turn`. */
+  async rewindTo(msgIndex: number, turn: number | undefined, files: boolean): Promise<RevertResult> {
+    const r: RevertResult = files && turn !== undefined ? await revertChanges(this.ctx, { fromTurn: turn }) : { reverted: [], skipped: [] };
+    this.main.messages = this.main.messages.slice(0, msgIndex);
+    this.ctx.todos = [];
+    if (r.reverted.length) this.emit({ type: "files_changed", paths: r.reverted });
+    return r;
+  }
+
+  private estTokens(chars: number, scale: number): number {
+    return Math.round(chars * scale);
+  }
+
+  /** /context: ngữ cảnh đang dùng vào việc gì (ước lượng, hiệu chỉnh theo số token thật của lần gọi gần nhất). */
+  private contextReport(): string {
+    const limit = this.o.getSettings().contextTokens;
+    const sysAll = this.systemPrompt(null, 0).length;
+    const base = PROFILES[this.profile].systemBase.length;
+    const mem = this.memory.reduce((n, m) => n + m.text.length, 0);
+    const tools = JSON.stringify(this.toolsFor(null, 0).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }))).length;
+    const msgs = this.main.messages;
+    const part = (role: string) => msgs.filter((m) => m.role === role).reduce((n, m) => n + (m.content?.length ?? 0) + (m.tool_calls ? JSON.stringify(m.tool_calls).length : 0), 0);
+    const [u, a, t] = [part("user"), part("assistant"), part("tool")];
+    const all = sysAll + tools + u + a + t;
+    // cùng con số với thước ngữ cảnh ở thanh trên (đã hiệu chỉnh theo token thật), chia theo tỉ lệ ký tự
+    const used = this.main.estimateTokens();
+    const scale = all > 0 ? used / all : 0;
+    const k = (c: number) => { const n = this.estTokens(c, scale); return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n); };
+    const pct = this.contextPct();
+    const bar = "█".repeat(Math.round(pct / 5)) + "░".repeat(20 - Math.round(pct / 5));
+    const rows: [string, string][] = [["Lời nhắc hệ thống", k(base + (sysAll - base - mem))], ["Công cụ", k(tools)], ...(mem ? [["AGENTS.md", k(mem)] as [string, string]] : []), ["Tin nhắn của bạn", k(u)], ["Trả lời của agent", k(a)], ["Kết quả công cụ", k(t)], ["Còn trống", limit - used >= 1000 ? ((limit - used) / 1000).toFixed(1) + "k" : String(Math.max(0, limit - used))]];
+    return `${bar} ~${pct}% · ${used}/${limit} token\n` + rows.map(([n, v]) => `${n.padEnd(20)} ${v}`).join("\n") + `\nTổng: ${this.promptTokens} token vào / ${this.completionTokens} ra · ${this.calls} lần gọi`;
+  }
+
+  /** /status: tình trạng phiên (kiểu Codex). */
+  private async statusReport(): Promise<string> {
+    const s = this.o.getSettings();
+    const ch = this.profile === "code" ? (await listChanges(this.ctx)).length : 0;
+    const procs = this.ctx.procs?.list().filter((p) => p.alive).length ?? 0;
+    return [
+      `Mô hình: ${s.model} · Chế độ: ${this.mode}`,
+      `Thư mục: ${this.ctx.root}`,
+      `Terminal: ${this.o.env.exec ? "có" : "không"}${this.o.env.sandbox ? ` · sandbox ${this.o.env.sandbox.kind}${this.o.env.sandbox.network ? "" : ", không mạng"}` : this.o.env.exec ? " · không sandbox" : ""}`,
+      `Ngữ cảnh ~${this.contextPct()}% · ${this.calls} lần gọi · ${this.main.messages.length} tin nhắn`,
+      ...(this.profile === "code" ? [`Đã thay đổi ${ch} tệp · ${procs} tiến trình nền`] : []),
+      `Hướng dẫn dự án: ${this.memory.map((m) => m.name).join(", ") || "(chưa có)"}`,
+    ].join("\n");
   }
 
   contextPct(): number {
@@ -523,7 +662,9 @@ export class Agent {
         if (hr.context) userText += "\n\n[Thông tin thêm từ hook]\n" + hr.context;
       }
     }
-    this.messages.push({ role: "user", content: userText });
+    const userMsg: ChatMessage = { role: "user", content: userText };
+    this.messages.push(userMsg);
+    if (this.depth === 0) s.beginTurn(userMsg);
     let stopRetries = 0;
     const maxSteps = this.depth === 0 ? s.o.getSettings().maxSteps : 25;
     let final = "";
@@ -692,8 +833,12 @@ export class Agent {
     // chạy
     let ok = true;
     let result: string;
+    const undoBefore = s.ctx.undoStack.length;
     try {
-      result = await tool.run(s.ctx, args);
+      // lệnh bash có thể ghi file: chụp trước/sau để đưa vào "Thay đổi" (bỏ qua lệnh chỉ-đọc cho nhanh)
+      const segs = name === "bash" ? parseCommand(String(args.command ?? "")) : null;
+      const readonlyCmd = !!segs && segs.length > 0 && segs.every((x) => isReadonlySegment(x, s.ctx.root));
+      result = name === "bash" && !readonlyCmd ? await trackExec(s.ctx, () => tool.run(s.ctx, args)) : await tool.run(s.ctx, args);
     } catch (e) {
       ok = false;
       if (e instanceof ToolError) result = "Lỗi: " + e.message;
@@ -703,6 +848,7 @@ export class Agent {
     result = String(result);
     if (result.length > MAX_TOOL_CHARS) result = result.slice(0, MAX_TOOL_CHARS) + `\n… (đã cắt bớt ${result.length - MAX_TOOL_CHARS} ký tự)`;
     s.emit({ type: "tool_result", id: tc.id, name, ok, output: result, depth: this.depth });
+    s.noteTool(name, ok && !(name === "bash" && /\[(mã thoát [1-9]\d*|Hết thời gian)/.test(result.slice(-80))), s.ctx.undoStack.length > undoBefore);
     if (ok && (name === "web_fetch" || tool.kind === "mcp") && !s.perms.tainted) {
       s.perms.tainted = true;
       s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${name === "web_fetch" ? "web" : "công cụ ngoài (MCP)"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });

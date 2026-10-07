@@ -17,6 +17,8 @@ export interface Policy {
   disableBash?: boolean;
   /** Lời nhắn hiển thị cho người dùng (vd liên hệ hỗ trợ). */
   notice?: string;
+  /** false = tắt hẳn chẩn đoán/báo lỗi ẩn danh (người dùng không bật lại được). Xem docs/DIAGNOSTICS.md. */
+  diagnostics?: boolean;
 }
 
 /** Làm sạch tệp chính sách đọc từ đĩa: chỉ giữ các trường biết, đúng kiểu. */
@@ -29,6 +31,7 @@ export function parsePolicy(raw: unknown): Policy {
   if (typeof r.bashNetwork === "boolean") p.bashNetwork = r.bashNetwork;
   if (typeof r.disableBash === "boolean") p.disableBash = r.disableBash;
   if (typeof r.notice === "string") p.notice = r.notice.slice(0, 500);
+  if (typeof r.diagnostics === "boolean") p.diagnostics = r.diagnostics;
   return p;
 }
 

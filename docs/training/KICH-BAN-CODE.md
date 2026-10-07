@@ -49,7 +49,7 @@
 - Agent báo "đã sửa" mà không chạy lại → gõ: `Chạy lại để chứng minh.`
 
 **Điểm nhấn:** "Chạy được" ≠ "đúng"; bằng chứng là kết quả chạy. Diff nhỏ = dễ review.
-**Mở rộng:** gõ `/undo` để hoàn tác, rồi nhờ agent sửa theo cách khác.
+**Mở rộng:** gõ `/undo` để hoàn tác, rồi nhờ agent sửa theo cách khác. Mở **± Thay đổi** (hoặc `/diff`) để xem lại diff cả buổi; **↶** (Esc hai lần) quay về một lượt trước, cả hội thoại lẫn tệp. Thẻ cuối lượt báo “⚠ Chưa kiểm tra” nghĩa là agent chưa chạy test sau lần sửa cuối: yêu cầu chạy.
 
 ## C2 — Lập kế hoạch trước khi code (30′)
 

@@ -13,3 +13,6 @@ __pycache__/
 # bản cài Desktop (nặng) — chỉ để upload lên máy chủ
 deploy/ai-neu/downloads/
 deploy/ai-neu/web.tar.gz
+deploy/220/auth/*.tar.gz
+deploy/220/downloads/
+deploy/220/web.tar.gz

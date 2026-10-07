@@ -1,7 +1,14 @@
-import type { AgentController, DiffLine, DiffPreview, Mode, PermissionRequest, PublicSettings, SessionEvent, SlashCommandInfo, Todo, UiState } from "@neu/agent-core";
+import type { AgentController, DiffLine, HistoryItem, DiffPreview, Mode, PermissionRequest, PublicSettings, SessionEvent, SlashCommandInfo, Todo, UiState } from "@neu/agent-core";
 import { clear, h, store } from "./dom";
 import { escapeHtml, renderMarkdown } from "./markdown";
+import { treeIcon } from "./icons";
+import { openSettings as openSettingsDialog, type AccountInfo } from "./settings-ui";
+import { DesignPreview } from "./preview";
+import { ago, openInstructions, openNewProject, toggleProjectMenu } from "./projects-ui";
 import { openLearn } from "./learn";
+import { CodeTools } from "./code-tools";
+import { DocPane } from "./docview";
+import { WorkTools } from "./work-tools";
 import { PROMPT_TEMPLATE, promptTips } from "./prompt-tips";
 
 const MODE_INFO: Record<Mode, { label: string; desc: string }> = {
@@ -10,7 +17,7 @@ const MODE_INFO: Record<Mode, { label: string; desc: string }> = {
   plan: { label: "Lập kế hoạch", desc: "Chỉ đọc. Agent đề xuất kế hoạch để bạn duyệt trước khi làm." },
   bypass: { label: "Tự động hết", desc: "Tự duyệt mọi thứ (vẫn chặn lệnh phá hoại nặng). Chỉ dùng trong thư mục thử nghiệm!" },
 };
-const TOOL_LABEL: Record<string, string> = { read_document: "Đọc tài liệu", find_in_documents: "Tìm trong tài liệu", create_docx: "Tạo Word", docx_replace: "Sửa Word", create_xlsx: "Tạo Excel", xlsx_edit: "Sửa Excel", create_pptx: "Tạo PowerPoint", convert_to_pdf: "Xuất PDF", read_file: "Đọc", list_dir: "Liệt kê", glob: "Tìm file", grep: "Tìm nội dung", edit_file: "Sửa", write_file: "Ghi", bash: "Lệnh", todo_write: "Việc cần làm", task: "Subagent", run_javascript: "Chạy JS", web_fetch: "Tải web", exit_plan_mode: "Kế hoạch" };
+const TOOL_LABEL: Record<string, string> = { read_document: "Đọc tài liệu", find_in_documents: "Tìm trong tài liệu", create_docx: "Tạo Word", docx_replace: "Sửa Word", merge_check: "Kiểm tra trộn", merge_documents: "Trộn hàng loạt", scan_pii: "Quét dữ liệu cá nhân", redact_pii: "Che dữ liệu cá nhân", xlsx_pivot: "Bảng tổng hợp", create_xlsx: "Tạo Excel", xlsx_edit: "Sửa Excel", create_pptx: "Tạo PowerPoint", convert_to_pdf: "Xuất PDF", read_file: "Đọc", list_dir: "Liệt kê", glob: "Tìm file", grep: "Tìm nội dung", edit_file: "Sửa", write_file: "Ghi", bash: "Lệnh", todo_write: "Việc cần làm", task: "Subagent", run_javascript: "Chạy JS", web_fetch: "Tải web", exit_plan_mode: "Kế hoạch" };
 
 interface ToolCard {
   id: string;
@@ -25,6 +32,10 @@ interface ToolCard {
 export interface MountOptions {
   /** Gọi khi agent cần người dùng chú ý (xin quyền) hoặc làm xong khi tab đang ẩn. */
   onAttention?: (kind: "permission" | "done" | "clear") => void;
+  /** Chỗ trên thanh ngang của khung chứa để App đặt các nút (trái: ☰; phải: thước ngữ cảnh, chế độ, nút…). Không có thì App tự vẽ thanh riêng. */
+  bar?: { left: HTMLElement; right: HTMLElement };
+  /** Tài khoản đang đăng nhập (SSO) để hiện trong Cài đặt. */
+  account?: AccountInfo;
 }
 
 export function saveBlob(name: string, data: Uint8Array): void {
@@ -50,11 +61,6 @@ export const previewBlock = (d: DiffPreview): HTMLElement[] =>
     ? [h("div", { class: "diff-stat" }, d.isNew ? "Tạo tệp mới " : "Ghi vào tệp ", h("b", {}, d.path)), h("pre", { class: "outline" }, d.outline)]
     : [diffStat(d), renderDiff(d.diff)];
 
-const fileIcon = (name: string): string => {
-  const e = name.toLowerCase().split(".").pop() ?? "";
-  return ({ docx: "W", doc: "W", xlsx: "X", xls: "X", csv: "X", pptx: "P", ppt: "P", pdf: "▤", md: "¶", txt: "¶" } as Record<string, string>)[e] ?? "·";
-};
-
 const diffStat = (d: DiffPreview): HTMLElement => {
   const a = d.diff.filter((l) => l.kind === "add").length;
   const r = d.diff.filter((l) => l.kind === "del").length;
@@ -77,7 +83,7 @@ class App {
   private busy = false;
   private feedInner = h("div", { class: "feed-inner" });
   private feed = h("div", { class: "feed", tabindex: "-1" }, this.feedInner);
-  private input = h("textarea", { rows: "1", placeholder: "Nhập yêu cầu… (Enter gửi · Shift+Enter xuống dòng · / để xem lệnh)", "aria-label": "Yêu cầu cho agent" });
+  private input = h("textarea", { rows: "1", placeholder: "Nhập yêu cầu…", "aria-label": "Yêu cầu cho agent" });
   private sendBtn = h("button", { class: "btn primary", type: "button", onclick: () => this.onSendClick() }, "Gửi");
   private modePill = h("button", { class: "pill", type: "button", "aria-haspopup": "menu", onclick: () => this.toggleModeMenu() });
   private modeMenu: HTMLElement | null = null;
@@ -92,10 +98,26 @@ class App {
   private procs = new Map<string, { command: string; alive: boolean; url?: string }>();
   private tipEl = h("div", { class: "mention-note", "aria-live": "polite" });
   private tree = h("div", { class: "tree", role: "tree", "aria-label": "Tệp trong dự án" });
+  private projBtn = h("button", { class: "projbtn", type: "button", "aria-haspopup": "menu", title: "Chuyển dự án" });
+  private projBox = h("div", { class: "proj", hidden: true });
+  private chatsEl = h("div", { class: "chats", role: "list", "aria-label": "Các cuộc trò chuyện" });
+  private chatsHead = h("h4", { class: "chats-h", hidden: true }, "Trò chuyện");
+  private newChatBtn = h("button", { class: "btn newchat", type: "button", onclick: () => void this.ctl.newSession() }, "＋ Cuộc trò chuyện mới");
+  private newBtn = h("button", { class: "iconbtn", type: "button", "aria-label": "Cuộc trò chuyện mới", title: "Cuộc trò chuyện mới (/clear)", onclick: () => void this.ctl.newSession() }, "＋ Mới");
+  private learnBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Học vibe coding", title: "Bài học, bài tập chấm tự động, dự án mẫu", onclick: () => this.openLearning() }, "📚 Học");
+  private pv: DesignPreview | null = null;
+  private pvHost = h("div", { class: "pv-host", hidden: true });
+  /** Bảng Thay đổi, /rewind, thẻ tổng kết, chọn mô hình, nút chạy (chỉ tab Code). */
+  private codeTools!: CodeTools;
+  /** Trích dẫn bấm xem được, khung xem tài liệu, “Quy trình của tôi” (chỉ tab Work). */
+  private workTools!: WorkTools;
+  private docPane!: DocPane;
+  private hintEl = h("span", { id: "hint" });
   private todosEl = h("div", { class: "todos" });
+  private todosHead = h("h4", { hidden: true }, "Việc cần làm");
   private wsEl = h("span", { class: "ws" });
   private meterBar = h("i");
-  private meterTxt = h("span", {}, "ngữ cảnh 0%");
+  private meterTxt = h("span", {}, "0%");
   private bannerHost = h("div");
   private sideActions = h("span", { class: "side-acts" });
   private fileInput = h("input", { type: "file", multiple: true, hidden: true, "aria-label": "Chọn tệp để thêm" });
@@ -120,6 +142,21 @@ class App {
   constructor(private root: HTMLElement, private ctl: AgentController, private opts: MountOptions) {
     this.shell = h("div", { class: "neu" });
     root.append(this.shell);
+    this.codeTools = new CodeTools(ctl, {
+      append: (el) => this.append(el),
+      repaint: (hist) => this.paintHistory(hist),
+      setInput: (t) => { this.input.value = t; this.autoGrow(); this.input.focus(); },
+      submit: (t) => void this.submit(t),
+      refreshState: () => void this.refresh(),
+      renderDiff: (d) => renderDiff(d),
+    });
+    this.docPane = new DocPane(ctl, { download: (p) => void this.download(p), external: ctl.openExternally ? (p) => void ctl.openExternally!(p) : undefined });
+    this.workTools = new WorkTools(ctl, {
+      append: (el) => this.append(el),
+      setInput: (t) => { this.input.value = t; this.autoGrow(); this.input.focus(); },
+      refreshState: () => void this.refresh(),
+      openDoc: (path, loc) => void this.docPane.open(path, loc),
+    });
     this.build();
     ctl.onEvent((e) => this.onEvent(e));
     void this.refresh(true);
@@ -138,28 +175,41 @@ class App {
 
   // ------------------------------------------------------------------ khung
   private build(): void {
-    const head = h("div", { class: "neu-head" },
-      h("button", { class: "iconbtn toggle-side", type: "button", "aria-label": "Mở/đóng thanh bên", onclick: () => this.shell.classList.toggle("side-open") }, "☰"),
-      this.wsEl,
-      h("span", { class: "grow" }),
+    const toggle = h("button", { class: "iconbtn toggle-side", type: "button", "aria-label": "Mở/đóng thanh bên", onclick: () => this.shell.classList.toggle("side-open") }, "☰");
+    const tools = [
       h("div", { class: "meter", title: "Mức dùng cửa sổ ngữ cảnh của mô hình" }, h("div", { class: "bar" }, this.meterBar), this.meterTxt),
       h("div", { style: { position: "relative" } }, this.modePill),
-      this.ctl.learnLessons ? h("button", { class: "iconbtn", type: "button", "aria-label": "Học vibe coding", title: "Bài học, bài tập chấm tự động, dự án mẫu", onclick: () => this.openLearning() }, "📚 Học") : null,
-      h("button", { class: "iconbtn", type: "button", "aria-label": "Phiên mới", title: "Phiên mới (/clear)", onclick: () => void this.ctl.newSession() }, "＋ Mới"),
+      ...this.codeTools.buttons,
+      ...this.workTools.buttons,
+      this.learnBtn,
+      this.newBtn,
       h("button", { class: "iconbtn", type: "button", "aria-label": "Cài đặt", title: "Cài đặt", onclick: () => this.openSettings() }, "⚙"),
-    );
+    ];
+    let head: HTMLElement | null = null;
+    if (this.opts.bar) {
+      this.opts.bar.left.append(toggle);
+      this.opts.bar.right.append(...tools);
+    } else head = h("div", { class: "neu-head" }, toggle, this.wsEl, h("span", { class: "grow" }), ...tools);
+    this.projBtn.addEventListener("click", () => void toggleProjectMenu(this.projBtn, this.ctl, this.state, { changed: () => void this.refresh(true), newProject: () => openNewProject(this.ctl, this.state, () => void this.refresh(true)) }));
+    this.projBox.append(this.projBtn, h("button", { class: "iconbtn", type: "button", title: "Hướng dẫn riêng của dự án (AGENTS.md)", "aria-label": "Hướng dẫn của dự án", onclick: () => void openInstructions(this.ctl, this.state, () => void this.refresh()) }, "📝"));
     const side = h("aside", { class: "side", "aria-label": "Thanh bên" },
+      this.projBox,
+      h("div", { class: "newchat-wrap" }, this.newChatBtn),
+      this.chatsHead,
+      this.chatsEl,
       h("h4", { class: "files-h" }, "Tệp", this.sideActions),
       this.tree,
-      h("h4", {}, "Việc cần làm"),
+      this.todosHead,
       this.todosEl,
     );
     const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.input,
-      h("div", { class: "bar" }, h("span", { id: "hint" }, "@tệp · !lệnh · Shift+Tab đổi chế độ · Esc dừng"), h("span", { class: "grow" }),
+      h("div", { class: "bar" }, this.hintEl, h("span", { class: "grow" }),
         h("button", { class: "btn sm", type: "button", title: "Chèn khung Mục tiêu – Ngữ cảnh – Ràng buộc", onclick: () => this.insertTemplate() }, "Mẫu prompt"), this.sendBtn),
       this.tipEl));
     const main = h("main", { class: "main" }, this.bannerHost, this.feed, composer);
-    this.shell.append(head, h("div", { class: "neu-body" }, side, main));
+    this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path));
+    this.pvHost.append(this.pv.el);
+    this.shell.append(...(head ? [head] : []), h("div", { class: "neu-body" }, side, main, this.codeTools.panel, this.pvHost, this.docPane.el));
     if (this.sideStore.get() === "0") this.side(false);
     this.shell.append(this.fileInput);
     this.fileInput.addEventListener("change", () => {
@@ -215,6 +265,20 @@ class App {
     this.busy = this.state.busy;
     this.wsEl.textContent = this.state.workspace;
     this.wsEl.title = this.state.workspace;
+    this.paintProject();
+    this.codeTools.update(this.state);
+    this.workTools.update(this.state);
+    if (this.state.profile !== "work") this.docPane.close();
+    this.projBtn.title = this.state.workspace;
+    this.learnBtn.hidden = !(this.ctl.learnLessons && this.state.profile === "code");
+    this.newBtn.hidden = !!this.state.capabilities.chats;
+    const exec = this.state.capabilities.exec;
+    this.hintEl.textContent = "Enter gửi · / lệnh · @ tệp" + (exec ? " · ! chạy lệnh" : "");
+    const design = this.state.profile === "design";
+    this.pvHost.hidden = !design;
+    this.pv?.setVisible(design);
+    if (design) void this.pv?.refreshFiles();
+    void this.paintChats();
     this.paintMode();
     this.paintSideActions();
     this.paintTodos(this.state.todos);
@@ -239,29 +303,88 @@ class App {
     const s = this.state;
     if (s.untrustedProject)
       this.bannerHost.append(h("div", { class: "banner warn", role: "alert" },
-        h("div", { class: "grow" }, h("b", {}, "Dự án này có cấu hình riêng "), "(quy tắc cho phép, hook hoặc máy chủ MCP trong .neuagent/settings.json) có thể chạy lệnh thật. Chỉ tin cậy nếu bạn tin nguồn của thư mục này. Chưa tin cậy thì chỉ áp dụng quy tắc cấm."),
+        h("div", { class: "grow" }, h("b", {}, "Dự án này có cấu hình riêng "), "(quy tắc, hook hoặc MCP) có thể chạy lệnh thật. Chỉ tin cậy nếu bạn tin nguồn thư mục này."),
         h("button", { class: "btn sm primary", type: "button", onclick: async () => { await this.ctl.trustProject(true); await this.refresh(); } }, "Tin cậy"),
         h("button", { class: "btn sm", type: "button", onclick: async () => { await this.ctl.trustProject(false); await this.refresh(); } }, "Không")));
     if (!s.settings.hasKey && !s.presets.some((p) => !p.needsKey && p.baseUrl === s.settings.baseUrl))
-      this.bannerHost.append(h("div", { class: "banner warn" }, h("div", { class: "grow" }, "Chưa có key để gọi mô hình. Vào Cài đặt để nhập key của nhóm bạn."), h("button", { class: "btn sm", type: "button", onclick: () => this.openSettings() }, "Cài đặt")));
-    if (s.memoryFiles.length) this.bannerHost.append(h("div", { class: "notice", style: { padding: "6px 18px 0" } }, "Đã nạp hướng dẫn dự án: " + s.memoryFiles.join(", ")));
+      this.bannerHost.append(h("div", { class: "banner warn" }, h("div", { class: "grow" }, "Chưa có key. Hãy nhập ở Cài đặt."), h("button", { class: "btn sm", type: "button", onclick: () => this.openSettings() }, "Cài đặt")));
+    if (s.memoryFiles.length) this.bannerHost.append(h("div", { class: "notice", style: { padding: "6px 18px 0" } }, "Hướng dẫn dự án: " + s.memoryFiles.join(", ")));
   }
 
   private paintWelcome(): void {
     clear(this.feedInner);
     const st = this.state;
-    const work = st.profile === "work";
+    const line = st.profile === "work" ? "Kéo thả tệp Word, Excel, PDF vào đây để bắt đầu."
+      : st.profile === "design" ? "Gõ / để chọn mẫu: poster, landing page, slide, logo…"
+        : st.capabilities.exec ? "Mô tả điều bạn muốn làm; tôi đọc, sửa mã và chạy thử." : "Mô tả điều bạn muốn làm; tôi đọc và sửa mã.";
     this.feedInner.append(h("div", { class: "welcome" },
       h("h2", {}, st.welcomeTitle),
-      h("div", {}, ...(work
-        ? ["Tôi làm việc với các tệp trong thư mục ", h("code", {}, st.workspaceName), ": đọc, tóm tắt, soạn Word, tính Excel, làm slide. ", h("b", {}, "Kéo thả tệp Word/Excel/PDF vào đây"), " hoặc bấm “Thêm tệp” để bắt đầu."]
-        : ["Tôi làm việc trong thư mục ", h("code", {}, st.workspaceName), st.capabilities.exec ? ": đọc và sửa mã, chạy lệnh (luôn hỏi bạn trước)." : ": đọc và sửa mã; chạy JavaScript trong hộp cát an toàn (bản web không có terminal)."])),
-      h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip", type: "button", onclick: () => void this.submit(x) }, x))),
-      work ? h("div", { class: "hint", style: { marginTop: "18px" } }, "Mọi thay đổi đều được hỏi trước. Bản gốc của bạn không bị ghi đè — kết quả được lưu thành tệp mới.") : null));
+      h("div", {}, line),
+      h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip", type: "button", onclick: () => void this.submit(x) }, x)))));
+  }
+
+  // ------------------------------------------------------------------ dự án và lịch sử trò chuyện
+  private paintProject(): void {
+    const on = !!this.state.capabilities.projects;
+    this.projBox.hidden = !on;
+    this.projBtn.textContent = "";
+    this.projBtn.append(h("span", { class: "pj-ic" }, this.state.profile === "code" ? "📁" : this.state.profile === "design" ? "🎨" : "🗂"), h("span", { class: "pj-nm" }, this.state.projectName), h("span", { class: "pj-ar" }, "▾"));
+    this.projBtn.title = "Dự án đang mở: " + this.state.projectName + " (bấm để chuyển)";
+  }
+
+  private async paintChats(): Promise<void> {
+    const on = !!(this.state?.capabilities.chats && this.ctl.chatList);
+    const list = on ? await this.ctl.chatList!() : [];
+    this.chatsHead.hidden = !on;
+    this.chatsEl.hidden = !on;
+    clear(this.chatsEl);
+    if (!on) return;
+    // cuộc đang mở mà chưa được hỏi gì thì chưa lưu: vẫn hiện một dòng để luôn thấy mình đang ở đâu
+    if (!list.some((c) => c.id === this.state.chatId)) this.chatsEl.append(h("div", { class: "chat on", role: "listitem" }, h("div", { class: "ct" }, h("span", { class: "t" }, "Cuộc trò chuyện mới"))));
+    for (const c of list) {
+      const cur = c.id === this.state.chatId;
+      this.chatsEl.append(h("div", { class: "chat" + (cur ? " on" : ""), role: "listitem" },
+        h("button", { class: "ct", type: "button", title: c.title, "aria-current": cur ? "true" : undefined, onclick: () => void this.openChat(c.id) }, h("span", { class: "t" }, c.title), h("small", {}, ago(c.updated) + " · " + c.turns + " lượt")),
+        h("button", { class: "cx", type: "button", title: "Xoá cuộc trò chuyện này", "aria-label": "Xoá " + c.title, onclick: async () => { if (confirm(`Xoá cuộc trò chuyện “${c.title}”?`)) { await this.ctl.chatRemove!(c.id); await this.paintChats(); } } }, "×")));
+    }
+  }
+
+  /** Mở lại một cuộc trò chuyện đã lưu: dựng lại nội dung và tiếp tục hỏi với đúng ngữ cảnh cũ. */
+  private async openChat(id: string): Promise<void> {
+    if (this.busy || id === this.state.chatId) return;
+    const r = await this.ctl.chatOpen!(id);
+    if ("error" in r) return void this.append(h("div", { class: "notice error" }, r.error));
+    this.state = await this.ctl.getState();
+    this.paintHistory(r.history);
+    this.paintBanners();
+    this.paintTodos([]);
+    void this.paintChats();
+  }
+
+  /** Dựng lại khung chat từ lịch sử đã lưu (mở lại cuộc trò chuyện, hoặc sau /rewind). */
+  private paintHistory(history: HistoryItem[]): void {
+    this.cards.clear();
+    this.lastCard = null;
+    this.cur = null;
+    clear(this.feedInner);
+    this.stick = true;
+    for (const it of history) {
+      if (it.kind === "user") this.append(h("div", { class: "msg-user" }, it.text));
+      else if (it.kind === "assistant") {
+        const el = h("div", { class: "msg-ai" });
+        this.md(el, it.text);
+        this.append(el);
+      }
+      else this.append(h("div", { class: "tool ok" }, h("div", { class: "tool-h" }, h("span", { class: "dot" }), h("span", { class: "nm" }, TOOL_LABEL[it.name ?? ""] ?? it.name ?? "Công cụ"), h("span", { class: "sm" }, it.text))));
+    }
+    if (!history.length) this.paintWelcome();
   }
 
   // ------------------------------------------------------------------ sự kiện từ agent
   private onEvent(e: SessionEvent): void {
+    this.codeTools.onEvent(e);
+    this.workTools.onEvent(e);
+    if (e.type === "files_changed") this.docPane.onFilesChanged(e.paths);
     switch (e.type) {
       case "turn_start":
         this.busy = true;
@@ -313,7 +436,7 @@ class App {
       case "usage": {
         this.meterBar.style.width = e.contextPct + "%";
         this.meterBar.className = e.contextPct > 85 ? "vhi" : e.contextPct > 65 ? "hi" : "";
-        this.meterTxt.textContent = `ngữ cảnh ${e.contextPct}%`;
+        this.meterTxt.textContent = `${e.contextPct}%`;
         this.meterTxt.title = `${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi`;
         break;
       }
@@ -332,6 +455,7 @@ class App {
       }
       case "files_changed":
         void this.loadTree(e.paths);
+        if (this.state?.profile === "design") void this.pv?.onFilesChanged(e.paths);
         break;
       case "turn_end":
         this.finishText();
@@ -341,6 +465,7 @@ class App {
         if (!this.visible) this.opts.onAttention?.("done");
         this.paintBusy();
         this.input.focus();
+        void this.paintChats();
         break;
       case "reset":
         this.cards.clear();
@@ -350,6 +475,12 @@ class App {
         void this.refresh(true);
         break;
     }
+  }
+
+  /** Dựng Markdown vào một khối trả lời; ở tab Work các trích dẫn [[tệp|vị trí]] thành chip bấm xem được. */
+  private md(el: HTMLElement, raw: string): void {
+    el.innerHTML = renderMarkdown(this.workTools.prepare(raw));
+    this.workTools.decorate(el);
   }
 
   private dropWelcome(): void {
@@ -367,14 +498,14 @@ class App {
     this.renderQueued = true;
     requestAnimationFrame(() => {
       this.renderQueued = false;
-      if (this.cur) this.cur.innerHTML = renderMarkdown(this.curRaw);
+      if (this.cur) this.md(this.cur, this.curRaw);
       this.scroll();
     });
   }
   private finishText(final?: string): void {
     if (this.cur) {
       const text = final ?? this.curRaw;
-      if (text.trim()) this.cur.innerHTML = renderMarkdown(text);
+      if (text.trim()) this.md(this.cur, text);
       else this.cur.remove();
     }
     this.cur = null;
@@ -525,7 +656,14 @@ class App {
 
   private async submit(text: string): Promise<void> {
     const t = text.trim();
+    if (t && this.codeTools.handleSlash(t)) {
+      this.input.value = "";
+      this.autoGrow();
+      this.closeSlash();
+      return;
+    }
     if (!t || this.busy) return;
+    this.workTools.noteRequest(t);
     this.history.unshift(t);
     this.histIdx = -1;
     this.input.value = "";
@@ -583,7 +721,7 @@ class App {
           this.input.value = "/" + c.name + " ";
           this.closeSlash();
           this.autoGrow();
-          if (e.key === "Enter" && ["help", "clear", "undo", "context", "compact"].includes(c.name)) void this.submit("/" + c.name);
+          if (e.key === "Enter" && ["help", "clear", "undo", "context", "compact", "status", "diff", "rewind"].includes(c.name)) void this.submit("/" + c.name);
         }
         return;
       }
@@ -599,6 +737,8 @@ class App {
     } else if (e.key === "Tab" && e.shiftKey) {
       e.preventDefault();
       void this.cycleMode();
+    } else if (e.key === "Escape" && !this.busy && !this.input.value && this.codeTools.escTap()) {
+      e.preventDefault();
     } else if (e.key === "Escape" && this.busy) {
       e.preventDefault();
       this.ctl.interrupt();
@@ -690,7 +830,7 @@ class App {
     this.mentionMenu?.remove();
     const m = h("div", { class: "menu", role: "listbox", "aria-label": "Tệp" }, ...this.mentionItems.map((p, i) =>
       h("div", { class: "it" + (i === this.mentionSel ? " sel" : ""), role: "option", onmousedown: (ev: Event) => { ev.preventDefault(); this.pickMention(p); } },
-        h("span", { class: "k" }, "@" + p.split("/").pop()), h("span", { class: "d" }, p))));
+        h("span", { class: "k" }, "@" + (p.endsWith("/") ? "📁 " + p.slice(0, -1).split("/").pop() + "/" : p.split("/").pop())), h("span", { class: "d" }, p))));
     this.input.parentElement!.append(m);
     this.mentionMenu = m;
     m.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
@@ -776,7 +916,9 @@ class App {
   // ------------------------------------------------------------------ thanh bên
   private paintTodos(todos: Todo[]): void {
     clear(this.todosEl);
-    if (!todos.length) return void this.todosEl.append(h("div", { class: "empty" }, "Agent sẽ ghi danh sách việc ở đây khi làm nhiệm vụ nhiều bước."));
+    this.todosHead.hidden = !todos.length;
+    this.todosEl.hidden = !todos.length;
+    if (!todos.length) return;
     const box = { completed: "☑", in_progress: "◐", pending: "☐" } as const;
     todos.forEach((t) => this.todosEl.append(h("div", { class: "todo " + t.status }, h("span", { class: "box" }, box[t.status]), h("span", {}, t.content))));
   }
@@ -799,7 +941,7 @@ class App {
           this.state.capabilities.openExternal ? h("button", { type: "button", title: "Mở bằng ứng dụng", "aria-label": "Mở " + it.name + " bằng ứng dụng", onclick: (ev: Event) => { ev.stopPropagation(); void this.ctl.openExternally?.(path); } }, "↗") : null,
           h("button", { type: "button", title: "Tải xuống", "aria-label": "Tải " + it.name + " xuống", onclick: (ev: Event) => { ev.stopPropagation(); void this.download(path); } }, "⬇"));
         const row = h("div", { class: "row" + (hit ? " changed" : ""), role: "treeitem", style: { paddingLeft: 6 + depth * 14 + "px" }, tabindex: "0", title: path },
-          h("span", { class: "ic" }, it.isDir ? (open ? "▾" : "▸") : fileIcon(it.name)), h("span", { class: "nm" }, it.name), acts);
+          ...treeIcon(it.name, it.isDir, open), h("span", { class: "nm" }, it.name), acts);
         const act = () => {
           if (it.isDir) {
             if (this.openDirs.has(path)) this.openDirs.delete(path);
@@ -820,6 +962,7 @@ class App {
   }
 
   private async openFile(path: string): Promise<void> {
+    if (this.state.profile === "work" && this.ctl.docView && /\.(docx|xlsx|xlsm|pptx|pdf)$/i.test(path)) return void this.docPane.open(path);
     const r = await this.ctl.readFile(path);
     const dlg = h("dialog", { class: "viewer" });
     const body = "error" in r ? h("div", { class: "hint" }, r.error) : h("pre", {}, ...r.text.split("\n").slice(0, 3000).map((l, i) => h("div", {}, r.kind === "text" ? h("span", { class: "ln" }, String(i + 1)) : null, l)));
@@ -829,7 +972,7 @@ class App {
           this.state.capabilities.openExternal ? h("button", { class: "btn sm", type: "button", onclick: () => void this.ctl.openExternally?.(path) }, "Mở bằng ứng dụng") : null,
           h("button", { class: "btn sm", type: "button", onclick: () => void this.download(path) }, "Tải xuống"),
           h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng"))),
-      h("div", { class: "db" }, body, ...("text" in r && r.kind === "document" ? [h("div", { class: "hint" }, "Đây là bản chữ trích xuất để xem nhanh. Mở tệp gốc để xem đúng định dạng.")] : []), ...("text" in r && r.truncated ? [h("div", { class: "hint" }, "(đã cắt bớt phần cuối)")] : [])));
+      h("div", { class: "db" }, body, ...("text" in r && r.kind === "document" ? [h("div", { class: "hint" }, "Bản chữ trích xuất. Mở tệp gốc để xem đúng định dạng.")] : []), ...("text" in r && r.truncated ? [h("div", { class: "hint" }, "(đã cắt bớt phần cuối)")] : [])));
     dlg.style.width = "min(860px, 96vw)";
     dlg.addEventListener("close", () => dlg.remove());
     document.body.append(dlg);
@@ -868,33 +1011,7 @@ class App {
 
   // ------------------------------------------------------------------ cài đặt
   private openSettings(): void {
-    const s: PublicSettings = this.state.settings;
-    const base = h("input", { type: "text", value: s.baseUrl, spellcheck: "false", "aria-label": "Địa chỉ API" });
-    const model = h("input", { type: "text", value: s.model, spellcheck: "false" });
-    const key = h("input", { type: "password", autocomplete: "off", placeholder: s.hasKey ? `Đang dùng key ${s.keyHint} — để trống nếu giữ nguyên` : "Dán key vào đây", spellcheck: "false" });
-    const think = h("input", { type: "checkbox", checked: s.thinking });
-    const result = h("span", { class: "res", role: "status" });
-    const dlg = h("dialog", {});
-    const patch = () => ({ baseUrl: base.value.trim(), model: model.value.trim(), thinking: think.checked, ...(key.value.trim() ? { key: key.value.trim() } : {}) });
-    dlg.append(
-      h("div", { class: "dh" }, "Cài đặt", h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")),
-      h("div", { class: "db" },
-        this.state.presets.length ? h("div", { class: "chips", style: { justifyContent: "flex-start", marginTop: "0" } }, ...this.state.presets.map((p) => h("button", { class: "chip", type: "button", onclick: () => { base.value = p.baseUrl; model.value = p.model; } }, p.label))) : null,
-        h("label", {}, "Địa chỉ API (kiểu OpenAI)", base),
-        h("label", {}, "Mô hình", model),
-        h("label", {}, "Key API", key),
-        h("label", { class: "chk" }, think, "Bật chế độ suy nghĩ (chậm hơn, hiển thị quá trình suy luận)"),
-        h("div", { class: "hint" }, `Thư mục làm việc: ${this.state.workspace}. Khả năng: ${[this.state.capabilities.exec ? "chạy lệnh" : "không có terminal", this.state.capabilities.runJs ? "JS sandbox" : "", this.state.capabilities.fetch ? "tải web" : ""].filter(Boolean).join(", ")}.`),
-        this.state.capabilities.realFs ? null : h("div", { class: "hint" }, "Key được lưu trong trình duyệt này (localStorage). Chỉ nhập key trên máy bạn tin cậy."),
-        h("div", {}, h("button", { class: "btn sm", type: "button", onclick: async () => { await this.ctl.saveSettings(patch()); result.className = "res"; result.textContent = "Đang thử…"; const r = await this.ctl.testConnection(); result.className = "res " + (r.ok ? "ok" : "bad"); result.textContent = r.message; } }, "Lưu và kiểm tra kết nối"), " ", result)),
-      h("div", { class: "df" },
-        this.state.capabilities.reset ? h("button", { class: "btn danger", type: "button", style: { marginRight: "auto" }, title: "Xoá mọi thay đổi trong thư mục ảo của tab này và nạp lại dữ liệu mẫu", onclick: async () => { if (confirm("Xoá toàn bộ tệp trong thư mục của tab này và nạp lại dữ liệu mẫu?")) { await this.ctl.resetWorkspace?.(); dlg.close(); await this.refresh(true); } } }, "Khôi phục dữ liệu mẫu") : null,
-        h("button", { class: "btn", type: "button", onclick: async () => { await this.ctl.saveSettings({ key: "" }); await this.refresh(); dlg.close(); } }, "Xoá key"),
-        h("button", { class: "btn primary", type: "button", onclick: async () => { await this.ctl.saveSettings(patch()); await this.refresh(); dlg.close(); } }, "Lưu")));
-    dlg.addEventListener("close", () => dlg.remove());
-    document.body.append(dlg);
-    dlg.showModal();
-    base.focus();
+    openSettingsDialog(this.ctl, this.state, this.opts.account, () => void this.refresh());
   }
 }
 

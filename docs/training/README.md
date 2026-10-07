@@ -1,13 +1,14 @@
 # Tài liệu training NEU Agent
 
-NEU Agent có hai tab, cho hai nhóm người dùng:
+NEU Agent có ba tab, cho ba nhóm người dùng:
 
 | Tab | Dành cho | Làm gì | Tài liệu |
 |---|---|---|---|
+| **Design** | Truyền thông, giảng viên, sinh viên | Mô tả poster/landing page/slide/logo… bằng tiếng Việt, agent viết HTML/SVG, xem trước ngay, xuất PDF/PNG | [KICH-BAN-DESIGN.md](KICH-BAN-DESIGN.md) |
 | **Code** | Sinh viên (môn FIT-VIBE, "vibe coding"), giảng viên CNTT | Mô tả điều muốn làm bằng tiếng Việt, agent đọc mã, lập kế hoạch, viết/sửa mã, chạy thử và sửa đến khi chạy được | [KICH-BAN-CODE.md](KICH-BAN-CODE.md) |
 | **Work** | Khối văn phòng, trợ lý khoa, giảng viên | Tóm tắt, soạn thảo, tính toán, rà soát và làm slide từ Word / Excel / PowerPoint / PDF, giống Claude Desktop | [KICH-BAN-WORK.md](KICH-BAN-WORK.md) |
 
-Hai tab là hai phiên **độc lập** (hội thoại, thư mục, công cụ khác nhau); chuyển tab bằng `Ctrl/⌘ + 1` và `Ctrl/⌘ + 2`, tab kia vẫn chạy nền (chấm xanh = đã xong, chấm vàng = đang chờ bạn duyệt).
+Ba tab là ba phiên **độc lập** (hội thoại, thư mục, công cụ khác nhau; mỗi tab có nhiều **dự án**); chuyển tab bằng `Ctrl/⌘ + 1`, `2`, `3` (thứ tự Work, Code, Design), tab kia vẫn chạy nền (chấm xanh = đã xong, chấm vàng = đang chờ bạn duyệt).
 
 ## 1. Chuẩn bị của người tổ chức (làm trước buổi học)
 

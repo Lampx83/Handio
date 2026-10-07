@@ -19,5 +19,17 @@ try {
 } catch (e) {
   console.warn("Không tạo được SBOM:", e.message.split("\n")[0]);
 }
+
+// latest.json: phiên bản + mã băm + tình trạng ký số (trang tải dùng để hiện đúng sự thật; ứng dụng dùng để biết có bản mới)
+try {
+  const version = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")).version;
+  const signing = fs.existsSync(path.join(out, "signing.json")) ? JSON.parse(fs.readFileSync(path.join(out, "signing.json"), "utf8")) : null;
+  const fl = Object.fromEntries(files.map((f) => [f, { sha256: lines.find((l) => l.endsWith("  " + f)).split("  ")[0], size: fs.statSync(path.join(out, f)).size }]));
+  const latest = { version, files: fl, signed: { mac: !!signing?.mac?.notarized, win: !!signing?.win?.signed }, signer: { mac: signing?.mac?.authority || "", win: signing?.win?.subject || "" } };
+  fs.writeFileSync(path.join(out, "latest.json"), JSON.stringify(latest, null, 2));
+  console.log("latest.json: ok", JSON.stringify(latest.signed));
+} catch (e) {
+  console.warn("Không tạo được latest.json:", e.message.split("\n")[0]);
+}
 fs.copyFileSync(path.resolve("../../docs/INSTALL.md"), path.join(out, "HUONG-DAN-CAI-DAT.md"));
 fs.copyFileSync(path.resolve("../../docs/SECURITY.md"), path.join(out, "BAO-MAT.md"));

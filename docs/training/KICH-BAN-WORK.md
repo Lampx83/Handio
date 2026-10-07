@@ -150,6 +150,15 @@ Thêm tệp của bạn: nút **＋ Thêm tệp** hoặc **kéo thả** vào c�
 
 ---
 
+## Bài nâng cao (tuỳ chọn, 15′ mỗi bài)
+
+- **N1 — Hỏi đáp có nguồn:** `/hoidap Kinh phí hội thảo là bao nhiêu và ai phụ trách phần nội dung?` → bấm chip `[1]` `[2]`: khung bên phải mở tài liệu, tô sáng đúng đoạn. *Kiểm tra:* mỗi ý có chip; bấm thấy đúng câu. Hỏi một điều tài liệu không có → agent phải nói "không nêu", không chip.
+- **N2 — Giấy khen hàng loạt:** tạo mẫu Word có `{{Họ tên}}`, `{{Lớp}}` rồi `/tronthu` với `danh-sach-moi.xlsx` (hoặc bảng điểm). Xem bản đầu, đối chiếu **từng** họ tên; thử thiếu một cột để thấy cảnh báo; `/undo` xoá cả lô.
+- **N3 — Che dữ liệu cá nhân trước khi gửi:** thêm cột SĐT/CCCD giả vào một bảng, `/quetcanhan`, rồi nhờ tạo bản đã che. *Điểm nhấn:* tên, địa chỉ, ngày sinh **không** tự che; luôn đọc lại.
+- **N4 — Sửa văn bản của người khác dưới dạng đề xuất:** `/rasoat thong-bao-nhap.docx` rồi "sửa dạng đề xuất"; mở bằng Word → Review → Chấp nhận/Từ chối từng chỗ.
+- **N5 — Tổng hợp theo nhóm:** `/bangtonghop diem-tong-ket.xlsx theo lớp: sĩ số, điểm trung bình`; đổi một điểm ở sheet gốc và xem bảng tổng hợp đổi theo. Biểu đồ: nhờ làm slide có biểu đồ cột (chỉ PowerPoint).
+- **N6 — Biên bản + bảng theo dõi việc:** `/bienban` với ghi chú họp thô; agent liệt kê "quyết định / việc giao / câu hỏi còn mở" để bạn sửa, rồi tạo Word + Excel theo dõi việc (cột *Còn lại (ngày)* là công thức). Bấm **⚡ Lưu quy trình** để dùng lại cho các cuộc họp sau.
+
 ### Checklist trước khi gửi bất kỳ văn bản/bảng tính nào do AI soạn (phát cho học viên)
 
 - [ ] Tôi đã **đọc toàn bộ** văn bản, không chỉ lướt.
@@ -164,6 +173,8 @@ Thêm tệp của bạn: nút **＋ Thêm tệp** hoặc **kéo thả** vào c�
 ### Phụ lục: giới hạn đã biết của tab Work (nói thẳng với học viên)
 
 - Không đọc được **PDF scan/ảnh** (chưa có OCR) và hình ảnh trong tài liệu; `.doc/.xls/.ppt` cũ cần lưu lại bản mới.
+- **Biểu đồ chỉ tạo được trong PowerPoint**; bảng tổng hợp ở Excel là công thức + tô màu điều kiện (không phải PivotTable/biểu đồ Excel thật).
+- Nhận diện dữ liệu cá nhân dựa trên mẫu và từ khoá (CCCD, SĐT, email, MST, STK, MSSV): có thể sót hoặc báo nhầm; không che tên/địa chỉ/ngày sinh; không quét PDF scan.
 - Sửa file Excel có sẵn bằng agent có thể làm mất **biểu đồ, bảng pivot, macro**: nên luôn *lưu thành bản mới* và kiểm tra; với tệp quan trọng, làm trên bản sao.
 - Công thức Excel được tính kiểm bằng bộ tính riêng của hệ thống cho các hàm thông dụng (SUM, IF, COUNTIF(S), SUMIF(S), AVERAGE, MAX/MIN, VLOOKUP, INDEX/MATCH, ROUND, TEXT…). Hàm hiếm sẽ được báo "chưa kiểm được"; Excel sẽ tự tính khi mở.
 - Định dạng Word/PowerPoint do agent tạo theo mẫu có sẵn (hành chính hoặc hiện đại); không sao chép mẫu riêng của đơn vị. Muốn dùng mẫu riêng: để agent soạn nội dung rồi dán vào mẫu, hoặc sửa tệp mẫu bằng "Sửa Word" (thay chữ).

@@ -190,8 +190,8 @@ describe("công cụ cho agent (end-to-end trên thư mục ảo)", () => {
     await run("create_pptx", { path: "gt.pptx", content: "## Giới thiệu\n- Diễn giả: Nguyễn Văn Hùng" });
     const r = await run("find_in_documents", { query: "nguyen van hung" });
     expect(r).toContain("thu-moi.docx");
-    expect(r).toContain("ds.xlsx › Sheet “DS”");
-    expect(r).toContain("gt.pptx › Slide 1");
+    expect(r).toContain("[[ds.xlsx|DS!A2]]");
+    expect(r).toContain("[[gt.pptx|slide 1]]");
     expect(await run("find_in_documents", { query: "không-có-đâu" })).toContain("(không tìm thấy)");
   });
   it("đọc file hỏng/định dạng cũ cho thông báo rõ ràng", async () => {

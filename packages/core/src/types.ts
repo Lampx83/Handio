@@ -4,6 +4,19 @@ import type { DirEntry } from "./env";
 import type { Profile } from "./profiles";
 import type { Lesson } from "./learning-types";
 import type { ExerciseSummary, GradeResult, TemplateSummary } from "./learning";
+import type { ChatMeta, HistoryItem, ProjectsState } from "./projects";
+import type { ChangeDiff, ChangeFile, RevertResult } from "./changes";
+import type { RunSuggestion } from "./run-detect";
+import type { DocView } from "./office/locate";
+import type { Procedure } from "./work-ctl";
+
+/** Một điểm có thể "quay lại" (/rewind): trước một yêu cầu của người dùng. */
+export interface RewindPoint {
+  index: number;
+  text: string;
+  /** Số tệp đã bị agent đụng tới từ điểm này (0 nếu không biết, vd cuộc trò chuyện mở lại từ lịch sử). */
+  files: number;
+}
 
 export interface PermissionRequest {
   id: string;
@@ -43,6 +56,7 @@ export type SessionEvent =
   | { type: "usage"; promptTokens: number; completionTokens: number; contextPct: number; calls: number }
   | { type: "notice"; level: "info" | "warn" | "error"; text: string }
   | { type: "files_changed"; paths: string[] }
+  | { type: "summary"; turn: number; files: ChangeFile[]; /** Đã chạy kiểm tra sau lần sửa cuối chưa */ verify: "ok" | "fail" | "none" }
   | { type: "turn_end"; interrupted: boolean; final: string }
   | { type: "proc"; id: string; command: string; state: "start" | "data" | "exit"; text?: string; code?: number; url?: string }
   | { type: "reset" };
@@ -69,6 +83,10 @@ export interface Settings {
   mcpServers: Record<string, import("./mcp").McpServerSpec>;
   /** Chỉ có ở phía lưu trữ; UI không bao giờ nhận giá trị thật. */
   key?: string;
+  /** Gửi chẩn đoán không chứa nội dung (mặc định bật; chính sách quản trị có thể ép tắt). Xem docs/DIAGNOSTICS.md. */
+  diagnostics?: boolean;
+  /** Mã ngẫu nhiên của máy cài (không phải danh tính), do bộ chẩn đoán tự tạo. */
+  diagId?: string;
 }
 
 /** Bản gửi cho giao diện: không chứa key. */
@@ -86,13 +104,17 @@ export interface UiState {
   allowedModes: Mode[];
   workspace: string;
   workspaceName: string;
+  projectId: string;
+  projectName: string;
+  /** Cuộc trò chuyện đang mở (đổi khi bấm “Mới” hoặc mở lại một cuộc cũ). */
+  chatId: string;
   mode: Mode;
   model: string;
   settings: PublicSettings;
   commands: SlashCommandInfo[];
   todos: Todo[];
   busy: boolean;
-  capabilities: { exec: boolean; runJs: boolean; fetch: boolean; openFolder: boolean; realFs: boolean; openExternal: boolean; revealWorkspace: boolean; pdf: boolean; reset: boolean; sandbox: boolean };
+  capabilities: { exec: boolean; runJs: boolean; fetch: boolean; openFolder: boolean; realFs: boolean; openExternal: boolean; revealWorkspace: boolean; pdf: boolean; reset: boolean; sandbox: boolean; projects: boolean; pickFolder: boolean; chats: boolean; renderDesign: boolean };
   /** Có file cấu hình của dự án đang chờ người dùng tin cậy. */
   untrustedProject: boolean;
   /** Các mục bị chính sách quản trị khoá (UI vô hiệu hoá) và lời nhắn của quản trị viên. */
@@ -124,6 +146,10 @@ export interface AgentController {
   resetWorkspace?(): Promise<void>;
   saveSettings(patch: Partial<Settings>): Promise<void>;
   testConnection(): Promise<{ ok: boolean; message: string }>;
+  /** Danh sách mô hình trên máy chủ (cho ô chọn mô hình trong Cài đặt). */
+  listModels?(): Promise<string[]>;
+  /** Bỏ các quy tắc “Luôn cho phép” đã lưu (chỉ thắt chặt, không thêm quyền). */
+  resetPermissions?(): Promise<void>;
   trustProject(trust: boolean): Promise<void>;
   openFolder?(): Promise<void>;
   /** Học tập (tab Code): giáo trình, bài tập có chấm, dự án mẫu. */
@@ -137,8 +163,44 @@ export interface AgentController {
   learnCreate?(id: string): Promise<{ dir: string; files: number } | { error: string }>;
   /** Gợi ý tệp cho `@` trong ô chat. */
   searchFiles?(query: string): Promise<string[]>;
+  /** Dự án (thư mục làm việc) của tab này. */
+  projectsState?(): Promise<ProjectsState>;
+  projectOpen?(id: string): Promise<void>;
+  projectCreate?(spec: { name: string; instructions?: string }): Promise<{ ok: true } | { error: string }>;
+  /** Chọn một thư mục có sẵn trên máy làm dự án (Desktop). */
+  projectPick?(): Promise<{ ok: boolean } | { error: string }>;
+  projectRemove?(id: string): Promise<{ ok: true } | { error: string }>;
+  projectRename?(id: string, name: string): Promise<void>;
+  /** Hướng dẫn riêng của dự án (tệp AGENTS.md ở thư mục gốc dự án). */
+  instructionsGet?(): Promise<string>;
+  instructionsSet?(text: string): Promise<void>;
+  /** Lịch sử trò chuyện của dự án đang mở. */
+  chatList?(): Promise<ChatMeta[]>;
+  chatOpen?(id: string): Promise<{ id: string; title: string; history: HistoryItem[] } | { error: string }>;
+  chatRemove?(id: string): Promise<void>;
+  /** Xuất một thiết kế (.html/.svg) ra PDF hoặc PNG cạnh tệp gốc (Desktop). */
+  exportDesign?(path: string, format: "pdf" | "png", width: number, height?: number): Promise<{ saved: string } | { error: string }>;
   /** Dừng một lệnh chạy nền. */
   stopProcess?(id: string): Promise<void>;
   /** Mở địa chỉ localhost (xem trước ứng dụng web đang chạy) trong trình duyệt. */
   openUrl?(url: string): Promise<void>;
+  /** "Thay đổi": các tệp agent đã tạo/sửa/xoá trong cuộc trò chuyện này, so với bản gốc. */
+  changesList?(): Promise<ChangeFile[]>;
+  changeDiff?(path: string): Promise<ChangeDiff | { error: string }>;
+  /** Hoàn tác một tệp (có `path`) hoặc tất cả. */
+  changesRevert?(path?: string): Promise<RevertResult | { error: string }>;
+  /** /rewind: các điểm quay lại; `rewind` cắt hội thoại về trước điểm đó (và khôi phục tệp nếu `files`). */
+  rewindPoints?(): Promise<RewindPoint[]>;
+  rewind?(index: number, files: boolean): Promise<{ history: HistoryItem[]; reverted: string[]; skipped: string[]; text: string } | { error: string }>;
+  /** Gợi ý lệnh chạy/kiểm thử dự án. */
+  runSuggestions?(): Promise<RunSuggestion[]>;
+  /** Work: xem tài liệu (chỉ đọc) và đánh dấu vị trí trích dẫn; "Quy trình của tôi" = lệnh / lưu trong dự án. */
+  docView?(path: string, loc?: string): Promise<DocView | { error: string }>;
+  procedureList?(): Promise<Procedure[]>;
+  procedureSave?(name: string, description?: string): Promise<{ ok: true; name: string } | { error: string }>;
+  procedureRemove?(name: string): Promise<void>;
+  /** Chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md): trạng thái; xem trước gói “Báo lỗi” (JSON đúng như sẽ gửi, null nếu bị cấm); gửi chính gói đó. */
+  diagnosticsStatus?(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }>;
+  diagnosticsPreview?(note: string): Promise<string | null>;
+  diagnosticsSend?(): Promise<{ ok: boolean }>;
 }

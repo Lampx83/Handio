@@ -1,0 +1,14 @@
+# Nhật ký truy cập JSON của nginx cho /agent/ (không có query string, cookie, Authorization, email). Giữ 14 ngày để báo cáo so với 7 ngày trước.
+/var/log/nginx/neu-agent-access.json.log {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        invoke-rc.d nginx rotate >/dev/null 2>&1 || true
+    endscript
+}

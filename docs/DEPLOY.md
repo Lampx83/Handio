@@ -11,42 +11,45 @@ npm run smoke          # kiểm thử đầu-cuối: mở app Electron thật, t
 
 `npm run smoke` dùng máy chủ LLM giả (kịch bản có sẵn) nên không cần key; nó kiểm tra: hai tab, sửa lỗi + chạy `node` thật, tạo Excel/Word thật, file gốc không bị sửa, không đọc được file ngoài thư mục, giao diện có CSP chặt và không có Node. Ảnh chụp màn hình lưu ở thư mục tạm in ra cuối lệnh.
 
-## 2. Bản web — triển khai lên `https://ai.neu.edu.vn/agent/`
+## 2. Bản web và máy chủ — chạy thật trên máy 220, tên miền ở máy 222
 
-```bash
-NODE_ENV=production npm run build -w @neu/agent-web     # → apps/web/dist (không có sourcemap, ~1,2 MB nén)
-npm run dev:web                                          # thử cục bộ: http://127.0.0.1:5173 (có Demo giả lập)
-NEU_DEV_KEY=<key> npm run dev:web                        # thử với Qwen thật: proxy dev gắn key như nginx
+```text
+Người dùng ──HTTPS──▶ 222 (ai.neu.edu.vn, giữ chứng chỉ)  ──HTTP nội bộ──▶  220 (nginx + oauth2-proxy)  ──▶  gateway Kong 232:8037 (Qwen)
+                      chỉ chuyển tiếp /agent/ sang 220                        web, tải về, API, đăng nhập SSO, key mô hình
 ```
 
-**Kiến trúc trên máy 222** (nginx dùng chung của `ai.neu.edu.vn`; các ứng dụng khác như `/apps`, `/gaze` cũng đi theo kiểu này):
+- **Máy 220** (`deploy/220/`): web tĩnh, bản cài Desktop, proxy mô hình (gắn key ở phía máy chủ), và **đăng nhập SSO Microsoft 365** (`oauth2-proxy`). Mọi đường dẫn đều yêu cầu đăng nhập; chỉ nhận kết nối từ máy 222.
+- **Máy 222** (`deploy/222/`): giữ tên miền + HTTPS, chuyển `/agent/` sang 220. Các ứng dụng khác trên 222 (như `/apps`) không bị đụng tới.
+- Trang đăng nhập/chuyển hướng dùng đường dẫn tương đối nên người dùng luôn ở HTTPS.
 
-| Đường dẫn | Việc |
-|---|---|
-| `/agent/` | Tệp tĩnh từ `/var/www/neu-agent` (nginx đọc được; `/home/codelab` là 750 nên không đặt ở đó) |
-| `/agent/sandbox-worker.js` | Như trên nhưng kèm header CSP `connect-src 'none'` (bắt buộc: worker chạy mã do mô hình viết) |
-| `/agent/vllm/v1/{models,chat/completions}` | `proxy_pass` tới gateway nội bộ **`http://192.0.2.10:8037`** (222 không với được IP công khai `192.0.2.11:8037`; HTTPS của trang → không thể gọi HTTP trực tiếp từ trình duyệt vì mixed content). Chỉ 2 đường dẫn, phương thức GET/POST, thân ≤ 2 MB, giới hạn 10 yêu cầu/giây/IP (burst 100) và 40 kết nối đồng thời/IP |
+### Khai báo SSO trên Microsoft Entra (một lần, bởi người quản trị ứng dụng)
+Ứng dụng có Application (client) ID `00000000-0000-0000-0000-000000000002`, tenant `00000000-0000-0000-0000-000000000001`.
+- Authentication → thêm nền tảng **Web**: `https://ai.neu.edu.vn/agent/oauth2/callback` (dùng cho bản web và `oauth2-proxy`).
+- Thêm nền tảng **Mobile and desktop applications**: `http://localhost` và bật **Allow public client flows = Yes** (dùng cho bản Desktop).
+- Quyền (delegated): `openid`, `profile`, `email`, `offline_access`.
+- Tài khoản `@st.neu.edu.vn` phải đăng nhập được vào đúng tenant này. Nếu gặp lỗi `AADSTS50020`, sinh viên thuộc tenant khác: cần đổi ứng dụng sang đa tenant (liên hệ người phát triển).
+- **Mã bí mật (client secret) chỉ nhập trên máy 220 khi cài, không đưa vào mã nguồn/gói cài/chat.** Đổi mã định kỳ (tạo mã mới trong Entra rồi chạy lại `install-auth.sh`).
 
-**Key của bản web nằm ở nginx, không nằm trong JavaScript:** `map` trong `conf.d/neu-agent.conf` (quyền 640, chỉ root đọc) gắn `x-ollama-seckey` khi trình duyệt không gửi key; người dùng nào tự dán key riêng (Cài đặt) thì dùng key của họ để Kong theo dõi riêng.
-
-**Tải ứng dụng Desktop từ trang web:** nút “⬇ Tải ứng dụng” (thanh trên cùng, chỉ ở bản web) mở hộp thoại tự nhận máy người dùng (macOS chip Apple/Intel, Windows; điện thoại và Linux được báo rõ là không có bản) và đưa bản phù hợp lên đầu, kèm SHA-256 và dung lượng. Tệp nằm ở `/var/www/neu-agent-dl/` (ngoài thư mục web, nên cập nhật web không xoá chúng), phục vụ tại `/agent/download/` (tệp tĩnh, không liệt kê thư mục). Cập nhật bản cài: đặt tệp mới và `SHA256SUMS.txt` (chỉ liệt kê tệp có thật) vào `deploy/ai-neu/downloads/`, chép lên rồi chạy lại `install.sh` (script kiểm tra mã băm trước khi chép). Muốn thêm/bớt bản nào chỉ cần đổi nội dung `SHA256SUMS.txt`.
-
-**Cài đặt** (một bước, cần sudo trên 222; script tự sao lưu cấu hình, `nginx -t`, nạp lại, kiểm tra sau cài và **tự khôi phục** nếu lỗi):
-
+### Cài đặt (theo thứ tự)
 ```bash
-scp -r deploy/ai-neu/* 222:~/neu-agent-deploy/        # gồm web.tar.gz, 3 tệp cấu hình và thư mục downloads/ (bản cài Desktop)
-ssh 222
-cd ~/neu-agent-deploy && sudo ./install.sh <key>      # cập nhật bản web về sau: chép web.tar.gz mới rồi chạy lại lệnh này
-sudo ./install.sh --uninstall                         # gỡ (giữ lại /var/www/neu-agent)
+# từ máy của bạn (SSH cổng <cổng-ssh> đã khai trong ~/.ssh/config: Host 220 / 222)
+scp -r deploy/220 220:~/neu-agent-220                  # gồm web.tar.gz, cấu hình nginx, auth/, downloads/
+ssh -t 220 'cd ~/neu-agent-220 && sudo ./auth/install-auth.sh'                   # 1) đăng nhập SSO (hỏi mã bí mật, gõ không hiện)
+ssh -t 220 'cd ~/neu-agent-220 && sudo ./install.sh <key mô hình>'               # 2) web + proxy + tải về
+scp -r deploy/222 222:~/neu-agent-222
+ssh -t 222 'cd ~/neu-agent-222 && sudo ./install.sh'                             # 3) chuyển ai.neu.edu.vn/agent/ sang 220
 ```
+Mỗi script tự sao lưu, chạy `nginx -t`, **tự khôi phục nếu lỗi hoặc kiểm tra sau cài thất bại**, và kiểm tra rằng các site khác không bị ảnh hưởng. Cập nhật về sau: chép `web.tar.gz`/`downloads/` mới rồi chạy lại bước 2. Gỡ: `sudo ./install.sh --uninstall` (từng máy).
 
-Cấu hình trong `deploy/ai-neu/` đã được kiểm thử trên đúng nginx 1.24 của 222 (tiến trình tạm, cổng cục bộ): tệp tĩnh, header CSP, chặn `DELETE`/`embeddings`/đường dẫn lạ, key gắn phía máy chủ, streaming Qwen thật.
+Dọn OJ Judge cũ trên 220: `sudo ./remove-oj-judge.sh` (mặc định chỉ liệt kê), thêm `--yes` để xoá, `--purge-data` để xoá cả dữ liệu.
 
-> ⚠ **Rủi ro cần quyết định:** `/agent/vllm/` là cửa ngõ vào mô hình **không cần đăng nhập** cho mọi người truy cập `ai.neu.edu.vn`. Hiện chỉ có giới hạn tần suất theo IP. Nếu muốn hạn chế người dùng nội bộ: thêm `allow <dải IP trường>; deny all;` vào location API, hoặc đặt sau SSO của NEUAI; đồng thời đặt giới hạn lệnh/phút/ngày cho consumer của key này ở Kong. Nên đặt thêm giới hạn trước đợt phát cho nhiều lớp.
+### Đã kiểm thử thế nào
+`node deploy/test/e2e-sso.mjs` (nginx 222 → nginx 220 thật → `oauth2-proxy` thật → máy chủ OIDC giả; 27 kiểm tra: chưa đăng nhập bị chặn ở mọi đường, đăng nhập giảng viên/sinh viên, miền lạ bị từ chối, Bearer của Desktop đúng/sai audience/hết hạn/bị sửa, key do máy chủ gắn và token không chuyển sang gateway) và `node deploy/test/e2e-install.mjs` (chạy hai script cài trong Ubuntu 24.04 có nginx thật cùng site "khác", kể cả ép lỗi để thử tự khôi phục). Chưa thử với Microsoft thật: lần đầu cần một người đăng nhập thử.
 
-Ghi chú khác:
-- Thư mục làm việc của bản web nằm trong trình duyệt (IndexedDB), **chỉ trên máy đó**; xoá dữ liệu trình duyệt là mất. Nhắc học viên dùng nút **Zip/⬇**.
-- Máy chủ giả (`/mock`) không có trong bản build; chỉ có ở `npm run dev:web`.
+### Việc nên làm thêm
+- **Giới hạn gateway:** cổng `232:8037` chỉ cho máy 220 truy cập và đổi key `neuagent`; nếu không, ai biết key vẫn vòng qua SSO được.
+- Đường nội bộ 222 → 220 là HTTP (không mã hoá) trong mạng LAN; nếu mạng không tin cậy, thêm TLS giữa hai máy.
+- Phát triển cục bộ: `npm run dev:web` (http://127.0.0.1:5173, không có SSO, có Demo giả lập); `NEU_DEV_KEY=<key> npm run dev:web` để thử với Qwen thật.
 
 ## 3. Bản Desktop (Electron)
 

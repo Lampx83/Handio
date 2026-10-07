@@ -16,6 +16,15 @@ export interface SheetSpec {
   autofilter?: boolean;
   /** Định dạng số theo cột, vd {"C": "#,##0", "D": "0.0%"}. */
   number_formats?: Record<string, string>;
+  /** Tô màu theo điều kiện: thanh dữ liệu, thang màu, hoặc tô ô theo ngưỡng. */
+  conditional?: ConditionalSpec[];
+}
+
+export interface ConditionalSpec {
+  /** Vùng áp dụng, vd "D2:D30". */
+  range: string;
+  /** "bars" thanh dữ liệu · "scale" thang 2 màu · hoặc ngưỡng: ô thoả điều kiện được tô màu. */
+  rule: "bars" | "scale" | { op: "lt" | "le" | "gt" | "ge" | "eq" | "ne"; value: number; color?: "red" | "green" | "yellow" };
 }
 
 export interface FormulaReport {
@@ -139,6 +148,53 @@ async function recalc(wb: any, grid: Grid): Promise<BuildReport> {
   return report;
 }
 
+
+const CF_COLORS = { red: ["FFFFC7CE", "FF9C0006"], green: ["FFC6EFCE", "FF006100"], yellow: ["FFFFEB9C", "FF9C5700"] } as const;
+const CF_OPS = { lt: "lessThan", le: "lessThanOrEqual", gt: "greaterThan", ge: "greaterThanOrEqual", eq: "equal", ne: "notEqual" } as const;
+
+/** Tô màu theo điều kiện (ExcelJS không hỗ trợ biểu đồ, nhưng hỗ trợ định dạng có điều kiện). Bỏ qua vùng không hợp lệ. */
+function addConditional(ws: any, specs: ConditionalSpec[] | undefined): void {
+  for (const c of (specs ?? []).slice(0, 10)) {
+    const m = /^\$?([A-Za-z]{1,3})\$?(\d{1,7}):\$?([A-Za-z]{1,3})\$?(\d{1,7})$/.exec(String(c?.range ?? "").trim());
+    if (!m) continue;
+    const ref = `${m[1].toUpperCase()}${m[2]}:${m[3].toUpperCase()}${m[4]}`;
+    let rule: any;
+    if (c.rule === "bars") rule = { type: "dataBar", gradient: false, showValue: true, cfvo: [{ type: "min" }, { type: "max" }], color: { argb: "FF638EC6" } };
+    else if (c.rule === "scale") rule = { type: "colorScale", cfvo: [{ type: "min" }, { type: "max" }], color: [{ argb: "FFFCFCFF" }, { argb: "FF63BE7B" }] };
+    else if (c.rule && typeof c.rule === "object" && c.rule.op in CF_OPS && Number.isFinite(c.rule.value)) {
+      const [bg, fg] = CF_COLORS[c.rule.color && c.rule.color in CF_COLORS ? c.rule.color : "red"];
+      rule = { type: "cellIs", operator: CF_OPS[c.rule.op], formulae: [c.rule.value], style: { fill: { type: "pattern", pattern: "solid", bgColor: { argb: bg } }, font: { color: { argb: fg } } } };
+    } else continue;
+    ws.addConditionalFormatting({ ref, rules: [{ ...rule, priority: 1 }] });
+  }
+}
+
+/** Kẻ viền, tô đậm hàng tiêu đề, định dạng số, độ rộng cột, cố định hàng đầu, lọc, tô màu điều kiện. */
+function styleSheet(ws: any, spec: Pick<SheetSpec, "widths" | "freeze_header" | "autofilter" | "number_formats" | "conditional">, rows: CellInput[][], cols: number, header: boolean): void {
+  const border = { top: { style: "thin", color: { argb: "FFBFBFBF" } }, bottom: { style: "thin", color: { argb: "FFBFBFBF" } }, left: { style: "thin", color: { argb: "FFBFBFBF" } }, right: { style: "thin", color: { argb: "FFBFBFBF" } } };
+  rows.forEach((line, r) => line.forEach((_v, c) => (ws.getCell(r + 1, c + 1).border = border)));
+  if (header) {
+    for (let c = 1; c <= cols; c++) {
+      const cell = ws.getCell(1, c);
+      cell.font = { bold: true };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } };
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+    }
+  }
+  for (const [letter, fmt] of Object.entries(spec.number_formats ?? {})) {
+    const c = colIndex(letter);
+    if (c) for (let r = header ? 2 : 1; r <= rows.length; r++) ws.getCell(r, c).numFmt = fmt;
+  }
+  for (let c = 1; c <= cols; c++) {
+    const w = spec.widths?.[c - 1];
+    const auto = Math.min(60, Math.max(8, ...rows.map((r) => (typeof r[c - 1] === "string" && !String(r[c - 1]).startsWith("=") ? [...String(r[c - 1])].length : 10)))) + 2;
+    ws.getColumn(c).width = w ?? auto;
+  }
+  if (spec.freeze_header !== false && header) ws.views = [{ state: "frozen", ySplit: 1 }];
+  if (spec.autofilter && rows.length > 1) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length, column: cols } };
+  addConditional(ws, spec.conditional);
+}
+
 export async function createXlsx(sheets: SheetSpec[]): Promise<{ bytes: Uint8Array; report: BuildReport; dims: string[] }> {
   if (!sheets.length) throw new Error("Cần ít nhất một sheet.");
   const ExcelJS = await excel();
@@ -182,28 +238,7 @@ export async function createXlsx(sheets: SheetSpec[]): Promise<{ bytes: Uint8Arr
       g.push(gl);
     });
     grid.set(name, g);
-    // định dạng
-    const border = { top: { style: "thin", color: { argb: "FFBFBFBF" } }, bottom: { style: "thin", color: { argb: "FFBFBFBF" } }, left: { style: "thin", color: { argb: "FFBFBFBF" } }, right: { style: "thin", color: { argb: "FFBFBFBF" } } };
-    rows.forEach((line, r) => line.forEach((_v, c) => (ws.getCell(r + 1, c + 1).border = border)));
-    if (header) {
-      for (let c = 1; c <= cols; c++) {
-        const cell = ws.getCell(1, c);
-        cell.font = { bold: true };
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } };
-        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
-      }
-    }
-    for (const [letter, fmt] of Object.entries(spec.number_formats ?? {})) {
-      const c = colIndex(letter);
-      if (c) for (let r = header ? 2 : 1; r <= rows.length; r++) ws.getCell(r, c).numFmt = fmt;
-    }
-    for (let c = 1; c <= cols; c++) {
-      const w = spec.widths?.[c - 1];
-      const auto = Math.min(60, Math.max(8, ...rows.map((r) => (typeof r[c - 1] === "string" && !String(r[c - 1]).startsWith("=") ? [...String(r[c - 1])].length : 10)))) + 2;
-      ws.getColumn(c).width = w ?? auto;
-    }
-    if (spec.freeze_header !== false && header) ws.views = [{ state: "frozen", ySplit: 1 }];
-    if (spec.autofilter && rows.length > 1) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length, column: cols } };
+    styleSheet(ws, spec, rows, cols, header);
     dims.push(`${name}: ${rows.length} hàng × ${cols} cột`);
   });
   const report = await recalc(wb, grid);
@@ -302,8 +337,8 @@ export interface XlsxEdit {
   set?: Record<string, CellInput>;
   /** Thêm hàng vào cuối sheet. */
   append_rows?: CellInput[][];
-  /** Thêm sheet mới. */
-  add_sheet?: { name: string; rows: CellInput[][] };
+  /** Thêm sheet mới (có thể kèm tiêu đề đậm, định dạng số, tô màu điều kiện như create_xlsx). */
+  add_sheet?: { name: string; rows: CellInput[][] } & Partial<Pick<SheetSpec, "header" | "widths" | "freeze_header" | "autofilter" | "number_formats" | "conditional">>;
 }
 
 export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes: Uint8Array; changed: string[]; report: BuildReport }> {
@@ -324,6 +359,7 @@ export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes:
   const apply = (ws: any, row: number, col: number, raw: CellInput) => {
     const cell = ws.getCell(row, col);
     if (raw === null) cell.value = null;
+    else if (typeof raw === "string" && raw.startsWith("'")) cell.value = raw.slice(1); // 'chữ: ép thành chữ (không phải công thức)
     else if (typeof raw === "string" && ISO_DATE.test(raw)) {
       cell.value = new Date(raw + "T00:00:00Z");
       cell.numFmt = "dd/mm/yyyy";
@@ -351,6 +387,9 @@ export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes:
   if (e.add_sheet) {
     const ws = wb.addWorksheet(safeSheetName(e.add_sheet.name, wb.worksheets.length));
     e.add_sheet.rows.forEach((line, r) => line.forEach((v, c) => apply(ws, r + 1, c + 1, v)));
+    const sp = e.add_sheet;
+    if (sp.header !== undefined || sp.widths || sp.number_formats || sp.conditional || sp.autofilter || sp.freeze_header !== undefined)
+      styleSheet(ws, sp, sp.rows, Math.max(1, ...sp.rows.map((r) => r.length)), sp.header !== false && sp.rows.length > 0);
     changed.push(`(sheet mới) ${ws.name}`);
   }
   // dựng lưới để tính lại mọi công thức
@@ -374,4 +413,69 @@ export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes:
 
 export function describeXlsx(sheets: SheetSpec[]): string {
   return sheets.map((s) => `Sheet “${s.name}”: ${s.rows.length} hàng × ${Math.max(0, ...s.rows.map((r) => r.length))} cột, ${s.rows.flat().filter((c) => typeof c === "string" && c.startsWith("=")).length} công thức${s.rows[0] ? " — tiêu đề: " + s.rows[0].slice(0, 8).join(", ") : ""}`).join("\n");
+}
+
+// ---------------------------------------------------------------- lưới ô có cấu trúc (xem trước, tìm kiếm, quét dữ liệu cá nhân, tổng hợp)
+
+export interface GridRow {
+  /** Số hàng trong sheet (từ 1). */
+  r: number;
+  /** Giá trị hiển thị của từng ô, bắt đầu từ cột `c1`. */
+  cells: string[];
+}
+export interface SheetGrid {
+  name: string;
+  /** Chữ cái các cột hiển thị. */
+  cols: string[];
+  c1: number;
+  rows: GridRow[];
+  lastRow: number;
+  lastCol: number;
+  truncated: boolean;
+}
+
+export const colName = colLetter;
+export const colNumber = colIndex;
+
+/** Giá trị ô dạng chữ như người dùng thấy: ngày dd/mm/yyyy, số nguyên không dấu thập phân thừa; không kèm công thức. */
+export function cellDisplay(v: any): string {
+  const x = plain(v);
+  return x instanceof Date ? fmtDate(x) : typeof x === "number" ? String(Math.round(x * 1e9) / 1e9) : String(x ?? "");
+}
+
+/** Đọc các sheet thành lưới ô (giới hạn số hàng/cột/ô để an toàn bộ nhớ). `aroundRow`: nếu hàng đó nằm ngoài giới hạn thì mở cửa sổ quanh nó. */
+export async function readXlsxGrid(bytes: Uint8Array, opts: { sheet?: string; maxRows?: number; maxCols?: number; maxCells?: number; aroundRow?: number } = {}): Promise<SheetGrid[]> {
+  const ExcelJS = await excel();
+  const wb = new ExcelJS.Workbook();
+  try {
+    await loadZip(bytes);
+    await wb.xlsx.load(bytes);
+  } catch (e) {
+    if (/quá lớn/.test((e as Error).message)) throw e;
+    throw new Error("Không mở được file Excel (hỏng, có mật khẩu, hoặc là định dạng .xls cũ — hãy lưu lại thành .xlsx).");
+  }
+  const want = opts.sheet?.toLowerCase();
+  const maxRows = opts.maxRows ?? 300;
+  const maxCols = opts.maxCols ?? 26;
+  let budget = opts.maxCells ?? 250_000;
+  const out: SheetGrid[] = [];
+  for (const [idx, ws] of wb.worksheets.entries()) {
+    if (want && ws.name.toLowerCase() !== want && String(idx + 1) !== want) continue;
+    const lastRow = ws.rowCount || 0;
+    const lastCol = ws.columnCount || 0;
+    const cEnd = Math.min(lastCol, maxCols);
+    let r1 = 1;
+    if (opts.aroundRow && opts.aroundRow > maxRows && opts.aroundRow <= lastRow) r1 = Math.max(1, opts.aroundRow - Math.floor(maxRows / 2));
+    const rEnd = Math.min(lastRow, r1 + maxRows - 1, r1 - 1 + Math.max(0, Math.floor(budget / Math.max(1, cEnd))));
+    const rows: GridRow[] = [];
+    for (let r = r1; r <= rEnd; r++) {
+      const row = ws.getRow(r);
+      const cells = Array.from({ length: cEnd }, (_, i) => cellDisplay(row.getCell(i + 1).value));
+      budget -= cEnd;
+      if (cells.some((c) => c !== "")) rows.push({ r, cells });
+    }
+    out.push({ name: ws.name, cols: Array.from({ length: cEnd }, (_, i) => colLetter(i + 1)), c1: 1, rows, lastRow, lastCol, truncated: r1 > 1 || rEnd < lastRow || cEnd < lastCol });
+  }
+  if (!out.length && want) throw new Error(`Không có sheet "${opts.sheet}". Các sheet: ${wb.worksheets.map((w: any) => w.name).join(", ")}`);
+  return out;
 }

@@ -8,7 +8,9 @@
     "build": "node build.mjs",
     "start": "node build.mjs && electron .",
     "smoke": "node build.mjs && node smoke.mjs",
-    "dist": "RELEASE=1 node build.mjs && electron-builder --mac --win && node scripts/release-info.mjs",
+    "dist": "node scripts/release.mjs",
+    "dist:signed": "NEU_REQUIRE_SIGNED=1 node scripts/release.mjs",
+    "verify:signature": "node scripts/verify-signature.mjs",
     "pack:smoke": "SMOKE_PACK=1 node build.mjs && electron-builder --mac --arm64 --dir -c.mac.target=dir",
     "release:info": "node scripts/release-info.mjs"
   },
@@ -19,7 +21,8 @@
     "@neu/agent-env-node": "*",
     "@neu/agent-ui": "*",
     "electron": "^44.6.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "jose": "^6.2.12"
   },
   "author": "NEU Agent"
 }

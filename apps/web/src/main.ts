@@ -1,5 +1,5 @@
 import "@neu/agent-ui/style.css";
-import { buildWorkSamples, LocalController, MemoryEnv, SAMPLE_PROJECT, type AgentController, type Profile, type Settings, type SettingsStore, type TrustStore } from "@neu/agent-core";
+import { buildWorkSamples, KvChatStore, KvProjectHost, LocalController, MemoryEnv, SAMPLE_DESIGN, SAMPLE_PROJECT, type AgentController, type Env, type Profile, type ProjectInfo, type Settings, type SettingsStore, type TrustStore } from "@neu/agent-core";
 import { mountShell } from "@neu/agent-ui";
 import { autosave, restore, wipe } from "./persist";
 import { runJsSandbox } from "./sandbox";
@@ -48,28 +48,88 @@ async function mockAvailable(): Promise<boolean> {
   }
 }
 
-/** Dựng một thư mục ảo: nạp từ IndexedDB, nếu trống thì nạp dữ liệu mẫu. */
-async function makeEnv(root: string, key: string, seed: () => Promise<Record<string, string | Uint8Array>>) {
-  const env = new MemoryEnv(root);
-  const load = async () => {
-    const files = await seed();
-    for (const [p, c] of Object.entries(files)) {
+type Seed = () => Promise<Record<string, string | Uint8Array>>;
+
+/**
+ * Dự án trong trình duyệt: mỗi dự án là một thư mục ảo riêng, lưu trong IndexedDB (khoá `profile` cho dự án mẫu để giữ dữ liệu cũ,
+ * `profile-<mã>` cho dự án tạo thêm). Chỉ dự án mẫu được nạp dữ liệu mẫu.
+ */
+function makeProjects(profile: Profile, root: string, seed: Seed, defaultName: string) {
+  const keyOf = (info: ProjectInfo) => (info.id === "default" ? profile : `${profile}-${info.id}`);
+  let cur: { info: ProjectInfo; env: MemoryEnv } | null = null;
+  const load = async (info: ProjectInfo, env: MemoryEnv) => {
+    if (info.id !== "default") return;
+    for (const [p, c] of Object.entries(await seed())) {
       const abs = `${root}/${p}`;
       if (typeof c === "string") await env.writeText(abs, c);
       else await env.writeBytes(abs, c);
     }
   };
-  if (!(await restore(key, env))) await load();
-  const save = autosave(key, env);
-  await save();
-  const reset = async () => {
-    for (const e of env.exportEntries()) await env.remove(e.path);
-    await wipe(key);
-    await load();
-    await save();
+  const host = new KvProjectHost(
+    { get: (k) => ls.get(k), set: (k, v) => ls.set(k, v) },
+    `neu.projects.${profile}`,
+    { id: "default", name: defaultName },
+    async (info) => {
+      const env = new MemoryEnv(root);
+      if (!(await restore(keyOf(info), env))) await load(info, env);
+      const save = autosave(keyOf(info), env);
+      await save();
+      if (profile === "code") env.runJs = runJsSandbox;
+      cur = { info, env };
+      return env as Env;
+    },
+    async (info) => wipe(keyOf(info)),
+  );
+  // ghi nhớ dự án đang mở để “Khôi phục dữ liệu mẫu” tác động đúng thư mục
+  const open = host.open.bind(host);
+  host.open = async (id) => {
+    const env = await open(id);
+    cur = { info: (await host.list()).projects.find((p) => p.id === id)!, env: env as MemoryEnv };
+    return env;
   };
-  return { env, reset };
+  const reset = async () => {
+    if (!cur) return;
+    for (const e of cur.env.exportEntries()) await cur.env.remove(e.path);
+    await wipe(keyOf(cur.info));
+    await load(cur.info, cur.env);
+    await autosave(keyOf(cur.info), cur.env)();
+  };
+  return { host, reset };
 }
+
+/** Người đang đăng nhập (SSO do nginx + oauth2-proxy giữ). Ở máy phát triển (localhost) không có đăng nhập thì trả undefined. */
+async function currentAccount(): Promise<{ email: string; name?: string; logout(): void } | undefined> {
+  try {
+    const r = await fetch(new URL("oauth2/userinfo", document.baseURI), { cache: "no-store", credentials: "same-origin" });
+    if (!r.ok || !/json/i.test(r.headers.get("content-type") ?? "")) return undefined;
+    const j = (await r.json()) as { email?: string; preferredUsername?: string };
+    const email = j.email || j.preferredUsername;
+    if (!email) return undefined;
+    return { email, logout: () => void (location.href = new URL("oauth2/sign_out?rd=" + encodeURIComponent(new URL(document.baseURI).pathname), document.baseURI).href) };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Hết phiên đăng nhập giữa chừng (máy chủ trả 401): tự đưa về trang đăng nhập, tối đa một lần mỗi 30 giây để không lặp vô hạn. */
+const authFetch: typeof fetch = async (...a) => {
+  const r = await fetch(...a);
+  if (r.status === 401 && /\/vllm\//.test(String(a[0] instanceof Request ? a[0].url : a[0]))) {
+    const last = Number(sessionStorage.getItem("neu.relogin") ?? 0);
+    if (Date.now() - last > 30_000) {
+      sessionStorage.setItem("neu.relogin", String(Date.now()));
+      location.href = new URL("oauth2/start?rd=" + encodeURIComponent(new URL(document.baseURI).pathname), document.baseURI).href;
+    }
+  }
+  return r;
+};
+
+// Chrome/Edge cho cài bản web như một ứng dụng (cửa sổ riêng, biểu tượng riêng) mà không tải tệp thực thi nào
+let installEvent: (Event & { prompt(): Promise<unknown> }) | null = null;
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installEvent = e as typeof installEvent;
+});
 
 async function main(): Promise<void> {
   const hasMock = await mockAvailable();
@@ -86,16 +146,20 @@ async function main(): Promise<void> {
   }
   if (ls.get("neu.settings") === null) ls.set("neu.settings", JSON.stringify({ baseUrl: gateway }));
 
-  const code = await makeEnv("/workspace", "code", async () => SAMPLE_PROJECT);
-  code.env.runJs = runJsSandbox;
-  const work = await makeEnv("/work", "work", buildWorkSamples);
-
-  const controllers: Partial<Record<Profile, AgentController>> = {
-    code: await LocalController.create({ env: code.env, profile: "code", store, trust, realFs: false, presets, resetWorkspace: code.reset }),
-    work: await LocalController.create({ env: work.env, profile: "work", store, trust, realFs: false, presets, resetWorkspace: work.reset }),
+  const chats = (profile: Profile) => new KvChatStore({ get: (k) => ls.get(k), set: (k, v) => ls.set(k, v) }, `neu.chats.${profile}`);
+  const make = async (profile: Profile, root: string, seed: Seed, defaultName: string): Promise<LocalController> => {
+    const p = makeProjects(profile, root, seed, defaultName);
+    const st = await p.host.list();
+    const env = await p.host.open(st.active);
+    return LocalController.create({ env, profile, store, trust, realFs: false, presets, fetchImpl: authFetch, diagnostics: { endpoint: new URL("diag", document.baseURI).href, version: "0.1.0", platform: "web", enabled: () => location.protocol === "https:" }, resetWorkspace: p.reset, projects: p.host, chats: chats(profile) });
   };
-  mountShell(document.getElementById("root")!, controllers, { productName: "NEU Agent", downloadsBase: new URL("download/", document.baseURI).href });
-  (window as unknown as { __neu: unknown }).__neu = { controllers, code: code.env, work: work.env };
+  const controllers: Partial<Record<Profile, AgentController>> = {
+    work: await make("work", "/work", buildWorkSamples, "Dự án mẫu"),
+    code: await make("code", "/workspace", async () => SAMPLE_PROJECT, "Dự án mẫu"),
+    design: await make("design", "/design", async () => SAMPLE_DESIGN, "Mẫu thiết kế"),
+  };
+  mountShell(document.getElementById("root")!, controllers, { productName: "NEU Agent", downloadsBase: new URL("download/", document.baseURI).href, account: await currentAccount(), install: { available: () => !!installEvent, run: () => void installEvent?.prompt() } });
+  (window as unknown as { __neu: unknown }).__neu = { controllers };
 }
 
 void main();
