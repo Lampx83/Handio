@@ -1,0 +1,722 @@
+import type { Env } from "./env";
+import { LlmClient, LlmError, type ChatMessage, type ChatResult, type ToolSchema } from "./llm";
+import { expandCommand, loadAgents, loadCommands, loadMemory, loadSkills, type CustomCommand, type CustomSkill } from "./memory";
+import { Permissions, type Mode, type TargetInfo } from "./permissions";
+import { toPublic, type ProjectSettings } from "./settings";
+import { builtinTools, readText, relPath, resolveSafe, ToolError, walk, type Tool, type ToolContext } from "./tools";
+import { dangerousReason } from "./shell";
+import { isSensitivePath } from "./sensitive";
+import { officeTools } from "./office/tools";
+import { PROFILES, type Profile } from "./profiles";
+import { allowedModes, type Policy } from "./policy";
+import { ProcessManager } from "./processes";
+import { HookRunner, mergeHooks, countHooks } from "./hooks";
+import { McpManager, type McpServerSpec } from "./mcp";
+import type { PermissionRequest, PermissionResponse, SessionEvent, Settings, SlashCommandInfo } from "./types";
+
+const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
+const MAX_TOOL_CHARS = 12000;
+
+const SUMMARY_SYSTEM = `You compress a conversation between a user and a coding agent into a short working summary (Vietnamese if the user wrote Vietnamese). Keep: the user's goal, decisions made, files read/changed (with paths), commands run and results, open problems and the next step. Drop pleasantries and raw file dumps. Max ~350 words, bullet points.`;
+
+interface AgentDef {
+  name: string;
+  description: string;
+  prompt: string;
+  tools: string[] | null;
+}
+const AGENTS: Record<string, AgentDef> = {
+  explore: {
+    name: "explore",
+    description: "Explore and search the codebase (read-only). Use when you need to look through many files without filling the main context.",
+    prompt: "You explore code, read-only. Find the answer quickly with grep/glob/read_file, then report briefly (max ~15 lines): which file, which function, what it does. Do not guess; do not modify files.",
+    tools: ["read_file", "list_dir", "glob", "grep"],
+  },
+  general: {
+    name: "general",
+    description: "General-purpose agent for one independent multi-step subtask.",
+    prompt: "You carry out one subtask you were given. Finish it completely, then report briefly the result and the files you changed.",
+    tools: null,
+  },
+};
+
+export interface SessionOptions {
+  env: Env;
+  profile?: Profile;
+  policy?: Policy;
+  getSettings: () => Settings;
+  llm: LlmClient;
+  emit: (e: SessionEvent) => void;
+  askPermission: (req: PermissionRequest) => Promise<PermissionResponse>;
+  project?: ProjectSettings | null;
+  trustProject?: boolean;
+}
+
+let idCounter = 0;
+const nextId = (p: string) => `${p}${Date.now().toString(36)}${(idCounter++).toString(36)}`;
+
+export class Session {
+  readonly ctx: ToolContext;
+  readonly perms: Permissions;
+  readonly tools = new Map<string, Tool>();
+  memory: { name: string; text: string }[] = [];
+  commands: CustomCommand[] = [];
+  agentDefs: Record<string, AgentDef> = { ...AGENTS };
+  skills: CustomSkill[] = [];
+  hooks: HookRunner | null = null;
+  mcp: McpManager | null = null;
+  hookContext = "";
+  /** Thông báo lúc khởi động (lỗi MCP…) để bộ điều khiển hiển thị. */
+  startupNotices: string[] = [];
+  promptTokens = 0;
+  completionTokens = 0;
+  calls = 0;
+  charsPerToken = 3;
+  lastPromptTokens = 0;
+  readonly main: Agent;
+
+  private constructor(readonly o: SessionOptions, root: string) {
+    this.ctx = { env: o.env, root, extraDirs: [], readFiles: new Map(), undoStack: [], todos: [], onTodos: (t) => o.emit({ type: "todos", todos: t }) };
+    if (o.env.spawn) this.ctx.procs = new ProcessManager(o.env, (e) => o.emit({ type: "proc", ...e }));
+    const s = o.getSettings();
+    const proj = o.project ?? { deny: [], allow: [] };
+    const trusted = !!o.trustProject;
+    const def = PROFILES[o.profile ?? "code"];
+    let mode = (trusted && proj.mode && proj.mode !== "bypass" ? proj.mode : s.mode) as Mode;
+    if (!allowedModes(def.modes, o.policy).includes(mode)) mode = def.defaultMode;
+    this.perms = new Permissions(
+      { allow: [...s.permissions.allow, ...(trusted ? proj.allow : [])], deny: [...s.permissions.deny, ...proj.deny] },
+      mode,
+      root,
+    );
+    const code = def.id === "code" && !o.policy?.disableBash;
+    // Hooks chạy LỆNH THẬT: của người dùng thì luôn; của dự án chỉ khi đã bấm "Tin cậy"
+    if (code && o.env.exec) {
+      const hooks = mergeHooks(s.hooks ?? {}, trusted ? proj.hooks ?? {} : {});
+      if (countHooks(hooks)) this.hooks = new HookRunner(hooks, o.env, root);
+    }
+    if (code && o.env.spawnStdio) {
+      const servers: Record<string, McpServerSpec> = { ...(s.mcpServers ?? {}), ...(trusted ? proj.mcpServers ?? {} : {}) };
+      if (Object.keys(servers).length) this.mcp = new McpManager(servers, o.env, root);
+    }
+    const base = builtinTools(o.env).filter((t) => (def.id === "code" || !["bash", "run_javascript"].includes(t.name)) && !(o.policy?.disableBash && t.name === "bash"));
+    for (const t of [...base, ...(def.id === "work" ? officeTools(o.env) : []), ...this.metaTools()]) this.tools.set(t.name, t);
+    this.main = new Agent(this);
+  }
+
+  static async create(o: SessionOptions): Promise<Session> {
+    let root = o.env.root;
+    try {
+      root = await o.env.realpath(o.env.root);
+    } catch {
+      /* thư mục ảo */
+    }
+    const s = new Session(o, root);
+    s.memory = await loadMemory(o.env, root);
+    s.commands = await loadCommands(o.env, root);
+    for (const a of await loadAgents(o.env, root)) if (!(a.name in AGENTS)) s.agentDefs[a.name] = { name: a.name, description: a.description || "(không có mô tả)", prompt: a.prompt, tools: a.tools };
+    s.skills = await loadSkills(o.env, root);
+    if (s.skills.length) s.tools.set("skill", s.skillTool());
+    if (s.mcp) {
+      await s.mcp.startAll();
+      for (const t of s.mcp.tools()) s.tools.set(t.name, t);
+      s.startupNotices.push(...s.mcp.errors);
+    }
+    if (s.hooks) {
+      const r = await s.hooks.run("SessionStart");
+      s.hookContext = r.context;
+      s.startupNotices.push(...r.warnings);
+    }
+    return s;
+  }
+
+  /** Dừng mọi tiến trình nền và máy chủ MCP khi phiên kết thúc. */
+  dispose(): void {
+    this.ctx.procs?.stopAll();
+    this.mcp?.close();
+  }
+
+  private skillTool(): Tool {
+    return {
+      name: "skill", kind: "read", readonly: true,
+      description: "Load the detailed instructions of a skill (a packaged procedure/knowledge) by name, from the skills list in the system prompt.",
+      parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
+      summarize: (a) => String(a.name ?? ""),
+      run: async (_ctx, a) => {
+        const sk = this.skills.find((x) => x.name === a.name);
+        if (!sk) throw new ToolError(`Không có skill '${a.name}'. Hiện có: ${this.skills.map((x) => x.name).join(", ")}`);
+        return sk.body + (sk.files.length ? `\n\n[Các tệp kèm trong ${sk.dir}: ${sk.files.join(", ")}]` : "");
+      },
+    };
+  }
+
+  get profile(): Profile {
+    return this.o.profile ?? "code";
+  }
+  get mode(): Mode {
+    return this.perms.mode;
+  }
+  setMode(m: Mode): void {
+    if (!allowedModes(PROFILES[this.profile].modes, this.o.policy).includes(m)) throw new ToolError(`Chế độ ${m} không dùng được ở tab ${PROFILES[this.profile].label}.`);
+    this.perms.setMode(m);
+    this.o.emit({ type: "mode", mode: m });
+  }
+  emit(e: SessionEvent): void {
+    this.o.emit(e);
+  }
+
+  // ---------------------------------------------------------------- công cụ meta
+  private metaTools(): Tool[] {
+    const task: Tool = {
+      name: "task", kind: "meta", readonly: true,
+      description: "Delegate a subtask to a subagent with its own context (keeps the main context small). Use 'explore' for read-only code exploration, or 'general'. The subagent returns a short report.",
+      parameters: { type: "object", properties: { agent: { type: "string", description: "subagent name, default explore" }, description: { type: "string", description: "3-6 words" }, prompt: { type: "string", description: "detailed, self-contained request (the subagent cannot see this conversation)" } }, required: ["prompt"] },
+      summarize: (a) => `${a.agent || "explore"}: ${String(a.description || a.prompt || "").slice(0, 70)}`,
+      run: async (_ctx, a) => this.runSubagent(String(a.prompt ?? ""), String(a.agent || "explore"), String(a.description || "")),
+    };
+    const exitPlan: Tool = {
+      name: "exit_plan_mode", kind: "meta", readonly: false,
+      description: "Only in plan mode: present your plan to the user for approval before changing anything.",
+      parameters: { type: "object", properties: { plan: { type: "string", description: "detailed plan in markdown" } }, required: ["plan"] },
+      summarize: () => "kế hoạch",
+      run: async (_ctx, a) => this.exitPlanMode(String(a.plan ?? ""), 0),
+    };
+    return [task, exitPlan];
+  }
+
+  async exitPlanMode(plan: string, depth: number): Promise<string> {
+    if (this.perms.mode !== "plan") return "Không ở chế độ plan; cứ tiếp tục làm theo kế hoạch.";
+    const req: PermissionRequest = { id: nextId("p"), kind: "plan", tool: "exit_plan_mode", summary: "Kế hoạch đề xuất", args: {}, plan, depth };
+    const res = await this.ask(req);
+    if (res.allow) {
+      const m: Mode = res.mode === "default" ? "default" : "acceptEdits";
+      this.setMode(m);
+      return `Kế hoạch được duyệt. Đã thoát chế độ plan (${m === "acceptEdits" ? "tự động duyệt sửa file" : "mỗi thay đổi sẽ được hỏi"}). Hãy thực hiện theo kế hoạch rồi kiểm chứng.`;
+    }
+    return `Người dùng chưa duyệt.${res.note ? " Góp ý: " + res.note + "." : ""} Hãy chỉnh kế hoạch rồi gọi lại exit_plan_mode.`;
+  }
+
+  async runSubagent(prompt: string, agent: string, description: string): Promise<string> {
+    const def = this.agentDefs[agent || "explore"];
+    if (!def) throw new ToolError(`Không có subagent '${agent}'. Hiện có: ${Object.keys(this.agentDefs).join(", ")}`);
+    this.emit({ type: "notice", level: "info", text: `Subagent ${def.name}${description ? ": " + description : ""} bắt đầu` });
+    const sub = new Agent(this, def, 1);
+    const text = await sub.runTurn(prompt, this.ctx.signal);
+    return text || "(subagent không trả về nội dung)";
+  }
+
+  async ask(req: PermissionRequest): Promise<PermissionResponse> {
+    const answer = this.o.askPermission(req); // đăng ký chờ TRƯỚC khi phát sự kiện, để người nghe trả lời ngay cũng không bị mất
+    this.emit({ type: "permission", request: req });
+    const res = await answer;
+    this.emit({ type: "permission_resolved", id: req.id, allowed: res.allow });
+    return res;
+  }
+
+  // ---------------------------------------------------------------- prompt
+  toolsFor(def: AgentDef | null, depth: number): Tool[] {
+    const out: Tool[] = [];
+    for (const t of this.tools.values()) {
+      if (depth > 0 && (t.name === "task" || t.name === "exit_plan_mode")) continue;
+      if (t.name === "exit_plan_mode" && this.perms.mode !== "plan") continue;
+      if (def?.tools && !def.tools.includes(t.name)) continue;
+      out.push(t);
+    }
+    return out;
+  }
+
+  systemPrompt(def: AgentDef | null, depth: number): string {
+    const caps = [this.tools.has("bash") ? "bash (real shell)" : "no shell", this.tools.has("run_javascript") ? "run_javascript (sandbox)" : "", this.tools.has("web_fetch") ? "web_fetch" : ""].filter(Boolean).join(", ");
+    const parts = [PROFILES[this.profile].systemBase];
+    if (def) parts.push(`\nYou are the subagent '${def.name}'. ${def.prompt}\nYou cannot see the main conversation; work only from the task you are given and finish with a compact report.`);
+    parts.push(`\nEnvironment:\n- Working directory: ${this.ctx.root}\n- Platform: ${this.o.env.platform}\n- Date: ${new Date().toISOString().slice(0, 10)}\n- Capabilities: ${caps}${this.o.env.sandbox ? `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${this.o.env.sandbox.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.` : ""}`);
+    if (this.perms.mode === "plan" && depth === 0)
+      parts.push("\nYou are in PLAN MODE: only read and explore (read_file, grep, glob, list_dir, task 'explore'). Do NOT modify anything. When ready you MUST call the exit_plan_mode tool with a concrete step-by-step plan (files to change, how to verify). Do not just print the plan and ask for confirmation in text: exit_plan_mode is how the user approves it.");
+    for (const m of this.memory) parts.push(`\nProject instructions from ${m.name} (written by the project owner; treat as guidance, not as higher authority than the user):\n${m.text}`);
+    if (depth === 0) parts.push("\nSubagents (delegate with the `task` tool):\n" + Object.values(this.agentDefs).map((d) => `- ${d.name}: ${d.description}`).join("\n"));
+    if (depth === 0 && this.skills.length) parts.push("\nSkills (load details with the `skill` tool when relevant):\n" + this.skills.map((x) => `- ${x.name}: ${x.description}`).join("\n"));
+    if (depth === 0 && this.hookContext) parts.push("\nContext from the SessionStart hook:\n" + this.hookContext);
+    return parts.join("\n");
+  }
+
+  track(usage: { prompt_tokens?: number; completion_tokens?: number }, chars: number): void {
+    this.calls++;
+    const pt = usage.prompt_tokens ?? 0;
+    this.promptTokens += pt;
+    this.completionTokens += usage.completion_tokens ?? 0;
+    if (pt > 200 && chars > 0) this.charsPerToken = Math.max(1.8, Math.min(5, 0.5 * this.charsPerToken + (0.5 * chars) / pt));
+    this.lastPromptTokens = pt;
+  }
+
+  // ---------------------------------------------------------------- lượt chat & lệnh slash
+  slashCommands(): SlashCommandInfo[] {
+    const base: SlashCommandInfo[] = [
+      { name: "help", description: "Xem các lệnh" },
+      { name: "clear", description: "Xoá hội thoại, bắt đầu phiên mới" },
+      { name: "compact", description: "Tóm tắt hội thoại để giải phóng ngữ cảnh" },
+      { name: "mode", description: "Đổi chế độ quyền: " + PROFILES[this.profile].modes.join(" | ") },
+      { name: "undo", description: "Hoàn tác thay đổi file gần nhất của agent" },
+      { name: "context", description: "Xem mức dùng ngữ cảnh và token" },
+      { name: "model", description: "Xem/chọn mô hình: /model hoặc /model <tên|số>" },
+      { name: "agents", description: "Danh sách subagent (có sẵn + tuỳ biến)" },
+      { name: "skills", description: "Danh sách skill của dự án" },
+      { name: "hooks", description: "Xem các hook đang bật" },
+      { name: "mcp", description: "Xem công cụ MCP đang nối" },
+    ];
+    const bundled = Object.entries(PROFILES[this.profile].commands).map(([name, c]) => ({ name, description: c.description }));
+    const custom = this.commands.map((c) => ({ name: c.name, description: c.description }));
+    return [...base, ...bundled, ...custom.filter((c) => !bundled.some((b) => b.name === c.name))];
+  }
+
+  /** Xử lý dòng người dùng nhập. Trả về văn bản để chạy như một lượt chat, hoặc null nếu đã xử lý xong. */
+  async handleInput(line: string): Promise<{ run: string | null; reset?: boolean }> {
+    const text = line.trim();
+    if (text.startsWith("!")) return { run: await this.userShell(text.slice(1).trim()) };
+    if (!text.startsWith("/")) return { run: await this.attachMentions(text) };
+    const m = /^\/(\S+)\s*([\s\S]*)$/.exec(text);
+    if (!m) return { run: text };
+    const [, name, args] = m;
+    const notice = (t: string, level: "info" | "warn" | "error" = "info") => this.emit({ type: "notice", level, text: t });
+    switch (name) {
+      case "help":
+        notice(this.slashCommands().map((c) => `/${c.name} — ${c.description}`).join("\n"));
+        return { run: null };
+      case "clear":
+        return { run: null, reset: true };
+      case "compact": {
+        const ok = await this.main.compact(args);
+        notice(ok ? "Đã tóm tắt hội thoại." : "Chưa có gì để tóm tắt.", ok ? "info" : "warn");
+        this.emitUsage();
+        return { run: null };
+      }
+      case "mode": {
+        const a = args.trim();
+        const allowed = allowedModes(PROFILES[this.profile].modes, this.o.policy);
+        if (!allowed.includes(a as Mode)) notice(`Chế độ hiện tại: ${this.mode}. Dùng: /mode ${allowed.join(" | ")}`, "warn");
+        else {
+          this.setMode(a as Mode);
+          notice(`Đã chuyển sang chế độ ${a}.`);
+        }
+        return { run: null };
+      }
+      case "undo": {
+        notice(await this.undo());
+        return { run: null };
+      }
+      case "hooks":
+        notice(this.hooks ? `Đang có ${this.hooks.count} hook (sự kiện: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop). Hook của dự án chỉ chạy khi bạn đã “Tin cậy” thư mục.` : "Chưa có hook nào. Thêm vào cài đặt người dùng (hooks) hoặc .neuagent/settings.json của dự án (cần Tin cậy).");
+        return { run: null };
+      case "agents":
+        notice(Object.values(this.agentDefs).map((d) => `${d.name}${d.tools ? ` [${d.tools.join(", ")}]` : ""}: ${d.description}`).join("\n"));
+        return { run: null };
+      case "skills":
+        notice(this.skills.length ? this.skills.map((x) => `${x.name}: ${x.description}`).join("\n") : "Chưa có skill. Tạo .neuagent/skills/<tên>/SKILL.md.");
+        return { run: null };
+      case "mcp":
+        notice(this.mcp ? `Công cụ MCP: ${[...this.tools.keys()].filter((k) => k.startsWith("mcp__")).join(", ") || "(không có)"}${this.mcp.errors.length ? "\nLỗi: " + this.mcp.errors.join("; ") : ""}` : "Chưa cấu hình máy chủ MCP (mcpServers trong cài đặt người dùng; của dự án cần Tin cậy).");
+        return { run: null };
+      case "context":
+        notice(`Ngữ cảnh ~${this.contextPct()}% · ${this.promptTokens} token vào / ${this.completionTokens} token ra · ${this.calls} lần gọi mô hình · ${this.main.messages.length} tin nhắn`);
+        return { run: null };
+    }
+    const custom = this.commands.find((c) => c.name === name);
+    const bundled = PROFILES[this.profile].commands[name];
+    if (custom || bundled) return { run: await this.attachMentions(expandCommand((custom ?? bundled).body, args)) };
+    notice(`Không có lệnh /${name}. Gõ /help để xem danh sách.`, "warn");
+    return { run: null };
+  }
+
+  /** `!lệnh`: người dùng tự chạy lệnh (không cần xin phép như agent, vẫn chặn lệnh phá hoại); kết quả được đưa vào hội thoại để agent biết. */
+  private async userShell(command: string): Promise<null> {
+    const notice = (t: string, level: "info" | "warn" | "error" = "warn") => this.emit({ type: "notice", level, text: t });
+    if (!command) return void notice("Cú pháp: !lệnh  (ví dụ: !ls -la hoặc !python3 --version)") as unknown as null;
+    if (!this.o.env.exec || this.o.policy?.disableBash || this.profile !== "code") return void notice("Tab này không có terminal để chạy lệnh.") as unknown as null;
+    const danger = dangerousReason(command, this.ctx.root);
+    if (danger) return void notice("Lệnh bị chặn vì nguy hiểm: " + danger + ".", "error") as unknown as null;
+    const id = nextId("u");
+    this.emit({ type: "tool_start", id, name: "bash", summary: command.slice(0, 110), args: { command }, depth: 0 });
+    let out = "";
+    let ok = true;
+    try {
+      const r = await this.o.env.exec(command, { cwd: this.ctx.root, timeoutMs: 120_000, signal: this.ctx.signal });
+      out = (r.output.trim() || "(không có đầu ra)").slice(-8000) + (r.timedOut ? "\n[Hết thời gian 120s, đã dừng lệnh]" : `\n[mã thoát ${r.code}]`);
+      ok = r.code === 0 && !r.timedOut;
+    } catch (e) {
+      out = "Lỗi: " + (e as Error).message;
+      ok = false;
+    }
+    this.emit({ type: "tool_result", id, name: "bash", ok, output: out, depth: 0 });
+    this.emit({ type: "files_changed", paths: [] });
+    this.main.messages.push({ role: "user", content: `[Tôi vừa tự chạy lệnh \`${command}\` trong terminal và nhận được kết quả:]\n${out}` }, { role: "assistant", content: "Đã ghi nhận kết quả lệnh." });
+    return null;
+  }
+
+  /** `@đường/dẫn` trong prompt: đính kèm nội dung tệp (hoặc danh sách thư mục) để agent khỏi phải đoán/đọc lại. */
+  async attachMentions(text: string): Promise<string> {
+    const found: string[] = [];
+    for (const m of text.matchAll(/(^|[\s(\[])@([^\s@()'",;<>\[\]]+)/g)) {
+      const t = m[2].replace(/[.,;:!?]+$/, "");
+      if (t && !found.includes(t)) found.push(t);
+    }
+    if (!found.length) return text;
+    const blocks: string[] = [];
+    const names: string[] = [];
+    let total = 0;
+    for (const t of found.slice(0, 8)) {
+      let abs: string;
+      try {
+        abs = await resolveSafe(this.ctx, t);
+      } catch {
+        continue;
+      }
+      const st = await this.o.env.stat(abs);
+      if (!st) continue;
+      const rel = relPath(this.ctx, abs);
+      if (isSensitivePath(rel)) {
+        this.emit({ type: "notice", level: "warn", text: `Không đính kèm @${t}: tệp có thể chứa bí mật (khoá/mật khẩu).` });
+        continue;
+      }
+      if (st.isDir) {
+        const items = (await this.o.env.readdir(abs)).map((e) => e.name + (e.isDir ? "/" : "")).sort().slice(0, 100);
+        blocks.push(`<dir path="${rel}">\n${items.join("\n")}\n</dir>`);
+        names.push("@" + rel + "/");
+        continue;
+      }
+      let body: string;
+      try {
+        body = await readText(this.ctx, abs);
+      } catch {
+        continue; // nhị phân/không đọc được
+      }
+      const lines = body.split("\n");
+      if (lines.length && lines[lines.length - 1] === "") lines.pop();
+      const shown = lines.slice(0, 400);
+      let block = `<file path="${rel}">\n${shown.map((l, i) => `${String(i + 1).padStart(6)}\t${l.length > 400 ? l.slice(0, 400) + "…" : l}`).join("\n")}${lines.length > shown.length ? `\n… (còn ${lines.length - shown.length} dòng, dùng read_file offset=${shown.length + 1})` : ""}\n</file>`;
+      if (total + block.length > 80_000) block = `<file path="${rel}">(bỏ qua: tổng dung lượng đính kèm quá lớn, hãy dùng read_file)</file>`;
+      total += block.length;
+      blocks.push(block);
+      names.push(`@${rel} (${lines.length} dòng)`);
+      if (lines.length <= 400) this.ctx.readFiles.set(abs, st.mtimeMs); // đã "đọc": sửa được ngay
+    }
+    if (!blocks.length) return text;
+    this.emit({ type: "notice", level: "info", text: "Đã đính kèm: " + names.join(", ") });
+    return `${text}\n\n[Nội dung các tệp được đính kèm bằng @ (tại thời điểm gửi):]\n${blocks.join("\n")}`;
+  }
+
+  async undo(): Promise<string> {
+    const u = this.ctx.undoStack.pop();
+    if (!u) return "Không còn thay đổi nào để hoàn tác.";
+    const rel = relPath(this.ctx, u.path);
+    if (u.old === null) await this.o.env.remove(u.path);
+    else {
+      if (typeof u.old === "string") await this.o.env.writeText(u.path, u.old);
+      else await this.o.env.writeBytes(u.path, u.old);
+      const st = await this.o.env.stat(u.path);
+      if (st) this.ctx.readFiles.set(u.path, st.mtimeMs);
+    }
+    this.emit({ type: "files_changed", paths: [rel] });
+    return u.old === null ? `Đã xoá file ${rel} vừa tạo.` : `Đã khôi phục ${rel} về trước lần sửa gần nhất.`;
+  }
+
+  contextPct(): number {
+    return Math.min(99, Math.floor((100 * this.main.estimateTokens()) / this.o.getSettings().contextTokens));
+  }
+  emitUsage(): void {
+    this.emit({ type: "usage", promptTokens: this.promptTokens, completionTokens: this.completionTokens, contextPct: this.contextPct(), calls: this.calls });
+  }
+  publicSettings() {
+    return toPublic(this.o.getSettings());
+  }
+}
+
+// ================================================================== Agent
+
+export class Agent {
+  messages: ChatMessage[] = [];
+  private repeatKey = "";
+  private repeatN = 0;
+
+  constructor(private s: Session, private def: AgentDef | null = null, private depth = 0) {}
+
+  estimateTokens(): number {
+    const chars = this.s.systemPrompt(this.def, this.depth).length + JSON.stringify(this.messages).length;
+    return Math.floor(chars / this.s.charsPerToken);
+  }
+
+  pruneToolResults(keepLast = 4): number {
+    const idx = this.messages.map((m, i) => (m.role === "tool" ? i : -1)).filter((i) => i >= 0);
+    let n = 0;
+    for (const i of keepLast ? idx.slice(0, -keepLast) : idx) {
+      const c = this.messages[i].content ?? "";
+      if (c.length > 300 && !c.endsWith(PRUNE_MARK)) {
+        this.messages[i].content = c.slice(0, 200) + " … " + PRUNE_MARK;
+        n++;
+      }
+    }
+    return n;
+  }
+
+  private async manageContext(): Promise<void> {
+    const limit = this.s.o.getSettings().contextTokens;
+    if (this.estimateTokens() > 0.55 * limit && this.pruneToolResults()) this.s.emit({ type: "notice", level: "info", text: "Đã lược bớt kết quả công cụ cũ để tiết kiệm ngữ cảnh." });
+    if (this.estimateTokens() > 0.75 * limit) await this.compact("", true);
+  }
+
+  private transcript(maxChars = 14000): string {
+    const lines = this.messages.map((m) => {
+      if (m.role === "tool") return "[tool result] " + (m.content ?? "").slice(0, 400);
+      if (m.role === "assistant") {
+        const calls = (m.tool_calls ?? []).map((c) => `${c.function.name}(${c.function.arguments.slice(0, 120)})`).join("; ");
+        return "[assistant] " + (m.content ?? "").slice(0, 600) + (calls ? " -> calls: " + calls : "");
+      }
+      return "[user] " + (m.content ?? "").slice(0, 1200);
+    });
+    const t = lines.join("\n");
+    return t.length > maxChars ? t.slice(0, 3000) + "\n… (omitted) …\n" + t.slice(-(maxChars - 3000)) : t;
+  }
+
+  async compact(focus = "", midturn = false): Promise<boolean> {
+    if (this.messages.length < 3) return false;
+    this.s.emit({ type: "notice", level: "info", text: "Đang tóm tắt hội thoại để giải phóng ngữ cảnh…" });
+    const user = "Conversation to summarize:\n\n" + this.transcript() + (focus ? "\n\nSpecial focus: " + focus : "");
+    let r: ChatResult;
+    try {
+      r = await this.s.o.llm.chat([{ role: "system", content: SUMMARY_SYSTEM }, { role: "user", content: user }], { maxTokens: 900, temperature: 0.1, thinking: false, signal: this.s.ctx.signal });
+    } catch (e) {
+      this.s.emit({ type: "notice", level: "error", text: "Không tóm tắt được: " + (e as Error).message });
+      return false;
+    }
+    this.s.track(r.usage, user.length);
+    this.messages = [
+      { role: "user", content: "[Tóm tắt phần hội thoại trước đó, để tiết kiệm ngữ cảnh]\n" + (r.content.trim() || "(không có tóm tắt)") },
+      { role: "assistant", content: "Đã nắm bối cảnh, tôi sẽ tiếp tục từ đây." },
+    ];
+    if (midturn) this.messages.push({ role: "user", content: "Hãy tiếp tục công việc đang làm dở theo bản tóm tắt ở trên." });
+    return true;
+  }
+
+  /** Sau khi bị ngắt giữa chừng: mọi tool_call đều phải có kết quả. */
+  repairHistory(): void {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const m = this.messages[i];
+      if (m.role === "assistant" && m.tool_calls) {
+        const answered = new Set(this.messages.slice(i + 1).filter((x) => x.role === "tool").map((x) => x.tool_call_id));
+        for (const c of m.tool_calls) if (!answered.has(c.id)) this.messages.push({ role: "tool", tool_call_id: c.id, content: "Bị người dùng ngắt." });
+        return;
+      }
+      if (m.role === "user") return;
+    }
+  }
+
+  async runTurn(userText: string, signal?: AbortSignal): Promise<string> {
+    const s = this.s;
+    s.ctx.signal = signal;
+    if (this.depth === 0) {
+      s.perms.tainted = false;
+      if (s.hooks) {
+        const hr = await s.hooks.run("UserPromptSubmit", { prompt: userText }, signal);
+        for (const w of hr.warnings) s.emit({ type: "notice", level: "warn", text: w });
+        if (hr.blocked) {
+          s.emit({ type: "notice", level: "error", text: "Yêu cầu bị chặn bởi hook: " + hr.message });
+          return "";
+        }
+        if (hr.context) userText += "\n\n[Thông tin thêm từ hook]\n" + hr.context;
+      }
+    }
+    this.messages.push({ role: "user", content: userText });
+    let stopRetries = 0;
+    const maxSteps = this.depth === 0 ? s.o.getSettings().maxSteps : 25;
+    let final = "";
+    this.repeatKey = "";
+    this.repeatN = 0;
+    try {
+      for (let step = 0; step < maxSteps; step++) {
+        if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
+        await this.manageContext();
+        const resp = await this.callModel(signal);
+        const msg: ChatMessage = { role: "assistant", content: resp.content || null };
+        if (resp.toolCalls.length) msg.tool_calls = resp.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.arguments } }));
+        this.messages.push(msg);
+        if (resp.content.trim()) final = resp.content.trim();
+        s.emit({ type: "message_end", depth: this.depth, text: resp.content });
+
+        if (!resp.toolCalls.length) {
+          if (this.depth === 0 && s.mode === "plan" && resp.content.trim()) {
+            // mô hình in kế hoạch ra văn bản thay vì gọi exit_plan_mode: vẫn xin người dùng duyệt
+            const fb = await s.exitPlanMode(resp.content.trim(), this.depth);
+            this.messages.push({ role: "user", content: fb });
+            if (s.mode !== "plan") continue;
+            if (fb.startsWith("Người dùng chưa duyệt")) continue;
+          }
+          if (resp.finish === "length") s.emit({ type: "notice", level: "warn", text: "Câu trả lời bị cắt do hết độ dài tối đa." });
+          if (this.depth === 0 && s.hooks) {
+            const hr = await s.hooks.run("Stop", { prompt: userText }, signal);
+            for (const w of hr.warnings) s.emit({ type: "notice", level: "warn", text: w });
+            if (hr.blocked && stopRetries < 2) {
+              stopRetries++;
+              s.emit({ type: "notice", level: "info", text: "Hook Stop yêu cầu làm tiếp: " + hr.message.split("\n")[0] });
+              this.messages.push({ role: "user", content: "[Hook Stop phản hồi]\n" + hr.message });
+              continue;
+            }
+          }
+          return final;
+        }
+        for (const c of resp.toolCalls) {
+          if (signal?.aborted) {
+            this.messages.push({ role: "tool", tool_call_id: c.id, content: "Bị người dùng ngắt." });
+            continue;
+          }
+          const key = c.name + "\u0000" + c.arguments;
+          this.repeatN = key === this.repeatKey ? this.repeatN + 1 : 1;
+          this.repeatKey = key;
+          let result = await this.execute(c);
+          if (this.repeatN >= 3) result += `\n[Cảnh báo] Bạn đã gọi cùng công cụ với cùng tham số ${this.repeatN} lần liên tiếp mà không tiến triển. Hãy đổi cách tiếp cận, hoặc dừng lại và báo cáo người dùng.`;
+          this.messages.push({ role: "tool", tool_call_id: c.id, content: result });
+        }
+        if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
+        if (this.repeatN >= 5) {
+          s.emit({ type: "notice", level: "warn", text: `Agent lặp lại cùng một thao tác ${this.repeatN} lần nên đã dừng.` });
+          return final || "(đã dừng vì lặp vô ích)";
+        }
+      }
+      s.emit({ type: "notice", level: "warn", text: `Đã đạt giới hạn ${maxSteps} bước. Gõ "tiếp tục" nếu muốn làm tiếp.` });
+      return final;
+    } catch (e) {
+      if (e instanceof LlmError && e.kind === "abort") {
+        this.repairHistory();
+        throw e;
+      }
+      throw e;
+    }
+  }
+
+  private async callModel(signal?: AbortSignal): Promise<ChatResult> {
+    const s = this.s;
+    const tools: ToolSchema[] = s.toolsFor(this.def, this.depth).map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
+    const system = s.systemPrompt(this.def, this.depth);
+    const settings = s.o.getSettings();
+    const notify = (text: string) => s.emit({ type: "notice", level: "warn", text });
+    let resp: ChatResult | null = null;
+    for (let attempt = 0; attempt < 2 && !resp; attempt++) {
+      try {
+        resp = await s.o.llm.chat([{ role: "system", content: system }, ...this.messages], {
+          tools,
+          signal,
+          thinking: settings.thinking,
+          notify,
+          onContent: this.depth === 0 ? (t) => s.emit({ type: "text", depth: 0, delta: t }) : undefined,
+          onReasoning: this.depth === 0 && settings.thinking ? (t) => s.emit({ type: "reasoning", depth: 0, delta: t }) : undefined,
+        });
+      } catch (e) {
+        if (e instanceof LlmError && e.kind === "context" && attempt === 0) {
+          s.emit({ type: "notice", level: "warn", text: "Ngữ cảnh đầy, đang rút gọn rồi thử lại…" });
+          this.pruneToolResults(1);
+          if (!(await this.compact("", this.messages[this.messages.length - 1]?.role === "tool"))) throw e;
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (!resp) throw new LlmError("Không gọi được mô hình.");
+    s.track(resp.usage, system.length + JSON.stringify(this.messages).length);
+    s.emitUsage();
+    return resp;
+  }
+
+  // ---------------------------------------------------------------- chạy công cụ
+  private async execute(tc: { id: string; name: string; arguments: string }): Promise<string> {
+    const s = this.s;
+    const { name } = tc;
+    const tool = s.tools.get(name);
+    const allowed = new Set(s.toolsFor(this.def, this.depth).map((t) => t.name));
+    let args: Record<string, unknown>;
+    try {
+      const parsed = tc.arguments.trim() ? JSON.parse(tc.arguments) : {};
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("tham số phải là object");
+      args = parsed;
+    } catch (e) {
+      s.emit({ type: "tool_start", id: tc.id, name, summary: "tham số không hợp lệ", args: {}, depth: this.depth });
+      const out = `Lỗi: tham số không phải JSON hợp lệ (${(e as Error).message}). Hãy gọi lại với JSON đúng.`;
+      s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+      return out;
+    }
+    const summary = tool ? tool.summarize(args) : "";
+    if (!tool || !allowed.has(name)) {
+      s.emit({ type: "tool_start", id: tc.id, name, summary, args, depth: this.depth });
+      const out = `Lỗi: không có công cụ '${name}'. Công cụ hiện có: ${[...allowed].sort().join(", ")}`;
+      s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+      return out;
+    }
+
+    // xin quyền
+    let target: TargetInfo = {};
+    const rawPath = tool.targetPath ? tool.targetPath(args) : tool.pathArg ? args[tool.pathArg] : undefined;
+    if (typeof rawPath === "string") {
+      try {
+        const abs = await resolveSafe(s.ctx, rawPath);
+        target = { abs, rel: relPath(s.ctx, abs) };
+      } catch {
+        /* công cụ sẽ báo lỗi đường dẫn */
+      }
+    }
+    const preview = tool.preview ? await tool.preview(s.ctx, args).catch(() => null) : null;
+    s.emit({ type: "tool_start", id: tc.id, name, summary, args, depth: this.depth, preview });
+    if (s.hooks) {
+      const hr = await s.hooks.run("PreToolUse", { toolName: name, toolInput: args }, s.ctx.signal);
+      for (const w of hr.warnings) s.emit({ type: "notice", level: "warn", text: w });
+      if (hr.blocked) {
+        const out = "Bị chặn bởi hook PreToolUse: " + hr.message;
+        s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+        return out;
+      }
+    }
+    const d = s.perms.decide(tool, args, target);
+    if (d.decision === "deny") {
+      const out = "Bị từ chối: " + d.reason;
+      s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+      return out;
+    }
+    if (d.decision === "ask") {
+      const res = await s.ask({ id: nextId("a"), kind: "tool", tool: name, summary, args, preview, note: d.reason || undefined, depth: this.depth });
+      if (!res.allow) {
+        const out = "Người dùng từ chối chạy công cụ này." + (res.note ? " Lý do: " + res.note : " Hãy đề xuất cách khác hoặc hỏi lại người dùng.");
+        s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+        return out;
+      }
+      if (res.always) {
+        const rule = s.perms.remember(tool, args);
+        s.emit({ type: "notice", level: "info", text: "Đã thêm quy tắc cho phiên này: " + rule });
+      }
+    }
+
+    // chạy
+    let ok = true;
+    let result: string;
+    try {
+      result = await tool.run(s.ctx, args);
+    } catch (e) {
+      ok = false;
+      if (e instanceof ToolError) result = "Lỗi: " + e.message;
+      else if (e instanceof LlmError && e.kind === "abort") throw e;
+      else result = `Lỗi nội bộ khi chạy ${name}: ${(e as Error).name}: ${(e as Error).message}`;
+    }
+    result = String(result);
+    if (result.length > MAX_TOOL_CHARS) result = result.slice(0, MAX_TOOL_CHARS) + `\n… (đã cắt bớt ${result.length - MAX_TOOL_CHARS} ký tự)`;
+    s.emit({ type: "tool_result", id: tc.id, name, ok, output: result, depth: this.depth });
+    if (ok && (name === "web_fetch" || tool.kind === "mcp") && !s.perms.tainted) {
+      s.perms.tainted = true;
+      s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${name === "web_fetch" ? "web" : "công cụ ngoài (MCP)"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });
+    }
+    if (ok && (tool.kind === "edit" || tool.kind === "exec")) s.emit({ type: "files_changed", paths: target.rel ? [target.rel] : [] });
+    if (s.hooks) {
+      const hr = await s.hooks.run("PostToolUse", { toolName: name, toolInput: args, toolOutput: result }, s.ctx.signal);
+      for (const w of hr.warnings) s.emit({ type: "notice", level: "warn", text: w });
+      if (hr.blocked) {
+        s.emit({ type: "notice", level: "info", text: "Hook PostToolUse phản hồi: " + hr.message.split("\n")[0] });
+        result += "\n[Hook PostToolUse phản hồi]\n" + hr.message;
+      } else if (hr.context) result += "\n[Hook PostToolUse]\n" + hr.context;
+    }
+    return result;
+  }
+}
+

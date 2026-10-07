@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "packages/*/src",
+    "packages/*/test",
+    "apps/web/src",
+    "apps/desktop/src",
+    "apps/desktop/renderer",
+    "apps/desktop/test"
+  ]
+}

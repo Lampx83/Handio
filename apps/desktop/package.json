@@ -1,0 +1,25 @@
+{
+  "name": "@neu/agent-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NEU Agent — trợ lý AI giúp học lập trình và xử lý công việc văn phòng",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node build.mjs && electron .",
+    "smoke": "node build.mjs && node smoke.mjs",
+    "dist": "RELEASE=1 node build.mjs && electron-builder --mac --win && node scripts/release-info.mjs",
+    "pack:smoke": "SMOKE_PACK=1 node build.mjs && electron-builder --mac --arm64 --dir -c.mac.target=dir",
+    "release:info": "node scripts/release-info.mjs"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@electron/fuses": "^2.1.3",
+    "@neu/agent-core": "*",
+    "@neu/agent-env-node": "*",
+    "@neu/agent-ui": "*",
+    "electron": "^44.6.0",
+    "electron-builder": "^26.15.3"
+  },
+  "author": "NEU Agent"
+}

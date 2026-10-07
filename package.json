@@ -1,0 +1,31 @@
+{
+  "name": "neu-agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "NEU Agent — trợ lý agent (lập trình + văn phòng) của Trường Đại học Kinh tế Quốc dân. Chạy trên terminal, máy tính (Electron) và web.",
+  "workspaces": [
+    "packages/core",
+    "packages/env-node",
+    "packages/ui",
+    "apps/web",
+    "apps/desktop"
+  ],
+  "scripts": {
+    "build": "npm run build -w @neu/agent-web && npm run build -w @neu/agent-desktop",
+    "dev:web": "npm run dev -w @neu/agent-web",
+    "desktop": "npm run start -w @neu/agent-desktop",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "smoke": "npm run smoke -w @neu/agent-desktop"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "@types/node": "^20.14.0",
+    "esbuild": "^0.24.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1",
+    "image-size": "^2.0.3"
+  }
+}

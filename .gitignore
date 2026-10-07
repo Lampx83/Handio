@@ -1,0 +1,15 @@
+.DS_Store
+node_modules/
+dist/
+build/
+release/
+__pycache__/
+*.pyc
+*.log
+.neuagent/sessions/
+.fitcode/sessions/
+!apps/desktop/build/
+
+# bản cài Desktop (nặng) — chỉ để upload lên máy chủ
+deploy/ai-neu/downloads/
+deploy/ai-neu/web.tar.gz

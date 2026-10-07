@@ -1,0 +1,66 @@
+appId: vn.edu.neu.agent
+productName: NEU Agent
+copyright: NEU Agent
+directories:
+  output: release
+  buildResources: build
+# Mã đã được esbuild gộp vào dist/: gói cài chỉ chứa dist + package.json, đóng trong asar
+files:
+  - dist/**/*
+  - package.json
+  - "!dist/**/*.map"
+asar: true
+compression: maximum
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+
+# Củng cố Electron (fuses): tắt các đường tắt có thể bị lợi dụng để chạy mã tuỳ ý
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  loadBrowserProcessSpecificV8Snapshot: false
+  grantFileProtocolExtraPrivileges: false
+
+mac:
+  category: public.app-category.education
+  icon: build/icon.png
+  # Chưa có chứng chỉ Apple Developer ID: ký "ad-hoc" (-) để chạy được trên Apple Silicon. Muốn bỏ cảnh báo Gatekeeper phải ký + notarize.
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  target:
+    - { target: dmg, arch: [arm64, x64] }
+    - { target: zip, arch: [arm64, x64] }
+  artifactName: "NEU-Agent-${version}-mac-${arch}.${ext}"
+  extendInfo:
+    NSMicrophoneUsageDescription: ""
+    NSCameraUsageDescription: ""
+dmg:
+  title: "NEU Agent ${version}"
+  contents:
+    - { x: 130, y: 220 }
+    - { x: 410, y: 220, type: link, path: /Applications }
+
+win:
+  icon: build/icon.png
+  # Không cần wine để đóng gói từ macOS; chưa có chứng chỉ ký số nên tệp .exe sẽ hiện "Nhà phát hành không xác định" (SmartScreen)
+  signAndEditExecutable: false
+  target:
+    - { target: nsis, arch: [x64] }
+    - { target: zip, arch: [x64] }
+  artifactName: "NEU-Agent-${version}-win-${arch}.${ext}"
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: NEU Agent
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
