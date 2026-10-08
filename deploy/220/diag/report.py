@@ -145,7 +145,8 @@ def summarize(recs, rows):
         e = r["e"]
         if e.get("t") == "tool":
             tools[e.get("name", "other")]["calls"] += 1
-            if e.get("ok") is False:
+            # chương trình/test của người dùng chạy hỏng ("program") hoặc bị từ chối quyền không tính là công cụ lỗi (bản cũ không có mã: tính như lỗi)
+            if e.get("ok") is False and e.get("err") not in ("program", "denied"):
                 tools[e.get("name", "other")]["fails"] += 1
     S["tools"] = dict(tools)
     sig = collections.Counter(r["e"].get("code", "?") for r in recs if r["e"].get("t") == "signal")

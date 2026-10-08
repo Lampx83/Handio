@@ -157,6 +157,30 @@
           "ge2m"
         ],
         "req": true
+      },
+      "err": {
+        "k": "enum",
+        "v": [
+          "not_found",
+          "outside_project",
+          "read_first",
+          "stale",
+          "binary",
+          "bad_args",
+          "no_match",
+          "ambiguous",
+          "wrong_type",
+          "sandbox",
+          "program",
+          "timeout",
+          "unsupported",
+          "denied",
+          "hook",
+          "unknown_tool",
+          "bad_json",
+          "internal",
+          "other"
+        ]
       }
     },
     "llm_error": {

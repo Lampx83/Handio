@@ -574,6 +574,11 @@ export class Agent {
   messages: ChatMessage[] = [];
   private repeatKey = "";
   private repeatN = 0;
+  /** Các lệnh gọi gần nhất (để phát hiện xen kẽ A,B,A,B…) và chuỗi lỗi liên tiếp cùng công cụ cùng lý do. */
+  private hist: string[] = [];
+  private cycleN = 0;
+  private failRun = { tool: "", sig: "", n: 0 };
+  private stopWhy = "";
 
   constructor(private s: Session, private def: AgentDef | null = null, private depth = 0) {}
 
@@ -670,9 +675,14 @@ export class Agent {
     let final = "";
     this.repeatKey = "";
     this.repeatN = 0;
+    this.hist = [];
+    this.cycleN = 0;
+    this.failRun = { tool: "", sig: "", n: 0 };
+    this.stopWhy = "";
     try {
       for (let step = 0; step < maxSteps; step++) {
         if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
+        if (maxSteps >= 10 && maxSteps - step === Math.max(3, Math.floor(maxSteps * 0.15))) this.messages.push({ role: "user", content: `[Hệ thống] Chỉ còn ${maxSteps - step} bước trong lượt này. Hãy ưu tiên hoàn thành phần quan trọng nhất, rồi tóm tắt: đã làm gì và còn thiếu gì.` });
         await this.manageContext();
         const resp = await this.callModel(signal);
         const msg: ChatMessage = { role: "assistant", content: resp.content || null };
@@ -712,16 +722,20 @@ export class Agent {
           this.repeatKey = key;
           let result = await this.execute(c);
           if (this.repeatN >= 3) result += `\n[Cảnh báo] Bạn đã gọi cùng công cụ với cùng tham số ${this.repeatN} lần liên tiếp mà không tiến triển. Hãy đổi cách tiếp cận, hoặc dừng lại và báo cáo người dùng.`;
+          result += this.watch(c.name, key, result);
           this.messages.push({ role: "tool", tool_call_id: c.id, content: result });
         }
         if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
         if (this.repeatN >= 5) {
-          s.emit({ type: "notice", level: "warn", text: `Agent lặp lại cùng một thao tác ${this.repeatN} lần nên đã dừng.` });
-          return final || "(đã dừng vì lặp vô ích)";
+          s.emit({ type: "notice", level: "warn", text: this.stopWhy ? `Agent lặp lại cùng một thao tác ${this.stopWhy} nên đã dừng.` : `Agent lặp lại cùng một thao tác ${this.repeatN} lần nên đã dừng.` });
+          // thay vì im lặng: nhờ mô hình nói rõ đang kẹt ở đâu và cần người dùng cung cấp/quyết định gì
+          const why = await this.wrapUp(signal, "[Hệ thống] Bạn đã bị dừng vì cứ lặp lại thao tác mà không tiến triển. Không gọi công cụ nữa. Hãy nói ngắn gọn: bạn đang cố làm gì, vì sao bị kẹt, và cần người dùng cung cấp thông tin hay quyết định gì để làm tiếp.");
+          return why || final || "(đã dừng vì lặp vô ích)";
         }
       }
       s.emit({ type: "notice", level: "warn", text: `Đã đạt giới hạn ${maxSteps} bước. Gõ "tiếp tục" nếu muốn làm tiếp.` });
-      return final;
+      // một lượt cuối không dùng công cụ để người dùng nhận được bản tóm tắt tiến độ (thay vì lượt kết thúc đột ngột)
+      return (await this.wrapUp(signal, "[Hệ thống] Đã hết số bước cho phép trong lượt này. Không gọi công cụ nữa. Hãy tóm tắt ngắn gọn: đã làm được gì, còn lại việc gì, và bước tiếp theo bạn đề xuất (người dùng gõ \"tiếp tục\" để làm tiếp).")) || final;
     } catch (e) {
       if (e instanceof LlmError && e.kind === "abort") {
         this.repairHistory();
@@ -731,9 +745,60 @@ export class Agent {
     }
   }
 
-  private async callModel(signal?: AbortSignal): Promise<ChatResult> {
+  /**
+   * Phát hiện lặp ngoài trường hợp "cùng lệnh, cùng tham số": (1) xen kẽ A,B,A,B,A,B; (2) cùng một công cụ lỗi liên tiếp với cùng lý do.
+   * Trả về lời nhắc gắn vào kết quả công cụ; khi nặng thì đặt repeatN ≥ 5 để vòng lặp chính dừng. Chương trình của người dùng chạy hỏng (kind "program") và việc bị từ chối không tính là lặp.
+   */
+  private watch(name: string, key: string, result: string): string {
+    const { ok, kind } = this.lastRes;
+    const h = this.hist;
+    h.push(key);
+    if (h.length > 12) h.shift();
+    const n = h.length;
+    let warn = "";
+    if (n >= 6 && h[n - 1] === h[n - 3] && h[n - 3] === h[n - 5] && h[n - 2] === h[n - 4] && h[n - 4] === h[n - 6] && h[n - 1] !== h[n - 2]) {
+      this.cycleN++;
+      warn += "\n[Cảnh báo] Bạn đang lặp qua lại giữa hai thao tác mà không tiến triển. Đổi hướng hoặc báo người dùng.";
+      if (this.cycleN >= 3) {
+        this.repeatN = Math.max(this.repeatN, 5);
+        this.stopWhy = "qua lại giữa hai thao tác";
+      }
+    }
+    if (ok) this.failRun = { tool: "", sig: "", n: 0 };
+    else if (kind !== "program" && kind !== "denied") {
+      const sig = result.split("\n")[0].replace(/\d+/g, "#").slice(0, 100);
+      this.failRun = this.failRun.tool === name && this.failRun.sig === sig ? { tool: name, sig, n: this.failRun.n + 1 } : { tool: name, sig, n: 1 };
+      if (this.failRun.n >= 3) warn += `\n[Cảnh báo] ${name} đã lỗi ${this.failRun.n} lần liên tiếp với cùng lý do. Đừng thử lại cùng cách: đọc kỹ thông báo lỗi, đổi cách làm (đường dẫn, tham số hoặc công cụ khác) hoặc hỏi người dùng.`;
+      if (this.failRun.n >= 5) {
+        this.repeatN = Math.max(this.repeatN, 5);
+        this.stopWhy = `thất bại (${name})`;
+      }
+    }
+    return warn;
+  }
+
+  /** Một lượt cuối KHÔNG dùng công cụ để mô hình tóm tắt/giải thích. Chỉ ở lớp agent chính; lỗi (trừ ngắt) thì bỏ qua và dọn lời nhắc. */
+  private async wrapUp(signal: AbortSignal | undefined, instruction: string): Promise<string> {
+    if (this.depth !== 0 || signal?.aborted) return "";
+    const mark = this.messages.length;
+    this.messages.push({ role: "user", content: instruction });
+    try {
+      const resp = await this.callModel(signal, true);
+      const text = resp.content.trim();
+      if (!text) throw new Error("rỗng");
+      this.messages.push({ role: "assistant", content: resp.content });
+      this.s.emit({ type: "message_end", depth: 0, text: resp.content });
+      return text;
+    } catch (e) {
+      if (e instanceof LlmError && e.kind === "abort") throw e;
+      this.messages.length = mark;
+      return "";
+    }
+  }
+
+  private async callModel(signal?: AbortSignal, noTools = false): Promise<ChatResult> {
     const s = this.s;
-    const tools: ToolSchema[] = s.toolsFor(this.def, this.depth).map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
+    const tools: ToolSchema[] = noTools ? [] : s.toolsFor(this.def, this.depth).map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
     const system = s.systemPrompt(this.def, this.depth);
     const settings = s.o.getSettings();
     const notify = (text: string) => s.emit({ type: "notice", level: "warn", text });
@@ -765,6 +830,13 @@ export class Agent {
   }
 
   // ---------------------------------------------------------------- chạy công cụ
+  /** Kết quả công cụ gần nhất (để phát hiện lặp). */
+  private lastRes: { ok: boolean; kind?: string } = { ok: true };
+  private done(tc: { id: string }, name: string, ok: boolean, output: string, kind?: string): void {
+    this.lastRes = { ok, kind };
+    this.s.emit({ type: "tool_result", id: tc.id, name, ok, output, depth: this.depth, ...(kind ? { errKind: kind } : {}) });
+  }
+
   private async execute(tc: { id: string; name: string; arguments: string }): Promise<string> {
     const s = this.s;
     const { name } = tc;
@@ -778,14 +850,14 @@ export class Agent {
     } catch (e) {
       s.emit({ type: "tool_start", id: tc.id, name, summary: "tham số không hợp lệ", args: {}, depth: this.depth });
       const out = `Lỗi: tham số không phải JSON hợp lệ (${(e as Error).message}). Hãy gọi lại với JSON đúng.`;
-      s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+      this.done(tc, name, false, out, "bad_json");
       return out;
     }
     const summary = tool ? tool.summarize(args) : "";
     if (!tool || !allowed.has(name)) {
       s.emit({ type: "tool_start", id: tc.id, name, summary, args, depth: this.depth });
       const out = `Lỗi: không có công cụ '${name}'. Công cụ hiện có: ${[...allowed].sort().join(", ")}`;
-      s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+      this.done(tc, name, false, out, "unknown_tool");
       return out;
     }
 
@@ -807,21 +879,21 @@ export class Agent {
       for (const w of hr.warnings) s.emit({ type: "notice", level: "warn", text: w });
       if (hr.blocked) {
         const out = "Bị chặn bởi hook PreToolUse: " + hr.message;
-        s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+        this.done(tc, name, false, out, "hook");
         return out;
       }
     }
     const d = s.perms.decide(tool, args, target);
     if (d.decision === "deny") {
       const out = "Bị từ chối: " + d.reason;
-      s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+      this.done(tc, name, false, out, "denied");
       return out;
     }
     if (d.decision === "ask") {
       const res = await s.ask({ id: nextId("a"), kind: "tool", tool: name, summary, args, preview, note: d.reason || undefined, depth: this.depth });
       if (!res.allow) {
         const out = "Người dùng từ chối chạy công cụ này." + (res.note ? " Lý do: " + res.note : " Hãy đề xuất cách khác hoặc hỏi lại người dùng.");
-        s.emit({ type: "tool_result", id: tc.id, name, ok: false, output: out, depth: this.depth });
+        this.done(tc, name, false, out, "denied");
         return out;
       }
       if (res.always) {
@@ -832,6 +904,7 @@ export class Agent {
 
     // chạy
     let ok = true;
+    let errKind: string | undefined;
     let result: string;
     const undoBefore = s.ctx.undoStack.length;
     try {
@@ -841,13 +914,18 @@ export class Agent {
       result = name === "bash" && !readonlyCmd ? await trackExec(s.ctx, () => tool.run(s.ctx, args)) : await tool.run(s.ctx, args);
     } catch (e) {
       ok = false;
-      if (e instanceof ToolError) result = "Lỗi: " + e.message;
-      else if (e instanceof LlmError && e.kind === "abort") throw e;
-      else result = `Lỗi nội bộ khi chạy ${name}: ${(e as Error).name}: ${(e as Error).message}`;
+      if (e instanceof ToolError) {
+        result = "Lỗi: " + e.message;
+        errKind = e.kind;
+      } else if (e instanceof LlmError && e.kind === "abort") throw e;
+      else {
+        result = `Lỗi nội bộ khi chạy ${name}: ${(e as Error).name}: ${(e as Error).message}`;
+        errKind = "internal";
+      }
     }
     result = String(result);
     if (result.length > MAX_TOOL_CHARS) result = result.slice(0, MAX_TOOL_CHARS) + `\n… (đã cắt bớt ${result.length - MAX_TOOL_CHARS} ký tự)`;
-    s.emit({ type: "tool_result", id: tc.id, name, ok, output: result, depth: this.depth });
+    this.done(tc, name, ok, result, ok ? undefined : errKind);
     s.noteTool(name, ok && !(name === "bash" && /\[(mã thoát [1-9]\d*|Hết thời gian)/.test(result.slice(-80))), s.ctx.undoStack.length > undoBefore);
     if (ok && (name === "web_fetch" || tool.kind === "mcp") && !s.perms.tainted) {
       s.perms.tainted = true;

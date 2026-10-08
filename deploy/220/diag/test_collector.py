@@ -48,6 +48,14 @@ class ValidationTests(unittest.TestCase):
         self.assertIsNone(C.validate_event("turn", SCHEMA))
         self.assertEqual(C.validate_event({"t": "turn", "ts": NOW, "end": "ok", "dur_s": True, "steps": 1e99, "note": "x"}, SCHEMA), {"t": "turn", "ts": NOW, "end": "ok", "steps": 1000})
 
+    def test_tool_error_code_is_enum_only(self):
+        ok = C.validate_event({"t": "tool", "ts": NOW, "name": "read_file", "ok": False, "dur": "lt1s", "err": "not_found"}, SCHEMA)
+        self.assertEqual(ok["err"], "not_found")
+        for bad in (SECRETS[1], "Không có file luong-2026.xlsx", "x" * 50):  # lý do chỉ là mã trong danh sách; nội dung tự do bị bỏ khỏi sự kiện
+            e = C.validate_event({"t": "tool", "ts": NOW, "name": "read_file", "ok": False, "dur": "lt1s", "err": bad}, SCHEMA)
+            self.assertNotIn("err", e)
+            self.assertNotIn(bad, json.dumps(e))
+
     def test_tool_name_secret_becomes_other(self):
         e = C.validate_event({"t": "signal", "ts": NOW, "code": "loop", "tool": SECRETS[0], "n": 3}, SCHEMA)
         self.assertEqual(e["tool"], "other")

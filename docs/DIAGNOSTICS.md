@@ -14,12 +14,14 @@ Mục tiêu: hệ thống **tự phát hiện vấn đề** (lỗi mô hình/c�
 | Sự kiện | Trường (tất cả là mã/số/boolean) |
 |---|---|
 | `turn` (mỗi lượt làm việc) | `end` (ok/interrupted/error/step_limit/loop), `dur_s`, `ttft_ms`, `steps`, `tools`, `tool_fail`, `prompt_tok`, `completion_tok`, `ctx_pct`, `compactions`, `perm_allow`, `perm_deny` |
-| `tool` | `name` (danh sách cố định, `mcp`, `other`), `ok`, `dur` (lt1s/lt5s/lt30s/lt2m/ge2m) |
+| `tool` | `name` (danh sách cố định, `mcp`, `other`), `ok`, `dur` (lt1s/lt5s/lt30s/lt2m/ge2m), `err` (khi lỗi; **chỉ mã** như `not_found`, `read_first`, `no_match`, `sandbox`, `program`, `denied`…; từ bản 0.2.0) |
 | `llm_error` | `kind` (context/auth/rate/server/network/insecure/unexpected/other), `status` (mã HTTP) |
 | `llm_retry` | `kind` (network/rate/server) |
 | `signal` | `code` (loop, step_limit, repeat_tool_fail, slow_first_token, slow_turn, ctx_high, early_interrupt, perm_denied, empty_output, invalid_tool_args, unknown_tool, truncated, context_overflow), `tool`, `n` |
 | `report` | `note`: ghi chú ≤500 ký tự **do người dùng gõ khi bấm “Báo lỗi”** (xem trước đúng gói sẽ gửi) |
 | Chung | `ts`; app: mã cài ngẫu nhiên 32 hex, `version`, `build`, `platform` (web/mac/win), `profile` (work/code/design), `model` |
+
+**Về `err`:** `program` = chương trình/test của người dùng chạy hỏng (kết quả bình thường trong bài tập sửa lỗi), `denied` = người dùng hoặc quy tắc từ chối quyền; hai loại này **không** tính là “công cụ lỗi” trong trang quản trị và báo cáo (bản cũ không gửi `err` thì tính như lỗi). Các mã còn lại cho biết agent dùng sai ở đâu (sai đường dẫn, sửa khi chưa đọc, đoạn cần sửa không khớp…) để biết sửa gì.
 
 **Không bao giờ:** câu hỏi, câu trả lời, tên/đường dẫn/nội dung tệp, dòng lệnh, URL, thông điệp lỗi của công cụ, key, email, IP, User-Agent. Ngoại lệ duy nhất là `note` của “Báo lỗi” (văn bản tự do của người dùng, nhắc họ đừng dán dữ liệu nhạy cảm).
 

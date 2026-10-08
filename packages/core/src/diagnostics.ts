@@ -26,6 +26,8 @@ export const DIAG_TOOLS: string[] = [
   "convert_to_pdf", "skill", "task", "exit_plan_mode", "mcp", "other",
 ];
 export const DIAG_SIGNALS = ["loop", "step_limit", "repeat_tool_fail", "slow_first_token", "slow_turn", "ctx_high", "early_interrupt", "perm_denied", "empty_output", "invalid_tool_args", "unknown_tool", "truncated", "context_overflow"];
+/** Lý do công cụ thất bại (chỉ mã): xem ToolErrorKind trong tools.ts. "program" = chương trình/test của người dùng chạy hỏng (kết quả bình thường, không phải lỗi công cụ); "denied" = bị từ chối quyền. */
+export const DIAG_TOOL_ERRORS = ["not_found", "outside_project", "read_first", "stale", "binary", "bad_args", "no_match", "ambiguous", "wrong_type", "sandbox", "program", "timeout", "unsupported", "denied", "hook", "unknown_tool", "bad_json", "internal", "other"];
 export const DIAG_PLATFORMS = ["web", "mac", "win", "linux", "other"];
 export const DIAG_PROFILES = ["work", "code", "design"];
 
@@ -60,6 +62,7 @@ export const DIAG_SCHEMA = {
       name: { k: "tool", req: true },
       ok: { k: "bool", req: true },
       dur: { k: "enum", v: ["lt1s", "lt5s", "lt30s", "lt2m", "ge2m"], req: true },
+      err: { k: "enum", v: DIAG_TOOL_ERRORS },
     },
     llm_error: {
       kind: { k: "enum", v: ["context", "auth", "rate", "server", "network", "insecure", "unexpected", "other"], req: true },
@@ -418,12 +421,15 @@ export class DiagnosticsRecorder {
         const name = safeToolName(e.name);
         const st = t.toolStart.get(e.id);
         t.toolStart.delete(e.id);
-        this.push({ t: "tool", ts: this.ts(), name, ok: !!e.ok, dur: durBucket(st ? this.now() - st : 0) });
+        const err = !e.ok && e.errKind && DIAG_TOOL_ERRORS.includes(e.errKind) ? e.errKind : undefined;
+        this.push({ t: "tool", ts: this.ts(), name, ok: !!e.ok, dur: durBucket(st ? this.now() - st : 0), ...(err ? { err } : {}) });
         if (!e.ok) {
           t.fails++;
-          const n = (t.failBy.get(name) ?? 0) + 1;
+          // chương trình của người dùng chạy hỏng / bị từ chối quyền không phải "công cụ lỗi lặp lại"
+          const real = err !== "program" && err !== "denied";
+          const n = (t.failBy.get(name) ?? 0) + (real ? 1 : 0);
           t.failBy.set(name, n);
-          if (n >= DIAG_THRESHOLDS.toolFailRepeat) this.signal("repeat_tool_fail", name, n);
+          if (real && n >= DIAG_THRESHOLDS.toolFailRepeat) this.signal("repeat_tool_fail", name, n);
           if (e.output.startsWith("Lỗi: không có công cụ")) this.signal("unknown_tool");
         }
         return;

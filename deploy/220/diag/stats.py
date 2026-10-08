@@ -31,6 +31,10 @@ SPARK_DAYS = 14
 OUTCOMES = ("ok", "interrupted", "error", "step_limit", "loop")
 OUTCOME_VI = {"ok": "Thành công", "interrupted": "Bị ngắt", "error": "Lỗi", "step_limit": "Chạm giới hạn bước", "loop": "Lặp"}
 STATUS_CLS = {"mới": "bn", "hoạt động": "ba", "ngủ đông": "bd"}
+ERR_VI = {"not_found": "Không có file/thư mục", "outside_project": "Đường dẫn ngoài dự án", "read_first": "Sửa trước khi đọc", "stale": "File đã đổi sau khi đọc", "binary": "File nhị phân", "bad_args": "Thiếu/sai tham số",
+          "no_match": "Không tìm thấy đoạn cần sửa", "ambiguous": "Đoạn cần sửa không duy nhất", "wrong_type": "Nhầm file/thư mục", "sandbox": "Dùng thứ sandbox không có", "program": "Chương trình/test của người dùng lỗi (bình thường)",
+          "timeout": "Quá thời gian", "unsupported": "Không hỗ trợ", "denied": "Bị từ chối quyền", "hook": "Bị hook chặn", "unknown_tool": "Công cụ không tồn tại", "bad_json": "Tham số không phải JSON", "internal": "Lỗi nội bộ", "other": "Khác", "unknown": "Chưa rõ (bản cũ)"}
+NOT_TOOL_FAULT = ("program", "denied")  # kết quả bình thường/ý người dùng, không tính là công cụ lỗi
 WD = ("T2", "T3", "T4", "T5", "T6", "T7", "CN")
 
 
@@ -89,7 +93,8 @@ def compute(recs, daily, now, findings=None, release=None):
     D = collections.defaultdict(lambda: {"users": set(), "installs": set(), "turns": 0, "out": collections.Counter(), "dur": [], "ttft": [], "ptok": 0, "ctok": 0, "tool_calls": 0, "tool_fails": 0, "signals": 0, "llm_errors": 0, "retries": 0})
     heat = [[0] * 24 for _ in range(7)]
     dist = {k: collections.defaultdict(lambda: {"users": set(), "installs": set(), "turns": 0}) for k in ("version", "platform", "profile", "model")}
-    tools = collections.defaultdict(lambda: {"calls": 0, "fails": 0})
+    tools = collections.defaultdict(lambda: {"calls": 0, "fails": 0, "prog": 0})
+    tool_err = collections.Counter()
     signals, llm_err, outcomes30 = collections.Counter(), collections.Counter(), collections.Counter()
     # cửa sổ trượt: (đầu, cuối) tính bằng giây trước hiện tại
     W = {"24h": (0, 86400), "p24": (86400, 172800), "7d": (0, 7 * 86400), "p7": (7 * 86400, 14 * 86400), "30d": (0, 30 * 86400), "p30": (30 * 86400, 60 * 86400), "all": (0, HIST_DAYS * 86400)}
@@ -138,11 +143,17 @@ def compute(recs, daily, now, findings=None, release=None):
                 heat[dt.weekday()][dt.hour] += 1
                 outcomes30[e.get("end", "?")] += 1
         elif et == "tool":
+            failed = e.get("ok") is False
+            real = failed and e.get("err") not in NOT_TOOL_FAULT
             pd["tool_calls"] += 1
-            pd["tool_fails"] += e.get("ok") is False
+            pd["tool_fails"] += real
             if in30:
-                tools[e.get("name", "other")]["calls"] += 1
-                tools[e.get("name", "other")]["fails"] += e.get("ok") is False
+                x = tools[e.get("name", "other")]
+                x["calls"] += 1
+                x["fails"] += real
+                x["prog"] += failed and not real
+                if failed:
+                    tool_err[e.get("err") or "unknown"] += 1
         elif et == "signal":
             pd["signals"] += 1
             if in30:
@@ -226,7 +237,7 @@ def compute(recs, daily, now, findings=None, release=None):
         "generated": datetime.datetime.fromtimestamp(t, TZ).strftime("%Y-%m-%d %H:%M"), "today": today, "kpi": kpi, "series": series, "spark_days": spark_days,
         "users": users, "users_listed": len(users), "segments": seg, "funnel": funnel, "hist_turns": [(k, hist_turns.get(k, 0)) for k in tl], "hist_days": [(k, hist_days.get(k, 0)) for k in dl],
         "dist": dists, "hours": hours, "heat": heat, "outcomes30": {k: outcomes30.get(k, 0) for k in OUTCOMES},
-        "tools": sorted(({"name": k, **v} for k, v in tools.items()), key=lambda x: -x["calls"]), "signals": dict(signals.most_common()), "llm_errors": dict(llm_err.most_common()),
+        "tools": sorted(({"name": k, **v} for k, v in tools.items()), key=lambda x: -x["calls"]), "tool_errors": dict(tool_err.most_common()), "signals": dict(signals.most_common()), "llm_errors": dict(llm_err.most_common()),
         "release": release_info(release, dists["version"], kpi["users_30d"]),
         "findings": findings or [], "downloads_total": sum(v.get("pkg", 0) for v in daily.values()), "daily_first": min(daily) if daily else None}
 
@@ -517,7 +528,9 @@ def render(S, health, report_links, nginx_note):
     o.append('<div class="card"><h3>Thời gian tới token đầu tiên</h3>%s%s</div>' % (lines([("p50", col("ttft_p50"), "s1"), ("p95", col("ttft_p95"), "s3")], lab, unit=" ms"), legend([("p50", "s1"), ("p95", "s3")])))
     o.append('<div class="card"><h3>Token mỗi ngày</h3>%s%s</div>' % (stack([("Prompt", col("ptok"), "s6"), ("Trả lời", col("ctok"), "s5")], lab), legend([("Prompt (gửi lên)", "s6"), ("Trả lời (sinh ra)", "s5")])))
     o.append('<div class="card"><h3>Lệnh gọi mô hình qua nginx</h3><p class="sub">đỏ: lỗi 5xx của cổng mô hình</p>%s</div>' % bars(col("chat"), lab, col("chat_5xx")))
-    o.append('<div class="card"><h3>Công cụ: số lần gọi và tỷ lệ lỗi</h3>%s</div>' % hbars([(x["name"], x["calls"], "%d · lỗi %s" % (x["calls"], R._p(R.ratio(x["fails"], x["calls"])))) for x in S["tools"][:12]]))
+    o.append('<div class="card"><h3>Công cụ: số lần gọi và tỷ lệ lỗi</h3>%s</div>' % hbars([(x["name"], x["calls"], "%d · lỗi %s%s" % (x["calls"], R._p(R.ratio(x["fails"], x["calls"])), " (+%d chương trình lỗi)" % x["prog"] if x.get("prog") else "")) for x in S["tools"][:12]]))
+    if S.get("tool_errors"):
+        o.append('<div class="card"><h3>Vì sao công cụ thất bại</h3><p class="sub">lý do (mã), 30 ngày; "chương trình/test lỗi" là kết quả bình thường</p>%s</div>' % hbars([(ERR_VI.get(nm, nm), v, str(v)) for nm, v in S["tool_errors"].items()], "bad"))
     o.append('<div class="card"><h3>Tín hiệu vấn đề và lỗi gọi mô hình</h3>%s%s</div>' % (hbars([(nm, v, str(v)) for nm, v in list(S["signals"].items())[:10]], "bad"), hbars([("lỗi " + nm, v, str(v)) for nm, v in S["llm_errors"].items()], "bad") if S["llm_errors"] else ""))
     o.append("</div>")
     if S["findings"]:

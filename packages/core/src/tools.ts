@@ -10,7 +10,25 @@ export const IGNORE_DIRS = new Set([".git", "node_modules", "__pycache__", ".ven
 export const MAX_READ_LINES = 500;
 const MAX_LINE_CHARS = 400;
 
-export class ToolError extends Error {}
+/**
+ * Loại lỗi công cụ (chỉ MÃ, không chứa nội dung): để chẩn đoán phân biệt "agent dùng sai" với "chương trình của người dùng chạy hỏng"
+ * (vd test không qua trong bài tập sửa lỗi là kết quả bình thường, không phải lỗi của công cụ).
+ */
+export type ToolErrorKind = "not_found" | "outside_project" | "read_first" | "stale" | "binary" | "bad_args" | "no_match" | "ambiguous" | "wrong_type" | "sandbox" | "program" | "timeout" | "unsupported" | "other";
+
+export class ToolError extends Error {
+  constructor(message: string, readonly kind: ToolErrorKind = "other") {
+    super(message);
+  }
+}
+
+const lev = (a: string, b: string): number => {
+  if (Math.abs(a.length - b.length) > 3) return 9;
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+};
 
 export interface Todo {
   content: string;
@@ -69,7 +87,7 @@ const dec = new TextDecoder();
 
 /** Resolve đường dẫn, theo symlink, và bắt buộc nằm trong thư mục dự án (hoặc thư mục được thêm). */
 export async function resolveSafe(ctx: ToolContext, p: unknown): Promise<string> {
-  if (typeof p !== "string" || !p.trim()) throw new ToolError("Thiếu đường dẫn.");
+  if (typeof p !== "string" || !p.trim()) throw new ToolError("Thiếu đường dẫn.", "bad_args");
   const raw = p.startsWith("~") && ctx.env.home ? ctx.env.home + p.slice(1) : p;
   const abs = resolve(ctx.root, raw);
   let cur = abs;
@@ -86,14 +104,49 @@ export async function resolveSafe(ctx: ToolContext, p: unknown): Promise<string>
     }
   }
   if ([ctx.root, ...ctx.extraDirs].some((b) => isInside(b, real))) return real;
-  throw new ToolError(`Đường dẫn ${p} nằm ngoài thư mục dự án (${ctx.root}). Chỉ làm việc trong thư mục dự án.`);
+  throw new ToolError(`Đường dẫn ${p} nằm ngoài thư mục dự án (${ctx.root}). Chỉ làm việc trong thư mục dự án: dùng đường dẫn tương đối so với thư mục đó (vd src/app.js).`, "outside_project");
 }
 
 export const relPath = (ctx: ToolContext, abs: string): string => relative(ctx.root, abs) || ".";
 
+/**
+ * Gợi ý khi đường dẫn không tồn tại: tên gần giống trong thư mục cha, hoặc file cùng tên ở chỗ khác trong dự án; nếu không có thì liệt kê thư mục gốc.
+ * Mô hình hay đoán sai thư mục (vd "app.js" thay vì "src/app.js"): gợi ý đúng giúp nó sửa ngay thay vì thử mò.
+ */
+export async function similarPaths(ctx: ToolContext, abs: string): Promise<string> {
+  const base = basename(abs).toLowerCase();
+  const found: string[] = [];
+  try {
+    for (const e of await ctx.env.readdir(dirname(abs))) {
+      const n = e.name.toLowerCase();
+      if (n !== base && (n === base || (base.length >= 4 && lev(n, base) <= 2) || n.replace(/\.[^.]+$/, "") === base.replace(/\.[^.]+$/, ""))) found.push(relPath(ctx, join(dirname(abs), e.name)) + (e.isDir ? "/" : ""));
+    }
+  } catch {
+    /* thư mục cha cũng không có */
+  }
+  if (!found.length) {
+    try {
+      let n = 0;
+      for await (const f of walk(ctx, ctx.root)) {
+        if (++n > 3000 || found.length >= 3) break;
+        if (basename(f).toLowerCase() === base) found.push(relPath(ctx, f));
+      }
+    } catch {
+      /* bỏ qua */
+    }
+  }
+  if (found.length) return ` Có phải ý bạn là: ${found.slice(0, 3).join(", ")}?`;
+  try {
+    const top = (await ctx.env.readdir(ctx.root)).filter((e) => !IGNORE_DIRS.has(e.name)).map((e) => e.name + (e.isDir ? "/" : "")).sort().slice(0, 12);
+    return top.length ? ` Thư mục dự án có: ${top.join(", ")}. Dùng list_dir hoặc glob để tìm đúng đường dẫn.` : "";
+  } catch {
+    return "";
+  }
+}
+
 export async function readText(ctx: ToolContext, p: string): Promise<string> {
   const data = await ctx.env.readBytes(p);
-  if (data.subarray(0, 8000).includes(0)) throw new ToolError(`${basename(p)} là file nhị phân, không đọc được dạng văn bản.`);
+  if (data.subarray(0, 8000).includes(0)) throw new ToolError(`${basename(p)} là file nhị phân, không đọc được dạng văn bản.${/\.(docx?|xlsx?|pptx?|pdf)$/i.test(p) ? " Với Word/Excel/PowerPoint/PDF hãy dùng read_document." : ""}`, "binary");
   return dec.decode(data);
 }
 
@@ -120,9 +173,9 @@ const short = (v: unknown, n = 90): string => {
 
 export async function checkFresh(ctx: ToolContext, p: string, rel: string): Promise<void> {
   const seen = ctx.readFiles.get(p);
-  if (seen === undefined) throw new ToolError(`Hãy đọc ${rel} bằng read_file trước khi sửa/ghi đè.`);
+  if (seen === undefined) throw new ToolError(`Hãy đọc ${rel} bằng read_file trước khi sửa/ghi đè.`, "read_first");
   const st = await ctx.env.stat(p);
-  if (st && st.mtimeMs !== seen) throw new ToolError(`${rel} đã thay đổi kể từ lần đọc trước. Đọc lại bằng read_file rồi thử lại.`);
+  if (st && st.mtimeMs !== seen) throw new ToolError(`${rel} đã thay đổi kể từ lần đọc trước (do người dùng, lệnh bash hoặc chương trình khác). Đọc lại bằng read_file rồi thử lại.`, "stale");
 }
 
 /** Ghi lại nội dung cũ trước khi sửa (cho /undo, "Thay đổi", /rewind). */
@@ -178,23 +231,23 @@ function closestHint(text: string, oldS: string): string {
 async function applyEdit(ctx: ToolContext, args: { path: string; old_string: string; new_string: string; replace_all?: boolean }, dryRun: boolean) {
   const p = await resolveSafe(ctx, args.path);
   const st = await ctx.env.stat(p);
-  if (!st || !st.isFile) throw new ToolError(`Không có file ${args.path} (muốn tạo mới hãy dùng write_file).`);
+  if (!st || !st.isFile) throw new ToolError(`Không có file ${args.path} (muốn tạo mới hãy dùng write_file).${st ? "" : await similarPaths(ctx, p)}`, st ? "wrong_type" : "not_found");
   const { old_string: o, new_string: nw } = args;
-  if (typeof o !== "string" || typeof nw !== "string") throw new ToolError("Thiếu old_string/new_string.");
+  if (typeof o !== "string" || typeof nw !== "string") throw new ToolError("Thiếu old_string/new_string.", "bad_args");
   if (!dryRun) await checkFresh(ctx, p, args.path);
-  if (o === nw) throw new ToolError("old_string và new_string giống nhau.");
-  if (!o) throw new ToolError("old_string rỗng.");
+  if (o === nw) throw new ToolError("old_string và new_string giống nhau.", "bad_args");
+  if (!o) throw new ToolError("old_string rỗng.", "bad_args");
   const text = await readText(ctx, p);
   const n = text.split(o).length - 1;
   let next: string;
   let note: string;
   if (n === 0) {
     const fz = fuzzyReplace(text, o, nw);
-    if (!fz) throw new ToolError(`Không tìm thấy old_string trong ${args.path}.${closestHint(text, o)} Hãy đọc lại file và sao chép đúng từng ký tự (kể cả thụt dòng).`);
+    if (!fz) throw new ToolError(`Không tìm thấy old_string trong ${args.path}.${closestHint(text, o)} Hãy đọc lại file và sao chép đúng từng ký tự (kể cả thụt dòng).`, "no_match");
     next = fz.text;
     note = `Đã sửa ${relPath(ctx, p)} (khớp gần đúng, bỏ qua khác biệt thụt dòng/khoảng trắng; bắt đầu ở dòng ${fz.line}).`;
   } else {
-    if (n > 1 && !args.replace_all) throw new ToolError(`old_string xuất hiện ${n} lần trong ${args.path}. Thêm vài dòng xung quanh để duy nhất, hoặc đặt replace_all=true.`);
+    if (n > 1 && !args.replace_all) throw new ToolError(`old_string xuất hiện ${n} lần trong ${args.path}. Thêm vài dòng xung quanh để duy nhất, hoặc đặt replace_all=true.`, "ambiguous");
     next = args.replace_all ? text.split(o).join(nw) : text.replace(o, () => nw);
     const line = text.slice(0, text.indexOf(o)).split("\n").length;
     note = `Đã sửa ${relPath(ctx, p)} (${args.replace_all ? n : 1} chỗ thay, bắt đầu ở dòng ${line}).`;
@@ -212,8 +265,8 @@ export function builtinTools(env: Env): Tool[] {
       async run(ctx, a) {
         const p = await resolveSafe(ctx, a.path);
         const st = await ctx.env.stat(p);
-        if (!st) throw new ToolError(`Không có file ${a.path}.`);
-        if (st.isDir) throw new ToolError(`${a.path} là thư mục; dùng list_dir.`);
+        if (!st) throw new ToolError(`Không có file ${a.path}.${await similarPaths(ctx, p)}`, "not_found");
+        if (st.isDir) throw new ToolError(`${a.path} là thư mục; dùng list_dir.`, "wrong_type");
         const text = await readText(ctx, p);
         ctx.readFiles.set(p, st.mtimeMs);
         const lines = text.split("\n");
@@ -236,7 +289,8 @@ export function builtinTools(env: Env): Tool[] {
       async run(ctx, a) {
         const p = await resolveSafe(ctx, a.path || ".");
         const st = await ctx.env.stat(p);
-        if (!st?.isDir) throw new ToolError(`${a.path || "."} không phải thư mục.`);
+        if (!st) throw new ToolError(`Không có thư mục ${a.path || "."}.${await similarPaths(ctx, p)}`, "not_found");
+        if (!st.isDir) throw new ToolError(`${a.path || "."} là file, không phải thư mục; dùng read_file để đọc nó.`, "wrong_type");
         const items = (await ctx.env.readdir(p))
           .filter((e) => !(e.isDir && IGNORE_DIRS.has(e.name)))
           .sort((x: DirEntry, y: DirEntry) => Number(y.isDir) - Number(x.isDir) || x.name.toLowerCase().localeCompare(y.name.toLowerCase()))
@@ -251,7 +305,7 @@ export function builtinTools(env: Env): Tool[] {
       parameters: { type: "object", properties: { pattern: S }, required: ["pattern"] },
       summarize: (a) => String(a.pattern ?? ""),
       async run(ctx, a) {
-        if (!a.pattern) throw new ToolError("Thiếu pattern.");
+        if (!a.pattern) throw new ToolError("Thiếu pattern.", "bad_args");
         const out: string[] = [];
         for await (const f of walk(ctx, ctx.root)) {
           const rel = relPath(ctx, f);
@@ -273,11 +327,11 @@ export function builtinTools(env: Env): Tool[] {
         try {
           rx = new RegExp(a.pattern, a.ignore_case ? "i" : "");
         } catch (e) {
-          throw new ToolError("Biểu thức chính quy sai: " + (e as Error).message);
+          throw new ToolError("Biểu thức chính quy sai: " + (e as Error).message, "bad_args");
         }
         const base = await resolveSafe(ctx, a.path || ".");
         const st = await ctx.env.stat(base);
-        if (!st) throw new ToolError(`Không có ${a.path}.`);
+        if (!st) throw new ToolError(`Không có ${a.path}.${await similarPaths(ctx, base)}`, "not_found");
         const files: AsyncIterable<string> = st.isFile ? (async function* () { yield base; })() : walk(ctx, base);
         const out: string[] = [];
         let scanned = 0;
@@ -339,9 +393,9 @@ export function builtinTools(env: Env): Tool[] {
       },
       async run(ctx, a) {
         const p = await resolveSafe(ctx, a.path);
-        if (typeof a.content !== "string") throw new ToolError("Thiếu content.");
+        if (typeof a.content !== "string") throw new ToolError("Thiếu content.", "bad_args");
         const st = await ctx.env.stat(p);
-        if (st?.isDir) throw new ToolError(`${a.path} là thư mục.`);
+        if (st?.isDir) throw new ToolError(`${a.path} là thư mục.`, "wrong_type");
         let old: string | null = null;
         if (st) {
           await checkFresh(ctx, p, a.path);
@@ -361,11 +415,11 @@ export function builtinTools(env: Env): Tool[] {
       parameters: { type: "object", properties: { todos: { type: "array", items: { type: "object", properties: { content: S, status: { type: "string", enum: ["pending", "in_progress", "completed"] } }, required: ["content", "status"] } } }, required: ["todos"] },
       summarize: (a) => `${Array.isArray(a.todos) ? a.todos.length : 0} việc`,
       async run(ctx, a) {
-        if (!Array.isArray(a.todos)) throw new ToolError("todos phải là danh sách.");
+        if (!Array.isArray(a.todos)) throw new ToolError("todos phải là danh sách.", "bad_args");
         const clean: Todo[] = a.todos.map((t: any) => {
-          if (!t || typeof t !== "object" || !t.content) throw new ToolError("Mỗi việc cần có 'content'.");
+          if (!t || typeof t !== "object" || !t.content) throw new ToolError("Mỗi việc cần có 'content'.", "bad_args");
           const st = t.status ?? "pending";
-          if (!["pending", "in_progress", "completed"].includes(st)) throw new ToolError("status phải là pending, in_progress hoặc completed.");
+          if (!["pending", "in_progress", "completed"].includes(st)) throw new ToolError("status phải là pending, in_progress hoặc completed.", "bad_args");
           return { content: String(t.content), status: st };
         });
         ctx.todos = clean;
@@ -382,9 +436,9 @@ export function builtinTools(env: Env): Tool[] {
       parameters: { type: "object", properties: { command: S, timeout: { type: "integer", description: "seconds, max 300" }, background: { type: "boolean", description: "true for long-running programs (web servers like `streamlit run app.py`, `npm start`): starts it in the background and returns its first output; then use bash_output / kill_process" } }, required: ["command"] },
       summarize: (a) => (a.background ? "[nền] " : "") + short(a.command ?? "", 110),
       async run(ctx, a) {
-        if (typeof a.command !== "string" || !a.command.trim()) throw new ToolError("Thiếu lệnh.");
+        if (typeof a.command !== "string" || !a.command.trim()) throw new ToolError("Thiếu lệnh.", "bad_args");
         if (a.background) {
-          if (!ctx.procs) throw new ToolError("Nơi chạy này không hỗ trợ chạy nền.");
+          if (!ctx.procs) throw new ToolError("Nơi chạy này không hỗ trợ chạy nền.", "unsupported");
           let info;
           try {
             info = ctx.procs.start(a.command, ctx.root);
@@ -412,7 +466,7 @@ export function builtinTools(env: Env): Tool[] {
         summarize: (a) => String(a.id ?? ""),
         async run(ctx, a) {
           const p = ctx.procs?.get(String(a.id));
-          if (!p) throw new ToolError(`Không có tiến trình ${a.id}.`);
+          if (!p) throw new ToolError(`Không có tiến trình ${a.id}.`, "not_found");
           const n = Math.max(1, Math.min(Math.floor(Number(a.tail) || 60), 300));
           return `[${p.info.alive ? "đang chạy" : "đã thoát mã " + p.info.code}] ${p.info.url ? "Địa chỉ: " + p.info.url + "\n" : ""}${clip(p.log.split("\n").slice(-n).join("\n").trim() || "(chưa có đầu ra)")}`;
         },
@@ -423,7 +477,7 @@ export function builtinTools(env: Env): Tool[] {
         parameters: { type: "object", properties: { id: S }, required: ["id"] },
         summarize: (a) => String(a.id ?? ""),
         async run(ctx, a) {
-          if (!ctx.procs?.get(String(a.id))) throw new ToolError(`Không có tiến trình ${a.id}.`);
+          if (!ctx.procs?.get(String(a.id))) throw new ToolError(`Không có tiến trình ${a.id}.`, "not_found");
           return ctx.procs.stop(String(a.id)) ? `Đã gửi lệnh dừng tiến trình ${a.id}.` : `Tiến trình ${a.id} đã thoát từ trước.`;
         },
       },
@@ -432,11 +486,11 @@ export function builtinTools(env: Env): Tool[] {
   if (env.runJs) {
     tools.push({
       name: "run_javascript", kind: "exec", readonly: false,
-      description: "Run JavaScript in an isolated sandbox (no DOM, no network, no npm packages). CommonJS works on the project's own files: require('./src/grades') loads files/src/grades.js, process.exit(1) marks failure - so you can run the project's tests, e.g. require('./src/grades.test.js'). Project text files are also available as the object `files` (path -> content). console.log output and the return value are returned.",
+      description: "Run JavaScript in an isolated sandbox (no DOM, no network, no npm packages, no fs/path/os/child_process). CommonJS works on the project's own files: require('./src/grades') loads files/src/grades.js, process.exit(1) marks failure - so you can run the project's tests, e.g. require('./src/grades.test.js'). Project text files are also available as the object `files` (path -> content). console.log output and the return value are returned. If the program itself throws or a test fails you get the error text back: that is the program's result, read it and fix the project's code. To run real node programs or shell tools, use bash instead.",
       parameters: { type: "object", properties: { code: S }, required: ["code"] },
       summarize: (a) => short(a.code ?? "", 110),
       async run(ctx, a) {
-        if (typeof a.code !== "string" || !a.code.trim()) throw new ToolError("Thiếu code.");
+        if (typeof a.code !== "string" || !a.code.trim()) throw new ToolError("Thiếu code.", "bad_args");
         const files: Record<string, string> = {};
         for await (const f of walk(ctx, ctx.root)) {
           try {
@@ -448,7 +502,13 @@ export function builtinTools(env: Env): Tool[] {
         }
         const r = await ctx.env.runJs!(a.code, { timeoutMs: 8000, files });
         const logs = clip(r.logs.join("\n"));
-        if (!r.ok) throw new ToolError((logs ? logs + "\n" : "") + (r.error ?? "lỗi không rõ"));
+        if (!r.ok) {
+          const err = r.error ?? "lỗi không rõ";
+          // dùng nhầm thứ sandbox không có (fs, mạng, DOM…): lỗi do cách gọi của agent, kèm gợi ý; còn lại là kết quả của CHƯƠNG TRÌNH (test không qua, ném lỗi)
+          if (/Cannot find module '(fs|path|os|child_process|http|https|net|crypto|readline|node:[a-z_/]+)'|require is not defined|\b(fetch|XMLHttpRequest|document|window|localStorage) is not defined/.test(err))
+            throw new ToolError((logs ? logs + "\n" : "") + err + "\n[Gợi ý] Sandbox không có fs/mạng/DOM. Đọc file dự án bằng `files['đường/dẫn']` hoặc require('./tệp'); cần chạy chương trình thật thì dùng bash (vd `node tệp.js`).", "sandbox");
+          throw new ToolError((logs ? logs + "\n" : "") + err, /timeout|Hết thời gian|timed out/i.test(err) ? "timeout" : "program");
+        }
         return (logs ? logs + "\n" : "") + (r.result !== undefined ? "[giá trị trả về] " + r.result : "(chạy xong)");
       },
     });

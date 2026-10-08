@@ -48,7 +48,7 @@ export type SessionEvent =
   | { type: "reasoning"; depth: number; delta: string }
   | { type: "message_end"; depth: number; text: string }
   | { type: "tool_start"; id: string; name: string; summary: string; args: Record<string, unknown>; depth: number; preview?: DiffPreview | null }
-  | { type: "tool_result"; id: string; name: string; ok: boolean; output: string; depth: number }
+  | { type: "tool_result"; id: string; name: string; ok: boolean; output: string; depth: number; /** Mã loại lỗi (khi ok = false), vd "not_found", "program": để chẩn đoán phân biệt lỗi do agent với kết quả chạy chương trình. */ errKind?: string }
   | { type: "permission"; request: PermissionRequest }
   | { type: "permission_resolved"; id: string; allowed: boolean }
   | { type: "todos"; todos: Todo[] }

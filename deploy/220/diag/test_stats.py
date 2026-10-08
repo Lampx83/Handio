@@ -159,6 +159,20 @@ class StatsTest(unittest.TestCase):
         self.assertIsNone(S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW, dl)["release"])
         self.assertIsNone(S.read_release(os.path.join(self.tmp.name, "nope")))
 
+    def test_tool_failure_reasons_exclude_user_program_errors(self):
+        tool = lambda ok, err=None: {"t": "tool", "name": "run_javascript", "ok": ok, "dur": "lt1s", **({"err": err} if err else {})}
+        recs = [rec(day_ts(0), tool(True)), rec(day_ts(0), tool(False, "program")), rec(day_ts(0), tool(False, "program")), rec(day_ts(0), tool(False, "sandbox")), rec(day_ts(0), tool(False)),
+                rec(day_ts(0), {"t": "tool", "name": "read_file", "ok": False, "dur": "lt1s", "err": "not_found"})]
+        write_diag(self.diag, recs)
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
+        rj = {x["name"]: x for x in j["tools"]}["run_javascript"]
+        self.assertEqual((rj["calls"], rj["fails"], rj["prog"]), (5, 2, 2))          # chỉ sandbox + không rõ là lỗi công cụ
+        self.assertEqual(j["tool_errors"], {"program": 2, "sandbox": 1, "unknown": 1, "not_found": 1})
+        self.assertEqual(j["series"][-1]["tool_fails"], 3)
+        h = slurp(os.path.join(self.out, "index.html"))
+        self.assertIn("Vì sao công cụ thất bại", h)
+        self.assertIn("+2 chương trình lỗi", h)
+
     def test_empty_data_still_renders(self):
         S.run(self.diag, self.log, self.out, os.path.join(self.tmp.name, "none.json"), NOW)
         h = slurp(os.path.join(self.out, "index.html"))
