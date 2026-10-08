@@ -54,7 +54,7 @@ export type SessionEvent =
   | { type: "todos"; todos: Todo[] }
   | { type: "mode"; mode: Mode }
   | { type: "usage"; promptTokens: number; completionTokens: number; contextPct: number; calls: number }
-  | { type: "notice"; level: "info" | "warn" | "error"; text: string }
+  | { type: "notice"; level: "info" | "warn" | "error"; text: string; /** Hành động gợi ý cho người dùng: "login" = hiện nút Đăng nhập lại. */ action?: "login" }
   | { type: "files_changed"; paths: string[] }
   | { type: "summary"; turn: number; files: ChangeFile[]; /** Đã chạy kiểm tra sau lần sửa cuối chưa */ verify: "ok" | "fail" | "none" }
   | { type: "turn_end"; interrupted: boolean; final: string }

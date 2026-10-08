@@ -17,6 +17,8 @@ export interface ShellOptions {
   install?: { available(): boolean; run(): void };
   /** Tài khoản đang đăng nhập (hiện trong Cài đặt, có nút Đăng xuất). */
   account?: AccountInfo;
+  /** Xem MountOptions.onLogin. */
+  onLogin?: (() => void) | null;
 }
 
 /** Khung chứa hai tab (Code/Work), mỗi tab là một phiên agent độc lập vẫn chạy khi bạn chuyển tab. */
@@ -59,6 +61,7 @@ export function mountShell(root: HTMLElement, controllers: Partial<Record<Profil
     handles.set(id, mountApp(panel, controllers[id]!, {
       bar: { left, right },
       account: opts.account,
+      onLogin: opts.onLogin,
       onAttention: (kind) => {
         const t = tabs.get(id)!;
         if (kind === "clear") delete t.dataset.attn;

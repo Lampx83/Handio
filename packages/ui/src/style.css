@@ -98,6 +98,7 @@ code, pre, .mono { font-family: var(--mono); }
 
 .notice { font-size: 12.5px; color: var(--muted); padding: 2px 4px; white-space: pre-wrap; }
 .notice.warn { color: var(--warn); } .notice.error { color: var(--err); font-weight: 600; }
+.notice .notice-sub { font-weight: 400; color: var(--fg, inherit); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .think { color: var(--muted); font-size: 12.5px; font-style: italic; border-left: 2px solid var(--border); padding-left: 10px; white-space: pre-wrap; }
 
 .tool { border: 1px solid var(--border); background: var(--panel); border-radius: var(--radius); overflow: hidden; }

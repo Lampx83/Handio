@@ -111,6 +111,14 @@ function renderLogin(root: HTMLElement, st: AuthState): void {
     btn.textContent = "Đăng nhập Microsoft";
     err.textContent = r.error ?? "";
   });
+  try {
+    if (sessionStorage.getItem("neu.expired")) {
+      sessionStorage.removeItem("neu.expired");
+      err.textContent = "Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại để tiếp tục; cuộc trò chuyện của bạn vẫn còn.";
+    }
+  } catch {
+    /* bỏ qua */
+  }
   const card = document.createElement("div");
   card.className = "login-card";
   const title = document.createElement("h1");
@@ -180,6 +188,15 @@ async function start(): Promise<void> {
     productName: "NEU Agent",
     macInset: bridge.platform === "darwin",
     account: st.enabled && st.email ? { email: st.email, name: st.name, kind: st.kind, logout: () => void bridge.auth.logout() } : undefined,
+    // phiên hết hạn giữa chừng: đăng xuất cục bộ → tiến trình chính tải lại cửa sổ về màn hình đăng nhập (kèm lời giải thích)
+    onLogin: st.enabled ? () => {
+      try {
+        sessionStorage.setItem("neu.expired", "1");
+      } catch {
+        /* bỏ qua */
+      }
+      void bridge.auth.logout();
+    } : null,
   });
   mountUpdateBanner(bridge.update);
 }

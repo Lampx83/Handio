@@ -60,7 +60,7 @@ export interface ChatOptions {
 
 export type LlmErrorKind = "context" | "auth" | "rate" | "server" | "network" | "abort" | "insecure" | "";
 export class LlmError extends Error {
-  constructor(message: string, public status = 0, public kind: LlmErrorKind = "") {
+  constructor(message: string, public status = 0, public kind: LlmErrorKind = "", /** "login_required": máy chủ yêu cầu đăng nhập (chưa đăng nhập hoặc phiên hết hạn): giao diện hiện nút Đăng nhập lại. */ public code = "") {
     super(message);
   }
 }
@@ -71,7 +71,7 @@ function friendly(status: number, text: string): LlmError {
   const low = (text || "").toLowerCase();
   if (status === 400 && (low.includes("context length") || low.includes("maximum context") || low.includes("too long")))
     return new LlmError("Ngữ cảnh vượt giới hạn của mô hình.", status, "context");
-  if (status === 401 && low.includes("login_required")) return new LlmError("Hết phiên đăng nhập. Hãy đăng nhập lại.", status, "auth");
+  if (status === 401 && low.includes("login_required")) return new LlmError("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.", status, "auth", "login_required");
   if (status === 401) return new LlmError("Key sai hoặc chưa nhập. Vào Cài đặt để nhập lại.", status, "auth");
   if (status === 403) return new LlmError("Key này không được dùng mô hình chat (có thể là key chỉ dành cho embedding).", status, "auth");
   if (status === 429) return new LlmError("Vượt giới hạn số lệnh/phút của key.", status, "rate");

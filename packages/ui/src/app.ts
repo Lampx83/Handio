@@ -38,6 +38,8 @@ export interface MountOptions {
   bar?: { left: HTMLElement; right: HTMLElement };
   /** Tài khoản đang đăng nhập (SSO) để hiện trong Cài đặt. */
   account?: AccountInfo;
+  /** Gọi khi người dùng bấm "Đăng nhập lại" (phiên hết hạn). Không đặt: tải lại trang (web tự chuyển tới đăng nhập). null: bản này không có đăng nhập. */
+  onLogin?: (() => void) | null;
 }
 
 export function saveBlob(name: string, data: Uint8Array): void {
@@ -452,6 +454,14 @@ class App {
       }
       case "notice":
         this.finishText();
+        if (e.action === "login") {
+          // phiên hết hạn / chưa đăng nhập: luôn kèm việc cần làm tiếp (không để người dùng bí)
+          const go = this.opts.onLogin;
+          this.append(h("div", { class: "notice error", role: "alert" }, h("div", {}, e.text),
+            go === null ? h("div", { class: "notice-sub" }, "Bản này không bật đăng nhập nên không đăng nhập lại được. Nếu bạn đang chạy bản phát triển, hãy chạy lại với NEU_AUTH_FORCE=1, hoặc đổi địa chỉ máy chủ ở Cài đặt.")
+              : h("div", { class: "notice-sub" }, h("button", { class: "btn primary sm", type: "button", onclick: () => (go ?? (() => location.reload()))() }, "Đăng nhập lại"), " rồi gửi lại yêu cầu của bạn.")));
+          break;
+        }
         this.append(h("div", { class: "notice " + e.level, role: e.level === "error" ? "alert" : "status" }, e.text));
         break;
       case "proc": {

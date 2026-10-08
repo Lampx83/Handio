@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MemoryEnv, DiagnosticsRecorder, type SessionEvent } from "../src";
+import { MemoryEnv, DiagnosticsRecorder, LlmError, type SessionEvent } from "../src";
 import { makeController, type Step } from "./helpers";
 
 const results = (events: any[]) => events.filter((e) => e.type === "tool_result") as { name: string; ok: boolean; output: string; errKind?: string }[];
@@ -148,5 +148,34 @@ describe("chẩn đoán: mã lý do lỗi công cụ", () => {
     expect(tools.find((e) => e.name === "bash")).not.toHaveProperty("err");
     const sig = evs.filter((e) => e.t === "signal" && e.code === "repeat_tool_fail");
     expect(sig.map((e) => e.tool)).toEqual(["read_file"]);
+  });
+});
+
+describe("lỗi đăng nhập luôn kèm việc cần làm", () => {
+  it("máy chủ trả 401 login_required: thông báo có action 'login' (giao diện hiện nút Đăng nhập lại)", async () => {
+    const { c, events } = await makeController(() => {
+      throw new LlmError("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.", 401, "auth", "login_required");
+    });
+    await c.send("xin chào");
+    const n = events.find((e: any) => e.type === "notice" && e.level === "error") as any;
+    expect(n).toMatchObject({ action: "login" });
+    expect(n.text).toContain("đăng nhập");
+  });
+
+  it("lỗi key sai (401 thường) thì không có action login", async () => {
+    const { c, events } = await makeController(() => {
+      throw new LlmError("Key sai hoặc chưa nhập.", 401, "auth");
+    });
+    await c.send("x");
+    expect((events.find((e: any) => e.type === "notice" && e.level === "error") as any)).not.toHaveProperty("action");
+  });
+
+  it("friendly(): phản hồi 401 login_required của máy chủ được nhận ra", async () => {
+    const { LlmClient } = await import("../src");
+    const fetchFn = (async () => new Response('{"error":"login_required","message":"Cần đăng nhập"}', { status: 401, headers: { "content-type": "application/json" } })) as unknown as typeof fetch;
+    const llm = new LlmClient(() => ({ baseUrl: "https://ai.neu.edu.vn/agent/vllm/v1", model: "m", key: "" } as any), fetchFn);
+    const err = await llm.chat([{ role: "user", content: "x" }], {}).catch((e) => e);
+    expect(err).toBeInstanceOf(LlmError);
+    expect(err).toMatchObject({ status: 401, kind: "auth", code: "login_required" });
   });
 });

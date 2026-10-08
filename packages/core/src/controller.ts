@@ -254,7 +254,7 @@ export class LocalController implements AgentController {
     } catch (e) {
       if (!(e instanceof ToolError)) this.diag?.onError(e);
       if (e instanceof LlmError && e.kind === "abort") interrupted = true;
-      else if (e instanceof LlmError) this.fire({ type: "notice", level: "error", text: e.message });
+      else if (e instanceof LlmError) this.fire({ type: "notice", level: "error", text: e.message, ...(e.code === "login_required" ? { action: "login" as const } : {}) });
       else if (e instanceof ToolError) this.fire({ type: "notice", level: "error", text: e.message });
       else this.fire({ type: "notice", level: "error", text: "Lỗi không mong muốn: " + (e as Error).message });
     } finally {
