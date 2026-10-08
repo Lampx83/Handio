@@ -5,7 +5,9 @@ Wants=network-online.target
 
 [Service]
 EnvironmentFile=/etc/neu-agent/oauth2-proxy.env
-ExecStart=/usr/local/bin/oauth2-proxy
+# Tệp tài khoản mật khẩu được nạp qua LoadCredential (chỉ root đọc, dịch vụ chạy bằng tài khoản tạm vẫn đọc được bản sao riêng của nó)
+LoadCredential=htpasswd:/etc/neu-agent/users.htpasswd
+ExecStart=/bin/sh -c 'OAUTH2_PROXY_HTPASSWD_FILE="$CREDENTIALS_DIRECTORY/htpasswd" exec /usr/local/bin/oauth2-proxy'
 Restart=always
 RestartSec=3
 # chạy bằng tài khoản tạm, không quyền ghi, không quyền đặc biệt

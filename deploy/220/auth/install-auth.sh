@@ -34,10 +34,24 @@ COOKIE=""; OLD_SECRET=""
 if [ -f "$ENVF" ]; then COOKIE=$(grep '^OAUTH2_PROXY_COOKIE_SECRET=' "$ENVF" | cut -d= -f2-); OLD_SECRET=$(grep '^OAUTH2_PROXY_CLIENT_SECRET=' "$ENVF" | cut -d= -f2-); fi
 [ -n "$COOKIE" ] || COOKIE=$(openssl rand -hex 16)
 SECRET="${NEU_SSO_SECRET:-}"
-if [ -z "$SECRET" ] && [ -n "$OLD_SECRET" ]; then read -r -p "Giữ mã bí mật đang dùng? [Y/n] " a; [ "${a:-Y}" = "n" ] || SECRET="$OLD_SECRET"; fi
+# tệp tạm chứa mã bí mật (quyền 600, do người quản trị chép lên bằng scp): đọc xong xoá ngay
+SECRET_FILE="$HERE/../.sso-secret"
+if [ -z "$SECRET" ] && [ -f "$SECRET_FILE" ]; then SECRET=$(tr -d '[:space:]' < "$SECRET_FILE"); rm -f "$SECRET_FILE"; echo "Đã đọc mã bí mật từ tệp tạm (và xoá tệp)."; fi
+if [ -z "$SECRET" ] && [ -n "$OLD_SECRET" ]; then
+  # dán mã mới để thay; chỉ nhấn Enter nếu muốn giữ mã đang dùng (gõ không hiện)
+  read -r -s -p "Dán mã bí mật MỚI của ứng dụng Entra (Enter = giữ mã đang dùng): " SECRET; echo
+  [ -n "$SECRET" ] || SECRET="$OLD_SECRET"
+fi
 if [ -z "$SECRET" ]; then read -r -s -p "Mã bí mật (Application secret) của ứng dụng Entra: " SECRET; echo; fi
 [ -n "$SECRET" ] || { echo "Thiếu mã bí mật."; exit 1; }
 case "$SECRET" in *[!A-Za-z0-9._~-]*) echo "Mã bí mật có ký tự lạ; kiểm tra lại (chỉ chữ, số, . _ ~ -)."; exit 1;; esac
+# thử mã với Microsoft trước khi dùng: sai thì dừng, không ghi đè cấu hình đang chạy
+CHK=$(curl -s -m 20 -X POST "https://login.microsoftonline.com/$TENANT/oauth2/v2.0/token" --data-urlencode "client_id=$CLIENT_ID" --data-urlencode "client_secret=$SECRET" --data-urlencode "grant_type=client_credentials" --data-urlencode "scope=https://graph.microsoft.com/.default" || true)
+case "$CHK" in
+  *access_token*) echo "Mã bí mật đúng (đã kiểm tra với Microsoft).";;
+  *AADSTS7000215*|*invalid_client*) echo "MÃ BÍ MẬT SAI (Microsoft từ chối). Cấu hình cũ được giữ nguyên."; exit 1;;
+  *) echo "Không kiểm tra được mã với Microsoft (mạng?); tiếp tục.";;
+esac
 umask 077
 cat > "$ENVF" <<EOT
 # NEU Agent - oauth2-proxy (đăng nhập SSO Microsoft 365). Tệp này chứa bí mật: quyền 600, chỉ root đọc.
@@ -64,20 +78,32 @@ OAUTH2_PROXY_REVERSE_PROXY=true
 OAUTH2_PROXY_REAL_CLIENT_IP_HEADER=X-Real-IP
 OAUTH2_PROXY_SKIP_JWT_BEARER_TOKENS=true
 OAUTH2_PROXY_SET_XAUTHREQUEST=true
-OAUTH2_PROXY_SKIP_PROVIDER_BUTTON=true
+OAUTH2_PROXY_PREFER_EMAIL_TO_USER=true
+OAUTH2_PROXY_USER_ID_CLAIM=preferred_username
+OAUTH2_PROXY_SKIP_PROVIDER_BUTTON=false
+OAUTH2_PROXY_DISPLAY_HTPASSWD_FORM=true
+OAUTH2_PROXY_CUSTOM_TEMPLATES_DIR=/usr/local/share/neu-agent/templates
 OAUTH2_PROXY_WHITELIST_DOMAINS=$(echo "$PUBLIC_URL" | sed -E 's#^https?://##; s#/.*##')
 OAUTH2_PROXY_PASS_ACCESS_TOKEN=false
 OAUTH2_PROXY_SILENCE_PING_LOGGING=true
 EOT
 chmod 600 "$ENVF"; chown root:root "$ENVF"
 
+# 2b) trang đăng nhập tiếng Việt + tệp tài khoản mật khẩu (rỗng lúc đầu; quản lý bằng ../users.sh)
+# (mẫu giao diện không chứa bí mật; để ngoài /etc/neu-agent vì dịch vụ chạy bằng tài khoản tạm, không đọc được thư mục đó)
+mkdir -p /usr/local/share/neu-agent/templates; chmod 755 /usr/local/share/neu-agent /usr/local/share/neu-agent/templates
+cp "$HERE"/templates/*.html /usr/local/share/neu-agent/templates/; chmod 644 /usr/local/share/neu-agent/templates/*.html
+rm -rf /etc/neu-agent/templates
+[ -f /etc/neu-agent/users.htpasswd ] || { : > /etc/neu-agent/users.htpasswd; chmod 600 /etc/neu-agent/users.htpasswd; }
+
 # 3) dịch vụ
 install -m 644 "$HERE/neu-agent-oauth2.service" /etc/systemd/system/neu-agent-oauth2.service
 systemctl daemon-reload
 systemctl enable neu-agent-oauth2 >/dev/null 2>&1
 systemctl restart neu-agent-oauth2
-for i in $(seq 1 20); do curl -fs -o /dev/null http://127.0.0.1:4180/ping && break; sleep 1; done
+for i in $(seq 1 60); do curl -fs -o /dev/null http://127.0.0.1:4180/ping && break; sleep 1; done
 if curl -fs -o /dev/null http://127.0.0.1:4180/ping; then
+  curl -fs http://127.0.0.1:4180/agent/oauth2/sign_in | grep -q "Đăng nhập Microsoft" || { echo "Dịch vụ chạy nhưng chưa nạp được trang đăng nhập tiếng Việt (xem journalctl -u neu-agent-oauth2)"; exit 1; }
   echo "OK: dịch vụ đăng nhập đang chạy (127.0.0.1:4180). Bước tiếp: sudo ./install.sh <key mô hình>"
 else
   echo "Dịch vụ chưa chạy. Xem nguyên nhân: journalctl -u neu-agent-oauth2 -n 30 --no-pager"; exit 1

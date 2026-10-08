@@ -8,9 +8,9 @@ export async function startMockIdp({ port = 0, host = "127.0.0.1", issuerHost = 
   const jwk = { ...(await exportJWK(publicKey)), kid: "k1", alg: "RS256", use: "sig" };
   const codes = new Map();
   const refresh = new Map();
-  const state = { requests: [], ttlSeconds, issuer: "", badNonce: false };
+  const state = { requests: [], ttlSeconds, issuer: "", badNonce: false, bigClaims: false };
   const sign = (user, nonce, aud = clientId, extra = {}) =>
-    new SignJWT({ preferred_username: user, name: user.split("@")[0], ...(nonce ? { nonce } : {}), ...extra })
+    new SignJWT({ preferred_username: user, name: user.split("@")[0], ...(nonce ? { nonce } : {}), ...(state.bigClaims ? { groups: Array.from({ length: 45 }, () => crypto.randomUUID()) } : {}), ...extra })
       .setProtectedHeader({ alg: "RS256", kid: "k1" })
       .setIssuer(state.issuer).setAudience(aud).setSubject("sub-" + user)
       .setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + state.ttlSeconds)

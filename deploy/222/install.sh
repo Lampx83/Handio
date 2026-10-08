@@ -7,7 +7,7 @@ set -euo pipefail
 
 SITE=/etc/nginx/sites-available/ai.neu.edu.vn
 SNIP=/etc/nginx/snippets/neu-agent-locations.conf
-UPSTREAM="${NEU_UPSTREAM:-192.0.2.20}"   # chỉ đổi khi kiểm thử
+UPSTREAM="${NEU_UPSTREAM:-192.0.2.21}"   # chỉ đổi khi kiểm thử
 INCLUDE_LINE="    include /etc/nginx/snippets/neu-agent-locations.conf;   # NEU Agent (chuyển tiếp sang máy 220)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TS=$(date +%Y%m%d%H%M%S)
@@ -25,7 +25,7 @@ fi
 
 # 0) máy 220 phải trả lời đúng (401 JSON "login_required" khi chưa đăng nhập) — chứng tỏ mạng 222→220 thông và 220 đã cài xong
 probe=$(curl -s -m 8 -H "Host: ai.neu.edu.vn" "http://$UPSTREAM/agent/vllm/v1/models" || true)
-case "$probe" in *login_required*) ;; *) echo "Máy 220 chưa sẵn sàng (nhận: ${probe:0:80}). Cài deploy/220 trước, hoặc kiểm tra tường lửa 222→220:80."; exit 1;; esac
+case "$probe" in *login_required*) ;; *) echo "Máy 220 chưa sẵn sàng (địa chỉ $UPSTREAM, nhận: ${probe:0:80}). Cài deploy/220 trước; 222 phải gọi 220 bằng địa chỉ NỘI BỘ và 220 phải cho phép IP nội bộ của 222 (allow trong neu-agent.server.conf; 403 = bị chặn bởi allow/deny; không nhận gì = tường lửa)."; exit 1;; esac
 
 cp -a "$SITE" "$SITE.bak-neu-agent-$TS"
 had_snip=0; [ -f "$SNIP" ] && { cp -a "$SNIP" "$SNIP.bak-$TS"; had_snip=1; }
@@ -39,7 +39,7 @@ rollback() {
 trap 'rc=$?; [ $rc -ne 0 ] && rollback; exit $rc' EXIT
 
 mkdir -p /etc/nginx/snippets
-sed "s#http://192.0.2.20:80#http://$UPSTREAM:80#" "$HERE/neu-agent-locations.conf" > "$SNIP"; chmod 644 "$SNIP"
+sed "s#http://192.0.2.21:80#http://$UPSTREAM:80#" "$HERE/neu-agent-locations.conf" > "$SNIP"; chmod 644 "$SNIP"
 if ! grep -q "neu-agent-locations.conf" "$SITE"; then
   # chèn ngay sau dòng server_name của khối server nghe cổng 443 và có ai.neu.edu.vn
   awk -v inc="$INCLUDE_LINE" '
@@ -76,6 +76,6 @@ r_page=$(chk -o /dev/null -w "%{http_code} %{redirect_url}" https://ai.neu.edu.v
 r_api=$(chk https://ai.neu.edu.vn/agent/vllm/v1/models | head -c 70)
 r_other=$(chk -o /dev/null -w "%{http_code}" https://ai.neu.edu.vn/apps/)
 echo "Kiểm tra: /agent/=$r_page | API chưa đăng nhập=$r_api | /apps/ (ứng dụng khác)=$r_other"
-[ "${r_page%% *}" = 302 ] && [[ "${r_page#* }" == *"/agent/oauth2/start"* ]] && [[ "$r_api" == *login_required* ]] || { echo "Kiểm tra sau cài THẤT BẠI"; exit 1; }
+[ "${r_page%% *}" = 302 ] && [[ "${r_page#* }" == *"/agent/oauth2/sign_in"* ]] && [[ "$r_api" == *login_required* ]] || { echo "Kiểm tra sau cài THẤT BẠI"; exit 1; }
 trap - EXIT
 echo "OK: https://ai.neu.edu.vn/agent/ nay chạy trên máy 220 (đăng nhập Microsoft 365)."

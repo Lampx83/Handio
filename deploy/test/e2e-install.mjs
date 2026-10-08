@@ -68,10 +68,15 @@ try {
   const broken = ex("neu-220", "cd /deploy/220 && bash ./install.sh testkey123");
   check("220: cấu hình hỏng → script thất bại và tự KHÔI PHỤC (trang vẫn đăng nhập được, site khác vẫn chạy)", !broken.ok && /khôi phục/i.test(broken.out) && c220("/agent/") === "302" && ex("neu-220", "curl -s http://127.0.0.1:8017/").out === "JUDGE");
   ex("neu-220", "cp /tmp/loc.bak /deploy/220/neu-agent.locations.conf");
-  // cho phép 222 (mạng docker) gọi vào 220 như ngoài đời: thay IP 222 bằng dải mạng docker
-  ex("neu-220", "sed -i 's#allow 192.0.2.22;#allow 172.16.0.0/12;#; s#set_real_ip_from 192.0.2.22;#set_real_ip_from 172.16.0.0/12;#' /etc/nginx/sites-available/neu-agent && nginx -s reload");
-  const direct = ex("neu-220", "curl -s -o /dev/null -w '%{http_code}' -H 'Host: ai.neu.edu.vn' --interface 127.0.0.1 http://127.0.0.1/agent/");
-  check("220: chỉ nhận từ máy 222/chính nó (cấu hình có allow/deny)", ex("neu-220", "grep -c 'deny all' /etc/nginx/sites-available/neu-agent").out === "1" && direct.ok);
+  // kiểm soát nguồn: container 222 (IP docker, KHÔNG nằm trong danh sách) phải bị từ chối — kể cả khi giả mạo X-Forwarded-For bằng IP của 222 thật
+  const ip220x = sh("docker", ["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "neu-220"]).stdout.trim();
+  const from222 = (xff) => ex("neu-222", `curl -s -m 5 -o /dev/null -w '%{http_code}' -H 'Host: ai.neu.edu.vn' ${xff ? "-H 'X-Forwarded-For: " + xff + "'" : ""} http://${ip220x}/agent/vllm/v1/models`).out;
+  check("220: máy lạ gọi vào bị 403; giả mạo X-Forwarded-For bằng IP của 222 cũng KHÔNG qua được", from222("") === "403" && from222("192.0.2.23") === "403" && from222("192.0.2.22") === "403", `${from222("")} ${from222("192.0.2.23")}`);
+  // thêm dải docker làm "máy 222" như ngoài đời, rồi X-Forwarded-For của máy 222 phải được dùng làm IP người dùng
+  ex("neu-220", "sed -i 's#default        0;#default        0;\\n    172.16.0.0/12  1;#' /etc/nginx/conf.d/neu-agent.conf && sed -i 's#set_real_ip_from 192.0.2.23;#set_real_ip_from 192.0.2.23;\\n    set_real_ip_from 172.16.0.0/12;#' /etc/nginx/sites-available/neu-agent && nginx -t 2>&1 && nginx -s reload; sleep 1");
+  const viaFront = ex("neu-222", `curl -s -m 5 -w ' %{http_code}' -H 'Host: ai.neu.edu.vn' -H 'X-Forwarded-For: 203.0.113.7' http://${ip220x}/agent/vllm/v1/models`);
+  check("220: máy 222 hợp lệ gọi được (dù X-Forwarded-For là IP người dùng khác) — đúng lỗi đã gặp ngoài đời", /login_required/.test(viaFront.out) && /401$/.test(viaFront.out), viaFront.out.slice(-60));
+  check("220: cấu hình có kiểm soát nguồn", ex("neu-220", "grep -c 'neu_from_front' /etc/nginx/sites-available/neu-agent /etc/nginx/conf.d/neu-agent.conf").out.includes(":1"));
 
   // ================================================================ máy 222
   const ip220 = sh("docker", ["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "neu-220"]).stdout.trim();

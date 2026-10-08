@@ -54,7 +54,7 @@ Get-FileHash .\NEU-Agent-*-win-x64.exe -Algorithm SHA256
 
 ## Dành cho người quản trị: khoá cấu hình
 
-Tạo tệp `policy.json` (người dùng thường không sửa được) để khoá địa chỉ máy chủ, cấm HTTP, cấm chế độ “Tự động hết”, tắt công cụ chạy lệnh, tắt gửi chẩn đoán không chứa nội dung (`diagnostics:false`, xem `docs/DIAGNOSTICS.md`):
+Tạo tệp `policy.json` (người dùng thường không sửa được) để khoá địa chỉ máy chủ, cấm HTTP, cấm chế độ “Toàn quyền”, tắt công cụ chạy lệnh, tắt gửi chẩn đoán không chứa nội dung (`diagnostics:false`, xem `docs/DIAGNOSTICS.md`):
 
 - macOS: `/Library/Application Support/NEU Agent/policy.json`
 - Windows: `%ProgramData%\NEU Agent\policy.json`

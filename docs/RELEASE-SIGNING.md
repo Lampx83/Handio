@@ -49,3 +49,21 @@ Kiểm tra bản đã dựng: `npm run verify:signature -w @neu/agent-desktop` (
 - Tải qua HTTPS từ tên miền của trường, sau đăng nhập SSO; mã băm hiển thị trên trang và qua kênh khác.
 - Nếu một trình diệt virus báo nhầm: gửi tệp tới [Microsoft Security Intelligence](https://www.microsoft.com/en-us/wdsi/filesubmission) (đánh dấu *false positive*) và tới nhà sản xuất AV đó. Quét trước bằng VirusTotal và chỉ phát hành khi sạch.
 - Chia nhỏ rủi ro: cho phép người dùng kiểm `SHA256SUMS.txt` (hộp tải có hướng dẫn một lệnh).
+
+## Chứng chỉ cố định cho bản CHƯA có Developer ID (tránh hộp thoại Keychain lặp lại)
+
+Bản ký "ad-hoc" có danh tính đổi theo từng bản build, nên Keychain của macOS hỏi lại *"NEU Agent wants to use your confidential information…"* sau mỗi lần cập nhật (bấm "Always Allow" cũng không giữ được sang bản sau). Cách chữa tạm khi chưa có Developer ID: ký mọi bản bằng **một chứng chỉ tự cấp cố định** của máy dựng.
+
+```bash
+D=~/.neu-agent-signing; mkdir -p $D && chmod 700 $D && cd $D
+openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 3650 -subj "/CN=NEU Agent Local Signing/O=NEU FIT" \
+  -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=critical,codeSigning" -addext "basicConstraints=critical,CA:false"
+openssl pkcs12 -export -legacy -inkey key.pem -in cert.pem -out id.p12 -passout pass:neu-local
+security import id.p12 -k ~/Library/Keychains/login.keychain-db -P neu-local -T /usr/bin/codesign
+```
+
+`npm run dist -w @neu/agent-desktop` tự phát hiện chứng chỉ tên "NEU Agent Local Signing" (hoặc `NEU_LOCAL_SIGN_NAME`) và ký lại .app bằng nó (`scripts/after-sign.cjs`). Danh tính trở thành `identifier "vn.edu.neu.agent" and certificate root = H"…"`: không đổi giữa các bản, nên người dùng chỉ gặp hộp thoại Keychain **một lần** trên mỗi máy.
+
+- **Giữ kỹ** `~/.neu-agent-signing/` (khoá riêng). Mất khoá hoặc đổi chứng chỉ thì danh tính đổi và mọi người gặp lại hộp thoại một lần.
+- Đây **không** thay cho Developer ID + notarize: Gatekeeper vẫn cảnh báo lần đầu mở bản tải về.
+- Khi có Developer ID thì danh tính đổi sang Developer ID một lần (người dùng gặp hộp thoại thêm một lần), sau đó ổn định.

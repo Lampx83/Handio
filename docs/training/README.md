@@ -36,12 +36,13 @@ Ba tab là ba phiên **độc lập** (hội thoại, thư mục, công cụ kh�
 
 | Chế độ | Ý nghĩa | Khi nào dùng |
 |---|---|---|
-| **Hỏi trước** (mặc định) | Đọc tự do; sửa file và chạy lệnh phải được duyệt | Luôn bắt đầu ở đây |
+| **Tự động** (mặc định) | Tự lo việc thường ngày (sửa file, build, test, git cục bộ); hỏi khi xoá, mạng, tệp bí mật, lệnh lạ | Làm việc hằng ngày |
+| **Hỏi trước** | Đọc tự do; sửa file và chạy lệnh phải được duyệt | Mã lạ, việc cần soi kỹ |
 | **Tự sửa file** | Tự duyệt sửa file trong dự án; lệnh vẫn hỏi | Khi đã tin kế hoạch và muốn đỡ bấm |
 | **Lập kế hoạch** | Chỉ đọc; agent đề xuất kế hoạch để bạn duyệt rồi mới làm | Việc lớn, yêu cầu còn mơ hồ |
-| **Tự động hết** (chỉ tab Code) | Tự duyệt mọi thứ, vẫn chặn lệnh phá hoại nặng | **Chỉ** trong thư mục thử nghiệm bỏ đi được |
+| **Toàn quyền** | Không hỏi gì, vẫn chặn lệnh phá hoại nặng | **Chỉ** trong thư mục thử nghiệm bỏ đi được |
 
-Tab Work **không có** chế độ "Tự động hết".
+Chế độ "Toàn quyền" có ở cả ba tab; người dùng văn phòng nên dùng "Tự động".
 
 ### Cái hệ thống tự bảo vệ bạn, và cái nó *không* bảo vệ
 

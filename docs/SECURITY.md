@@ -15,7 +15,7 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 ## 2. Các lớp bảo vệ đã có
 
 **Quyền và kiểm soát của người dùng**
-- Mọi thao tác ghi tệp/chạy lệnh/tải web đều **xin phép**, kèm phần thay đổi (diff) hoặc bản mô tả. Chế độ tự duyệt là tuỳ chọn có chủ đích; tab Work không có chế độ “Tự động hết”.
+- Mọi thao tác ghi tệp/chạy lệnh/tải web đều **xin phép**, kèm phần thay đổi (diff) hoặc bản mô tả. Chế độ mặc định **Tự động** chỉ tự chạy việc thường ngày trong dự án (sửa tệp, build/test/cài gói, git cục bộ) và vẫn hỏi khi xoá, đụng mạng, tệp bí mật, lệnh lạ hoặc sau khi đọc nội dung web; chế độ “Toàn quyền” là tuỳ chọn có chủ đích, có ở cả ba tab (quản trị viên có thể tắt bằng policy.json).
 - **Phân tích lệnh shell** trước khi cho tự động: tách lệnh ghép (`&&`, `;`, `|`), từ chối cú pháp che giấu (`$()`, backtick, `$VAR`, chạy nền, brace expansion); quy tắc `allow` khớp **từng đoạn** lệnh; quy tắc `deny` bắt được lệnh nằm giữa chuỗi. Có bộ test cho từng cách lách đã biết.
 - **Lệnh phá hoại** (`sudo`, `rm -rf` thư mục gốc/dự án, `git push --force`, tải về rồi chạy thẳng, bọc trong `bash -c`/`env`…) bị chặn ở **mọi** chế độ.
 - **Tệp nhạy cảm** (`.env`, `*.pem`, `id_rsa`, `.npmrc`, `.aws/`, `.ssh/`, `credentials`…): đọc/ghi luôn phải hỏi (kể cả chế độ tự động); tìm kiếm hàng loạt bỏ qua chúng.
@@ -62,7 +62,7 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 - Chưa đăng nhập thì ứng dụng Desktop từ chối **mọi** lệnh nghiệp vụ (không chỉ ẩn giao diện). Đăng nhập chỉ là cổng truy cập mô hình; tệp của người dùng vẫn nằm trên máy họ.
 - Hạn chế: cổng gateway 232:8037 còn mở với ai biết key (xem docs/DEPLOY.md); mã bí mật của ứng dụng Entra nằm trên máy 220 (`/etc/neu-agent/oauth2-proxy.env`, quyền 600).
 
-**Quản trị**: tệp `policy.json` ở vị trí chỉ quản trị viên ghi được có thể **khoá** địa chỉ máy chủ, cấm HTTP, cấm chế độ “Tự động hết”, tắt công cụ chạy lệnh, tắt mạng cho lệnh, **tắt chẩn đoán** (`diagnostics:false`) (xem `docs/INSTALL.md`).
+**Quản trị**: tệp `policy.json` ở vị trí chỉ quản trị viên ghi được có thể **khoá** địa chỉ máy chủ, cấm HTTP, cấm chế độ “Toàn quyền”, tắt công cụ chạy lệnh, tắt mạng cho lệnh, **tắt chẩn đoán** (`diagnostics:false`) (xem `docs/INSTALL.md`).
 
 ## 3. Điều CHƯA bảo vệ được (nói thẳng)
 

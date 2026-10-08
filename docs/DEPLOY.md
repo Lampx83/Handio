@@ -19,7 +19,7 @@ Người dùng ──HTTPS──▶ 222 (ai.neu.edu.vn, giữ chứng chỉ)  �
 ```
 
 - **Máy 220** (`deploy/220/`): web tĩnh, bản cài Desktop, proxy mô hình (gắn key ở phía máy chủ), và **đăng nhập SSO Microsoft 365** (`oauth2-proxy`). Mọi đường dẫn đều yêu cầu đăng nhập; chỉ nhận kết nối từ máy 222.
-- **Máy 222** (`deploy/222/`): giữ tên miền + HTTPS, chuyển `/agent/` sang 220. Các ứng dụng khác trên 222 (như `/apps`) không bị đụng tới.
+- **Máy 222** (`deploy/222/`): giữ tên miền + HTTPS, chuyển `/agent/` sang 220 **qua địa chỉ nội bộ** (222 `192.0.2.23` → 220 `192.0.2.21:80`; 222 không tới được IP công khai của 220, giống 232). Các ứng dụng khác trên 222 (như `/apps`) không bị đụng tới.
 - Trang đăng nhập/chuyển hướng dùng đường dẫn tương đối nên người dùng luôn ở HTTPS.
 
 ### Khai báo SSO trên Microsoft Entra (một lần, bởi người quản trị ứng dụng)
@@ -72,7 +72,7 @@ NEU_MOCK=1 npm run desktop       # thêm mẫu "Demo giả lập" trong Cài đ�
 | Agent đọc/ghi ngoài thư mục dự án | Mọi đường dẫn được resolve (kể cả liên kết tượng trưng) và phải nằm trong thư mục; kiểm tra bằng test | Lệnh `bash` (tab Code, Desktop) là tiến trình thật: các lệnh *chỉ-đọc* tự động chỉ được cho phép khi không có đường dẫn ra ngoài; lệnh khác luôn hỏi |
 | Lệnh phá hoại | Danh sách chặn (kể cả khi bọc trong `bash -c`, `env`…), bắt buộc hỏi cho mọi lệnh không chắc chắn là chỉ-đọc | Không phải bức tường; người dùng đọc trước khi duyệt là lớp chính |
 | Quy tắc cho phép ngầm trong repo lạ | Cấu hình dự án (`.neuagent/settings.json`) **không** đổi được địa chỉ máy chủ, key, hook; quy tắc `allow` của dự án chỉ có hiệu lực sau khi người dùng bấm "Tin cậy"; quy tắc `deny` luôn có hiệu lực | — |
-| Tự cấp quyền cho chính mình | Sửa `.neuagent/**`, `.git/**`, `NEUAGENT.md`, `AGENTS.md`, `CLAUDE.md` luôn hỏi (trừ chế độ "Tự động hết") | — |
+| Tự cấp quyền cho chính mình | Sửa `.neuagent/**`, `.git/**`, `NEUAGENT.md`, `AGENTS.md`, `CLAUDE.md` luôn hỏi (trừ chế độ "Toàn quyền") | — |
 | Prompt injection từ tệp/web | Lời nhắc hệ thống coi nội dung đó là dữ liệu; `web_fetch` chặn địa chỉ nội bộ/riêng tư; mọi hành động có tác dụng phụ đều hỏi | Mô hình có thể bị dụ; không có biện pháp tuyệt đối |
 | Mã do mô hình viết chạy trong trình duyệt | Web Worker dùng một lần, không DOM/mạng/IndexedDB, CSP riêng (`connect-src 'none'`), huỷ khi hết giờ | Cần cấu hình header CSP cho `sandbox-worker.js` ở máy chủ thật (mục 2) |
 | Lộ key | Web: key chung nằm ở nginx (không trong JS), key riêng của người dùng ở `localStorage` (CSP `script-src 'self'`); Desktop: key tích hợp chỉ gửi tới máy chủ của Khoa, key tự nhập mã hoá bằng kho khoá hệ điều hành; giao diện không bao giờ nhận lại key thật | Key tích hợp của Desktop lấy được từ ứng dụng; phải giới hạn ở Kong. Lõi dùng chung không chứa key |
