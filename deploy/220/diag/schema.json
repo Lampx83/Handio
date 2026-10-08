@@ -193,6 +193,7 @@
           "server",
           "network",
           "insecure",
+          "quota",
           "unexpected",
           "other"
         ],

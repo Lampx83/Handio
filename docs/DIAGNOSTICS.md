@@ -15,7 +15,7 @@ Mục tiêu: hệ thống **tự phát hiện vấn đề** (lỗi mô hình/c�
 |---|---|
 | `turn` (mỗi lượt làm việc) | `end` (ok/interrupted/error/step_limit/loop), `dur_s`, `ttft_ms`, `steps`, `tools`, `tool_fail`, `prompt_tok`, `completion_tok`, `ctx_pct`, `compactions`, `perm_allow`, `perm_deny` |
 | `tool` | `name` (danh sách cố định, `mcp`, `other`), `ok`, `dur` (lt1s/lt5s/lt30s/lt2m/ge2m), `err` (khi lỗi; **chỉ mã** như `not_found`, `read_first`, `no_match`, `sandbox`, `program`, `denied`…; từ bản 0.2.0) |
-| `llm_error` | `kind` (context/auth/rate/server/network/insecure/unexpected/other), `status` (mã HTTP) |
+| `llm_error` | `kind` (context/auth/rate/server/network/insecure/quota/unexpected/other), `status` (mã HTTP) |
 | `llm_retry` | `kind` (network/rate/server) |
 | `signal` | `code` (loop, step_limit, repeat_tool_fail, slow_first_token, slow_turn, ctx_high, early_interrupt, perm_denied, empty_output, invalid_tool_args, unknown_tool, truncated, context_overflow), `tool`, `n` |
 | `report` | `note`: ghi chú ≤500 ký tự **do người dùng gõ khi bấm “Báo lỗi”** (xem trước đúng gói sẽ gửi) |

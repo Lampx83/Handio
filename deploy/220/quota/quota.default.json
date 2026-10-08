@@ -1,0 +1,10 @@
+{
+  "mode": "enforce",
+  "tiers": { "student": 1000000, "staff": 10000000 },
+  "domains": { "st.neu.edu.vn": "student", "neu.edu.vn": "staff" },
+  "default_tier": "student",
+  "grace_pct": 10,
+  "warn_pct": 80,
+  "max_concurrent": 6,
+  "overrides": {}
+}

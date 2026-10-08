@@ -121,6 +121,9 @@ class App {
   private wsEl = h("span", { class: "ws" });
   private meterBar = h("i");
   private meterTxt = h("span", {}, "0%");
+  /** Nhãn hạn mức token hôm nay: chỉ hiện khi sắp hết (từ 80%), hết hoặc đang trong phần được vượt thêm. */
+  private quotaEl = h("span", { class: "quota-chip", hidden: true });
+  private ctxTip = "Mức dùng cửa sổ ngữ cảnh của mô hình";
   private bannerHost = h("div");
   private sideActions = h("span", { class: "side-acts" });
   private fileInput = h("input", { type: "file", multiple: true, hidden: true, "aria-label": "Chọn tệp để thêm" });
@@ -211,7 +214,8 @@ class App {
         h("div", { class: "mode-wrap", style: { position: "relative" } }, this.modePill),
         h("button", { class: "btn sm", type: "button", title: "Chèn khung Mục tiêu – Ngữ cảnh – Ràng buộc", onclick: () => this.insertTemplate() }, "Mẫu prompt"),
         this.hintEl, h("span", { class: "grow" }),
-        h("div", { class: "meter", title: "Mức dùng cửa sổ ngữ cảnh của mô hình" }, h("div", { class: "bar" }, this.meterBar), this.meterTxt),
+        this.quotaEl,
+        h("div", { class: "meter", title: this.ctxTip }, h("div", { class: "bar" }, this.meterBar), this.meterTxt),
         this.codeTools.modelEl, this.sendBtn)));
     const main = h("main", { class: "main" }, this.bannerHost, this.feed, composer);
     this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path));
@@ -288,6 +292,7 @@ class App {
     if (design) void this.pv?.refreshFiles();
     void this.paintChats();
     this.paintMode();
+    this.paintQuota();
     this.paintSideActions();
     this.paintTodos(this.state.todos);
     this.paintBanners();
@@ -437,6 +442,10 @@ class App {
       case "todos":
         this.paintTodos(e.todos);
         break;
+      case "quota":
+        this.state.quota = e.quota;
+        this.paintQuota();
+        break;
       case "mode":
         this.state.mode = e.mode;
         this.paintMode();
@@ -447,7 +456,8 @@ class App {
         const ring = this.meterBar.parentElement as HTMLElement; // vòng tròn dưới ô nhập: --p = % đã dùng, mức màu theo ngưỡng
         ring.style.setProperty("--p", String(Math.max(0, Math.min(100, e.contextPct))));
         ring.dataset.lvl = e.contextPct > 85 ? "vhi" : e.contextPct > 65 ? "hi" : "";
-        (ring.parentElement as HTMLElement).title = `Ngữ cảnh đã dùng ${e.contextPct}% · ${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi`;
+        this.ctxTip = `Ngữ cảnh đã dùng ${e.contextPct}% · ${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi`;
+        this.paintQuota();
         this.meterTxt.textContent = `${e.contextPct}%`;
         this.meterTxt.title = `${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi`;
         break;
@@ -916,6 +926,24 @@ class App {
         void this.loadTree([path]);
       },
     });
+  }
+
+  // ------------------------------------------------------------------ hạn mức token trong ngày
+  private paintQuota(): void {
+    const q = this.state?.quota;
+    const meter = this.meterBar.parentElement?.parentElement as HTMLElement | undefined;
+    const fmt = (n: number) => n.toLocaleString("vi-VN");
+    const detail = q && q.state !== "unlimited" && q.limit > 0 ? `\nToken hôm nay: ${fmt(q.used)} / ${fmt(q.limit)} (${q.pct ?? 0}%) · làm mới lúc 00:00 ngày mai` : "";
+    if (meter) meter.title = this.ctxTip + detail;
+    const el = this.quotaEl;
+    if (!q || q.state === "ok" || q.state === "unlimited" || !q.limit) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.dataset.state = q.state;
+    el.textContent = q.state === "warn" ? `Token hôm nay ${Math.round(q.pct ?? 0)}%` : q.state === "grace" ? "Hết hạn mức hôm nay · hoàn tất việc đang làm" : "Hết hạn mức hôm nay";
+    el.title = (q.state === "exceeded" ? "Bạn đã dùng hết hạn mức token hôm nay; hạn mức làm mới lúc 00:00 ngày mai. " : q.state === "grace" ? "Bạn đã dùng hết hạn mức; hệ thống cho vượt thêm một chút để hoàn tất việc đang làm. Sau đó yêu cầu mới sẽ bị từ chối đến 00:00 ngày mai. " : "Sắp hết hạn mức token hôm nay. ") + detail.trim();
   }
 
   // ------------------------------------------------------------------ menu chế độ

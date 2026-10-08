@@ -53,6 +53,7 @@ export type SessionEvent =
   | { type: "permission_resolved"; id: string; allowed: boolean }
   | { type: "todos"; todos: Todo[] }
   | { type: "mode"; mode: Mode }
+  | { type: "quota"; quota: QuotaInfo }
   | { type: "usage"; promptTokens: number; completionTokens: number; contextPct: number; calls: number }
   | { type: "notice"; level: "info" | "warn" | "error"; text: string; /** Hành động gợi ý cho người dùng: "login" = hiện nút Đăng nhập lại. */ action?: "login" }
   | { type: "files_changed"; paths: string[] }
@@ -95,7 +96,23 @@ export interface PublicSettings extends Omit<Settings, "key"> {
   keyHint: string;
 }
 
+/** Hạn mức token trong ngày của người dùng (do máy chủ đếm; làm mới 00:00 giờ Việt Nam). */
+export interface QuotaInfo {
+  /** Hạn mức/ngày; 0 = không giới hạn. */
+  limit: number;
+  used: number;
+  remaining: number | null;
+  pct: number | null;
+  /** ok < nhắc < grace (hết hạn mức, được hoàn tất việc đang làm) < exceeded (bị chặn). */
+  state: "ok" | "warn" | "grace" | "exceeded" | "unlimited";
+  /** Thời điểm làm mới (giây epoch). */
+  resetAt: number;
+  tier?: string;
+}
+
 export interface UiState {
+  /** Hạn mức token hôm nay (null = chưa biết / không có). */
+  quota?: QuotaInfo | null;
   profile: Profile;
   profileLabel: string;
   tagline: string;

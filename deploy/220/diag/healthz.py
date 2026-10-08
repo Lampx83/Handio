@@ -19,6 +19,7 @@ CHECKS = {
     "oauth2": E("NEU_HEALTH_OAUTH2", "http://127.0.0.1:4180/ping"),
     "gateway": E("NEU_HEALTH_GATEWAY", "http://192.0.2.10:8037/"),
     "collector": E("NEU_HEALTH_COLLECTOR", "http://127.0.0.1:4190/healthz"),
+    "quota": E("NEU_HEALTH_QUOTA", "http://127.0.0.1:4191/healthz"),
 }
 HEALTH_FILE = E("NEU_HEALTH_FILE", "/var/lib/neu-agent/health.json")
 LOG_FILE = E("NEU_HEALTH_LOG", "/var/log/neu-agent/health.log")
@@ -68,6 +69,7 @@ def run():
         "oauth2": http_check(CHECKS["oauth2"]),
         "gateway": http_check(CHECKS["gateway"], accept_any_status=True),  # chỉ cần máy chủ trả lời HTTP (có thể 401/404 vì không kèm key)
         "collector": http_check(CHECKS["collector"], want_ok_json=True),
+        "quota": http_check(CHECKS["quota"], want_ok_json=True),
         "disk": disk_check(),
     }
     return {"ts": int(time.time()), "ok": all(c["ok"] for c in checks.values()), "checks": checks}

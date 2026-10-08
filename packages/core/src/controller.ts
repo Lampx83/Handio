@@ -16,7 +16,7 @@ import type { DocView } from "./office/locate";
 import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
 import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk } from "./tools";
-import type { AgentController, PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, UiState } from "./types";
+import type { AgentController, PermissionRequest, PermissionResponse, QuotaInfo, RewindPoint, SessionEvent, Settings, UiState } from "./types";
 
 export interface SettingsStore {
   load(): Promise<Partial<Settings> | null>;
@@ -94,6 +94,8 @@ export class LocalController implements AgentController {
   private turnTools: string[] = [];
   private lastGood: { prompt: string; tools: string[]; chatId: string; projectId: string } | null = null;
   private diag?: DiagnosticsRecorder;
+  /** Hạn mức token trong ngày (do máy chủ đếm); null = chưa biết hoặc máy chủ không có hạn mức. */
+  private quota: QuotaInfo | null = null;
 
   private constructor(private o: ControllerOptions) {}
 
@@ -101,6 +103,13 @@ export class LocalController implements AgentController {
     const c = new LocalController(o);
     c.settings = c.applyPolicy(normalizeSettings(await o.store.load(), o.defaults));
     c.llm = new LlmClient(() => ({ baseUrl: c.settings.baseUrl, model: c.settings.model, key: effectiveKey(c.settings, c.builtin).key, keyHeader: c.settings.keyHeader, temperature: c.settings.temperature, maxOutputTokens: c.settings.maxOutputTokens, thinking: c.settings.thinking, allowInsecure: c.settings.allowInsecureHttp, authHeaders: o.authHeaders ? async () => { try { return o.authHosts?.includes(new URL(c.settings.baseUrl).host) ? await o.authHeaders!() : null; } catch { return null; } } : undefined }), o.fetchImpl);
+    // hạn mức token: lấy từ tiêu đề phản hồi mỗi lần gọi mô hình, và hỏi một lần lúc khởi động (không tốn token, không chặn khởi động)
+    c.llm.onQuota = (q) => {
+      c.quota = q;
+      c.fire({ type: "quota", quota: q });
+    };
+    // chỉ hỏi máy chủ mặc định của ứng dụng (không gửi thêm yêu cầu tới địa chỉ do người dùng tự đặt)
+    if (c.settings.baseUrl === normalizeSettings({}, o.defaults).baseUrl) void c.llm.quota().then((q) => q && c.llm.onQuota?.(q));
     c.trusted = await o.trust.isTrusted(o.env.root);
     await c.loadProject();
     c.session = await c.makeSession();
@@ -183,6 +192,7 @@ export class LocalController implements AgentController {
     await this.syncSettings();
     const def = PROFILES[this.o.profile ?? "code"];
     return {
+      quota: this.quota,
       profile: def.id,
       profileLabel: def.label,
       tagline: def.tagline,

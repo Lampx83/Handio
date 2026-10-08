@@ -65,7 +65,7 @@ export const DIAG_SCHEMA = {
       err: { k: "enum", v: DIAG_TOOL_ERRORS },
     },
     llm_error: {
-      kind: { k: "enum", v: ["context", "auth", "rate", "server", "network", "insecure", "unexpected", "other"], req: true },
+      kind: { k: "enum", v: ["context", "auth", "rate", "server", "network", "insecure", "quota", "unexpected", "other"], req: true },
       status: { k: "int", min: 0, max: 599 },
     },
     llm_retry: { kind: { k: "enum", v: ["network", "rate", "server"], req: true } },
@@ -346,7 +346,7 @@ export class DiagnosticsRecorder {
       if (x?.kind === "abort") return;
       if (x?.name === "ToolError") return;
       const isLlm = typeof x?.kind === "string" && typeof x?.status === "number";
-      const kind = isLlm ? (["context", "auth", "rate", "server", "network", "insecure"].includes(x.kind!) ? x.kind! : "other") : "unexpected";
+      const kind = isLlm ? (["context", "auth", "rate", "server", "network", "insecure", "quota"].includes(x.kind!) ? x.kind! : "other") : "unexpected";
       this.push({ t: "llm_error", ts: this.ts(), kind, status: isLlm ? x.status : 0 });
       if (this.turn) this.turn.err = true;
     } catch {

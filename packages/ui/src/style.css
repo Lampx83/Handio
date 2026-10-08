@@ -505,3 +505,6 @@ dialog.wt-dlg input { flex: 1; min-width: 0; }
 .composer .modemenu { top: auto; bottom: calc(100% + 6px); left: 0; right: auto; width: 340px; max-width: 80vw; }
 .ct-pop.up { top: auto; bottom: calc(100% + 6px); right: 0; left: auto; max-height: 280px; overflow: auto; }
 @media (max-width: 800px) { .modelbtn { display: inline-block; } .composer > .bar .meter { display: flex; } .composer > .bar .meter .bar { display: block; } .composer > .bar .btn.sm { display: none; } }
+.quota-chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; color: var(--warn); }
+.quota-chip[data-state="grace"], .quota-chip[data-state="exceeded"] { color: var(--err); font-weight: 600; }
+.quota-chip[hidden] { display: none; }

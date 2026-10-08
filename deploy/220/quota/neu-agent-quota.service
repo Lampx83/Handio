@@ -1,0 +1,50 @@
+[Unit]
+Description=NEU Agent - cong han muc token theo nguoi dung (127.0.0.1:4191)
+After=network.target
+
+[Service]
+User=neu-diag
+Group=neu-diag
+# bí mật HMAC, danh sách quản trị và cấu hình hạn mức (đổi cấu hình: dùng quota.sh, nó khởi động lại dịch vụ): chỉ root đọc được ở /etc/neu-agent; systemd đưa vào thư mục tạm riêng của dịch vụ
+LoadCredential=diag-secret:/etc/neu-agent/diag-secret
+LoadCredential=admins:/etc/neu-agent/admins.txt
+LoadCredential=quota-config:/etc/neu-agent/quota.json
+Environment=NEU_QUOTA_DB=/var/lib/neu-agent/quota/usage.db
+Environment=NEU_QUOTA_UPSTREAM=192.0.2.10:8037
+ExecStart=/usr/bin/python3 /usr/local/lib/neu-agent-quota/quota.py
+Restart=always
+RestartSec=3
+# cô lập như dịch vụ đăng nhập: không quyền ghi ngoài thư mục dữ liệu, không quyền đặc biệt; chỉ nói chuyện qua loopback và tới cổng mô hình 192.0.2.10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/neu-agent/quota
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+IPAddressDeny=any
+IPAddressAllow=localhost 192.0.2.10
+UMask=0077
+MemoryMax=384M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

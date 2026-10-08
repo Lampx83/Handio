@@ -42,10 +42,11 @@ class HealthzTests(unittest.TestCase):
             s.server_close()
         self.tmp.cleanup()
 
-    def load(self, oauth, gw, coll, **env):
-        self.servers += [oauth, gw, coll]
+    def load(self, oauth, gw, coll, quota=None, **env):
+        quota = quota or serve(200, b'{"ok":true}')
+        self.servers += [oauth, gw, coll, quota]
         e = {"NEU_HEALTH_OAUTH2": "http://127.0.0.1:%d/ping" % oauth.server_address[1], "NEU_HEALTH_GATEWAY": "http://127.0.0.1:%d/" % gw.server_address[1],
-             "NEU_HEALTH_COLLECTOR": "http://127.0.0.1:%d/healthz" % coll.server_address[1], "NEU_HEALTH_FILE": os.path.join(self.tmp.name, "h", "health.json"),
+             "NEU_HEALTH_COLLECTOR": "http://127.0.0.1:%d/healthz" % coll.server_address[1], "NEU_HEALTH_QUOTA": "http://127.0.0.1:%d/healthz" % quota.server_address[1], "NEU_HEALTH_FILE": os.path.join(self.tmp.name, "h", "health.json"),
              "NEU_HEALTH_LOG": os.path.join(self.tmp.name, "log", "health.log"), "NEU_HEALTH_DISK_PATHS": self.tmp.name, "NEU_HEALTH_TIMEOUT": "1"}
         e.update(env)
         for k, v in e.items():
@@ -59,9 +60,14 @@ class HealthzTests(unittest.TestCase):
         self.assertEqual(H.main(), 0)
         h = json.loads(read(H.HEALTH_FILE))
         self.assertTrue(h["ok"])
-        self.assertEqual(set(h["checks"]), {"oauth2", "gateway", "collector", "disk"})
+        self.assertEqual(set(h["checks"]), {"oauth2", "gateway", "collector", "quota", "disk"})
         self.assertFalse(os.path.exists(H.LOG_FILE))
         self.assertEqual(oct(os.stat(H.HEALTH_FILE).st_mode & 0o777), oct(0o640))
+
+    def test_quota_gateway_down_is_reported(self):
+        H = self.load(serve(200, b"OK"), serve(401), serve(200, b'{"ok":true}'), quota=serve(503, b'{"ok":false}'))
+        self.assertEqual(H.main(), 1)
+        self.assertEqual([k for k, v in json.loads(read(H.HEALTH_FILE))["checks"].items() if not v["ok"]], ["quota"])
 
     def test_failures_logged_and_exit_1(self):
         dead = serve(200)

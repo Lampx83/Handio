@@ -18,6 +18,7 @@ import glob
 import html
 import json
 import os
+import sqlite3
 import sys
 
 import report as R
@@ -84,7 +85,7 @@ def _bucket(v, edges, labels):
     return labels[-1]
 
 
-def compute(recs, daily, now, findings=None, release=None):
+def compute(recs, daily, now, findings=None, release=None, quota=None):
     t = now.timestamp()
     today = vn_day(t)
     days = [(datetime.date.fromisoformat(today) - datetime.timedelta(days=i)).isoformat() for i in range(DAYS - 1, -1, -1)]
@@ -238,7 +239,7 @@ def compute(recs, daily, now, findings=None, release=None):
         "users": users, "users_listed": len(users), "segments": seg, "funnel": funnel, "hist_turns": [(k, hist_turns.get(k, 0)) for k in tl], "hist_days": [(k, hist_days.get(k, 0)) for k in dl],
         "dist": dists, "hours": hours, "heat": heat, "outcomes30": {k: outcomes30.get(k, 0) for k in OUTCOMES},
         "tools": sorted(({"name": k, **v} for k, v in tools.items()), key=lambda x: -x["calls"]), "tool_errors": dict(tool_err.most_common()), "signals": dict(signals.most_common()), "llm_errors": dict(llm_err.most_common()),
-        "release": release_info(release, dists["version"], kpi["users_30d"]),
+        "release": release_info(release, dists["version"], kpi["users_30d"]), "quota": quota,
         "findings": findings or [], "downloads_total": sum(v.get("pkg", 0) for v in daily.values()), "daily_first": min(daily) if daily else None}
 
 
@@ -261,6 +262,39 @@ def release_info(rel, versions, users30):
     on_latest = sum(x["users"] for x in versions if _ver_key(x["value"]) >= cur)
     below_min = sum(x["users"] for x in versions if mn and _ver_key(x["value"]) < mn)
     return {**rel, "on_latest": on_latest, "adoption": R.ratio(on_latest, users30) if users30 else None, "below_min": below_min}
+
+
+def read_quota(db_path, now):
+    """Mức dùng token theo người (mã giả danh) do cổng hạn mức đếm (deploy/220/quota). None nếu chưa cài/chưa có dữ liệu."""
+    try:
+        db = sqlite3.connect("file:%s?mode=ro" % db_path, uri=True, timeout=3)
+    except sqlite3.Error:
+        return None
+    try:
+        t = now.timestamp()
+        today = vn_day(t)
+        since = vn_day(t - (DAYS - 1) * 86400)
+        rows = db.execute("SELECT uid,tier,lim,tokens,requests,blocked,estimated FROM usage WHERE day=? ORDER BY tokens DESC", (today,)).fetchall()
+        users = []
+        for uid, tier, lim, tokens, req, blocked, est in rows:
+            pct = None if lim < 0 else (100.0 * tokens / lim if lim else 100.0)
+            users.append({"id": uid[:8], "tier": tier, "tokens": tokens, "limit": None if lim < 0 else lim, "pct": None if pct is None else round(pct, 1), "requests": req, "blocked": blocked, "estimated": est})
+        by_day = {r[0]: r[1:] for r in db.execute("SELECT day,sum(tokens),count(*),sum(blocked),sum(CASE WHEN lim>=0 AND tokens>=lim*0.8 THEN 1 ELSE 0 END) FROM usage WHERE day>=? GROUP BY day", (since,))}
+        days = [(datetime.date.fromisoformat(today) - datetime.timedelta(days=i)).isoformat() for i in range(DAYS - 1, -1, -1)]
+        series = [{"day": d, "tokens": (by_day.get(d) or (0, 0, 0, 0))[0] or 0, "users": (by_day.get(d) or (0, 0, 0, 0))[1], "blocked": (by_day.get(d) or (0, 0, 0, 0))[2] or 0, "near": (by_day.get(d) or (0, 0, 0, 0))[3] or 0} for d in days]
+        tiers = collections.defaultdict(lambda: {"users": 0, "tokens": 0})
+        for u in users:
+            tiers[u["tier"]]["users"] += 1
+            tiers[u["tier"]]["tokens"] += u["tokens"]
+        return {
+            "today": today, "users": users[:30], "users_today": len(users), "tokens_today": sum(u["tokens"] for u in users),
+            "near": sum(1 for u in users if u["pct"] is not None and 80 <= u["pct"] < 100), "over": sum(1 for u in users if u["pct"] is not None and u["pct"] >= 100),
+            "blocked_users": sum(1 for u in users if u["blocked"]), "blocked_requests": sum(u["blocked"] for u in users), "series": series, "tiers": dict(tiers),
+        }
+    except sqlite3.Error:
+        return None
+    finally:
+        db.close()
 
 
 def _ver_key(v):
@@ -289,6 +323,12 @@ def insights(S):
     rl = S.get("release")
     if rl and rl.get("adoption") is not None:
         out.append(("good" if rl["adoption"] >= 0.8 else "warn" if rl["adoption"] < 0.5 else "info", "%s người dùng 30 ngày đã dùng bản mới nhất đang phát hành (%s)%s." % (R._p(rl["adoption"]), rl["version"], "; còn %d người dưới phiên bản tối thiểu %s" % (rl["below_min"], rl["min"]) if rl.get("below_min") else "")))
+    qt = S.get("quota")
+    if qt and qt["users_today"]:
+        if qt["blocked_users"]:
+            out.append(("bad", "%d người đã bị chặn vì hết hạn mức token hôm nay (%d yêu cầu bị từ chối)." % (qt["blocked_users"], qt["blocked_requests"])))
+        if qt["near"] + qt["over"]:
+            out.append(("warn", "%d người đã dùng ≥ 80%% hạn mức token hôm nay (%d người đã chạm hạn mức)." % (qt["near"] + qt["over"], qt["over"])))
     vs = S["dist"]["version"]
     if len(vs) > 1 and not rl:
         newest = max(vs, key=lambda x: _ver_key(x["value"]))["value"]
@@ -479,7 +519,7 @@ def render(S, health, report_links, nginx_note):
     dur_all = [x["dur_p95"] for x in ser[-7:] if x["dur_p95"] is not None]
     o = ['<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị NEU Agent</title><style>%s</style></head><body><main>' % CSS]
     o.append('<h1>Quản trị NEU Agent</h1><p class="sub">Cập nhật %s (giờ Việt Nam), tự làm mới mỗi 10 phút. Người dùng chỉ hiện dưới <b>mã giả danh</b>; không có email hay nội dung hội thoại.</p>' % _e(S["generated"]))
-    o.append('<nav class="top"><b>NEU Agent</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#nguoi-dung">Người dùng</a>'
+    o.append('<nav class="top"><b>NEU Agent</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a>'
              '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a></nav>' % hs)
 
     # ---- tổng quan
@@ -552,6 +592,29 @@ def render(S, health, report_links, nginx_note):
     o.append('<div class="card"><h3>Desktop kiểm tra cập nhật mỗi ngày</h3><p class="sub">xấp xỉ số lần máy Desktop mở và kiểm tra</p>%s</div>' % stack([("Kiểm tra", col("update_check"), "s6")], lab))
     o.append('</div><p class="note">%s</p>' % _e(nginx_note))
 
+    # ---- hạn mức token
+    o.append('<h2 id="han-muc">Hạn mức token <small>mỗi người một hạn mức/ngày, làm mới 00:00 giờ VN</small></h2>')
+    qt = S.get("quota")
+    if not qt:
+        o.append('<p class="note">Chưa có dữ liệu hạn mức: cổng hạn mức (deploy/220/quota) chưa cài hoặc chưa có yêu cầu nào đi qua. Xem docs/QUOTA.md.</p>')
+    else:
+        qs = qt["series"]
+        ql = [x["day"] for x in qs]
+        o.append('<div class="mini">' + "".join("<div><b>%s</b><span>%s</span></div>" % (_e(a), _e(b)) for a, b in [
+            (qt["users_today"], "người đã dùng hôm nay"), ("%.2f triệu" % (qt["tokens_today"] / 1e6), "token hôm nay (đã tính)"), (qt["near"], "người đã dùng 80–99% hạn mức"), (qt["over"], "người đã chạm hạn mức"),
+            (qt["blocked_users"], "người bị chặn hôm nay"), (qt["blocked_requests"], "yêu cầu bị từ chối hôm nay")]) + "</div>")
+        o.append('<div class="grid">')
+        o.append('<div class="card"><h3>Token mỗi ngày (cổng hạn mức đếm)</h3><p class="sub">triệu token; số do máy chủ đếm, chính xác hơn số ứng dụng tự báo</p>%s</div>' % stack([("Triệu token", [round(x["tokens"] / 1e6, 3) for x in qs], "s6")], ql))
+        o.append('<div class="card"><h3>Người dùng gần/hết hạn mức mỗi ngày</h3><p class="sub">đỏ: số yêu cầu bị từ chối</p>%s</div>' % bars([x["near"] for x in qs], ql, [x["blocked"] for x in qs]))
+        tiers = qt["tiers"]
+        o.append('<div class="card"><h3>Theo bậc (hôm nay)</h3>%s</div>' % table(["Bậc", "Người", "Token"], [[k, v["users"], format(v["tokens"], ",").replace(",", ".")] for k, v in sorted(tiers.items())] or [["—", 0, 0]]))
+        o.append("</div>")
+        hot = [u for u in qt["users"] if (u["pct"] or 0) >= 50 or u["blocked"]][:15]
+        o.append("<h3>Người dùng đang dùng nhiều hạn mức hôm nay <small>(từ 50% trở lên; mã giả danh)</small></h3>")
+        o.append(table(["Mã", "Bậc", "Token", "Hạn mức", "Đã dùng", "Yêu cầu", "Bị chặn"], [[u["id"], u["tier"], format(u["tokens"], ",").replace(",", "."), "không giới hạn" if u["limit"] is None else format(u["limit"], ",").replace(",", "."),
+                                                                                              "—" if u["pct"] is None else "%s%%" % u["pct"], u["requests"], u["blocked"]] for u in hot] or [["—", "", "", "", "", "", ""]]))
+        o.append('<p class="note">Đổi hạn mức trên máy 220: <code>sudo ~/neu-agent-220/quota/quota.sh show | mode | tier | set</code>. Mặc định sinh viên 1 triệu, giảng viên 10 triệu token/ngày; vượt thêm 10%% để hoàn tất việc đang làm. Tra mã ứng với ai: <code>quota.sh uid &lt;email&gt;</code>.</p>')
+
     # ---- người dùng
     o.append('<h2 id="nguoi-dung">Người dùng <small>%d người đứng đầu theo số lượt 30 ngày</small></h2>' % S["users_listed"])
     rows = [['<span class="badge %s">%s</span>' % (STATUS_CLS[u["status"]], u["status"]), "<code>%s</code>" % _e(u["id"]), strip(u["spark"]), u["first"], u["last"], u["days"], u["turns30"], u["turns"],
@@ -581,14 +644,14 @@ def read_findings(out):
         return []
 
 
-def run(diag_dir, nginx_log, out, health_file, now, dl_dir=None):
+def run(diag_dir, nginx_log, out, health_file, now, dl_dir=None, quota_db=None):
     t = now.timestamp()
     os.makedirs(out, exist_ok=True)
     recs = R.load_diag(diag_dir, t - HIST_DAYS * 86400, t + 1)
     rows = R.load_nginx(nginx_log, t - 15 * 86400, t + 1) if nginx_log else []
     dpath = os.path.join(out, "nginx-daily.json")
     daily = merge_daily(dpath, nginx_daily(rows), vn_day(t))
-    S = compute(recs, daily, now, read_findings(out), read_release(dl_dir) if dl_dir else None)
+    S = compute(recs, daily, now, read_findings(out), read_release(dl_dir) if dl_dir else None, read_quota(quota_db, now) if quota_db else None)
     first = S["daily_first"]
     note = "Số liệu nginx (lệnh gọi mô hình, tải bản cài, kiểm tra cập nhật) được cộng dồn theo ngày từ %s; nhật ký gốc chỉ giữ 14 ngày. Ngày trước mốc đó hiện bằng 0. Lượt tải đếm yêu cầu HTTP 200 tới tệp .dmg/.exe (tải lại hoặc tiếp tục tải có thể tính thêm)." % (first or "lần chạy đầu")
     links = sorted((os.path.basename(p) for p in glob.glob(os.path.join(out, "????-??-??.html"))), reverse=True)[:30]
@@ -605,9 +668,10 @@ def main(argv=None):
     ap.add_argument("--out", default=os.environ.get("NEU_DIAG_REPORTS", "/var/lib/neu-agent/reports"))
     ap.add_argument("--health", default=os.environ.get("NEU_DIAG_HEALTH", "/var/lib/neu-agent/health.json"))
     ap.add_argument("--dl-dir", default=os.environ.get("NEU_DL_DIR", "/var/www/neu-agent-dl"), help="thư mục tải về chứa latest.json")
+    ap.add_argument("--quota-db", default=os.environ.get("NEU_QUOTA_DB", "/var/lib/neu-agent/quota/usage.db"), help="CSDL hạn mức token của cổng hạn mức")
     ap.add_argument("--now", help="ISO hoặc epoch; mặc định: bây giờ")
     a = ap.parse_args(argv)
-    S = run(a.diag_dir, a.nginx_log, a.out, a.health, R.parse_now(a.now), a.dl_dir)
+    S = run(a.diag_dir, a.nginx_log, a.out, a.health, R.parse_now(a.now), a.dl_dir, a.quota_db)
     print("Đã ghi %s/index.html (%d người dùng 30 ngày, %d lượt 24 giờ)" % (a.out, S["kpi"]["users_30d"], S["kpi"]["turns_24h"]))
     return 0
 

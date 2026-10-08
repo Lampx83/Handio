@@ -173,6 +173,37 @@ class StatsTest(unittest.TestCase):
         self.assertIn("Vì sao công cụ thất bại", h)
         self.assertIn("+2 chương trình lỗi", h)
 
+    def test_token_quota_section(self):
+        import sqlite3
+        db = os.path.join(self.tmp.name, "usage.db")
+        c = sqlite3.connect(db)
+        c.execute("CREATE TABLE usage(day TEXT, uid TEXT, tier TEXT, lim INTEGER, tokens INTEGER, prompt INTEGER, completion INTEGER, requests INTEGER, estimated INTEGER, blocked INTEGER, PRIMARY KEY(day,uid))")
+        today, yday = S.vn_day(T_NOW), S.vn_day(T_NOW - 86400)
+        rows = [(today, "a" * 16, "student", 1_000_000, 850_000, 0, 0, 12, 0, 0), (today, "b" * 16, "student", 1_000_000, 1_150_000, 0, 0, 20, 0, 3),
+                (today, "c" * 16, "staff", 10_000_000, 2_000_000, 0, 0, 5, 0, 0), (today, "d" * 16, "admin", -1, 99_000_000, 0, 0, 9, 0, 0), (yday, "a" * 16, "student", 1_000_000, 500_000, 0, 0, 4, 0, 0)]
+        c.executemany("INSERT INTO usage VALUES(?,?,?,?,?,?,?,?,?,?)", rows)
+        c.commit()
+        c.close()
+        write_diag(self.diag, [rec(day_ts(0), turn_ev())])
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW, None, db)
+        q = j["quota"]
+        self.assertEqual((q["users_today"], q["near"], q["over"], q["blocked_users"], q["blocked_requests"]), (4, 1, 1, 1, 3))
+        self.assertEqual(q["tokens_today"], 850_000 + 1_150_000 + 2_000_000 + 99_000_000)
+        self.assertEqual(q["series"][-1]["tokens"], q["tokens_today"])
+        self.assertEqual(q["series"][-2]["tokens"], 500_000)
+        self.assertEqual(q["tiers"]["student"], {"users": 2, "tokens": 2_000_000})
+        users = {u["id"]: u for u in q["users"]}
+        self.assertEqual((users["bbbbbbbb"]["pct"], users["dddddddd"]["limit"], users["dddddddd"]["pct"]), (115.0, None, None))
+        h = slurp(os.path.join(self.out, "index.html"))
+        self.assertIn('id="han-muc"', h)
+        self.assertIn("bị chặn", h)
+        self.assertIn("bbbbbbbb", h)
+        self.assertIn("đã bị chặn vì hết hạn mức", " ".join(m for _, m in S.insights(j)))
+        # chưa cài cổng hạn mức: trang vẫn hiển thị, nói rõ
+        j2 = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW, None, os.path.join(self.tmp.name, "khong-co.db"))
+        self.assertIsNone(j2["quota"])
+        self.assertIn("Chưa có dữ liệu hạn mức", slurp(os.path.join(self.out, "index.html")))
+
     def test_empty_data_still_renders(self):
         S.run(self.diag, self.log, self.out, os.path.join(self.tmp.name, "none.json"), NOW)
         h = slurp(os.path.join(self.out, "index.html"))

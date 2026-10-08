@@ -1,4 +1,5 @@
 /** Client gọi mô hình qua giao diện kiểu OpenAI (/chat/completions, streaming). Dùng fetch nên chạy ở Node, Electron và trình duyệt. */
+import type { QuotaInfo } from "./types";
 
 export interface LlmConfig {
   baseUrl: string;
@@ -58,7 +59,7 @@ export interface ChatOptions {
   retries?: number;
 }
 
-export type LlmErrorKind = "context" | "auth" | "rate" | "server" | "network" | "abort" | "insecure" | "";
+export type LlmErrorKind = "context" | "auth" | "rate" | "server" | "network" | "abort" | "insecure" | "quota" | "";
 export class LlmError extends Error {
   constructor(message: string, public status = 0, public kind: LlmErrorKind = "", /** "login_required": máy chủ yêu cầu đăng nhập (chưa đăng nhập hoặc phiên hết hạn): giao diện hiện nút Đăng nhập lại. */ public code = "") {
     super(message);
@@ -71,6 +72,14 @@ function friendly(status: number, text: string): LlmError {
   const low = (text || "").toLowerCase();
   if (status === 400 && (low.includes("context length") || low.includes("maximum context") || low.includes("too long")))
     return new LlmError("Ngữ cảnh vượt giới hạn của mô hình.", status, "context");
+  if (status === 402 && low.includes("quota_exceeded")) {
+    try {
+      const j = JSON.parse(text) as { message?: string };
+      return new LlmError(typeof j.message === "string" && j.message ? j.message.slice(0, 300) : "Bạn đã dùng hết hạn mức token hôm nay. Hạn mức làm mới lúc 00:00 ngày mai.", status, "quota", "quota_exceeded");
+    } catch {
+      return new LlmError("Bạn đã dùng hết hạn mức token hôm nay. Hạn mức làm mới lúc 00:00 ngày mai.", status, "quota", "quota_exceeded");
+    }
+  }
   if (status === 401 && low.includes("login_required")) return new LlmError("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.", status, "auth", "login_required");
   if (status === 401) return new LlmError("Key sai hoặc chưa nhập. Vào Cài đặt để nhập lại.", status, "auth");
   if (status === 403) return new LlmError("Key này không được dùng mô hình chat (có thể là key chỉ dành cho embedding).", status, "auth");
@@ -148,7 +157,24 @@ export function parseTextToolCalls(content: string): { text: string; calls: Pars
   return { text: clean.trim(), calls };
 }
 
+const QUOTA_STATES = ["ok", "warn", "grace", "exceeded", "unlimited"];
+/** Đọc hạn mức từ tiêu đề X-Quota-* mà cổng hạn mức của máy chủ gắn vào phản hồi (không có = máy chủ không giới hạn/không hỗ trợ). */
+export function quotaFromHeaders(h: Headers): QuotaInfo | null {
+  const state = h.get("x-quota-state");
+  if (!state || !QUOTA_STATES.includes(state)) return null;
+  const n = (k: string): number => {
+    const v = Number(h.get(k));
+    return Number.isFinite(v) && v >= 0 ? v : 0;
+  };
+  const limit = n("x-quota-limit");
+  const used = n("x-quota-used");
+  const rem = h.get("x-quota-remaining");
+  return { limit, used, remaining: rem === null ? null : n("x-quota-remaining"), pct: limit ? Math.round((1000 * used) / limit) / 10 : null, state: state as QuotaInfo["state"], resetAt: n("x-quota-reset"), tier: h.get("x-quota-tier") ?? undefined };
+}
+
 export class LlmClient {
+  /** Được gọi mỗi khi biết hạn mức mới (từ tiêu đề phản hồi hoặc GET /quota). */
+  onQuota?: (q: QuotaInfo) => void;
   constructor(private getConfig: () => LlmConfig, private fetchImpl: typeof fetch = (...a) => fetch(...a)) {}
 
   private async headers(accept = "text/event-stream"): Promise<Record<string, string>> {
@@ -160,6 +186,29 @@ export class LlmClient {
     if (extra?.Authorization) h.Authorization = extra.Authorization;
     if (extra?.Cookie) h.Cookie = extra.Cookie;
     return h;
+  }
+
+  private noteQuota(h: Headers): void {
+    const q = quotaFromHeaders(h);
+    if (q) this.onQuota?.(q);
+  }
+
+  /** Hỏi máy chủ hạn mức hiện tại (không tốn token). null nếu máy chủ không có cổng hạn mức hoặc lỗi. Không bao giờ ném lỗi. */
+  async quota(signal?: AbortSignal): Promise<QuotaInfo | null> {
+    try {
+      const c = this.getConfig();
+      assertSecureEndpoint(c.baseUrl, c.allowInsecure);
+      if (!/\/vllm\/v1\/?$/.test(c.baseUrl)) return null;
+      const r = await this.fetchImpl(c.baseUrl.replace(/\/vllm\/v1\/?$/, "/quota"), { headers: await this.headers("application/json"), signal, redirect: "error" });
+      if (!r.ok || /html/i.test(r.headers.get("content-type") ?? "")) return null;
+      const j = (await r.json()) as Record<string, unknown>;
+      const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
+      const state = typeof j.state === "string" && QUOTA_STATES.includes(j.state) ? (j.state as QuotaInfo["state"]) : null;
+      if (!state) return null;
+      return { limit: num(j.limit), used: num(j.used), remaining: typeof j.remaining === "number" ? j.remaining : null, pct: typeof j.pct === "number" ? j.pct : null, state, resetAt: num(j.reset_at), tier: typeof j.tier === "string" ? j.tier : undefined };
+    } catch {
+      return null;
+    }
   }
 
   async models(signal?: AbortSignal): Promise<string[]> {
@@ -210,6 +259,7 @@ export class LlmClient {
         }
         throw new LlmError("Không kết nối được máy chủ: " + (e as Error).message, 0, "network");
       }
+      this.noteQuota(resp.headers);
       if (!resp.ok) {
         const err = friendly(resp.status, await resp.text().catch(() => ""));
         if (err.kind === "rate" && attempt <= retries) {
