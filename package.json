@@ -16,7 +16,9 @@
     "desktop": "npm run start -w @neu/agent-desktop",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "smoke": "npm run smoke -w @neu/agent-desktop"
+    "smoke": "npm run smoke -w @neu/agent-desktop",
+    "version:check": "node scripts/version.mjs check",
+    "version:bump": "node scripts/version.mjs bump"
   },
   "devDependencies": {
     "typescript": "^5.6.0",

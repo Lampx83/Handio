@@ -1,6 +1,7 @@
 import "@neu/agent-ui/style.css";
 import type { AgentController, ChatMeta, DirEntry, HistoryItem, PermissionResponse, Profile, ProjectsState, SessionEvent, Settings, UiState } from "@neu/agent-core";
 import { mountShell } from "@neu/agent-ui";
+import { mountUpdateBanner, type UpdateBridge } from "./update-banner";
 
 interface AuthState {
   enabled: boolean;
@@ -12,6 +13,7 @@ interface AuthState {
 interface Bridge {
   platform: string;
   auth: { status(): Promise<AuthState>; login(): Promise<AuthState>; logout(): Promise<AuthState>; onChange(cb: (s: AuthState) => void): () => void };
+  update: UpdateBridge;
   call(profile: string, method: string, args: unknown[]): Promise<any>;
   onEvent(cb: (profile: string, e: unknown) => void): () => void;
 }
@@ -133,5 +135,6 @@ async function start(): Promise<void> {
     macInset: bridge.platform === "darwin",
     account: st.enabled && st.email ? { email: st.email, name: st.name, logout: () => void bridge.auth.logout().then(() => location.reload()) } : undefined,
   });
+  mountUpdateBanner(bridge.update);
 }
 void start();

@@ -17,7 +17,7 @@ import datetime, json, os, sys
 dl, rel = sys.argv[1:3]
 src = json.load(open(os.path.join(rel, "latest.json"), encoding="utf-8"))
 files = {n: v for n, v in src["files"].items() if os.path.exists(os.path.join(dl, n))}
-out = {"version": src["version"], "released": datetime.date.today().isoformat(), "notes": "", "files": files, "signed": src.get("signed", {}), "signer": src.get("signer", {})}
+out = {"version": src["version"], "released": datetime.date.today().isoformat(), "notes": src.get("notes", ""), **({"minVersion": src["minVersion"]} if src.get("minVersion") else {}), "files": files, "signed": src.get("signed", {}), "signer": src.get("signer", {})}
 json.dump(out, open(os.path.join(dl, "latest.json"), "w", encoding="utf-8"), indent=2, ensure_ascii=False)
 print("latest.json:", out["version"], "ký số:", out["signed"])
 PY

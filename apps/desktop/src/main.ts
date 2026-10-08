@@ -5,6 +5,7 @@ import path from "node:path";
 import { buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
 import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
+import { Updater, UPDATE_METHODS } from "./updater";
 import { APP_ORIGIN, AUTH_METHODS, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
 
 // Hằng số lúc build (xem build.mjs): bản phát hành KHÔNG chứa mã kiểm thử/giả lập và KHÔNG chứa key.
@@ -26,6 +27,7 @@ const BUILTIN = __BUILTIN_KEY__ ? { key: __BUILTIN_KEY__, hosts: [new URL(__DEFA
 const RENDERER_ROOT = path.join(__dirname, "renderer");
 
 let win: BrowserWindow | null = null;
+let updater: Updater | null = null;
 let policy: Policy = {};
 const controllers = new Map<Profile, LocalController>();
 let mockServer: Server | null = null;
@@ -319,6 +321,48 @@ async function pickFolder(profile: Profile): Promise<void> {
   if (r && "error" in r && win) await dialog.showMessageBox(win, { type: "warning", message: "Không mở được thư mục", detail: r.error });
 }
 
+// ---------------------------------------------------------------- cập nhật (docs/RELEASE.md): tự kiểm tra, chỉ tải khi người dùng bấm, kiểm tra mã băm, không tự cài
+function startUpdater(): void {
+  if (SMOKE || !app.isPackaged) return; // bản dev/kiểm thử không kiểm tra bản mới
+  const base = __DEFAULT_BASE_URL__.replace(/vllm\/v1\/?$/, "download/");
+  if (!/^https:\/\/[^/]+\/.*\/$/.test(base)) return; // chỉ khi máy chủ chính là https
+  const file = path.join(userData(), "update.json");
+  updater = new Updater({
+    version: app.getVersion(),
+    platform: process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : "linux",
+    arch: process.arch,
+    baseUrl: base,
+    headers: async () => (auth ? auth.getHeaders() : {}),
+    fetch: (...a) => fetch(...a),
+    downloadsDir: () => app.getPath("downloads"),
+    reveal: (p) => shell.showItemInFolder(p),
+    onState: (st) => win?.webContents.send("neu:update-changed", st),
+    loadDismissed: async () => {
+      try {
+        return String(JSON.parse(await fs.readFile(file, "utf8")).dismissed ?? "");
+      } catch {
+        return "";
+      }
+    },
+    saveDismissed: async (v) => {
+      await fs.mkdir(userData(), { recursive: true });
+      await fs.writeFile(file, JSON.stringify({ dismissed: v }), { mode: 0o600 });
+    },
+  });
+  updater.start();
+}
+
+/** Menu "Kiểm tra bản cập nhật…": người dùng chủ động, nên hiện cả bản từng chọn "Để sau" và báo rõ khi đã mới nhất. */
+async function manualUpdateCheck(): Promise<void> {
+  if (!updater) {
+    await dialog.showMessageBox({ type: "info", message: "Kiểm tra bản cập nhật", detail: `Bạn đang dùng NEU Agent ${app.getVersion()}. Việc tự kiểm tra bản mới chỉ có trong bản cài đặt chính thức.` });
+    return;
+  }
+  const st = await updater.check(true);
+  if (st.phase === "idle") await dialog.showMessageBox({ type: "info", message: "Bạn đang dùng bản mới nhất", detail: `NEU Agent ${st.current}.` });
+  else if (st.phase === "error") await dialog.showMessageBox({ type: "warning", message: "Kiểm tra bản cập nhật", detail: st.error ?? "Không kiểm tra được." });
+}
+
 // ---------------------------------------------------------------- IPC (mọi tham số được kiểm tra; không lộ chi tiết lỗi nội bộ)
 const limiter = new RateLimiter(200, 1000);
 
@@ -339,6 +383,20 @@ function registerIpc(): void {
     } catch (err) {
       return { ...auth.status(), error: err instanceof Error ? err.message.slice(0, 300) : "Đăng nhập không thành công." };
     }
+  });
+  // kênh cập nhật: trạng thái / kiểm tra / tải / để sau / mở thư mục chứa bản đã tải (không có tham số)
+  ipcMain.handle("neu:update", async (e, method: unknown) => {
+    if (!trusted(e)) throw new Error("Nguồn không hợp lệ");
+    if (typeof method !== "string" || !UPDATE_METHODS.has(method)) throw new Error("Yêu cầu không hợp lệ");
+    if (!updater) return { phase: "idle", current: app.getVersion() };
+    if (method === "check") return updater.check(true);
+    if (method === "download") return updater.download();
+    if (method === "dismiss") return updater.dismiss();
+    if (method === "openFolder") {
+      updater.openFolder();
+      return updater.status();
+    }
+    return updater.status();
   });
   ipcMain.handle("neu:call", async (e, profile: unknown, method: unknown, args: unknown) => {
     if (!trusted(e)) throw new Error("Nguồn không hợp lệ");
@@ -429,6 +487,7 @@ function buildMenu(): void {
       { label: "Nạp thiết kế mẫu vào dự án mẫu Design", click: async () => { await seed("design", await folderFor("design")); send("design", { type: "files_changed", paths: [] }); } },
       { type: "separator" },
       { label: "Mở thư mục cài đặt", click: () => void shell.openPath(userData()) },
+      { label: "Kiểm tra bản cập nhật…", click: () => void manualUpdateCheck() },
       mac ? { role: "close" as const } : { role: "quit" as const },
     ] },
     { role: "editMenu" },
@@ -482,6 +541,7 @@ app.whenReady().then(async () => {
   for (const p of PROFILES_LIST) controllers.set(p, await buildController(p));
   buildMenu();
   await createWindow();
+  startUpdater();
   if (__SMOKE__ && SMOKE) {
     const { runSmoke } = await import("./smoke");
     const code = await runSmoke({ win: win!, dir: SMOKE, mockUrl, controllers, codeDir: await folderFor("code"), workDir: await folderFor("work") });

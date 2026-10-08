@@ -30,6 +30,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - run: npm run version:check          # mọi gói cùng phiên bản và CHANGELOG.md có mục cho phiên bản đó
+      - name: Tag khớp phiên bản
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME" || { echo "Tag $GITHUB_REF_NAME không khớp phiên bản trong package.json"; exit 1; }
       - run: npm run typecheck
       - run: npx vitest run
 

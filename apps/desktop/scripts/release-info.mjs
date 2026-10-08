@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { notesFor } from "../../../scripts/version.mjs";
 
 const out = path.resolve("release");
 const files = fs.readdirSync(out).filter((f) => /\.(dmg|zip|exe)$/.test(f)).sort();
@@ -25,7 +27,12 @@ try {
   const version = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")).version;
   const signing = fs.existsSync(path.join(out, "signing.json")) ? JSON.parse(fs.readFileSync(path.join(out, "signing.json"), "utf8")) : null;
   const fl = Object.fromEntries(files.map((f) => [f, { sha256: lines.find((l) => l.endsWith("  " + f)).split("  ")[0], size: fs.statSync(path.join(out, f)).size }]));
-  const latest = { version, files: fl, signed: { mac: !!signing?.mac?.notarized, win: !!signing?.win?.signed }, signer: { mac: signing?.mac?.authority || "", win: signing?.win?.subject || "" } };
+  // ghi chú phát hành lấy từ CHANGELOG.md (mục của phiên bản này); NEU_MIN_VERSION (tuỳ chọn) = phiên bản thấp nhất còn được hỗ trợ: bản cũ hơn sẽ bị yêu cầu cập nhật
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const notes = notesFor(fs.readFileSync(path.resolve(here, "../../../CHANGELOG.md"), "utf8"), version);
+  const minVersion = process.env.NEU_MIN_VERSION || "";
+  if (minVersion && !/^\d{1,4}\.\d{1,4}\.\d{1,4}(-[0-9A-Za-z.]{1,16})?$/.test(minVersion)) throw new Error("NEU_MIN_VERSION không hợp lệ: " + minVersion);
+  const latest = { version, released: new Date().toISOString().slice(0, 10), notes, ...(minVersion ? { minVersion } : {}), files: fl, signed: { mac: !!signing?.mac?.notarized, win: !!signing?.win?.signed }, signer: { mac: signing?.mac?.authority || "", win: signing?.win?.subject || "" } };
   fs.writeFileSync(path.join(out, "latest.json"), JSON.stringify(latest, null, 2));
   console.log("latest.json: ok", JSON.stringify(latest.signed));
 } catch (e) {

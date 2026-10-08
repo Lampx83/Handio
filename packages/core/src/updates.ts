@@ -2,7 +2,8 @@
  * Nhận biết bản cập nhật cho Desktop: đọc `latest.json` (do deploy/220/make-latest.sh tạo từ SHA256SUMS.txt + phiên bản gói).
  * Chỉ BÁO có bản mới + mã băm để người dùng so; không tự tải, không tự cài. Không bao giờ ném lỗi.
  *
- * Định dạng latest.json: { "version": "0.2.0", "released": "2026-10-08", "notes": "…", "files": { "NEU-Agent-0.2.0-win-x64.exe": { "sha256": "<64 hex>", "size": 123 } } }
+ * Định dạng latest.json: { "version": "0.2.0", "released": "2026-10-08", "notes": "…", "minVersion": "0.1.5", "files": { "NEU-Agent-0.2.0-win-x64.exe": { "sha256": "<64 hex>", "size": 123 } } }
+ * `minVersion` (tuỳ chọn): bản thấp hơn mức này không còn được hỗ trợ → `required = true` (giao diện yêu cầu cập nhật, không cho bỏ qua).
  */
 export interface LatestFile {
   name: string;
@@ -11,6 +12,9 @@ export interface LatestFile {
 }
 export interface UpdateInfo {
   available: boolean;
+  /** Phiên bản đang chạy thấp hơn `minVersion` của máy chủ: bắt buộc cập nhật. */
+  required: boolean;
+  minVersion?: string;
   current: string;
   latest: string;
   notes: string;
@@ -74,8 +78,12 @@ export async function checkForUpdate(
       if (pat && !pat.test(name)) continue;
       files.push({ name, sha256: f.sha256, ...(typeof f.size === "number" && f.size > 0 ? { size: f.size } : {}) });
     }
+    const minV = typeof j.minVersion === "string" ? j.minVersion : "";
+    const minCmp = minV ? compareVersions(currentVersion, minV) : null;
     return {
       available: cmp > 0,
+      required: minCmp !== null && minCmp < 0,
+      ...(minCmp !== null ? { minVersion: minV } : {}),
       current: currentVersion,
       latest,
       notes: typeof j.notes === "string" ? j.notes.slice(0, 2000) : "",

@@ -1,0 +1,11 @@
+/* Thông báo cập nhật (góc dưới phải; bản bắt buộc phủ toàn cửa sổ). Không phụ thuộc biến màu của giao diện chính. */
+.neu-upd{position:fixed;right:16px;bottom:16px;z-index:2147483000;width:min(360px,calc(100vw - 32px));background:#fff;color:#1c2330;border:1px solid #cfd6e2;border-radius:12px;box-shadow:0 8px 28px rgba(16,24,40,.22);padding:14px 16px;font:13.5px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+@media (prefers-color-scheme:dark){.neu-upd{background:#1a212c;color:#e4e8ef;border-color:#2f3a4d}}
+.neu-upd h3{margin:0 0 2px;font-size:14.5px}.neu-upd p{margin:2px 0 8px;opacity:.8}
+.neu-upd .nu-notes{white-space:pre-wrap;max-height:160px;overflow:auto;margin:6px 0 10px;padding:8px 10px;border-radius:8px;background:rgba(127,127,127,.12);font-size:12.5px}
+.neu-upd .nu-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.neu-upd button{font:inherit;border:1px solid #b8c2d4;background:transparent;color:inherit;border-radius:8px;padding:5px 12px;cursor:pointer}
+.neu-upd button.nu-go{background:#2b6cb0;border-color:#2b6cb0;color:#fff}.neu-upd button:disabled{opacity:.55;cursor:default}
+.neu-upd .nu-bar{height:8px;border-radius:4px;background:rgba(127,127,127,.25);overflow:hidden;margin:8px 0}.neu-upd .nu-bar i{display:block;height:100%;background:#2b6cb0;transition:width .2s}
+.neu-upd .nu-err{color:#c0362c}
+.neu-upd.nu-required{right:50%;bottom:50%;transform:translate(50%,50%);width:min(420px,calc(100vw - 32px));box-shadow:0 0 0 100vmax rgba(0,0,0,.55),0 8px 28px rgba(16,24,40,.4)}

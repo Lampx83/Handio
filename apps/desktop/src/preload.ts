@@ -14,6 +14,18 @@ contextBridge.exposeInMainWorld("neu", {
       return () => ipcRenderer.removeListener("neu:auth-changed", h);
     },
   },
+  update: {
+    status: () => ipcRenderer.invoke("neu:update", "status"),
+    check: () => ipcRenderer.invoke("neu:update", "check"),
+    download: () => ipcRenderer.invoke("neu:update", "download"),
+    dismiss: () => ipcRenderer.invoke("neu:update", "dismiss"),
+    openFolder: () => ipcRenderer.invoke("neu:update", "openFolder"),
+    onChange: (cb: (s: unknown) => void) => {
+      const h = (_e: unknown, s: unknown) => cb(s);
+      ipcRenderer.on("neu:update-changed", h);
+      return () => ipcRenderer.removeListener("neu:update-changed", h);
+    },
+  },
   onEvent: (cb: (profile: string, e: unknown) => void) => {
     const h = (_e: unknown, profile: string, ev: unknown) => cb(profile, ev);
     ipcRenderer.on("neu:event", h);
