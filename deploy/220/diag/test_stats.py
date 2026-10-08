@@ -141,6 +141,24 @@ class StatsTest(unittest.TestCase):
         h = slurp(os.path.join(self.out, "index.html"))
         self.assertNotIn("<img src=x>", h)
 
+    def test_release_adoption(self):
+        dl = os.path.join(self.tmp.name, "dl")
+        os.makedirs(dl)
+        jdump({"version": "0.2.0", "released": "2026-10-20", "minVersion": "0.1.5", "notes": "• Mới"}, os.path.join(dl, "latest.json"))
+        recs = [rec(day_ts(0), turn_ev(), uid="a" * 16, app=dict(APP, version="0.2.0")), rec(day_ts(0), turn_ev(), uid="b" * 16, app=dict(APP, version="0.1.0")),
+                rec(day_ts(0), turn_ev(), uid="c" * 16, app=dict(APP, version="0.1.9")), rec(day_ts(0), turn_ev(), uid="d" * 16, app=dict(APP, version="0.2.1"))]
+        write_diag(self.diag, recs)
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW, dl)
+        r = j["release"]
+        self.assertEqual((r["version"], r["min"], r["on_latest"], r["below_min"], r["adoption"]), ("0.2.0", "0.1.5", 2, 1, 0.5))
+        h = slurp(os.path.join(self.out, "index.html"))
+        self.assertIn("Phát hành", h)
+        self.assertIn("đã dùng bản mới nhất đang phát hành (0.2.0)", " ".join(m for _, m in S.insights(j)))
+        # latest.json hỏng/độc hại: bỏ qua, không làm hỏng trang
+        jdump({"version": "<script>", "notes": 5}, os.path.join(dl, "latest.json"))
+        self.assertIsNone(S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW, dl)["release"])
+        self.assertIsNone(S.read_release(os.path.join(self.tmp.name, "nope")))
+
     def test_empty_data_still_renders(self):
         S.run(self.diag, self.log, self.out, os.path.join(self.tmp.name, "none.json"), NOW)
         h = slurp(os.path.join(self.out, "index.html"))

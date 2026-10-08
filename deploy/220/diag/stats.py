@@ -80,7 +80,7 @@ def _bucket(v, edges, labels):
     return labels[-1]
 
 
-def compute(recs, daily, now, findings=None):
+def compute(recs, daily, now, findings=None, release=None):
     t = now.timestamp()
     today = vn_day(t)
     days = [(datetime.date.fromisoformat(today) - datetime.timedelta(days=i)).isoformat() for i in range(DAYS - 1, -1, -1)]
@@ -227,7 +227,29 @@ def compute(recs, daily, now, findings=None):
         "users": users, "users_listed": len(users), "segments": seg, "funnel": funnel, "hist_turns": [(k, hist_turns.get(k, 0)) for k in tl], "hist_days": [(k, hist_days.get(k, 0)) for k in dl],
         "dist": dists, "hours": hours, "heat": heat, "outcomes30": {k: outcomes30.get(k, 0) for k in OUTCOMES},
         "tools": sorted(({"name": k, **v} for k, v in tools.items()), key=lambda x: -x["calls"]), "signals": dict(signals.most_common()), "llm_errors": dict(llm_err.most_common()),
+        "release": release_info(release, dists["version"], kpi["users_30d"]),
         "findings": findings or [], "downloads_total": sum(v.get("pkg", 0) for v in daily.values()), "daily_first": min(daily) if daily else None}
+
+
+def read_release(dl_dir):
+    """latest.json đang phát hành (tệp do deploy/220/make-latest.sh tạo): phiên bản, ngày, phiên bản tối thiểu."""
+    try:
+        with open(os.path.join(dl_dir, "latest.json"), encoding="utf-8") as f:
+            j = json.load(f)
+        ok = lambda v: isinstance(v, str) and len(v) <= 24 and all(c.isalnum() or c in ".-" for c in v)
+        return {"version": j["version"] if ok(j.get("version")) else "", "released": str(j.get("released", ""))[:10], "min": j["minVersion"] if ok(j.get("minVersion")) else "", "notes": str(j.get("notes", ""))[:400]}
+    except (OSError, ValueError, AttributeError, KeyError):
+        return None
+
+
+def release_info(rel, versions, users30):
+    """Mức người dùng đã lên bản đang phát hành, và số người còn dưới phiên bản tối thiểu."""
+    if not rel or not rel.get("version"):
+        return None
+    cur, mn = _ver_key(rel["version"]), _ver_key(rel["min"]) if rel.get("min") else None
+    on_latest = sum(x["users"] for x in versions if _ver_key(x["value"]) >= cur)
+    below_min = sum(x["users"] for x in versions if mn and _ver_key(x["value"]) < mn)
+    return {**rel, "on_latest": on_latest, "adoption": R.ratio(on_latest, users30) if users30 else None, "below_min": below_min}
 
 
 def _ver_key(v):
@@ -253,8 +275,11 @@ def insights(S):
     e7 = k["error_rate_7d"]
     if e7 is not None:
         out.append(("bad" if e7 >= 0.15 else "warn" if e7 >= 0.05 else "good", "Tỷ lệ lượt kết thúc bằng lỗi 7 ngày: %s%s." % (R._p(e7), "" if k["error_rate_prev7"] is None else " (tuần trước %s)" % R._p(k["error_rate_prev7"]))))
+    rl = S.get("release")
+    if rl and rl.get("adoption") is not None:
+        out.append(("good" if rl["adoption"] >= 0.8 else "warn" if rl["adoption"] < 0.5 else "info", "%s người dùng 30 ngày đã dùng bản mới nhất đang phát hành (%s)%s." % (R._p(rl["adoption"]), rl["version"], "; còn %d người dưới phiên bản tối thiểu %s" % (rl["below_min"], rl["min"]) if rl.get("below_min") else "")))
     vs = S["dist"]["version"]
-    if len(vs) > 1:
+    if len(vs) > 1 and not rl:
         newest = max(vs, key=lambda x: _ver_key(x["value"]))["value"]
         old = sum(x["users"] for x in vs if x["value"] != newest)
         if old:
@@ -503,6 +528,11 @@ def render(S, health, report_links, nginx_note):
     names = {"profile": "Tab (Work/Code/Design)", "platform": "Nền tảng", "version": "Phiên bản", "model": "Mô hình"}
     for key in ("profile", "platform", "version", "model"):
         o.append('<div class="card"><h3>%s</h3><p class="sub">số người dùng · lượt</p>%s</div>' % (names[key], hbars([(x["value"], x["users"], "%d người · %d lượt" % (x["users"], x["turns"])) for x in S["dist"][key]])))
+    rl = S.get("release")
+    if rl:
+        o.append('<div class="card"><h3>Phát hành &amp; cập nhật</h3><p class="sub">tệp latest.json đang phục vụ</p><div class="mini"><div><b>%s</b><span>bản đang phát hành%s</span></div><div><b>%s</b><span>đã dùng bản này</span></div><div><b>%s</b><span>phiên bản tối thiểu%s</span></div></div>%s</div>'
+                 % (_e(rl["version"]), " · " + _e(rl["released"]) if rl.get("released") else "", "—" if rl["adoption"] is None else R._p(rl["adoption"]), _e(rl["min"] or "chưa đặt"), " · %d người dưới mức" % rl["below_min"] if rl.get("below_min") else "",
+                    '<p class="note" style="white-space:pre-wrap">%s</p>' % _e(rl["notes"]) if rl.get("notes") else ""))
     o.append('<div class="card"><h3>Bản đồ nhiệt: lượt theo thứ và giờ</h3><p class="sub">giờ Việt Nam; càng đậm càng nhiều lượt</p>%s</div>' % heatmap(S["heat"]))
     o.append('<div class="card"><h3>Lượt làm việc theo giờ trong ngày</h3>%s</div>' % stack([("Lượt", S["hours"], "s1")], ["%02d:00" % h for h in range(24)], trim=0))
     o.append('<div class="card"><h3>Tải bản cài mỗi ngày</h3>%s</div>' % stack([("Lượt tải", col("pkg"), "s2")], lab))
@@ -538,14 +568,14 @@ def read_findings(out):
         return []
 
 
-def run(diag_dir, nginx_log, out, health_file, now):
+def run(diag_dir, nginx_log, out, health_file, now, dl_dir=None):
     t = now.timestamp()
     os.makedirs(out, exist_ok=True)
     recs = R.load_diag(diag_dir, t - HIST_DAYS * 86400, t + 1)
     rows = R.load_nginx(nginx_log, t - 15 * 86400, t + 1) if nginx_log else []
     dpath = os.path.join(out, "nginx-daily.json")
     daily = merge_daily(dpath, nginx_daily(rows), vn_day(t))
-    S = compute(recs, daily, now, read_findings(out))
+    S = compute(recs, daily, now, read_findings(out), read_release(dl_dir) if dl_dir else None)
     first = S["daily_first"]
     note = "Số liệu nginx (lệnh gọi mô hình, tải bản cài, kiểm tra cập nhật) được cộng dồn theo ngày từ %s; nhật ký gốc chỉ giữ 14 ngày. Ngày trước mốc đó hiện bằng 0. Lượt tải đếm yêu cầu HTTP 200 tới tệp .dmg/.exe (tải lại hoặc tiếp tục tải có thể tính thêm)." % (first or "lần chạy đầu")
     links = sorted((os.path.basename(p) for p in glob.glob(os.path.join(out, "????-??-??.html"))), reverse=True)[:30]
@@ -561,9 +591,10 @@ def main(argv=None):
     ap.add_argument("--nginx-log", default=os.environ.get("NEU_DIAG_NGINX_LOG", "/var/log/nginx/neu-agent-access.json.log"))
     ap.add_argument("--out", default=os.environ.get("NEU_DIAG_REPORTS", "/var/lib/neu-agent/reports"))
     ap.add_argument("--health", default=os.environ.get("NEU_DIAG_HEALTH", "/var/lib/neu-agent/health.json"))
+    ap.add_argument("--dl-dir", default=os.environ.get("NEU_DL_DIR", "/var/www/neu-agent-dl"), help="thư mục tải về chứa latest.json")
     ap.add_argument("--now", help="ISO hoặc epoch; mặc định: bây giờ")
     a = ap.parse_args(argv)
-    S = run(a.diag_dir, a.nginx_log, a.out, a.health, R.parse_now(a.now))
+    S = run(a.diag_dir, a.nginx_log, a.out, a.health, R.parse_now(a.now), a.dl_dir)
     print("Đã ghi %s/index.html (%d người dùng 30 ngày, %d lượt 24 giờ)" % (a.out, S["kpi"]["users_30d"], S["kpi"]["turns_24h"]))
     return 0
 
