@@ -79,6 +79,17 @@ export class Auth {
   private refreshing: Promise<boolean> | null = null;
   private listeners = new Set<(s: AuthStatus) => void>();
   private now: () => number;
+  /** Độ lệch giữa đồng hồ máy chủ và đồng hồ máy này (ms), lấy từ tiêu đề Date của phản hồi: máy người dùng chạy sai giờ vẫn đăng nhập được. */
+  private skewMs = 0;
+  private serverNow = (): number => this.now() + this.skewMs;
+  private calibrate(r: { headers?: { get(n: string): string | null } }): void {
+    const t = Date.parse(r.headers?.get("date") ?? "");
+    if (Number.isFinite(t) && Math.abs(t - this.now()) < 30 * 24 * 3600_000) this.skewMs = t - this.now();
+  }
+  /** Còn bao nhiêu giây trước khi phiên hết hạn (phiên Microsoft: theo giờ máy chủ; phiên cookie: theo giờ máy này vì hạn do chính máy này đặt). */
+  private remaining(s: Session): number {
+    return s.exp - (s.cookie ? this.now() : this.serverNow()) / 1000;
+  }
 
   constructor(private cfg: AuthConfig, private deps: AuthDeps) {
     this.now = deps.now ?? (() => Date.now());
@@ -107,6 +118,7 @@ export class Auth {
     if (this.disc) return this.disc;
     const url = this.cfg.issuer.replace(/\/+$/, "") + "/.well-known/openid-configuration";
     const r = await this.deps.fetch(url, { redirect: "error" });
+    this.calibrate(r);
     if (!r.ok) throw new AuthError("Không lấy được cấu hình đăng nhập (" + r.status + ").");
     const d = (await r.json()) as Discovery;
     if (d.issuer !== this.cfg.issuer.replace(/\/+$/, "") && d.issuer !== this.cfg.issuer) throw new AuthError("Máy chủ đăng nhập trả issuer không khớp.");
@@ -123,7 +135,7 @@ export class Auth {
   /** Kiểm tra id_token: chữ ký (JWKS), issuer, đối tượng (client id), hạn, nonce, miền email. */
   private async verify(idToken: string, nonce?: string): Promise<{ email: string; name?: string; exp: number }> {
     await this.discovery();
-    const { payload } = await jwtVerify(idToken, this.jwks!, { issuer: this.disc!.issuer, audience: this.cfg.clientId, algorithms: ["RS256"], currentDate: new Date(this.now()) });
+    const { payload } = await jwtVerify(idToken, this.jwks!, { issuer: this.disc!.issuer, audience: this.cfg.clientId, algorithms: ["RS256"], currentDate: new Date(this.serverNow()), clockTolerance: 60 });
     if (nonce !== undefined && payload.nonce !== nonce) throw new AuthError("Phiên đăng nhập không khớp (nonce).");
     const email = String(payload.preferred_username ?? payload.email ?? "").toLowerCase();
     if (!emailAllowed(email, this.cfg.domains)) throw new AuthError("Tài khoản này không thuộc miền được phép (" + this.cfg.domains.map((d) => "@" + d).join(", ") + ").");
@@ -143,7 +155,7 @@ export class Auth {
         this.session = s; // phiên tên + mật khẩu còn hạn
       } else if (s && !s.cookie && typeof s.idToken === "string" && typeof s.email === "string" && emailAllowed(s.email, this.cfg.domains)) {
         this.session = s;
-        if (s.exp - this.now() / 1000 < REFRESH_MARGIN && !(await this.refresh())) this.session = null;
+        if (this.remaining(s) < REFRESH_MARGIN && !(await this.refresh())) this.session = null;
       }
     } catch {
       this.session = null;
@@ -205,6 +217,7 @@ export class Auth {
     const d = await this.discovery();
     const body = new URLSearchParams({ client_id: this.cfg.clientId, scope: this.cfg.scopes ?? "openid profile email offline_access", ...params });
     const r = await this.deps.fetch(d.token_endpoint, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" }, body, redirect: "error" });
+    this.calibrate(r);
     const j = (await r.json().catch(() => ({}))) as { id_token?: string; refresh_token?: string; error?: string; error_description?: string };
     if (!r.ok || !j.id_token) throw new AuthError(j.error === "invalid_grant" ? "Phiên đăng nhập đã hết hạn." : "Máy chủ đăng nhập từ chối (" + (j.error ?? r.status) + ").");
     return { id_token: j.id_token, refresh_token: j.refresh_token };
@@ -233,20 +246,20 @@ export class Auth {
 
   /** Token hiện có nếu còn hạn (không làm mới, không chờ): dùng cho việc nền như gửi số liệu chẩn đoán. */
   peekBearer(): string | null {
-    return this.session && !this.session.cookie && this.session.exp - this.now() / 1000 > 30 ? this.session.idToken : null;
+    return this.session && !this.session.cookie && this.remaining(this.session) > 30 ? this.session.idToken : null;
   }
 
   /** Tiêu đề đăng nhập đang dùng, không chờ/không làm mới (việc nền): Bearer (Microsoft) hoặc Cookie (tên + mật khẩu). */
   peekHeaders(): Record<string, string> {
     const s = this.session;
-    if (!s || s.exp - this.now() / 1000 <= 30) return {};
+    if (!s || this.remaining(s) <= 30) return {};
     return s.cookie ? { Cookie: s.cookie } : { Authorization: "Bearer " + s.idToken };
   }
 
   /** Tiêu đề đăng nhập còn hạn để gọi máy chủ; Microsoft thì tự làm mới. null nếu chưa/không còn đăng nhập. */
   async getHeaders(): Promise<Record<string, string> | null> {
     if (this.session?.cookie) {
-      if (this.session.exp - this.now() / 1000 <= 30) {
+      if (this.remaining(this.session) <= 30) {
         await this.logout(); // hết hạn phiên máy chủ (8 giờ): phải nhập lại mật khẩu
         return null;
       }
@@ -293,7 +306,7 @@ export class Auth {
   /** id_token còn hạn để gửi dạng Bearer; tự làm mới. null nếu chưa/không còn đăng nhập. */
   async getBearer(): Promise<string | null> {
     if (!this.session || this.session.cookie) return null;
-    if (this.session.exp - this.now() / 1000 < REFRESH_MARGIN) {
+    if (this.remaining(this.session) < REFRESH_MARGIN) {
       if (!(await this.refresh())) {
         await this.logout();
         return null;

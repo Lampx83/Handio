@@ -50,6 +50,16 @@ describe("đăng nhập SSO (OIDC + PKCE) với máy chủ giả", () => {
     }
   });
 
+  it("đồng hồ máy người dùng chạy SAI giờ (chậm/nhanh hàng giờ) vẫn đăng nhập được: đối chiếu theo giờ máy chủ", async () => {
+    for (const offsetMs of [-3 * 3600_000, -10 * 60_000, 2 * 3600_000]) {
+      const clock = { t: Date.now() + offsetMs };
+      const a = new Auth(cfg(), deps({ hint: "sv.cham.gio@st.neu.edu.vn", clock }));
+      const st = await a.login();
+      expect(st, `lệch ${offsetMs / 60000} phút`).toMatchObject({ signedIn: true, email: "sv.cham.gio@st.neu.edu.vn" });
+      expect(await a.getBearer()).toBeTruthy();
+    }
+  });
+
   it("từ chối tài khoản ngoài miền được phép", async () => {
     const a = new Auth(cfg(), deps({ hint: "ke-xau@gmail.com" }));
     await expect(a.login()).rejects.toThrow(/miền/);

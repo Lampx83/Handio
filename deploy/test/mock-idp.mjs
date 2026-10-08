@@ -13,7 +13,7 @@ export async function startMockIdp({ port = 0, host = "127.0.0.1", issuerHost = 
     new SignJWT({ preferred_username: user, name: user.split("@")[0], ...(nonce ? { nonce } : {}), ...(state.bigClaims ? { groups: Array.from({ length: 45 }, () => crypto.randomUUID()) } : {}), ...extra })
       .setProtectedHeader({ alg: "RS256", kid: "k1" })
       .setIssuer(state.issuer).setAudience(aud).setSubject("sub-" + user)
-      .setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + state.ttlSeconds)
+      .setIssuedAt().setNotBefore(Math.floor(Date.now() / 1000)).setExpirationTime(Math.floor(Date.now() / 1000) + state.ttlSeconds)
       .sign(privateKey);
   const json = (res, code, body) => { res.writeHead(code, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
   const server = http.createServer(async (req, res) => {

@@ -103,7 +103,9 @@ export async function openDownload(base: string, install?: { available(): boolea
   if (!sums.size) return void body.append(h("p", { class: "dl-warn" }, "Máy chủ này chưa có bản cài đặt để tải. Hãy liên hệ người quản trị."));
 
   const me = await detectPlatform();
-  const files = ITEMS.map((it) => ({ it, name: [...sums.keys()].find((n) => it.re.test(n)) })).filter((x): x is { it: Item; name: string } => !!x.name);
+  // nhiều phiên bản cùng nằm trong thư mục tải (giữ bản cũ để quay lui): luôn đưa bản MỚI NHẤT, không phải bản đầu tiên theo thứ tự chữ cái
+  const newest = (re: RegExp) => [...sums.keys()].filter((n) => re.test(n)).sort((x, y) => y.localeCompare(x, undefined, { numeric: true }))[0];
+  const files = ITEMS.map((it) => ({ it, name: newest(it.re) })).filter((x): x is { it: Item; name: string } => !!x.name);
   const url = (n: string) => new URL(n, base).href;
   const sizeOf = (n: string, into: HTMLElement) => void fetch(url(n), { method: "HEAD" }).then((r) => { const len = Number(r.headers.get("content-length")); if (r.ok && len > 0) into.textContent = mb(len); }).catch(() => undefined);
   const dlBtn = (f: { it: Item; name: string }, label: string, big = false) => h("a", { class: "btn primary" + (big ? " lg" : ""), href: url(f.name), download: f.name, rel: "noopener" }, label);
