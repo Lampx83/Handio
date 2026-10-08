@@ -86,7 +86,7 @@ const str = (v: unknown, max = 2000): v is string => typeof v === "string" && v.
 
 type Validator = (args: unknown[]) => boolean;
 const idStr = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v);
-const MODES = ["default", "acceptEdits", "plan", "bypass"];
+const MODES = ["default", "acceptEdits", "auto", "plan", "bypass"];
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 
 export const IPC_VALIDATORS: Record<string, Validator> = {
@@ -117,7 +117,7 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
     const num = (v: unknown, min: number, max: number, int: boolean) => typeof v === "number" && Number.isFinite(v) && v >= min && v <= max && (!int || Number.isInteger(v));
     const ok: Record<string, (v: unknown) => boolean> = {
       thinking: (v) => typeof v === "boolean", allowInsecureHttp: (v) => typeof v === "boolean", diagnostics: (v) => typeof v === "boolean",
-      mode: (v) => typeof v === "string" && MODES.includes(v) && v !== "bypass", /* chế độ mặc định được LƯU không bao giờ là “Tự động hết” */ temperature: (v) => num(v, 0, 2, false),
+      mode: (v) => typeof v === "string" && MODES.includes(v) && v !== "bypass", /* chế độ mặc định được LƯU không bao giờ là “Toàn quyền” */ temperature: (v) => num(v, 0, 2, false),
       maxOutputTokens: (v) => num(v, 256, 16384, true), maxSteps: (v) => num(v, 1, 200, true), contextTokens: (v) => num(v, 4096, 131072, true),
     };
     return Object.entries(a[0]).every(([k, v]) => allowed.has(k) && (ok[k] ? ok[k](v) : str(v, 2000)));
@@ -170,7 +170,16 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
 export const IPC_METHODS = new Set(Object.keys(IPC_VALIDATORS));
 
 /** Kênh đăng nhập riêng (neu:auth): chỉ ba lệnh, không tham số. */
-export const AUTH_METHODS = new Set(["status", "login", "logout"]);
+export const AUTH_METHODS = new Set(["status", "login", "loginPassword", "logout", "remember"]);
+
+/** Tham số của kênh đăng nhập: loginPassword nhận {username, password} (chuỗi, có giới hạn); remember nhận {value: boolean}; các lệnh còn lại không có tham số. */
+export function authArgsOk(method: string, arg: unknown): boolean {
+  if (method === "remember") return isObj(arg) && Object.keys(arg).length === 1 && typeof arg.value === "boolean";
+  if (method !== "loginPassword") return arg === undefined;
+  if (!isObj(arg) || Object.keys(arg).some((k) => k !== "username" && k !== "password")) return false;
+  // eslint-disable-next-line no-control-regex
+  return typeof arg.username === "string" && /^[A-Za-z0-9._@+-]{1,64}$/.test(arg.username) && typeof arg.password === "string" && arg.password.length >= 1 && arg.password.length <= 200 && !/[\u0000-\u001f]/.test(arg.password);
+}
 
 /** Khi SSO bật mà chưa đăng nhập, MỌI lệnh nghiệp vụ bị từ chối (giao diện chỉ được gọi kênh đăng nhập). */
 export const authBlocks = (authEnabled: boolean, signedIn: boolean): boolean => authEnabled && !signedIn;

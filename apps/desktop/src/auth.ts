@@ -16,6 +16,8 @@ export interface AuthConfig {
   /** Cho phép issuer http:// (chỉ để thử với máy chủ giả ở 127.0.0.1). */
   allowInsecureIssuer?: boolean;
   loginTimeoutMs?: number;
+  /** Đăng nhập bằng tên + mật khẩu (tài khoản do quản trị tạo): địa chỉ form của máy chủ (…/agent/oauth2/sign_in). Không đặt = tắt. */
+  passwordLogin?: { signInUrl: string; cookiePrefix?: string };
 }
 
 export interface AuthDeps {
@@ -32,6 +34,10 @@ export interface AuthStatus {
   signedIn: boolean;
   email?: string;
   name?: string;
+  /** microsoft = SSO; password = tên + mật khẩu. */
+  kind?: "microsoft" | "password";
+  /** Máy chủ có cho đăng nhập bằng tên + mật khẩu không. */
+  passwordLogin?: boolean;
 }
 
 interface Session {
@@ -41,7 +47,12 @@ interface Session {
   refreshToken?: string;
   /** Giây UNIX hết hạn của id_token. */
   exp: number;
+  /** Có = phiên tên + mật khẩu: chỉ giữ cookie phiên do máy chủ cấp (KHÔNG giữ mật khẩu). */
+  cookie?: string;
 }
+
+const DEFAULT_COOKIE_PREFIX = "_neuagent_sso";
+const MAX_SESSION_SEC = 8 * 3600;
 
 interface Discovery {
   issuer: string;
@@ -76,7 +87,7 @@ export class Auth {
   }
 
   status(): AuthStatus {
-    return { enabled: true, signedIn: !!this.session, email: this.session?.email, name: this.session?.name };
+    return { enabled: true, signedIn: !!this.session, email: this.session?.email, name: this.session?.name, kind: this.session ? (this.session.cookie ? "password" : "microsoft") : undefined, passwordLogin: !!this.cfg.passwordLogin };
   }
   onChange(cb: (s: AuthStatus) => void): () => void {
     this.listeners.add(cb);
@@ -128,7 +139,9 @@ export class Auth {
     try {
       const raw = await this.deps.storage.load();
       const s = raw ? (JSON.parse(raw) as Session) : null;
-      if (s && typeof s.idToken === "string" && typeof s.email === "string" && emailAllowed(s.email, this.cfg.domains)) {
+      if (s?.cookie && typeof s.cookie === "string" && typeof s.email === "string" && s.exp > this.now() / 1000 && this.cfg.passwordLogin) {
+        this.session = s; // phiên tên + mật khẩu còn hạn
+      } else if (s && !s.cookie && typeof s.idToken === "string" && typeof s.email === "string" && emailAllowed(s.email, this.cfg.domains)) {
         this.session = s;
         if (s.exp - this.now() / 1000 < REFRESH_MARGIN && !(await this.refresh())) this.session = null;
       }
@@ -220,12 +233,66 @@ export class Auth {
 
   /** Token hiện có nếu còn hạn (không làm mới, không chờ): dùng cho việc nền như gửi số liệu chẩn đoán. */
   peekBearer(): string | null {
-    return this.session && this.session.exp - this.now() / 1000 > 30 ? this.session.idToken : null;
+    return this.session && !this.session.cookie && this.session.exp - this.now() / 1000 > 30 ? this.session.idToken : null;
+  }
+
+  /** Tiêu đề đăng nhập đang dùng, không chờ/không làm mới (việc nền): Bearer (Microsoft) hoặc Cookie (tên + mật khẩu). */
+  peekHeaders(): Record<string, string> {
+    const s = this.session;
+    if (!s || s.exp - this.now() / 1000 <= 30) return {};
+    return s.cookie ? { Cookie: s.cookie } : { Authorization: "Bearer " + s.idToken };
+  }
+
+  /** Tiêu đề đăng nhập còn hạn để gọi máy chủ; Microsoft thì tự làm mới. null nếu chưa/không còn đăng nhập. */
+  async getHeaders(): Promise<Record<string, string> | null> {
+    if (this.session?.cookie) {
+      if (this.session.exp - this.now() / 1000 <= 30) {
+        await this.logout(); // hết hạn phiên máy chủ (8 giờ): phải nhập lại mật khẩu
+        return null;
+      }
+      return { Cookie: this.session.cookie };
+    }
+    const t = await this.getBearer();
+    return t ? { Authorization: "Bearer " + t } : null;
+  }
+
+  /**
+   * Đăng nhập bằng tên + mật khẩu: gửi form MỘT lần tới máy chủ (HTTPS), nhận cookie phiên rồi bỏ mật khẩu.
+   * Máy chủ trả 302 + Set-Cookie khi đúng; sai thì trả lại trang đăng nhập (không cấp cookie).
+   */
+  async loginPassword(username: string, password: string): Promise<AuthStatus> {
+    const pl = this.cfg.passwordLogin;
+    if (!pl) throw new AuthError("Máy chủ không bật đăng nhập bằng tên + mật khẩu.");
+    // eslint-disable-next-line no-control-regex
+    if (!/^[A-Za-z0-9._@+-]{1,64}$/.test(username) || password.length < 1 || password.length > 200 || /[\u0000-\u001f]/.test(password)) throw new AuthError("Tên hoặc mật khẩu không hợp lệ.");
+    const u = new URL(pl.signInUrl);
+    if (u.protocol !== "https:" && !(this.cfg.allowInsecureIssuer && /^(127\.0\.0\.1|localhost)$/.test(u.hostname))) throw new AuthError("Địa chỉ đăng nhập phải là https://");
+    const r = await this.deps.fetch(u, { method: "POST", redirect: "manual", headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "text/html" }, body: new URLSearchParams({ username, password, rd: "/" }).toString() });
+    const prefix = pl.cookiePrefix ?? DEFAULT_COOKIE_PREFIX;
+    const setCookies = (r.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie?.() ?? [];
+    const jar: string[] = [];
+    let maxAge = MAX_SESSION_SEC;
+    for (const c of setCookies) {
+      const [pair, ...attrs] = c.split(";").map((x) => x.trim());
+      const eq = pair.indexOf("=");
+      const name = pair.slice(0, eq);
+      const value = pair.slice(eq + 1);
+      if (!name.startsWith(prefix) || !value) continue; // bỏ cookie rỗng (xoá) và cookie không phải của phiên đăng nhập
+      jar.push(`${name}=${value}`);
+      const ma = attrs.find((a) => /^max-age=/i.test(a));
+      if (ma && Number(ma.split("=")[1]) > 0) maxAge = Math.min(maxAge, Number(ma.split("=")[1]));
+    }
+    if (r.status === 429) throw new AuthError("Thử quá nhiều lần. Hãy đợi một phút rồi thử lại.");
+    if (![302, 303].includes(r.status) || !jar.length) throw new AuthError("Tên hoặc mật khẩu không đúng.");
+    this.session = { email: username, idToken: "", cookie: jar.join("; "), exp: Math.floor(this.now() / 1000) + maxAge };
+    await this.persist();
+    this.emit();
+    return this.status();
   }
 
   /** id_token còn hạn để gửi dạng Bearer; tự làm mới. null nếu chưa/không còn đăng nhập. */
   async getBearer(): Promise<string | null> {
-    if (!this.session) return null;
+    if (!this.session || this.session.cookie) return null;
     if (this.session.exp - this.now() / 1000 < REFRESH_MARGIN) {
       if (!(await this.refresh())) {
         await this.logout();

@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { AUTH_METHODS, authBlocks, CSP, IPC_METHODS, IPC_VALIDATORS, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "../src/security";
+import { AUTH_METHODS, authArgsOk, authBlocks, CSP, IPC_METHODS, IPC_VALIDATORS, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "../src/security";
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "neu-sec-")));
 const root = path.join(tmp, "renderer");
@@ -223,8 +223,25 @@ describe("cổng đăng nhập SSO", () => {
     expect(authBlocks(true, true)).toBe(false);
     expect(authBlocks(false, false)).toBe(false);
   });
-  it("kênh đăng nhập chỉ có đúng ba lệnh, và không trùng lệnh nghiệp vụ", () => {
-    expect([...AUTH_METHODS].sort()).toEqual(["login", "logout", "status"]);
+  it("kênh đăng nhập chỉ có đúng năm lệnh, và không trùng lệnh nghiệp vụ", () => {
+    expect([...AUTH_METHODS].sort()).toEqual(["login", "loginPassword", "logout", "remember", "status"]);
     for (const m of AUTH_METHODS) expect(IPC_METHODS.has(m)).toBe(false);
+  });
+});
+
+describe("tham số kênh đăng nhập", () => {
+  it("loginPassword chỉ nhận {username, password} hợp lệ; các lệnh khác không có tham số", () => {
+    expect(authArgsOk("loginPassword", { username: "khach01", password: "mat-khau-dung-123" })).toBe(true);
+    expect(authArgsOk("loginPassword", { username: "a@neu.edu.vn", password: "x" })).toBe(true);
+    for (const bad of [undefined, null, "x", { username: "a b", password: "x" }, { username: "khach01" }, { username: "khach01", password: "" }, { username: "khach01", password: "x".repeat(201) }, { username: "khach01", password: "a\nb" }, { username: "khach01", password: "x", extra: 1 }, { username: 5, password: "x" }]) expect(authArgsOk("loginPassword", bad), JSON.stringify(bad)).toBe(false);
+    expect(authArgsOk("status", undefined)).toBe(true);
+    expect(authArgsOk("status", { x: 1 })).toBe(false);
+    expect(authArgsOk("login", "x")).toBe(false);
+  });
+  it("remember chỉ nhận đúng {value: boolean}", () => {
+    expect(AUTH_METHODS.has("remember")).toBe(true);
+    expect(authArgsOk("remember", { value: true })).toBe(true);
+    expect(authArgsOk("remember", { value: false })).toBe(true);
+    for (const bad of [undefined, null, true, { value: "true" }, { value: 1 }, {}, { value: true, extra: 1 }, { val: true }]) expect(authArgsOk("remember", bad), JSON.stringify(bad)).toBe(false);
   });
 });

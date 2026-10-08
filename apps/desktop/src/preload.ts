@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld("neu", {
   auth: {
     status: () => ipcRenderer.invoke("neu:auth", "status"),
     login: () => ipcRenderer.invoke("neu:auth", "login"),
+    loginPassword: (username: string, password: string) => ipcRenderer.invoke("neu:auth", "loginPassword", { username, password }),
+    setRemember: (value: boolean) => ipcRenderer.invoke("neu:auth", "remember", { value }),
     logout: () => ipcRenderer.invoke("neu:auth", "logout"),
     onChange: (cb: (s: unknown) => void) => {
       const h = (_e: unknown, s: unknown) => cb(s);

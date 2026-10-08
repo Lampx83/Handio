@@ -17,11 +17,16 @@ const macCert = !!(env.CSC_LINK || env.CSC_NAME);
 const notaryKey = !!(env.APPLE_API_KEY && env.APPLE_API_KEY_ID && env.APPLE_API_ISSUER);
 const notaryId = !!(env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID);
 const macSign = macCert && (notaryKey || notaryId);
+// Không có Developer ID: nếu máy dựng có chứng chỉ cố định "NEU Agent Local Signing" (xem docs/RELEASE-SIGNING.md) thì ký bằng nó,
+// để danh tính ứng dụng không đổi giữa các bản và Keychain không hỏi lại quyền sau mỗi lần cập nhật.
+const LOCAL_ID = env.NEU_LOCAL_SIGN_NAME || "NEU Agent Local Signing";
+const localSign = process.platform === "darwin" && !macCert && spawnSync("security", ["find-identity", "-p", "codesigning"], { encoding: "utf8" }).stdout?.includes(`"${LOCAL_ID}"`);
 const winCert = !!(env.WIN_CSC_LINK || (env.CSC_LINK && wantWin && !wantMac));
 const onWin = process.platform === "win32";
 
 console.log("== Kế hoạch phát hành ==");
-if (wantMac) console.log(macSign ? "macOS: KÝ + NOTARIZE (Hardened Runtime) → tải về chạy ngay" : `macOS: KHÔNG ký (${macCert ? "có chứng chỉ nhưng thiếu khoá notarize" : "chưa có chứng chỉ Developer ID"}) → macOS sẽ cảnh báo lần đầu mở`);
+if (wantMac && !macSign && localSign) console.log(`macOS: ký bằng chứng chỉ cố định "${LOCAL_ID}" (Keychain không hỏi lại sau mỗi bản; Gatekeeper vẫn cảnh báo lần đầu mở)`);
+if (wantMac && !(localSign && !macSign)) console.log(macSign ? "macOS: KÝ + NOTARIZE (Hardened Runtime) → tải về chạy ngay" : `macOS: KHÔNG ký (${macCert ? "có chứng chỉ nhưng thiếu khoá notarize" : "chưa có chứng chỉ Developer ID"}) → macOS sẽ cảnh báo lần đầu mở`);
 if (wantWin) console.log(winCert && onWin ? "Windows: KÝ SỐ (Authenticode)" : winCert ? "Windows: có chứng chỉ nhưng đang ở máy không phải Windows → KHÔNG ký (hãy dựng bản Windows trên Windows/GitHub Actions)" : "Windows: KHÔNG ký → SmartScreen hiện “Nhà phát hành không xác định”");
 if (env.NEU_REQUIRE_SIGNED === "1" && ((wantMac && !macSign) || (wantWin && !(winCert && onWin)))) {
   console.error("NEU_REQUIRE_SIGNED=1 nhưng thiếu điều kiện ký ở trên. Dừng (không phát hành bản không ký).");
@@ -41,7 +46,7 @@ const macArgs = ["--mac", ...(macSign
 const winArgs = ["--win", ...(winCert && onWin ? [] : ["-c.win.signAndEditExecutable=false"])];
 const cliArgs = [...(wantMac ? macArgs : []), ...(wantWin ? winArgs : [])];
 // electron-builder tự bỏ qua chứng chỉ Windows khi không có WIN_CSC_*; tránh dùng nhầm chứng chỉ macOS (CSC_LINK) để ký .exe
-const childEnv = wantWin && !winCert ? { CSC_LINK: wantMac ? env.CSC_LINK : "" } : {};
+const childEnv = { ...(wantWin && !winCert ? { CSC_LINK: wantMac ? env.CSC_LINK : "" } : {}), ...(localSign && !macSign ? { NEU_LOCAL_SIGN_NAME: LOCAL_ID } : {}) };
 run("npx", [...builder, ...cliArgs], { env: childEnv });
 run("node", ["scripts/verify-signature.mjs"]);
 run("node", ["scripts/release-info.mjs"]);

@@ -6,7 +6,7 @@ import { buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, pars
 import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { Updater, UPDATE_METHODS } from "./updater";
-import { APP_ORIGIN, AUTH_METHODS, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
+import { APP_ORIGIN, AUTH_METHODS, authArgsOk, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
 
 // Hằng số lúc build (xem build.mjs): bản phát hành KHÔNG chứa mã kiểm thử/giả lập và KHÔNG chứa key.
 declare const __SMOKE__: boolean;
@@ -23,6 +23,8 @@ const SMOKE = __SMOKE__ ? process.env.NEU_SMOKE_DIR || "" : "";
 // Đăng nhập SSO bắt buộc ở bản phát hành. Riêng chế độ kiểm thử đầu-cuối (SMOKE, không có trong bản phát hành) bỏ qua.
 const AUTH_CFG: AuthConfig | null = SMOKE ? null : __AUTH__;
 let auth: Auth | null = null;
+let remember = false; // có lưu phiên đăng nhập trên máy không (mặc định không; xem codec())
+let setRemember: (v: boolean) => Promise<void> = async () => undefined;
 const BUILTIN = __BUILTIN_KEY__ ? { key: __BUILTIN_KEY__, hosts: [new URL(__DEFAULT_BASE_URL__).host, "192.0.2.11:8037"] } : undefined;
 const RENDERER_ROOT = path.join(__dirname, "renderer");
 
@@ -74,9 +76,15 @@ async function saveFolder(p: Profile, dir: string): Promise<void> {
   await fs.writeFile(cfgFile(), JSON.stringify(f, null, 2), { mode: 0o600 });
 }
 
-function codec(): KeyCodec | undefined {
-  if (!safeStorage.isEncryptionAvailable()) return undefined;
-  return { encrypt: (s) => safeStorage.encryptString(s).toString("base64"), decrypt: (s) => safeStorage.decryptString(Buffer.from(s, "base64")) };
+/** Bộ mã hoá bằng Keychain/kho khoá của hệ điều hành. LƯỜI: chỉ chạm vào Keychain khi thật sự mã hoá/giải mã (macOS hỏi quyền mỗi lần chạm). */
+function codec(): KeyCodec {
+  const ok = () => {
+    if (!safeStorage.isEncryptionAvailable()) throw new Error("Không có kho khoá của hệ điều hành.");
+  };
+  return {
+    encrypt: (s) => (ok(), safeStorage.encryptString(s).toString("base64")),
+    decrypt: (s) => (ok(), safeStorage.decryptString(Buffer.from(s, "base64"))),
+  };
 }
 
 async function seed(profile: Profile, dir: string): Promise<void> {
@@ -277,11 +285,11 @@ async function buildController(profile: Profile): Promise<LocalController> {
     env,
     profile,
     policy,
-    defaults: { baseUrl: __DEFAULT_BASE_URL__ },
+    defaults: { baseUrl: __DEFAULT_BASE_URL__, mode: SMOKE ? "default" : "auto" },
     builtinKey: BUILTIN,
-    authToken: auth ? () => auth!.getBearer() : undefined,
+    authHeaders: auth ? () => auth!.getHeaders() : undefined,
     // tự chẩn đoán KHÔNG chứa nội dung (docs/DIAGNOSTICS.md): chỉ gửi khi đã đăng nhập, tới đúng máy chủ của ứng dụng
-    diagnostics: { endpoint: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/diag"), headers: (): Record<string, string> => { const t = auth?.peekBearer(); return t ? { Authorization: "Bearer " + t } : {}; }, enabled: () => !!auth && !SMOKE, version: app.getVersion(), platform: process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : "linux" },
+    diagnostics: { endpoint: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/diag"), headers: (): Record<string, string> => auth?.peekHeaders() ?? {}, enabled: () => !!auth && !SMOKE, version: app.getVersion(), platform: process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : "linux" },
     authHosts: [new URL(__DEFAULT_BASE_URL__).host],
     realFs: true,
     projects: host,
@@ -290,7 +298,7 @@ async function buildController(profile: Profile): Promise<LocalController> {
     store: new JsonSettingsStore(path.join(userData(), "settings.json"), codec(), { persistKeyWithoutCodec: false }),
     trust: new JsonTrustStore(path.join(userData(), "trusted-folders.json")),
     presets: [
-      { label: "Máy chủ chính (HTTPS)", baseUrl: __DEFAULT_BASE_URL__, model: "qwen3.5-35b-a3b-int4", needsKey: !BUILTIN },
+      { label: "Máy chủ chính (HTTPS)", baseUrl: __DEFAULT_BASE_URL__, model: "qwen3.5-35b-a3b-int4", needsKey: !BUILTIN && !auth }, // đã đăng nhập SSO thì máy chủ tự gắn key: người dùng không cần nhập
       { label: "Mạng nội bộ (HTTP, cần bật “Cho phép HTTP”)", baseUrl: LAN_GATEWAY, model: "qwen3.5-35b-a3b-int4", needsKey: true },
       ...(mockUrl ? [{ label: "Demo giả lập (không cần key)", baseUrl: mockUrl, model: "mock-agent", needsKey: false }] : []),
     ],
@@ -369,16 +377,24 @@ const limiter = new RateLimiter(200, 1000);
 function registerIpc(): void {
   const trusted = (e: Electron.IpcMainInvokeEvent) => !!win && e.sender === win.webContents && e.senderFrame === win.webContents.mainFrame && isTrustedSenderUrl(e.senderFrame?.url);
   // kênh đăng nhập: trạng thái / đăng nhập (mở trình duyệt hệ thống) / đăng xuất
-  ipcMain.handle("neu:auth", async (e, method: unknown) => {
+  ipcMain.handle("neu:auth", async (e, method: unknown, arg: unknown) => {
     if (!trusted(e)) throw new Error("Nguồn không hợp lệ");
-    if (typeof method !== "string" || !AUTH_METHODS.has(method)) throw new Error("Yêu cầu không hợp lệ");
+    if (typeof method !== "string" || !AUTH_METHODS.has(method) || !authArgsOk(method, arg)) throw new Error("Yêu cầu không hợp lệ");
     if (!auth) return { enabled: false, signedIn: true };
-    if (method === "status") return auth.status();
+    if (method === "status") return { ...auth.status(), remember };
+    if (method === "remember") {
+      await setRemember((arg as { value: boolean }).value);
+      return { ...auth.status(), remember };
+    }
     if (method === "logout") {
       await auth.logout();
       return auth.status();
     }
     try {
+      if (method === "loginPassword") {
+        const a = arg as { username: string; password: string };
+        return await auth.loginPassword(a.username, a.password);
+      }
       return await auth.login();
     } catch (err) {
       return { ...auth.status(), error: err instanceof Error ? err.message.slice(0, 300) : "Đăng nhập không thành công." };
@@ -512,7 +528,16 @@ app.whenReady().then(async () => {
   if ((__SMOKE__ && SMOKE) || (__DEV__ && process.env.NEU_MOCK)) await startMock();
   if (AUTH_CFG) {
     const file = path.join(userData(), "auth.json");
+    const prefsFile = path.join(userData(), "auth-prefs.json");
     const c = codec();
+    // Mặc định KHÔNG lưu phiên đăng nhập trên máy (không chạm Keychain, không bị hỏi quyền). Chỉ khi người dùng tích “Ghi nhớ” ở màn hình đăng nhập.
+    remember = await fs.readFile(prefsFile, "utf8").then((t) => JSON.parse(t).remember === true).catch(() => false);
+    setRemember = async (v) => {
+      remember = v;
+      await fs.mkdir(userData(), { recursive: true });
+      await fs.writeFile(prefsFile, JSON.stringify({ remember: v }), { mode: 0o600 });
+      if (!v) await fs.rm(file, { force: true });
+    };
     auth = new Auth(AUTH_CFG, {
       fetch: (...a) => fetch(...a),
       // chỉ mở đúng trang đăng nhập của nhà cấp đã cấu hình
@@ -521,20 +546,31 @@ app.whenReady().then(async () => {
         if (u.protocol !== "https:" || u.host !== new URL(AUTH_CFG.issuer).host) throw new Error("Địa chỉ đăng nhập không hợp lệ.");
         await shell.openExternal(u.href);
       },
-      // phiên đăng nhập (kể cả refresh token) chỉ lưu khi có kho mã hoá của hệ điều hành; không có thì chỉ giữ trong bộ nhớ
+      // phiên đăng nhập (kể cả refresh token) chỉ lưu khi người dùng chọn “Ghi nhớ” VÀ có kho mã hoá của hệ điều hành; không thì chỉ giữ trong bộ nhớ
       storage: {
-        load: async () => (c ? c.decrypt(await fs.readFile(file, "utf8")) : null),
+        load: async () => {
+          if (!remember) {
+            await fs.rm(file, { force: true });
+            return null;
+          }
+          return c.decrypt(await fs.readFile(file, "utf8"));
+        },
         save: async (d) => {
-          if (!c) return;
           if (d === null) await fs.rm(file, { force: true });
-          else {
+          else if (remember) {
             await fs.mkdir(userData(), { recursive: true });
             await fs.writeFile(file, c.encrypt(d), { mode: 0o600 });
           }
         },
       },
     });
-    auth.onChange((s) => win?.webContents.send("neu:auth-changed", s));
+    // vào/ra đăng nhập → tải lại cửa sổ từ tiến trình chính (renderer không tự reload được vì mọi điều hướng đều bị chặn)
+    let lastSigned: boolean | undefined;
+    auth.onChange((s) => {
+      win?.webContents.send("neu:auth-changed", s);
+      if (lastSigned !== undefined && s.signedIn !== lastSigned) win?.webContents.reload();
+      lastSigned = s.signedIn;
+    });
     await auth.init();
   }
   registerIpc();

@@ -14,7 +14,7 @@ const tenant = process.env.NEU_AUTH_TENANT || "00000000-0000-0000-0000-000000000
 const authClient = process.env.NEU_AUTH_CLIENT_ID || "00000000-0000-0000-0000-000000000002";
 const domains = (process.env.NEU_AUTH_DOMAINS || "neu.edu.vn,st.neu.edu.vn").split(",").map((d) => d.trim()).filter(Boolean);
 if (!/^[0-9a-f-]{36}$/i.test(tenant) || !/^[0-9a-f-]{36}$/i.test(authClient)) throw new Error("NEU_AUTH_TENANT / NEU_AUTH_CLIENT_ID phải là GUID.");
-const authCfg = { issuer: `https://login.microsoftonline.com/${tenant}/v2.0`, clientId: authClient, domains };
+const authCfg = { issuer: `https://login.microsoftonline.com/${tenant}/v2.0`, clientId: authClient, domains, passwordLogin: { signInUrl: baseUrl.replace(/\/vllm\/v1\/?$/, "/oauth2/sign_in") } };
 // Bản dev/thử nghiệm: tắt đăng nhập trừ khi đặt NEU_AUTH_FORCE=1. Bản phát hành: luôn bật (trừ khi cố ý NEU_ALLOW_NO_AUTH=1).
 const auth = release ? (process.env.NEU_ALLOW_NO_AUTH === "1" ? null : authCfg) : process.env.NEU_AUTH_FORCE === "1" ? authCfg : null;
 

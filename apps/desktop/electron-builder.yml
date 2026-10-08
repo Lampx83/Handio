@@ -26,6 +26,8 @@ electronFuses:
   loadBrowserProcessSpecificV8Snapshot: false
   grantFileProtocolExtraPrivileges: false
 
+afterSign: scripts/after-sign.cjs
+
 mac:
   category: public.app-category.education
   icon: build/icon.png

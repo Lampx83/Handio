@@ -33,8 +33,13 @@ export class JsonSettingsStore implements SettingsStore {
     const { key, ...rest } = s;
     const out: Record<string, unknown> = { ...rest };
     if (key) {
-      if (this.codec) out.keyEnc = this.codec.encrypt(key);
-      else if (this.opts.persistKeyWithoutCodec !== false) out.key = key;
+      if (this.codec) {
+        try {
+          out.keyEnc = this.codec.encrypt(key);
+        } catch {
+          /* kho khoá của hệ điều hành không dùng được: KHÔNG ghi key ra đĩa (key chỉ sống trong phiên) */
+        }
+      } else if (this.opts.persistKeyWithoutCodec !== false) out.key = key;
     }
     await fs.mkdir(path.dirname(this.file), { recursive: true });
     await fs.writeFile(this.file, JSON.stringify(out, null, 2), { mode: 0o600 });

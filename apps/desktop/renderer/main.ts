@@ -8,11 +8,14 @@ interface AuthState {
   signedIn: boolean;
   email?: string;
   name?: string;
+  kind?: "microsoft" | "password";
   error?: string;
+  passwordLogin?: boolean;
+  remember?: boolean;
 }
 interface Bridge {
   platform: string;
-  auth: { status(): Promise<AuthState>; login(): Promise<AuthState>; logout(): Promise<AuthState>; onChange(cb: (s: AuthState) => void): () => void };
+  auth: { status(): Promise<AuthState>; login(): Promise<AuthState>; loginPassword(u: string, p: string): Promise<AuthState>; setRemember(value: boolean): Promise<AuthState>; logout(): Promise<AuthState>; onChange(cb: (s: AuthState) => void): () => void };
   update: UpdateBridge;
   call(profile: string, method: string, args: unknown[]): Promise<any>;
   onEvent(cb: (profile: string, e: unknown) => void): () => void;
@@ -103,7 +106,7 @@ function renderLogin(root: HTMLElement, st: AuthState): void {
     btn.textContent = "Đang chờ trên trình duyệt…";
     err.textContent = "";
     const r = await bridge.auth.login().catch((e: Error) => ({ enabled: true, signedIn: false, error: e.message } as AuthState));
-    if (r.signedIn) return void location.reload();
+    if (r.signedIn) return; // tiến trình chính tải lại cửa sổ
     btn.disabled = false;
     btn.textContent = "Đăng nhập Microsoft";
     err.textContent = r.error ?? "";
@@ -115,7 +118,53 @@ function renderLogin(root: HTMLElement, st: AuthState): void {
   const note = document.createElement("div");
   note.className = "login-note";
   note.textContent = "@neu.edu.vn · @st.neu.edu.vn";
-  card.append(title, btn, err, note);
+  // mặc định KHÔNG lưu phiên trên máy (macOS sẽ không hỏi quyền Keychain); tích chọn để khỏi đăng nhập lại mỗi lần mở
+  const rem = document.createElement("input");
+  rem.type = "checkbox";
+  rem.id = "remember";
+  rem.checked = !!st.remember;
+  rem.addEventListener("change", () => void bridge.auth.setRemember(rem.checked));
+  const remLabel = document.createElement("label");
+  remLabel.className = "login-note login-remember";
+  remLabel.htmlFor = "remember";
+  remLabel.append(rem, " Ghi nhớ đăng nhập trên máy này");
+  remLabel.title = "macOS sẽ hỏi quyền dùng Keychain (một lần mỗi bản cập nhật)";
+  card.append(title, btn, note, remLabel);
+  if (st.passwordLogin) {
+    // đăng nhập bằng tên + mật khẩu (tài khoản do quản trị tạo): gửi một lần, ứng dụng chỉ giữ phiên, không giữ mật khẩu
+    const mk = (type: string, ph: string, ac: string) => {
+      const i = document.createElement("input");
+      i.type = type;
+      i.placeholder = ph;
+      i.setAttribute("autocomplete", ac);
+      i.maxLength = type === "password" ? 200 : 64;
+      i.className = "login-in";
+      return i;
+    };
+    const user = mk("text", "Tên đăng nhập", "username");
+    const pass = mk("password", "Mật khẩu", "current-password");
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "btn lg";
+    go.textContent = "Đăng nhập";
+    const submit = async () => {
+      if (!user.value || !pass.value) return;
+      go.disabled = true;
+      err.textContent = "";
+      const r = await bridge.auth.loginPassword(user.value.trim(), pass.value).catch((e: Error) => ({ enabled: true, signedIn: false, error: e.message } as AuthState));
+      pass.value = "";
+      if (r.signedIn) return; // tiến trình chính tải lại cửa sổ
+      go.disabled = false;
+      err.textContent = r.error ?? "";
+    };
+    go.addEventListener("click", () => void submit());
+    for (const i of [user, pass]) i.addEventListener("keydown", (e) => e.key === "Enter" && void submit());
+    const or = document.createElement("div");
+    or.className = "login-or";
+    or.textContent = "hoặc";
+    card.append(or, user, pass, go);
+  }
+  card.append(err);
   const wrap = document.createElement("div");
   wrap.className = "login";
   wrap.append(card);
@@ -127,13 +176,10 @@ async function start(): Promise<void> {
   const root = document.getElementById("root")!;
   const st = await bridge.auth.status();
   if (st.enabled && !st.signedIn) return renderLogin(root, st);
-  bridge.auth.onChange((s) => {
-    if (s.enabled && !s.signedIn) location.reload(); // hết phiên: về màn hình đăng nhập
-  });
   mountShell(root, { work: new IpcController("work"), code: new IpcController("code"), design: new IpcController("design") }, {
     productName: "NEU Agent",
     macInset: bridge.platform === "darwin",
-    account: st.enabled && st.email ? { email: st.email, name: st.name, logout: () => void bridge.auth.logout().then(() => location.reload()) } : undefined,
+    account: st.enabled && st.email ? { email: st.email, name: st.name, kind: st.kind, logout: () => void bridge.auth.logout() } : undefined,
   });
   mountUpdateBanner(bridge.update);
 }
