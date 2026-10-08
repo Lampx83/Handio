@@ -34,7 +34,7 @@ LOOKS_SECRET = re.compile(r"^(sk|pk|ghp|gho|ghu|ghs|xox.|akia|eyj|bearer|key|tok
 FILE_EXT = re.compile(r"\.(xlsx?|docx?|pptx?|pdf|txt|csv|json|env|pem|key|py|js|ts|sh|zip)$", re.I)
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9.-]{1,190}$")
 CTRL_RE = re.compile(r"[\x00-\x1f\x7f]+")
-ADMIN_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(html|md|json)$")
+ADMIN_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(html|md|json|csv)$")
 DAY_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.jsonl$")
 
 
@@ -233,7 +233,7 @@ def read_admins(path):
         return set()
 
 
-CT = {"html": "text/html; charset=utf-8", "md": "text/markdown; charset=utf-8", "json": "application/json"}
+CT = {"html": "text/html; charset=utf-8", "md": "text/markdown; charset=utf-8", "json": "application/json", "csv": "text/csv; charset=utf-8"}
 
 
 class Handler(BaseHTTPRequestHandler):

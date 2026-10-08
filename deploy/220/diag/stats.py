@@ -26,7 +26,7 @@ import report as R
 TZ = R.TZ
 DAYS = 30            # số ngày trong biểu đồ
 HIST_DAYS = 90       # khớp thời hạn giữ dữ liệu của bộ thu
-TOP_USERS = 100
+TOP_USERS = 300
 DAILY_KEEP = 400
 SPARK_DAYS = 14
 OUTCOMES = ("ok", "interrupted", "error", "step_limit", "loop")
@@ -36,7 +36,6 @@ ERR_VI = {"not_found": "Không có file/thư mục", "outside_project": "Đườ
           "no_match": "Không tìm thấy đoạn cần sửa", "ambiguous": "Đoạn cần sửa không duy nhất", "wrong_type": "Nhầm file/thư mục", "sandbox": "Dùng thứ sandbox không có", "program": "Chương trình/test của người dùng lỗi (bình thường)",
           "timeout": "Quá thời gian", "unsupported": "Không hỗ trợ", "denied": "Bị từ chối quyền", "hook": "Bị hook chặn", "unknown_tool": "Công cụ không tồn tại", "bad_json": "Tham số không phải JSON", "internal": "Lỗi nội bộ", "other": "Khác", "unknown": "Chưa rõ (bản cũ)"}
 NOT_TOOL_FAULT = ("program", "denied")  # kết quả bình thường/ý người dùng, không tính là công cụ lỗi
-WD = ("T2", "T3", "T4", "T5", "T6", "T7", "CN")
 
 
 def vn_day(ts):
@@ -46,10 +45,18 @@ def vn_day(ts):
 # ---------------------------------------------------------------- nginx theo ngày (cộng dồn)
 def nginx_daily(rows):
     d = collections.defaultdict(lambda: {"req": 0, "chat": 0, "chat_ok": 0, "chat_5xx": 0, "pkg": 0, "update_check": 0, "diag": 0})
+    rts, chat_st, diag_st = collections.defaultdict(list), collections.defaultdict(collections.Counter), collections.defaultdict(collections.Counter)
     for r in rows:
-        x = d[vn_day(r["_ts"])]
+        day = vn_day(r["_ts"])
+        x = d[day]
         x["req"] += 1
         route, st = r.get("route"), r["status"]
+        if route == "vllm_chat":
+            chat_st[day][str(st)] += 1
+            if st == 200 and isinstance(r.get("rt"), (int, float)):
+                rts[day].append(r["rt"])
+        elif route == "diag":
+            diag_st[day][str(st)] += 1
         if route == "vllm_chat":
             x["chat"] += 1
             x["chat_ok"] += st == 200
@@ -60,6 +67,9 @@ def nginx_daily(rows):
             x["update_check"] += 1
         elif route == "diag":
             x["diag"] += 1
+    for day, x in d.items():
+        x["chat_p50"], x["chat_p95"] = (R.pct(rts[day], 50), R.pct(rts[day], 95)) if rts.get(day) else (None, None)
+        x["chat_st"], x["diag_st"] = dict(chat_st.get(day, {})), dict(diag_st.get(day, {}))
     return dict(d)
 
 
@@ -207,7 +217,7 @@ def compute(recs, daily, now, findings=None, release=None, quota=None):
             "ptok": pd["ptok"] if pd else 0, "ctok": pd["ctok"] if pd else 0,
             "tool_calls": pd["tool_calls"] if pd else 0, "tool_fails": pd["tool_fails"] if pd else 0,
             "signals": pd["signals"] if pd else 0, "llm_errors": pd["llm_errors"] if pd else 0,
-            "chat": ng.get("chat", 0), "chat_5xx": ng.get("chat_5xx", 0), "pkg": ng.get("pkg", 0), "update_check": ng.get("update_check", 0)})
+            "chat": ng.get("chat", 0), "chat_5xx": ng.get("chat_5xx", 0), "chat_p50": ng.get("chat_p50"), "chat_p95": ng.get("chat_p95"), "chat_st": ng.get("chat_st", {}), "diag_st": ng.get("diag_st", {}), "diag": ng.get("diag", 0), "pkg": ng.get("pkg", 0), "update_check": ng.get("update_check", 0)})
     spark_days = days[-SPARK_DAYS:]
     seg = {"new": 0, "active": 0, "dormant": 0}
     for u in U.values():
@@ -344,148 +354,56 @@ def insights(S):
     return out
 
 
-# ---------------------------------------------------------------- hiển thị
-CSS = R.CSS + """
-:root{--c1:#4a7bd0;--c2:#2f9e6f;--c3:#d69e2e;--c4:#d8554a;--c5:#8b6fd0;--c6:#2b9aa8;--ok:#2f855a;--bad:#c0362c}
-@media (prefers-color-scheme:dark){:root{--c1:#6b9bf2;--c2:#48c78e;--c3:#e3b341;--c4:#ff7b72;--c5:#a78bfa;--c6:#4fc3d0;--ok:#48c78e;--bad:#ff7b72}}
-html{scroll-behavior:smooth}main{max-width:1100px}a{color:var(--lo)}
-nav.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 -16px 14px;padding:8px 16px;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
-nav.top b{margin-right:6px}nav.top a{text-decoration:none;font-size:14px}nav.top a:hover{text-decoration:underline}
-h2{scroll-margin-top:52px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:34px}h2 small{font-weight:400;color:var(--mut);font-size:13px;margin-left:8px}
-.pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px;background:var(--card);border:1px solid var(--line)}.pill.good{color:var(--ok)}.pill.bad{color:var(--bad)}.pill.warn{color:var(--c3)}
-.hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:12px 0}
-.hero .k{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;position:relative}
-.hero .k span{color:var(--mut);font-size:12.5px;display:block}.hero .k b{font-size:28px;line-height:1.15;display:block}.hero .k i{font-style:normal;font-size:12px;color:var(--mut)}
-.hero .k svg{position:absolute;right:10px;bottom:10px;width:84px;height:26px}
-.up{color:var(--ok)}.dn{color:var(--bad)}.up.inv{color:var(--bad)}.dn.inv{color:var(--ok)}
-.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}.mini div{border:1px solid var(--line);border-radius:8px;padding:6px 10px}.mini b{display:block;font-size:17px}.mini span{font-size:12px;color:var(--mut)}
-.ins{list-style:none;margin:8px 0;padding:0}.ins li{padding:5px 10px;margin:4px 0;border-left:4px solid var(--lo);background:var(--card);border-radius:0 6px 6px 0}
-.ins li.good{border-left-color:var(--ok)}.ins li.warn{border-left-color:var(--c3)}.ins li.bad{border-left-color:var(--bad)}
-.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
-@media (max-width:520px){.grid{grid-template-columns:1fr}}
-.card{min-width:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.card h3{margin:0 0 6px;font-size:14px}.card .sub{color:var(--mut);font-size:12px;margin:-2px 0 4px}
-.ch{width:100%;height:auto;display:block}.ch rect.s1,.ch rect.hm{fill:var(--c1)}.ch rect.s2{fill:var(--c2)}.ch rect.s3{fill:var(--c3)}.ch rect.s4{fill:var(--c4)}.ch rect.s5{fill:var(--c5)}.ch rect.s6{fill:var(--c6)}
-.ch path.ln{fill:none;stroke-width:1.6;stroke-linejoin:round}.ch path.s1{stroke:var(--c1)}.ch path.s2{stroke:var(--c2)}.ch path.s3{stroke:var(--c3)}.ch path.s4{stroke:var(--c4)}
-.ch circle.s1{fill:var(--c1)}.ch circle.s2{fill:var(--c2)}.ch circle.s3{fill:var(--c3)}.ch circle.s4{fill:var(--c4)}.ch line{stroke:var(--line)}.ch text{fill:var(--mut);font-size:9px}
-.lg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12px;color:var(--mut);margin:4px 0 0}.lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-.s1b{background:var(--c1)}.s2b{background:var(--c2)}.s3b{background:var(--c3)}.s4b{background:var(--c4)}.s5b{background:var(--c5)}.s6b{background:var(--c6)}
-.hb{display:grid;grid-template-columns:minmax(70px,32%) 1fr auto;gap:4px 8px;align-items:center;font-size:13.5px;margin-bottom:6px}.hb .t{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.hb .t i{display:block;height:100%;background:var(--c1);border-radius:5px}
-.hb .n{color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap}.hb .l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hb.bad .t i{background:var(--c4)}.hb.g .t i{background:var(--c2)}
-.seg{display:flex;height:16px;border-radius:8px;overflow:hidden;margin:6px 0;background:var(--line)}.seg i{display:block;height:100%}
-.fn{display:grid;grid-template-columns:minmax(120px,38%) 1fr auto;gap:5px 8px;align-items:center;font-size:13.5px}.fn .t{height:20px;background:var(--line);border-radius:4px;overflow:hidden}.fn .t i{display:block;height:100%;background:var(--c1);opacity:.85}.fn .n{color:var(--mut);white-space:nowrap}
-.badge{display:inline-block;padding:0 8px;border-radius:99px;font-size:12px;border:1px solid var(--line)}.badge.bn{color:var(--c1)}.badge.ba{color:var(--ok)}.badge.bd{color:var(--mut)}
-table.u td svg{width:70px;height:18px;display:block}table.u{font-size:13px}table.u td,table.u th{white-space:nowrap}.num{text-align:right;font-variant-numeric:tabular-nums}
-small,.note{color:var(--mut);font-size:12.5px}code{font-size:13px}.ok{color:var(--ok)}.bad{color:var(--bad)}"""
+def pages_reports(reps):
+    import pages as P  # noqa: PLC0415
+    return P.reports_table(reps)
 
 
-def _e(x):
-    return html.escape(str(x))
+# ---------------------------------------------------------------- hiển thị (biểu đồ/thành phần dùng chung ở charts.py)
+from charts import CSS, WD, _e, bars, delta, heatmap, hbars, hero, legend, lines, spark, stack, strip, table  # noqa: E402,F401
 
 
-def spark(vals, cls="s1"):
-    n, mx = len(vals), max(vals) if vals else 0
-    if n < 2 or mx == 0:
-        return '<svg viewBox="0 0 84 26" aria-hidden="true"><line x1="0" y1="24" x2="84" y2="24" stroke="var(--line)"/></svg>'
-    pts = [(i * 84 / (n - 1), 24 - 22 * v / mx) for i, v in enumerate(vals)]
-    return '<svg viewBox="0 0 84 26" class="ch" aria-hidden="true"><path class="ln %s" d="M%s"/><circle class="%s" cx="%.1f" cy="%.1f" r="2"/></svg>' % (cls, " L".join("%.1f,%.1f" % p for p in pts), cls, pts[-1][0], pts[-1][1])
+def cohort_table(U, t, weeks=8):
+    """Giữ chân theo tuần: mỗi hàng là nhóm người dùng lần đầu xuất hiện trong một tuần (thứ Hai đầu tuần, giờ VN); các cột là % còn hoạt động ở tuần +0, +1, …"""
+    def wk(ts_or_day):
+        d = datetime.date.fromisoformat(ts_or_day) if isinstance(ts_or_day, str) else datetime.datetime.fromtimestamp(ts_or_day, TZ).date()
+        return (d - datetime.timedelta(days=d.weekday())).toordinal() // 7
+    cur = wk(t)
+    coh = collections.defaultdict(list)
+    for uid, u in U.items():
+        coh[wk(u["first"])].append({wk(d) for d in u["days"]})
+    out = []
+    for w in range(cur - weeks + 1, cur + 1):
+        users = coh.get(w, [])
+        if not users:
+            continue
+        out.append({"week": (datetime.date.fromordinal(w * 7 + 1 + 6) - datetime.timedelta(days=6)).isoformat(), "n": len(users),
+                    "ret": [round(100.0 * sum(1 for act in users if (w + k) in act) / len(users), 1) for k in range(0, cur - w + 1)]})
+    return out
 
 
-def strip(vals):
-    n, mx = len(vals), max(vals) if vals else 0
-    if not mx:
-        return '<svg viewBox="0 0 70 18" aria-hidden="true"></svg>'
-    bw = 70 / n
-    return '<svg viewBox="0 0 70 18" class="ch" aria-hidden="true">' + "".join('<rect class="s1" x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="1"><title>%d lượt</title></rect>' % (i * bw + .5, 17 - 16 * v / mx, bw - 1, 16 * v / mx + .5, v) for i, v in enumerate(vals) if v) + "</svg>"
+def system_info(diag_dir, recs, out, t):
+    """Độ mới và dung lượng của dữ liệu (để quản trị biết hệ thống thu dữ liệu có đang chạy)."""
+    newest = max((r["ts_srv"] for r in recs), default=None)
+    files, size, oldest = 0, 0, None
+    try:
+        for p in glob.glob(os.path.join(diag_dir, "????-??-??.jsonl")):
+            files += 1
+            size += os.path.getsize(p)
+            d = os.path.basename(p)[:10]
+            oldest = d if oldest is None or d < oldest else oldest
+    except OSError:
+        pass
+    rsize = 0
+    try:
+        rsize = sum(os.path.getsize(os.path.join(out, f)) for f in os.listdir(out))
+    except OSError:
+        pass
+    return {"newest_event_age_s": None if newest is None else int(t - newest), "diag_files": files, "diag_bytes": size, "diag_oldest": oldest, "reports_bytes": rsize}
 
 
-def _frame(w, h, mx, labels, trim, unit=""):
-    return '<text x="0" y="%d">%s</text><text x="%d" y="%d" text-anchor="end">%s</text><text x="%d" y="9" text-anchor="end">max %.3g%s</text>' % (h + 12, _e(labels[0][trim:]), w, h + 12, _e(labels[-1][trim:]), w, mx, unit)
-
-
-def stack(series, labels, h=70, trim=5, unit=""):
-    """Cột chồng: series = [(tên, giá trị[], lớp màu)]."""
-    n, w = len(labels), 300
-    tot = [sum(s[1][i] or 0 for s in series) for i in range(n)]
-    mx = max(tot) or 1
-    bw = w / n
-    o = ['<svg class="ch" viewBox="0 0 %d %d" role="img" aria-label="Biểu đồ cột %d cột, lớn nhất %g">' % (w, h + 16, n, mx)]
-    for i in range(n):
-        y = h
-        for name, vals, cls in series:
-            v = vals[i] or 0
-            if v:
-                bh = (h - 10) * v / mx
-                y -= bh
-                o.append('<rect class="%s" x="%.1f" y="%.1f" width="%.1f" height="%.1f"><title>%s · %s: %g</title></rect>' % (cls, i * bw + 1, y, max(bw - 2, 1), max(bh, .6), _e(labels[i]), _e(name), v))
-    o.append(_frame(w, h, mx, labels, trim, unit) + "</svg>")
-    return "".join(o)
-
-
-def bars(vals, labels, errs=None, h=70, trim=5):
-    if errs:
-        return stack([("Không lỗi", [max(v - x, 0) for v, x in zip(vals, errs)], "s1"), ("Lỗi", errs, "s4")], labels, h, trim)
-    return stack([("Giá trị", vals, "s1")], labels, h, trim)
-
-
-def lines(series, labels, h=70, trim=5, unit=""):
-    """Đường: series = [(tên, giá trị[] (None = trống), lớp màu)]. Nối các điểm có dữ liệu."""
-    n, w = len(labels), 300
-    mx = max([v for _, vs, _ in series for v in vs if v is not None] or [1]) or 1
-    o = ['<svg class="ch" viewBox="0 0 %d %d" role="img" aria-label="Biểu đồ đường %d ngày, lớn nhất %g%s"><line x1="0" y1="%d" x2="%d" y2="%d"/>' % (w, h + 16, n, mx, unit, h, w, h)]
-    for name, vals, cls in series:
-        pts = [(i * w / max(n - 1, 1), h - (h - 12) * v / mx - 1, v, labels[i]) for i, v in enumerate(vals) if v is not None]
-        if len(pts) > 1:
-            o.append('<path class="ln %s" d="M%s"/>' % (cls, " L".join("%.1f,%.1f" % p[:2] for p in pts)))
-        for x, y, v, lab in pts:
-            o.append('<circle class="%s" cx="%.1f" cy="%.1f" r="%s"><title>%s · %s: %.3g%s</title></circle>' % (cls, x, y, "2.2" if len(pts) < 20 else "1.4", _e(lab), _e(name), v, unit))
-    o.append(_frame(w, h, mx, labels, trim, unit) + "</svg>")
-    return "".join(o)
-
-
-def legend(items):
-    return '<div class="lg">' + "".join('<span><i class="%sb"></i>%s</span>' % (cls, _e(name)) for name, cls in items) + "</div>"
-
-
-def heatmap(heat):
-    mx = max(max(r) for r in heat) or 1
-    cw, ch, left, top = 11, 11, 18, 10
-    o = ['<svg class="ch" viewBox="0 0 %d %d" role="img" aria-label="Bản đồ nhiệt lượt làm việc theo thứ và giờ">' % (left + 24 * cw, top + 7 * ch + 2)]
-    for h in range(0, 24, 3):
-        o.append('<text x="%d" y="8">%02d</text>' % (left + h * cw, h))
-    for d in range(7):
-        o.append('<text x="0" y="%d">%s</text>' % (top + d * ch + 9, WD[d]))
-        for h in range(24):
-            v = heat[d][h]
-            o.append('<rect class="hm" x="%d" y="%d" width="%d" height="%d" rx="2" fill-opacity="%.2f"><title>%s %02d:00 · %d lượt</title></rect>' % (left + h * cw + 1, top + d * ch + 1, cw - 2, ch - 2, .08 if not v else .2 + .8 * v / mx, WD[d], h, v))
-    return "".join(o) + "</svg>"
-
-
-def hbars(rows, cls=""):
-    """rows = [(nhãn, giá trị, chú thích)]; độ dài thanh theo giá trị lớn nhất."""
-    if not rows:
-        return '<p class="note">Chưa có dữ liệu.</p>'
-    mx = max(r[1] for r in rows) or 1
-    return '<div class="hb %s">' % cls + "".join('<div class="l" title="%s">%s</div><div class="t"><i style="width:%.1f%%"></i></div><div class="n">%s</div>' % (_e(l), _e(l), 100 * v / mx, _e(note)) for l, v, note in rows) + "</div>"
-
-
-def delta(cur, prev, inv=False, pct=False):
-    if cur is None or prev is None:
-        return ""
-    if cur == prev:
-        return "<i>bằng kỳ trước</i>"
-    up = cur > prev
-    txt = "mới" if prev == 0 else ("%+.1f điểm %%" % (100 * (cur - prev)) if pct else "%+.0f%%" % (100 * (cur - prev) / prev))
-    return '<i><span class="%s%s">%s %s</span> so với kỳ trước</i>' % ("up" if up else "dn", " inv" if inv else "", "▲" if up else "▼", txt)
-
-
-def hero(label, value, dl, sp):
-    return '<div class="k"><span>%s</span><b>%s</b>%s%s</div>' % (_e(label), _e(value), sp, dl)
-
-
-def table(cols, rows, cls="", raw=()):
-    th = "".join("<th>%s</th>" % _e(c) for c in cols)
-    body = "".join("<tr>%s</tr>" % "".join("<td%s>%s</td>" % (' class="num"' if isinstance(c, (int, float)) else "", c if i in raw else _e(c)) for i, c in enumerate(r)) for r in rows)
-    return '<div class="wrap"><table class="%s"><tr>%s</tr>%s</table></div>' % (cls, th, body)
+def _mb(n):
+    return "%.1f MB" % (n / 1048576.0) if n >= 1048576 else "%d KB" % max(1, n // 1024)
 
 
 def read_health(path, t):
@@ -493,12 +411,14 @@ def read_health(path, t):
         with open(path, encoding="utf-8") as f:
             h = json.load(f)
         age = t - os.path.getmtime(path)
-        return bool(h.get("ok")) and age < 900, [str(x) for x in h.get("failed", [])][:10], age
+        failed = [k for k, v in (h.get("checks") or {}).items() if isinstance(v, dict) and not v.get("ok")] or [str(x) for x in h.get("failed", [])][:10]
+        checks = {str(k): {"ok": bool(v.get("ok")), "ms": v.get("ms"), "detail": str(v.get("detail", ""))[:80]} for k, v in (h.get("checks") or {}).items() if isinstance(v, dict)}
+        return bool(h.get("ok")) and age < 900, failed[:10], age, checks
     except (OSError, ValueError, AttributeError):
-        return None, [], None
+        return None, [], None, {}
 
 
-def render(S, health, report_links, nginx_note):
+def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts=None):
     k, ser = S["kpi"], S["series"]
     lab = [x["day"] for x in ser]
 
@@ -508,7 +428,9 @@ def render(S, health, report_links, nginx_note):
     def sp(f, cls="s1"):
         return spark(col(f)[-SPARK_DAYS:], cls)
 
-    ok, failed, age = health
+    ok, failed, age, checks = health
+    info = info or {"linked": set(), "days": set(), "reports": []}
+    dl = ["d-%s.html" % d if d in info["days"] else None for d in lab]
     if ok is None:
         hs = '<span class="bad">chưa có dữ liệu kiểm tra sức khoẻ</span>'
     elif ok:
@@ -519,8 +441,8 @@ def render(S, health, report_links, nginx_note):
     dur_all = [x["dur_p95"] for x in ser[-7:] if x["dur_p95"] is not None]
     o = ['<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị NEU Agent</title><style>%s</style></head><body><main>' % CSS]
     o.append('<h1>Quản trị NEU Agent</h1><p class="sub">Cập nhật %s (giờ Việt Nam), tự làm mới mỗi 10 phút. Người dùng chỉ hiện dưới <b>mã giả danh</b>; không có email hay nội dung hội thoại.</p>' % _e(S["generated"]))
-    o.append('<nav class="top"><b>NEU Agent</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a>'
-             '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a></nav>' % hs)
+    o.append('<nav class="top"><b>NEU Agent</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a><a href="#he-thong">Hệ thống</a>'
+             '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="data.html">Dữ liệu &amp; CSV</a><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a></nav>' % hs)
 
     # ---- tổng quan
     o.append('<h2 id="tong-quan">Tổng quan</h2>')
@@ -544,7 +466,7 @@ def render(S, health, report_links, nginx_note):
 
     # ---- tăng trưởng
     o.append('<h2 id="tang-truong">Tăng trưởng &amp; giữ chân <small>30 ngày gần nhất</small></h2><div class="grid">')
-    o.append('<div class="card"><h3>Người dùng hoạt động mỗi ngày</h3>%s</div>' % bars(col("users"), lab))
+    o.append('<div class="card"><h3>Người dùng hoạt động mỗi ngày</h3>%s</div>' % bars(col("users"), lab, links=dl))
     o.append('<div class="card"><h3>Người dùng mới mỗi ngày</h3><p class="sub">lần đầu xuất hiện trong dữ liệu</p>%s</div>' % stack([("Mới", col("new"), "s2")], lab))
     sg = S["segments"]
     tot = sum(sg.values()) or 1
@@ -559,15 +481,21 @@ def render(S, health, report_links, nginx_note):
     o.append('<div class="card"><h3>Cường độ dùng: số lượt mỗi người</h3><p class="sub">số người theo tổng số lượt làm việc</p>%s</div>' % hbars([(nm, v, "%d người" % v) for nm, v in S["hist_turns"]], "g"))
     o.append("</div>")
 
+    if cohorts:
+        wmax = max(len(c["ret"]) for c in cohorts)
+        o.append("<h3>Giữ chân theo tuần</h3><p class=\"note\">Mỗi hàng là nhóm người dùng lần đầu xuất hiện trong tuần đó (thứ Hai đầu tuần). Mỗi cột là % số người của nhóm còn dùng ở tuần +0, +1, …</p>")
+        o.append(table(["Tuần", "Người"] + ["+%d" % k for k in range(wmax)], [[c["week"], c["n"]] + [("%s%%" % v) for v in c["ret"]] + [""] * (wmax - len(c["ret"])) for c in cohorts]))
+
     # ---- chất lượng
     o.append('<h2 id="chat-luong">Chất lượng &amp; hiệu năng <small>30 ngày gần nhất</small></h2><div class="grid">')
     oc = [(OUTCOME_VI[nm], [x["outcomes"][nm] for x in ser], c) for nm, c in zip(OUTCOMES, ("s2", "s3", "s4", "s5", "s6"))]
-    o.append('<div class="card"><h3>Kết quả các lượt mỗi ngày</h3>%s%s</div>' % (stack(oc, lab), legend([(nm, c) for nm, _, c in oc])))
+    o.append('<div class="card"><h3>Kết quả các lượt mỗi ngày</h3>%s%s</div>' % (stack(oc, lab, links=dl), legend([(nm, c) for nm, _, c in oc])))
     o.append('<div class="card"><h3>Tỷ lệ lượt lỗi mỗi ngày</h3>%s</div>' % lines([("Tỷ lệ lỗi", [None if v is None else 100 * v for v in col("error_rate")], "s4")], lab, unit="%"))
     o.append('<div class="card"><h3>Thời gian một lượt</h3>%s%s</div>' % (lines([("p50", col("dur_p50"), "s1"), ("p95", col("dur_p95"), "s3")], lab, unit=" s"), legend([("p50 (trung vị)", "s1"), ("p95", "s3")])))
     o.append('<div class="card"><h3>Thời gian tới token đầu tiên</h3>%s%s</div>' % (lines([("p50", col("ttft_p50"), "s1"), ("p95", col("ttft_p95"), "s3")], lab, unit=" ms"), legend([("p50", "s1"), ("p95", "s3")])))
-    o.append('<div class="card"><h3>Token mỗi ngày</h3>%s%s</div>' % (stack([("Prompt", col("ptok"), "s6"), ("Trả lời", col("ctok"), "s5")], lab), legend([("Prompt (gửi lên)", "s6"), ("Trả lời (sinh ra)", "s5")])))
-    o.append('<div class="card"><h3>Lệnh gọi mô hình qua nginx</h3><p class="sub">đỏ: lỗi 5xx của cổng mô hình</p>%s</div>' % bars(col("chat"), lab, col("chat_5xx")))
+    o.append('<div class="card"><h3>Token mỗi ngày</h3>%s%s</div>' % (stack([("Prompt", col("ptok"), "s6"), ("Trả lời", col("ctok"), "s5")], lab, links=dl), legend([("Prompt (gửi lên)", "s6"), ("Trả lời (sinh ra)", "s5")])))
+    o.append('<div class="card"><h3>Lệnh gọi mô hình qua nginx</h3><p class="sub">đỏ: lỗi 5xx của cổng mô hình</p>%s</div>' % bars(col("chat"), lab, col("chat_5xx"), links=dl))
+    o.append('<div class="card"><h3>Độ trễ cổng mô hình (nginx)</h3><p class="sub">thời gian cả yêu cầu chat thành công, gồm sinh văn bản</p>%s%s</div>' % (lines([("p50", col("chat_p50"), "s1"), ("p95", col("chat_p95"), "s3")], lab, unit=" s", links=dl), legend([("p50", "s1"), ("p95", "s3")])))
     o.append('<div class="card"><h3>Công cụ: số lần gọi và tỷ lệ lỗi</h3>%s</div>' % hbars([(x["name"], x["calls"], "%d · lỗi %s%s" % (x["calls"], R._p(R.ratio(x["fails"], x["calls"])), " (+%d chương trình lỗi)" % x["prog"] if x.get("prog") else "")) for x in S["tools"][:12]]))
     if S.get("tool_errors"):
         o.append('<div class="card"><h3>Vì sao công cụ thất bại</h3><p class="sub">lý do (mã), 30 ngày; "chương trình/test lỗi" là kết quả bình thường</p>%s</div>' % hbars([(ERR_VI.get(nm, nm), v, str(v)) for nm, v in S["tool_errors"].items()], "bad"))
@@ -616,11 +544,46 @@ def render(S, health, report_links, nginx_note):
         o.append('<p class="note">Đổi hạn mức trên máy 220: <code>sudo ~/neu-agent-220/quota/quota.sh show | mode | tier | set</code>. Mặc định sinh viên 1 triệu, giảng viên 10 triệu token/ngày; vượt thêm 10%% để hoàn tất việc đang làm. Tra mã ứng với ai: <code>quota.sh uid &lt;email&gt;</code>.</p>')
 
     # ---- người dùng
-    o.append('<h2 id="nguoi-dung">Người dùng <small>%d người đứng đầu theo số lượt 30 ngày</small></h2>' % S["users_listed"])
-    rows = [['<span class="badge %s">%s</span>' % (STATUS_CLS[u["status"]], u["status"]), "<code>%s</code>" % _e(u["id"]), strip(u["spark"]), u["first"], u["last"], u["days"], u["turns30"], u["turns"],
-             "—" if u["error_rate"] is None else R._p(u["error_rate"]), u["profile"], u["platform"], u["version"], u["model"]] for u in S["users"]]
-    o.append(table(["Trạng thái", "Mã", "%d ngày qua" % SPARK_DAYS, "Lần đầu", "Gần nhất (VN)", "Ngày dùng", "Lượt 30 ngày", "Tổng lượt", "Lỗi", "Tab chính", "Nền tảng", "Phiên bản", "Mô hình"], rows, "u", raw=(0, 1, 2)))
-    o.append('<p class="note">Mã = 8 ký tự đầu của HMAC(bí mật máy chủ, email). Muốn biết mã ứng với ai: tính HMAC cho email cần tra bằng <code>diag-secret</code> trên máy 220 (xem docs/DIAGNOSTICS.md); trang này không lưu và không hiển thị email.</p>')
+    o.append('<h2 id="nguoi-dung">Người dùng <small>%d người đứng đầu theo số lượt 30 ngày · bấm mã để xem chi tiết từng người</small></h2>' % S["users_listed"])
+    near = {u["id"] for u in (S.get("quota") or {}).get("users", []) if (u.get("pct") or 0) >= 80}
+    cnt = collections.Counter(u["status"] for u in S["users"])
+    o.append('<div class="ftab flt"><input type="radio" name="f" id="f-all" checked><label for="f-all">Tất cả (%d)</label><input type="radio" name="f" id="f-bn"><label for="f-bn">Mới (%d)</label>'
+             '<input type="radio" name="f" id="f-ba"><label for="f-ba">Hoạt động (%d)</label><input type="radio" name="f" id="f-bd"><label for="f-bd">Ngủ đông (%d)</label>'
+             '<input type="radio" name="f" id="f-near"><label for="f-near">Gần/hết hạn mức (%d)</label><input type="radio" name="f" id="f-err"><label for="f-err">Có lượt lỗi</label>' % (len(S["users"]), cnt["mới"], cnt["hoạt động"], cnt["ngủ đông"], len(near)))
+    rows, rc = [], []
+    for u in S["users"]:
+        idc = '<a href="u-%s.html"><code>%s</code></a>' % (_e(u["id"]), _e(u["id"])) if u["id"] in info["linked"] else "<code>%s</code>" % _e(u["id"])
+        rows.append(['<span class="badge %s">%s</span>' % (STATUS_CLS[u["status"]], u["status"]), idc, strip(u["spark"]), u["first"], u["last"], u["days"], u["turns30"], u["turns"],
+                     "—" if u["error_rate"] is None else R._p(u["error_rate"]), u["profile"], u["platform"], u["version"], u["model"]])
+        rc.append("r st-%s%s%s" % (STATUS_CLS[u["status"]], " near" if u["id"] in near else "", " haserr" if (u["error_rate"] or 0) > 0 else ""))
+    o.append(table(["Trạng thái", "Mã", "%d ngày qua" % SPARK_DAYS, "Lần đầu", "Gần nhất (VN)", "Ngày dùng", "Lượt 30 ngày", "Tổng lượt", "Lỗi", "Tab chính", "Nền tảng", "Phiên bản", "Mô hình"], rows, "u", raw=(0, 1, 2), row_cls=rc))
+    o.append("</div>")
+    o.append('<p class="note">Mã = 8 ký tự đầu của HMAC(bí mật máy chủ, email). Tra mã ứng với ai: <code>sudo ~/neu-agent-220/quota/quota.sh uid &lt;email&gt;</code> trên máy 220. Trang này không lưu và không hiển thị email. Xem tất cả người dùng và tải CSV ở <a href="data.html">Dữ liệu &amp; CSV</a>.</p>')
+
+    # ---- báo lỗi do người dùng gửi
+    if info["reports"]:
+        o.append('<h2 id="bao-loi">Báo lỗi do người dùng gửi <small>ghi chú tự gõ khi bấm "Báo lỗi"</small></h2>')
+        o.append(pages_reports(info["reports"][:15]))
+
+    # ---- hệ thống & dữ liệu
+    o.append('<h2 id="he-thong">Hệ thống &amp; dữ liệu</h2><div class="grid">')
+    if checks:
+        o.append('<div class="card"><h3>Kiểm tra sức khoẻ (5 phút/lần)</h3>%s</div>' % table(["Thành phần", "Tình trạng", "ms", "Chi tiết"], [[nm, "✓ tốt" if v["ok"] else "✗ lỗi", v["ms"] if v["ms"] is not None else "—", v["detail"]] for nm, v in checks.items()]))
+    if sysinfo:
+        fresh = sysinfo["newest_event_age_s"]
+        o.append('<div class="card"><h3>Dữ liệu chẩn đoán</h3>%s</div>' % table(["Chỉ số", "Giá trị"], [
+            ["Sự kiện mới nhất", "chưa có" if fresh is None else ("%d phút trước" % (fresh // 60) if fresh >= 120 else "%d giây trước" % fresh)], ["Số tệp ngày / từ ngày", "%d / %s" % (sysinfo["diag_files"], sysinfo["diag_oldest"] or "—")],
+            ["Dung lượng chẩn đoán", _mb(sysinfo["diag_bytes"])], ["Dung lượng báo cáo và trang quản trị", _mb(sysinfo["reports_bytes"])], ["Thời hạn giữ", "%d ngày (xoá tự động)" % HIST_DAYS]]))
+    o.append("</div>")
+    nd = [x for x in ser[-7:]]
+    st_rows = []
+    for x in reversed(nd):
+        cs, ds = x.get("chat_st") or {}, x.get("diag_st") or {}
+        if not cs and not ds and not x["chat"]:
+            continue
+        st_rows.append([x["day"], x["chat"], ", ".join("%s: %d" % kv for kv in sorted(cs.items())) or "—", "—" if x["chat_p50"] is None else "%.1f / %.1f s" % (x["chat_p50"], x["chat_p95"]), x.get("diag", 0), ", ".join("%s: %d" % kv for kv in sorted(ds.items())) or "—"])
+    if st_rows:
+        o.append("<h3>Cổng mô hình và nhận chẩn đoán (nginx, 7 ngày)</h3>" + table(["Ngày", "Lệnh chat", "Mã trạng thái", "p50 / p95", "Gói chẩn đoán", "Mã trạng thái"], st_rows))
     if report_links:
         o.append("<h2>Báo cáo chất lượng các ngày trước</h2><p>" + " · ".join('<a href="%s">%s</a>' % (_e(x), _e(x[:-5])) for x in report_links) + "</p>")
     o.append("</main></body></html>")
@@ -645,6 +608,7 @@ def read_findings(out):
 
 
 def run(diag_dir, nginx_log, out, health_file, now, dl_dir=None, quota_db=None):
+    import pages as P  # noqa: PLC0415 (pages.py dùng chung biểu đồ với tệp này)
     t = now.timestamp()
     os.makedirs(out, exist_ok=True)
     recs = R.load_diag(diag_dir, t - HIST_DAYS * 86400, t + 1)
@@ -656,8 +620,11 @@ def run(diag_dir, nginx_log, out, health_file, now, dl_dir=None, quota_db=None):
     note = "Số liệu nginx (lệnh gọi mô hình, tải bản cài, kiểm tra cập nhật) được cộng dồn theo ngày từ %s; nhật ký gốc chỉ giữ 14 ngày. Ngày trước mốc đó hiện bằng 0. Lượt tải đếm yêu cầu HTTP 200 tới tệp .dmg/.exe (tải lại hoặc tiếp tục tải có thể tính thêm)." % (first or "lần chạy đầu")
     links = sorted((os.path.basename(p) for p in glob.glob(os.path.join(out, "????-??-??.html"))), reverse=True)[:30]
     write_atomic(dpath, json.dumps(daily, ensure_ascii=False, indent=1))
+    info = P.write_all(out, S, recs, quota_db, t, write_atomic)          # trang từng người, từng ngày, dữ liệu đầy đủ, CSV
+    coh, sysinfo = cohort_table(info["U"], t), system_info(diag_dir, recs, out, t)
+    S["cohorts"], S["system"] = coh, sysinfo
     write_atomic(os.path.join(out, "stats.json"), json.dumps(S, ensure_ascii=False, indent=1, default=str))
-    write_atomic(os.path.join(out, "index.html"), render(S, read_health(health_file, t), links, note))
+    write_atomic(os.path.join(out, "index.html"), render(S, read_health(health_file, t), links, note, info, sysinfo, coh))
     return S
 
 

@@ -273,6 +273,21 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(st, 404, bad)
             self.assertNotIn(b"SECRET", body)
 
+    def test_admin_serves_detail_pages_and_csv_but_not_traversal(self):
+        for name, ctype in (("u-1a2b3c4d.html", "text/html"), ("d-2026-10-08.html", "text/html"), ("users.csv", "text/csv")):
+            with open(os.path.join(self.reports, name), "w") as f:
+                f.write("x")
+        try:
+            for name, ctype in (("u-1a2b3c4d.html", "text/html"), ("d-2026-10-08.html", "text/html"), ("users.csv", "text/csv")):
+                st, body, h = self.req("GET", "/admin/" + name, email="admin@neu.edu.vn")
+                self.assertEqual(st, 200, name)
+                self.assertTrue(h["Content-Type"].startswith(ctype))
+                self.assertEqual(self.req("GET", "/admin/" + name, email="user@neu.edu.vn")[0], 403)   # người thường không xem được
+            self.assertEqual(self.req("GET", "/admin/u-../x.csv", email="admin@neu.edu.vn")[0], 404)
+        finally:
+            for name in ("u-1a2b3c4d.html", "d-2026-10-08.html", "users.csv"):
+                os.unlink(os.path.join(self.reports, name))
+
     def test_admin_root_prefers_index_html(self):
         idx = os.path.join(self.reports, "index.html")
         with open(idx, "w") as f:

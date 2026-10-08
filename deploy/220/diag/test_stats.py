@@ -204,6 +204,65 @@ class StatsTest(unittest.TestCase):
         self.assertIsNone(j2["quota"])
         self.assertIn("Chưa có dữ liệu hạn mức", slurp(os.path.join(self.out, "index.html")))
 
+    def test_detail_pages_csv_and_links(self):
+        a2 = dict(APP, version="0.2.0", platform="win", profile="work")
+        recs = [rec(day_ts(0, 3), turn_ev(), uid="a" * 16), rec(day_ts(0, 4), turn_ev("error", prompt_tok=500, completion_tok=50), uid="a" * 16),
+                rec(day_ts(1, 3), turn_ev(), uid="a" * 16), rec(day_ts(0, 5), turn_ev(), uid="b" * 16, app=a2),
+                rec(day_ts(0, 3), {"t": "tool", "name": "read_file", "ok": False, "dur": "lt1s", "err": "not_found"}, uid="a" * 16),
+                rec(day_ts(0, 3), {"t": "signal", "code": "loop", "tool": "bash"}, uid="a" * 16),
+                rec(day_ts(0, 2), {"t": "report", "note": "<b>app lỗi</b> khi mở"}, uid="b" * 16, app=a2),
+                rec(day_ts(40), turn_ev(), uid="z" * 16)]
+        write_diag(self.diag, recs)
+        # trang cũ còn sót phải bị dọn
+        os.makedirs(self.out)
+        for stale in ("u-deadbeef.html", "d-2020-01-01.html"):
+            with open(os.path.join(self.out, stale), "w") as f:
+                f.write("cũ")
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
+        files = set(os.listdir(self.out))
+        self.assertTrue({"index.html", "data.html", "users.csv", "daily.csv", "tools.csv", "u-aaaaaaaa.html", "u-bbbbbbbb.html", "d-%s.html" % S.vn_day(T_NOW), "d-%s.html" % S.vn_day(T_NOW - 86400)} <= files)
+        self.assertFalse({"u-deadbeef.html", "d-2020-01-01.html", "u-zzzzzzzz.html"} & files)    # dọn trang cũ; người dùng ngoài 30 ngày không có trang
+        idx = slurp(os.path.join(self.out, "index.html"))
+        self.assertIn('href="u-aaaaaaaa.html"', idx)                                              # mã người dùng dẫn tới trang chi tiết
+        self.assertIn('href="d-%s.html"' % S.vn_day(T_NOW), idx)                                  # cột biểu đồ dẫn tới trang ngày
+        for frag in ('id="f-near"', "Giữ chân theo tuần", 'id="he-thong"', "Báo lỗi do người dùng gửi", "Kiểm tra sức khoẻ" if False else "Dữ liệu chẩn đoán"):
+            self.assertIn(frag, idx)
+        self.assertNotIn("<b>app lỗi</b>", idx)                                                   # ghi chú người dùng được escape
+        self.assertIn("&lt;b&gt;app lỗi&lt;/b&gt;", idx)
+        up = slurp(os.path.join(self.out, "u-aaaaaaaa.html"))
+        for frag in ("Người dùng", "30 lượt gần nhất", "Công cụ", "Không có file/thư mục", "loop"):
+            self.assertIn(frag, up)
+        dp = slurp(os.path.join(self.out, "d-%s.html" % S.vn_day(T_NOW)))
+        for frag in ("Theo giờ", "Người dùng nhiều lượt nhất trong ngày", 'href="u-aaaaaaaa.html"', "Báo lỗi trong ngày"):
+            self.assertIn(frag, dp)
+        self.assertIn('href="d-%s.html"' % S.vn_day(T_NOW - 86400), dp)                           # chuyển sang ngày trước
+        for page in (idx, up, dp, slurp(os.path.join(self.out, "data.html"))):
+            self.assertNotIn("<script", page.lower())
+        users_csv = slurp(os.path.join(self.out, "users.csv"))
+        self.assertTrue(users_csv.startswith("\ufeffma,bac,"))
+        self.assertIn("aaaaaaaa", users_csv)
+        self.assertNotIn("@", users_csv)
+        self.assertEqual(len(slurp(os.path.join(self.out, "daily.csv")).strip().split("\n")), 31)   # tiêu đề + 30 ngày
+        self.assertIn("read_file", slurp(os.path.join(self.out, "tools.csv")))
+        self.assertTrue(j["cohorts"] and j["cohorts"][-1]["n"] >= 2)
+        self.assertGreaterEqual(j["system"]["diag_files"], 1)
+
+    def test_cohort_table_weekly_retention(self):
+        t = T_NOW
+        wk = lambda days_ago: t - days_ago * 86400
+        U = {"u1": {"first": wk(15), "days": {S.vn_day(wk(15)): 1, S.vn_day(wk(8)): 1, S.vn_day(wk(1)): 1}},
+             "u2": {"first": wk(15), "days": {S.vn_day(wk(15)): 2}}}
+        c = S.cohort_table(U, t)
+        self.assertEqual(len(c), 1)
+        self.assertEqual(c[0]["n"], 2)
+        self.assertEqual(c[0]["ret"][0], 100.0)
+        self.assertLessEqual(c[0]["ret"][1], 100.0)
+
+    def test_gateway_latency_and_status_mix_in_daily(self):
+        rows = [dict(nginx_row(day_ts(0), 200, "vllm_chat", rt=r), _ts=day_ts(0)) for r in (2.0, 4.0, 10.0)] + [dict(nginx_row(day_ts(0), 502, "vllm_chat"), _ts=day_ts(0)), dict(nginx_row(day_ts(0), 400, "diag"), _ts=day_ts(0))]
+        d = S.nginx_daily(rows)[S.vn_day(day_ts(0))]
+        self.assertEqual((d["chat"], d["chat_5xx"], d["chat_p50"], d["chat_st"], d["diag_st"]), (4, 1, 4.0, {"200": 3, "502": 1}, {"400": 1}))
+
     def test_empty_data_still_renders(self):
         S.run(self.diag, self.log, self.out, os.path.join(self.tmp.name, "none.json"), NOW)
         h = slurp(os.path.join(self.out, "index.html"))
