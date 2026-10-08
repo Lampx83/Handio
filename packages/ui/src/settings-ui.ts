@@ -4,10 +4,12 @@ import { clear, h, store } from "./dom";
 export interface AccountInfo {
   email: string;
   name?: string;
+  /** Cách đăng nhập (để hiện trong hồ sơ). */
+  kind?: "microsoft" | "password";
   logout(): void;
 }
 
-const MODE_LABEL: Record<Mode, string> = { default: "Hỏi trước", acceptEdits: "Tự sửa tệp", plan: "Lập kế hoạch", bypass: "Tự động hết" };
+const MODE_LABEL: Record<Mode, string> = { default: "Hỏi trước", acceptEdits: "Tự sửa tệp", auto: "Tự động", plan: "Lập kế hoạch", bypass: "Toàn quyền" };
 const THEME = store("neu.theme");
 const ZOOM = store("neu.zoom");
 const ZOOMS: Record<string, number> = { s: 0.92, m: 1, l: 1.12 };
@@ -111,6 +113,7 @@ export function openSettings(ctl: AgentController, st: UiState, account: Account
   // ---- Tài khoản
   const acc = (): HTMLElement => h("div", {},
     row("Đăng nhập", h("span", {}, account?.name ? `${account.name} · ` : "", h("b", {}, account?.email ?? ""))),
+    ...(account?.kind ? [row("Loại", h("span", {}, account.kind === "microsoft" ? "Microsoft 365" : "Tài khoản nội bộ"))] : []),
     h("div", { class: "set-actions" }, h("button", { class: "btn danger", type: "button", onclick: () => account?.logout() }, "Đăng xuất")));
 
   const tabs: [Tab, string, () => HTMLElement][] = [["general", "Giao diện", general], ["model", "Mô hình", model], ["perm", "Quyền", perm], ...(account ? ([["account", "Tài khoản", acc]] as [Tab, string, () => HTMLElement][]) : [])];

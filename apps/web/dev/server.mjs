@@ -15,6 +15,11 @@ http
   .createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     try {
+      // thử giao diện tài khoản ở máy phát triển: NEU_DEV_USER=ten@neu.edu.vn npm run dev
+      if (url.pathname === "/oauth2/userinfo" && process.env.NEU_DEV_USER) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ email: process.env.NEU_DEV_USER }));
+      }
       if (url.pathname.startsWith("/mock/")) return await mockHandler(req, res, url.pathname);
       if (url.pathname.startsWith("/vllm/") || url.pathname.startsWith("/ollama/")) {
         const up = http.request({ host: UPSTREAM.hostname, port: UPSTREAM.port || 80, method: req.method, path: req.url, headers: { ...req.headers, host: UPSTREAM.host, ...(process.env.NEU_DEV_KEY && !req.headers["x-ollama-seckey"] ? { "x-ollama-seckey": process.env.NEU_DEV_KEY } : {}) } }, (r) => {

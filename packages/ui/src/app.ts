@@ -3,19 +3,21 @@ import { clear, h, store } from "./dom";
 import { escapeHtml, renderMarkdown } from "./markdown";
 import { treeIcon } from "./icons";
 import { openSettings as openSettingsDialog, type AccountInfo } from "./settings-ui";
+import { accountChip } from "./account-ui";
 import { DesignPreview } from "./preview";
 import { ago, openInstructions, openNewProject, toggleProjectMenu } from "./projects-ui";
 import { openLearn } from "./learn";
 import { CodeTools } from "./code-tools";
 import { DocPane } from "./docview";
 import { WorkTools } from "./work-tools";
-import { PROMPT_TEMPLATE, promptTips } from "./prompt-tips";
+import { PROMPT_TEMPLATE } from "./prompt-tips";
 
 const MODE_INFO: Record<Mode, { label: string; desc: string }> = {
   default: { label: "Hỏi trước", desc: "Đọc tự do. Sửa file và chạy lệnh phải được bạn duyệt." },
   acceptEdits: { label: "Tự sửa file", desc: "Tự duyệt sửa file trong dự án. Lệnh vẫn hỏi." },
+  auto: { label: "Tự động", desc: "Tự lo việc thường ngày (sửa file, build, test, git). Chỉ hỏi khi quan trọng: xoá, mạng, tệp bí mật." },
   plan: { label: "Lập kế hoạch", desc: "Chỉ đọc. Agent đề xuất kế hoạch để bạn duyệt trước khi làm." },
-  bypass: { label: "Tự động hết", desc: "Tự duyệt mọi thứ (vẫn chặn lệnh phá hoại nặng). Chỉ dùng trong thư mục thử nghiệm!" },
+  bypass: { label: "Toàn quyền", desc: "Không hỏi gì (vẫn chặn lệnh phá hoại nặng và hỏi khi đụng tệp bí mật). Chỉ dùng trong thư mục thử nghiệm." },
 };
 const TOOL_LABEL: Record<string, string> = { read_document: "Đọc tài liệu", find_in_documents: "Tìm trong tài liệu", create_docx: "Tạo Word", docx_replace: "Sửa Word", merge_check: "Kiểm tra trộn", merge_documents: "Trộn hàng loạt", scan_pii: "Quét dữ liệu cá nhân", redact_pii: "Che dữ liệu cá nhân", xlsx_pivot: "Bảng tổng hợp", create_xlsx: "Tạo Excel", xlsx_edit: "Sửa Excel", create_pptx: "Tạo PowerPoint", convert_to_pdf: "Xuất PDF", read_file: "Đọc", list_dir: "Liệt kê", glob: "Tìm file", grep: "Tìm nội dung", edit_file: "Sửa", write_file: "Ghi", bash: "Lệnh", todo_write: "Việc cần làm", task: "Subagent", run_javascript: "Chạy JS", web_fetch: "Tải web", exit_plan_mode: "Kế hoạch" };
 
@@ -84,7 +86,7 @@ class App {
   private feedInner = h("div", { class: "feed-inner" });
   private feed = h("div", { class: "feed", tabindex: "-1" }, this.feedInner);
   private input = h("textarea", { rows: "1", placeholder: "Nhập yêu cầu…", "aria-label": "Yêu cầu cho agent" });
-  private sendBtn = h("button", { class: "btn primary", type: "button", onclick: () => this.onSendClick() }, "Gửi");
+  private sendBtn = h("button", { class: "btn primary send", type: "button", title: "Gửi (Enter)", "aria-label": "Gửi", onclick: () => this.onSendClick() }, "↑");
   private modePill = h("button", { class: "pill", type: "button", "aria-haspopup": "menu", onclick: () => this.toggleModeMenu() });
   private modeMenu: HTMLElement | null = null;
   private slashMenu: HTMLElement | null = null;
@@ -96,7 +98,6 @@ class App {
   private mentionSeq = 0;
   private procBar = h("div", { class: "procbar", "aria-live": "polite" });
   private procs = new Map<string, { command: string; alive: boolean; url?: string }>();
-  private tipEl = h("div", { class: "mention-note", "aria-live": "polite" });
   private tree = h("div", { class: "tree", role: "tree", "aria-label": "Tệp trong dự án" });
   private projBtn = h("button", { class: "projbtn", type: "button", "aria-haspopup": "menu", title: "Chuyển dự án" });
   private projBox = h("div", { class: "proj", hidden: true });
@@ -177,8 +178,6 @@ class App {
   private build(): void {
     const toggle = h("button", { class: "iconbtn toggle-side", type: "button", "aria-label": "Mở/đóng thanh bên", onclick: () => this.shell.classList.toggle("side-open") }, "☰");
     const tools = [
-      h("div", { class: "meter", title: "Mức dùng cửa sổ ngữ cảnh của mô hình" }, h("div", { class: "bar" }, this.meterBar), this.meterTxt),
-      h("div", { style: { position: "relative" } }, this.modePill),
       ...this.codeTools.buttons,
       ...this.workTools.buttons,
       this.learnBtn,
@@ -201,11 +200,17 @@ class App {
       this.tree,
       this.todosHead,
       this.todosEl,
+      this.opts.account ? accountChip(this.opts.account, () => this.openSettings()) : null,
     );
     const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.input,
-      h("div", { class: "bar" }, this.hintEl, h("span", { class: "grow" }),
-        h("button", { class: "btn sm", type: "button", title: "Chèn khung Mục tiêu – Ngữ cảnh – Ràng buộc", onclick: () => this.insertTemplate() }, "Mẫu prompt"), this.sendBtn),
-      this.tipEl));
+      // dưới ô nhập (giống Claude): trái = chế độ chạy + mẫu prompt; phải = mức ngữ cảnh, mô hình, Gửi
+      h("div", { class: "bar" },
+        h("button", { class: "cbtn plus", type: "button", title: "Đính kèm tệp", "aria-label": "Đính kèm tệp", onclick: () => this.fileInput.click() }, "+"),
+        h("div", { class: "mode-wrap", style: { position: "relative" } }, this.modePill),
+        h("button", { class: "btn sm", type: "button", title: "Chèn khung Mục tiêu – Ngữ cảnh – Ràng buộc", onclick: () => this.insertTemplate() }, "Mẫu prompt"),
+        this.hintEl, h("span", { class: "grow" }),
+        h("div", { class: "meter", title: "Mức dùng cửa sổ ngữ cảnh của mô hình" }, h("div", { class: "bar" }, this.meterBar), this.meterTxt),
+        this.codeTools.modelEl, this.sendBtn)));
     const main = h("main", { class: "main" }, this.bannerHost, this.feed, composer);
     this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path));
     this.pvHost.append(this.pv.el);
@@ -242,7 +247,7 @@ class App {
       this.autoGrow();
       this.updateSlash();
       void this.updateMention();
-      this.paintTips();
+      if (this.busy) this.paintBusy(); // đổi nhãn Gửi/Dừng theo việc ô nhập có chữ hay không
     });
     this.input.addEventListener("keydown", (e) => this.onKey(e));
     document.addEventListener("keydown", (e) => this.onGlobalKey(e));
@@ -274,6 +279,7 @@ class App {
     this.newBtn.hidden = !!this.state.capabilities.chats;
     const exec = this.state.capabilities.exec;
     this.hintEl.textContent = "Enter gửi · / lệnh · @ tệp" + (exec ? " · ! chạy lệnh" : "");
+    this.input.placeholder = "Nhập yêu cầu… (" + this.hintEl.textContent + ")";
     const design = this.state.profile === "design";
     this.pvHost.hidden = !design;
     this.pv?.setVisible(design);
@@ -436,6 +442,10 @@ class App {
       case "usage": {
         this.meterBar.style.width = e.contextPct + "%";
         this.meterBar.className = e.contextPct > 85 ? "vhi" : e.contextPct > 65 ? "hi" : "";
+        const ring = this.meterBar.parentElement as HTMLElement; // vòng tròn dưới ô nhập: --p = % đã dùng, mức màu theo ngưỡng
+        ring.style.setProperty("--p", String(Math.max(0, Math.min(100, e.contextPct))));
+        ring.dataset.lvl = e.contextPct > 85 ? "vhi" : e.contextPct > 65 ? "hi" : "";
+        (ring.parentElement as HTMLElement).title = `Ngữ cảnh đã dùng ${e.contextPct}% · ${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi`;
         this.meterTxt.textContent = `${e.contextPct}%`;
         this.meterTxt.title = `${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi`;
         break;
@@ -592,11 +602,11 @@ class App {
     let deny: () => void;
     if (req.kind === "plan") {
       const plan = h("div", { class: "plan msg-ai", html: renderMarkdown(req.plan ?? "") });
-      allow = () => respond({ allow: true, mode: "acceptEdits" });
+      allow = () => respond({ allow: true, mode: "auto" });
       deny = () => respond({ allow: false, note: note.value.trim() || undefined });
       ask.append(h("div", { class: "q" }, "Agent đề xuất kế hoạch này. Duyệt chứ?"), plan,
         h("div", { class: "row" },
-          h("button", { class: "btn primary", type: "button", onclick: () => respond({ allow: true, mode: "acceptEdits" }) }, "Duyệt, tự sửa file"),
+          h("button", { class: "btn primary", type: "button", onclick: () => respond({ allow: true, mode: "auto" }) }, "Duyệt, tự làm"),
           h("button", { class: "btn", type: "button", onclick: () => respond({ allow: true, mode: "default" }) }, "Duyệt, hỏi từng thay đổi"),
           note, h("button", { class: "btn danger", type: "button", onclick: deny }, "Chưa, tiếp tục lập kế hoạch")));
     } else {
@@ -632,8 +642,12 @@ class App {
   // ------------------------------------------------------------------ nhập liệu
   private paintBusy(): void {
     const waiting = !!this.pending;
-    this.sendBtn.textContent = this.busy ? "Dừng" : "Gửi";
-    this.sendBtn.className = "btn " + (this.busy ? "danger" : "primary");
+    // đang làm việc: ô nhập có chữ → nút “Gửi” (tin được xếp hàng, agent nhận ở bước kế tiếp); trống → “Dừng”
+    const stop = this.busy && !this.input.value.trim();
+    this.sendBtn.textContent = stop ? "■" : "↑";
+    this.sendBtn.title = stop ? "Dừng (Esc)" : "Gửi (Enter)";
+    this.sendBtn.setAttribute("aria-label", stop ? "Dừng" : "Gửi");
+    this.sendBtn.className = "btn send " + (stop ? "danger" : "primary");
     if (this.busy && !this.working) {
       this.workStart = Date.now();
       const t = h("span", {}, "Đang làm việc… 0s");
@@ -650,7 +664,7 @@ class App {
   }
 
   private onSendClick(): void {
-    if (this.busy) this.ctl.interrupt();
+    if (this.busy && !this.input.value.trim()) this.ctl.interrupt();
     else void this.submit(this.input.value);
   }
 
@@ -662,7 +676,8 @@ class App {
       this.closeSlash();
       return;
     }
-    if (!t || this.busy) return;
+    if (!t) return;
+    const queued = this.busy; // agent đang làm: tin này được xếp hàng, không bắt đầu lượt mới
     this.workTools.noteRequest(t);
     this.history.unshift(t);
     this.histIdx = -1;
@@ -670,10 +685,14 @@ class App {
     this.autoGrow();
     this.closeSlash();
     this.closeMention();
-    clear(this.tipEl);
     this.dropWelcome();
     this.stick = true;
-    this.append(h("div", { class: "msg-user" }, t));
+    this.append(h("div", { class: "msg-user" + (queued ? " queued" : "") }, t));
+    if (queued) {
+      this.paintBusy();
+      await this.ctl.send(t);
+      return;
+    }
     this.busy = true;
     this.paintBusy();
     await this.ctl.send(t);
@@ -854,13 +873,6 @@ class App {
     this.mentionSel = 0;
   }
 
-  // ------------------------------------------------------------------ gợi ý cấu trúc prompt
-  private paintTips(): void {
-    clear(this.tipEl);
-    const tips = promptTips(this.input.value);
-    if (!tips.length) return;
-    this.tipEl.append("💡 Prompt rõ hơn: ", ...tips.flatMap((t, i) => [h("b", {}, t.part), " — " + t.tip + (i < tips.length - 1 ? " · " : "")]));
-  }
   private insertTemplate(): void {
     if (!this.input.value.trim()) this.input.value = PROMPT_TEMPLATE;
     else this.input.value += (this.input.value.endsWith("\n") ? "" : "\n") + PROMPT_TEMPLATE;
@@ -886,7 +898,6 @@ class App {
       onTry: (p) => {
         this.input.value = p;
         this.autoGrow();
-        this.paintTips();
         this.input.focus();
       },
       onReveal: (path) => {

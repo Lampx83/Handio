@@ -31,6 +31,8 @@ export class CodeTools {
   private runBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Chạy", title: "Chạy / kiểm thử dự án", onclick: () => void this.toggleRun() }, "▶");
   private modelBtn = h("button", { class: "iconbtn modelbtn", type: "button", hidden: true, "aria-label": "Mô hình", "aria-haspopup": "menu", title: "Đổi mô hình", onclick: () => void this.toggleModels() });
   private wrap = h("span", { class: "ct-wrap", style: { position: "relative", display: "inline-flex", gap: "6px" } });
+  /** Nút chọn mô hình: đặt dưới ô nhập prompt (do app.ts gắn), menu mở lên phía trên. */
+  readonly modelEl = h("span", { class: "ct-model", style: { position: "relative", display: "inline-flex" } });
   private pop: HTMLElement | null = null;
   private files: ChangeFile[] = [];
   private on = false;
@@ -41,27 +43,30 @@ export class CodeTools {
   private seq = 0;
 
   constructor(private ctl: AgentController, private host: CodeToolsHost) {
-    this.wrap.append(this.chBtn, this.rwBtn, this.runBtn, this.modelBtn);
+    this.wrap.append(this.chBtn, this.rwBtn, this.runBtn);
+    this.modelEl.append(this.modelBtn);
     this.buttons = [this.wrap];
     document.addEventListener("click", (e) => {
       const t = e.target as HTMLElement;
-      if (this.pop && !t.closest(".ct-pop") && !t.closest(".ct-wrap")) this.closePop();
+      if (this.pop && !t.closest(".ct-pop") && !t.closest(".ct-wrap") && !t.closest(".ct-model")) this.closePop();
     });
   }
 
   /** Gọi mỗi khi trạng thái giao diện được nạp lại. */
   update(state: UiState): void {
+    // chọn mô hình có ở mọi tab (nằm dưới ô nhập prompt); phần còn lại (thay đổi, quay lại, chạy) chỉ ở tab Code
+    this.modelBtn.hidden = !state.model;
+    this.modelBtn.textContent = state.model.length > 24 ? state.model.slice(0, 23) + "…" : state.model;
+    this.modelBtn.title = "Mô hình: " + state.model + " (bấm để đổi)";
     this.on = state.profile === "code" && !!this.ctl.changesList;
     this.exec = !!state.capabilities.exec;
     this.wrap.hidden = !this.on;
-    for (const b of [this.chBtn, this.rwBtn, this.modelBtn]) b.hidden = !this.on;
+    for (const b of [this.chBtn, this.rwBtn]) b.hidden = !this.on;
     if (!this.on) {
       this.panel.hidden = true;
       this.runBtn.hidden = true;
       return;
     }
-    this.modelBtn.textContent = "🤖 " + (state.model.length > 16 ? state.model.slice(0, 15) + "…" : state.model);
-    this.modelBtn.title = "Mô hình: " + state.model + " (bấm để đổi)";
     void this.refreshRun();
     this.schedule();
   }
@@ -231,10 +236,10 @@ export class CodeTools {
     this.pop = null;
   }
 
-  private showPop(items: { label: string; title?: string; sel?: boolean; on: () => void }[], cls = ""): void {
+  private showPop(items: { label: string; title?: string; sel?: boolean; on: () => void }[], cls = "", anchor: HTMLElement = this.wrap): void {
     this.closePop();
     const pop = h("div", { class: "menu ct-pop " + cls, role: "menu" }, ...items.map((it) => h("div", { class: "it" + (it.sel ? " sel" : ""), role: "menuitem", tabindex: "0", title: it.title, onclick: () => { this.closePop(); it.on(); }, onkeydown: (k: KeyboardEvent) => k.key === "Enter" && (k.target as HTMLElement).click() }, h("span", { class: "k" }, it.label))));
-    this.wrap.append(pop);
+    anchor.append(pop);
     this.pop = pop;
   }
 
@@ -248,7 +253,7 @@ export class CodeTools {
       /* không lấy được */
     }
     if (!list.includes(cur)) list = [cur, ...list];
-    this.showPop(list.map((m) => ({ label: (m === cur ? "✓ " : "") + m, sel: m === cur, on: () => void this.ctl.saveSettings({ model: m }).then(() => this.host.refreshState()) })), "modelmenu2");
+    this.showPop(list.map((m) => ({ label: (m === cur ? "✓ " : "") + m, sel: m === cur, on: () => void this.ctl.saveSettings({ model: m }).then(() => this.host.refreshState()) })), "modelmenu2 up", this.modelEl);
   }
 
   private suggestions: RunSuggestion[] = [];
