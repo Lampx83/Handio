@@ -1,15 +1,16 @@
 import { commandPatternToRegExp, matchGlob } from "./glob";
 import { isSensitivePath } from "./sensitive";
-import { dangerousReason, isReadonlySegment, parseCommand } from "./shell";
+import { dangerousReason, isReadonlySegment, isRoutineSegment, parseCommand } from "./shell";
 
 /**
  * Chế độ:
  *  default      đọc tự do; sửa file và chạy lệnh phải được duyệt
  *  acceptEdits  tự duyệt sửa file trong dự án; lệnh bash vẫn hỏi
+ *  auto         tự lo việc thường ngày (sửa file, build/test/cài gói, git cục bộ); chỉ hỏi việc quan trọng (xoá, mạng, tệp bí mật, lệnh lạ)
  *  plan         chỉ đọc; agent lập kế hoạch rồi xin duyệt (exit_plan_mode)
  *  bypass       tự duyệt mọi thứ, trừ lệnh phá hoại nặng
  */
-export const MODES = ["default", "acceptEdits", "plan", "bypass"] as const;
+export const MODES = ["default", "acceptEdits", "auto", "plan", "bypass"] as const;
 export type Mode = (typeof MODES)[number];
 
 export type ToolKind = "read" | "edit" | "exec" | "net" | "meta" | "mcp";
@@ -130,6 +131,8 @@ export class Permissions {
         // mọi đoạn phải được cho phép riêng lẻ; đoạn ghi ra file bằng `>` thì không bao giờ tự khớp quy tắc
         const ok = segs.every((s) => isReadonlySegment(s, this.root) || (!s.redirectsOut && rules.some((r) => this.bashRuleMatches(r, s.raw))));
         if (ok) return { decision: "allow", reason: bashReadonly ? "lệnh chỉ-đọc an toàn" : "mọi đoạn lệnh khớp quy tắc allow" };
+        if (this.mode === "auto" && segs.every((s) => isRoutineSegment(s, this.root) || (!s.redirectsOut && rules.some((r) => this.bashRuleMatches(r, s.raw)))))
+          return { decision: "allow", reason: "lệnh thường ngày trong dự án (chế độ auto)" };
       }
       // lệnh phức tạp không phân tích được: chỉ quy tắc allow KHÔNG kèm đối số (vd "bash") mới áp dụng
       if (!segs && rules.some((r) => parseRule(r)?.tool === "bash" && parseRule(r)?.arg === undefined))
@@ -137,7 +140,8 @@ export class Permissions {
       return { decision: "ask", reason: "" };
     }
     if (rules.some((r) => this.fileRuleMatches(r, tool, target))) return { decision: "allow", reason: "khớp quy tắc allow" };
-    if (tool.kind === "edit" && this.mode === "acceptEdits") return { decision: "allow", reason: "chế độ acceptEdits" };
+    if (tool.kind === "edit" && (this.mode === "acceptEdits" || this.mode === "auto")) return { decision: "allow", reason: "chế độ " + this.mode };
+    if (this.mode === "auto" && name === "run_javascript") return { decision: "allow", reason: "chạy trong hộp cát, chế độ auto" };
     return { decision: "ask", reason: "" };
   }
 

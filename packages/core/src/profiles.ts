@@ -77,8 +77,8 @@ export const PROFILES: Record<Profile, ProfileDef> = {
     id: "code",
     label: "Code",
     tagline: "Lập trình cùng AI (vibe coding)",
-    modes: ["default", "acceptEdits", "plan", "bypass"],
-    defaultMode: "default",
+    modes: ["default", "acceptEdits", "auto", "plan", "bypass"],
+    defaultMode: "auto",
     suggestions: ["Giải thích dự án này cho tôi", "Sửa lỗi trong hàm tính điểm trung bình", "/init", "Làm một trang web ghi chú đơn giản"],
     welcomeTitle: "Cùng viết code nhé. Bạn muốn làm gì?",
     commands: {
@@ -96,8 +96,8 @@ export const PROFILES: Record<Profile, ProfileDef> = {
     id: "work",
     label: "Work",
     tagline: "Trợ lý văn phòng: Word, Excel, PowerPoint, PDF",
-    modes: ["default", "acceptEdits", "plan"],
-    defaultMode: "default",
+    modes: ["default", "acceptEdits", "auto", "plan", "bypass"],
+    defaultMode: "auto",
     suggestions: ["Tóm tắt các tài liệu trong thư mục này", "Tính điểm tổng kết từ file điểm và xếp loại", "Soạn thông báo họp từ ghi chú", "Tạo slide báo cáo từ file Word"],
     welcomeTitle: "Hôm nay cần xử lý văn bản hay bảng tính nào?",
     commands: {
@@ -118,8 +118,8 @@ export const PROFILES: Record<Profile, ProfileDef> = {
     id: "design",
     label: "Design",
     tagline: "Thiết kế bằng AI: trang web, poster, slide, logo, infographic",
-    modes: ["default", "acceptEdits", "plan"],
-    defaultMode: "default",
+    modes: ["default", "acceptEdits", "auto", "plan", "bypass"],
+    defaultMode: "auto",
     suggestions: ["Thiết kế poster A4 cho hội thảo AI trong giáo dục", "Làm landing page giới thiệu một khoá học", "Tạo logo cho câu lạc bộ lập trình", "Đổi bảng màu của bản thiết kế đang mở sang tông xanh lá"],
     welcomeTitle: "Hôm nay bạn muốn thiết kế gì?",
     commands: {

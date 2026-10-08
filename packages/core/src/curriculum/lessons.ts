@@ -668,20 +668,21 @@ Sandbox chặt kèm phê duyệt lỏng cho tốc độ vừa an toàn; sandbox 
         check: "Bạn biết đọc từng phần của một lệnh (đối tượng bị tác động, cờ nguy hiểm) trước khi bấm cho phép.",
       },
       {
-        title: "Bốn chế độ quyền của NEU Agent",
-        body: `NEU Agent có bốn chế độ; hãy đối chiếu với ý tưởng sandbox và phê duyệt. Mô tả dưới đây là tóm tắt gần đúng để so sánh, hai hệ thống không giống hệt nhau: xem phần hướng dẫn trong NEU Agent để biết chính xác từng chế độ.
+        title: "Năm chế độ quyền của NEU Agent",
+        body: `NEU Agent có năm chế độ; hãy đối chiếu với ý tưởng sandbox và phê duyệt. Mô tả dưới đây là tóm tắt gần đúng để so sánh, hai hệ thống không giống hệt nhau: xem phần hướng dẫn trong NEU Agent để biết chính xác từng chế độ.
 | Chế độ NEU Agent | Hành vi | Gần với |
 | --- | --- | --- |
 | **Hỏi trước** | Hỏi bạn trước khi sửa tệp hoặc chạy lệnh | Phê duyệt chặt |
 | **Tự sửa file** | Tự sửa tệp trong dự án; vẫn hỏi khi chạy lệnh | Ghi trong thư mục dự án, hỏi với lệnh |
+| **Tự động** (mặc định) | Tự lo việc thường ngày: sửa tệp, build, test, cài gói, git cục bộ; vẫn hỏi khi xoá, đụng mạng, tệp bí mật hay lệnh lạ | Tự động nhưng có chốt chặn |
 | **Lập kế hoạch** | Chỉ đọc và đề xuất kế hoạch, chưa sửa | Chỉ đọc |
-| **Tự động hết** | Không hỏi gì | "Không bao giờ hỏi", cần thận trọng nhất |
+| **Toàn quyền** | Không hỏi gì | "Không bao giờ hỏi", cần thận trọng nhất |
 
-Khuyến nghị cho người mới: bắt đầu với *Hỏi trước* hoặc *Lập kế hoạch*; chuyển *Tự sửa file* cho việc quen thuộc, rủi ro thấp (có commit làm điểm quay về); chỉ dùng *Tự động hết* trong môi trường bỏ đi được.`,
+Khuyến nghị cho người mới: dùng *Tự động* cho việc hằng ngày (có commit làm điểm quay về); chuyển sang *Hỏi trước* hoặc *Lập kế hoạch* khi làm trên mã lạ hoặc việc lớn, mơ hồ; chỉ dùng *Toàn quyền* trong môi trường bỏ đi được.`,
         try: [
           "Hãy giúp mình chọn chế độ quyền cho từng tình huống: (1) khám phá một kho mã lạ, (2) sửa bài tập nhỏ có test và commit sẵn, (3) chạy một script mình không đọc hết, (4) tự động hóa việc đổi tên tệp hàng loạt. Giải thích lý do.",
         ],
-        check: "Bạn chọn chế độ khác nhau cho các tình huống và nói được rủi ro lớn nhất của chế độ \"Tự động hết\".",
+        check: "Bạn chọn chế độ khác nhau cho các tình huống và nói được rủi ro lớn nhất của chế độ \"Toàn quyền\".",
       },
       {
         title: "Quy tắc an toàn trong AGENTS.md và bảo vệ bí mật",
@@ -703,7 +704,7 @@ Nhưng AGENTS.md chỉ là *lời dặn*, không phải rào chắn cứng: rào
     takeaways: [
       "Host kiểm soát quyền: mô hình chỉ đề xuất, host kiểm sandbox và xin bạn duyệt.",
       "Ba mức sandbox: chỉ đọc, ghi trong thư mục dự án, toàn quyền; bắt đầu từ mức thấp nhất đủ dùng.",
-      "Chế độ NEU Agent: Hỏi trước, Tự sửa file, Lập kế hoạch, Tự động hết; \"Tự động hết\" chỉ dùng trong môi trường bỏ đi được.",
+      "Chế độ NEU Agent: Hỏi trước, Tự sửa file, Tự động, Lập kế hoạch, Toàn quyền; \"Toàn quyền\" chỉ dùng trong môi trường bỏ đi được.",
       "AGENTS.md chỉ là lời dặn; rào chắn cứng là sandbox cộng phê duyệt; luôn giữ khóa trong .env và ngoài Git.",
     ],
     exercises: ["py-05-mat-khau-manh"],

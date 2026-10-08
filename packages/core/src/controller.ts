@@ -51,8 +51,8 @@ export interface ControllerOptions {
   chats?: ChatStore;
   /** Dựng một trang HTML thành PDF/PNG (Desktop, trong cửa sổ ẩn không script, không mạng). */
   renderDesign?: (html: string, opts: { format: "pdf" | "png"; width: number; height?: number }) => Promise<Uint8Array>;
-  /** Token đăng nhập SSO và các máy chủ (host[:cổng]) được phép nhận nó. */
-  authToken?: () => Promise<string | null>;
+  /** Tiêu đề đăng nhập (SSO/tài khoản) và các máy chủ (host[:cổng]) được phép nhận nó. */
+  authHeaders?: () => Promise<Record<string, string> | null>;
   authHosts?: string[];
   fetchImpl?: typeof fetch;
   /** Tự chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md). Không đặt = không ghi, không gửi gì. Tắt được bằng Settings.diagnostics hoặc policy.diagnostics=false. */
@@ -100,7 +100,7 @@ export class LocalController implements AgentController {
   static async create(o: ControllerOptions): Promise<LocalController> {
     const c = new LocalController(o);
     c.settings = c.applyPolicy(normalizeSettings(await o.store.load(), o.defaults));
-    c.llm = new LlmClient(() => ({ baseUrl: c.settings.baseUrl, model: c.settings.model, key: effectiveKey(c.settings, c.builtin).key, keyHeader: c.settings.keyHeader, temperature: c.settings.temperature, maxOutputTokens: c.settings.maxOutputTokens, thinking: c.settings.thinking, allowInsecure: c.settings.allowInsecureHttp, authToken: o.authToken ? async () => { try { return o.authHosts?.includes(new URL(c.settings.baseUrl).host) ? await o.authToken!() : null; } catch { return null; } } : undefined }), o.fetchImpl);
+    c.llm = new LlmClient(() => ({ baseUrl: c.settings.baseUrl, model: c.settings.model, key: effectiveKey(c.settings, c.builtin).key, keyHeader: c.settings.keyHeader, temperature: c.settings.temperature, maxOutputTokens: c.settings.maxOutputTokens, thinking: c.settings.thinking, allowInsecure: c.settings.allowInsecureHttp, authHeaders: o.authHeaders ? async () => { try { return o.authHosts?.includes(new URL(c.settings.baseUrl).host) ? await o.authHeaders!() : null; } catch { return null; } } : undefined }), o.fetchImpl);
     c.trusted = await o.trust.isTrusted(o.env.root);
     await c.loadProject();
     c.session = await c.makeSession();
@@ -216,7 +216,13 @@ export class LocalController implements AgentController {
 
   async send(text: string): Promise<void> {
     if (this.busy) {
-      this.fire({ type: "notice", level: "warn", text: "Agent đang làm việc. Bấm Dừng (Esc) trước khi gửi yêu cầu mới." });
+      // đang làm việc: tin thường được xếp hàng và đưa cho agent ở bước kế tiếp; lệnh (/…, !…) thì phải đợi
+      const t = text.trim();
+      if (t && !/^[/!]/.test(t)) {
+        this.session.queue.push(t);
+        return;
+      }
+      this.fire({ type: "notice", level: "warn", text: "Agent đang làm việc. Tin nhắn thường gửi được ngay; lệnh / hoặc ! thì đợi xong hoặc bấm Dừng (Esc)." });
       return;
     }
     this.busy = true;
@@ -270,6 +276,9 @@ export class LocalController implements AgentController {
         if (c?.bad.length) this.fire({ type: "notice", level: "warn", text: `⚠ ${c.bad.length}/${c.checked} trích dẫn không khớp tài liệu: ${c.bad.slice(0, 3).join("; ")}` });
       }
       this.fire({ type: "turn_end", interrupted, final });
+      // tin nhắn xếp hàng mà lượt vừa rồi chưa kịp nhận: dừng thì bỏ, xong bình thường thì gửi tiếp như lượt mới
+      const rest = turn.session.queue.splice(0);
+      if (rest.length && !interrupted && turn.session === this.session) void this.send(rest.join("\n\n"));
     }
   }
 

@@ -10,8 +10,8 @@ export interface LlmConfig {
   thinking?: boolean;
   /** Cho phép http:// tới máy không phải cục bộ (mặc định KHÔNG: key và nội dung sẽ đi dạng rõ trên mạng). */
   allowInsecure?: boolean;
-  /** Token đăng nhập SSO (Bearer) cho máy chủ yêu cầu đăng nhập; chỉ được gọi khi địa chỉ API nằm trong danh sách máy chủ tin cậy của ứng dụng. */
-  authToken?: () => Promise<string | null>;
+  /** Tiêu đề đăng nhập (Authorization: Bearer… hoặc Cookie phiên) cho máy chủ yêu cầu đăng nhập; chỉ được gọi khi địa chỉ API nằm trong danh sách máy chủ tin cậy của ứng dụng. */
+  authHeaders?: () => Promise<Record<string, string> | null>;
 }
 
 export interface ToolCallMsg {
@@ -155,8 +155,10 @@ export class LlmClient {
     const c = this.getConfig();
     const h: Record<string, string> = { "Content-Type": "application/json", Accept: accept };
     if (c.key) h[c.keyHeader || "x-ollama-seckey"] = c.key;
-    const t = await c.authToken?.().catch(() => null);
-    if (t) h.Authorization = "Bearer " + t;
+    const extra = await c.authHeaders?.().catch(() => null);
+    // chỉ nhận đúng hai tiêu đề đăng nhập; không để phần chủ ghi đè Content-Type, Accept, …
+    if (extra?.Authorization) h.Authorization = extra.Authorization;
+    if (extra?.Cookie) h.Cookie = extra.Cookie;
     return h;
   }
 

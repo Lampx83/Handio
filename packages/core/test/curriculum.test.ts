@@ -74,7 +74,7 @@ describe("giáo trình: cấu trúc dữ liệu", () => {
     expect(b1.steps.length).toBeGreaterThanOrEqual(8);
     expect(b1.steps.length).toBeLessThanOrEqual(10);
     const all = JSON.stringify(LESSONS);
-    for (const kw of ["E-P-C-C", "PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionStart", "SKILL.md", "MCP", "AGENTS.md", ".neuagent/agents", ".neuagent/commands", "Hỏi trước", "Tự sửa file", "Lập kế hoạch", "Tự động hết"]) {
+    for (const kw of ["E-P-C-C", "PreToolUse", "PostToolUse", "UserPromptSubmit", "SessionStart", "SKILL.md", "MCP", "AGENTS.md", ".neuagent/agents", ".neuagent/commands", "Hỏi trước", "Tự sửa file", "Tự động", "Lập kế hoạch", "Toàn quyền"]) {
       expect(all, `giáo trình thiếu "${kw}"`).toContain(kw);
     }
   });

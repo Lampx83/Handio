@@ -9,7 +9,7 @@ export interface Policy {
   baseUrl?: string;
   /** false = cấm hẳn HTTP không mã hoá (kể cả khi người dùng tự bật). */
   allowInsecureHttp?: boolean;
-  /** false = bỏ chế độ "Tự động hết". */
+  /** false = bỏ chế độ "Toàn quyền". */
   allowBypass?: boolean;
   /** false = lệnh do agent chạy không được ra mạng (chỉ hiệu lực khi có sandbox hệ điều hành). */
   bashNetwork?: boolean;

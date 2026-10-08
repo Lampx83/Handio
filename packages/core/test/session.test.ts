@@ -101,7 +101,7 @@ describe("điều phối quyền", () => {
 });
 
 describe("chế độ plan", () => {
-  it("không sửa được khi chưa duyệt; duyệt xong chuyển sang acceptEdits rồi sửa được", async () => {
+  it("không sửa được khi chưa duyệt; duyệt xong chuyển sang auto rồi sửa được", async () => {
     const { c, env, requests, events } = await makeController(
       [
         { calls: [{ name: "write_file", args: { path: "a.txt", content: "no" } }] },
@@ -109,13 +109,13 @@ describe("chế độ plan", () => {
         { calls: [{ name: "write_file", args: { path: "a.txt", content: "yes" } }] },
         { text: "xong" },
       ],
-      { settings: { mode: "plan" }, decide: (r) => (r.kind === "plan" ? { allow: true, mode: "acceptEdits" } : { allow: true }) },
+      { settings: { mode: "plan" }, decide: (r) => (r.kind === "plan" ? { allow: true, mode: "auto" } : { allow: true }) },
     );
     await c.send("lập kế hoạch rồi làm");
     expect(tool(events, "write_file")[0].output).toContain("plan");
     expect(requests[0]).toMatchObject({ kind: "plan", plan: "1. tạo a.txt" });
     expect(env.snapshot()["/ws/a.txt"]).toBe("yes");
-    expect((await c.getState()).mode).toBe("acceptEdits");
+    expect((await c.getState()).mode).toBe("auto");
   });
 
   it("kế hoạch bị từ chối: ở lại plan, góp ý đến tay mô hình", async () => {
@@ -360,5 +360,56 @@ describe("khớp bài giảng: @file, !lệnh, /model, AGENTS.md", () => {
     await c.send("xin chào");
     const sys = String(llm.calls[0].messages[0].content);
     for (const s of ["Do ONLY what the user asked", "plan first or to stop before editing", "YOURSELF", "never write API keys", ".env.example", "check_package", "background=true", "exact message"]) expect(sys, s).toContain(s.replace("never write API keys", "never write API keys") );
+  });
+});
+
+describe("nhắn thêm khi agent đang làm việc", () => {
+  it("tin nhắn gửi giữa chừng được đưa vào bước kế tiếp của CHÍNH lượt đó (không bị từ chối)", async () => {
+    let ctl: { send(t: string): Promise<void> };
+    const h = await makeController((_m, n) => {
+      if (n === 0) {
+        void ctl.send("nhớ thêm chú thích tiếng Việt");
+        return { calls: [{ name: "read_file", args: { path: "hello.py" } }] };
+      }
+      return { text: "xong" };
+    });
+    ctl = h.c;
+    await h.c.send("sửa hello.py");
+    expect(h.llm.calls).toHaveLength(2);
+    const second = h.llm.calls[1].messages;
+    expect(second.at(-1)).toMatchObject({ role: "user" });
+    expect(String(second.at(-1)!.content)).toContain("nhớ thêm chú thích tiếng Việt");
+    expect(second.at(-2)).toMatchObject({ role: "tool" }); // đến ngay sau kết quả công cụ
+    expect(h.events.filter((e) => e.type === "turn_start")).toHaveLength(1);
+    expect(h.events.some((e: any) => e.type === "notice" && /đang làm việc/.test(e.text))).toBe(false);
+  });
+  it("gửi đúng lúc agent định kết thúc thì agent trả lời tiếp trong cùng lượt", async () => {
+    let ctl: { send(t: string): Promise<void> };
+    const h = await makeController((_m, n) => {
+      if (n === 0) {
+        void ctl.send("à quên, thêm test nữa");
+        return { text: "xong rồi" };
+      }
+      return { text: "đã thêm test" };
+    });
+    ctl = h.c;
+    await h.c.send("làm đi");
+    expect(h.llm.calls).toHaveLength(2);
+    expect(h.events.at(-1)).toMatchObject({ type: "turn_end", final: "đã thêm test" });
+  });
+  it("lệnh / khi đang bận vẫn bị từ chối có giải thích; bấm dừng thì bỏ tin đang xếp hàng", async () => {
+    let ctl: { send(t: string): Promise<void>; interrupt(): void };
+    const h = await makeController((_m, n) => {
+      if (n === 0) {
+        void ctl.send("/clear");
+        void ctl.send("tin sẽ bị bỏ");
+        ctl.interrupt();
+      }
+      return { text: "x" };
+    });
+    ctl = h.c;
+    await h.c.send("chạy");
+    expect(h.events.some((e: any) => e.type === "notice" && /Tin nhắn thường gửi được ngay/.test(e.text))).toBe(true);
+    expect(h.llm.calls).toHaveLength(1);
   });
 });

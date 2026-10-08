@@ -59,6 +59,8 @@ let idCounter = 0;
 const nextId = (p: string) => `${p}${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
 export class Session {
+  /** Tin nhắn người dùng gửi khi agent đang làm việc: được đưa vào cuộc hội thoại ở bước kế tiếp (không phải chờ hết lượt). */
+  queue: string[] = [];
   readonly ctx: ToolContext;
   readonly perms: Permissions;
   readonly tools = new Map<string, Tool>();
@@ -197,9 +199,9 @@ export class Session {
     const req: PermissionRequest = { id: nextId("p"), kind: "plan", tool: "exit_plan_mode", summary: "Kế hoạch đề xuất", args: {}, plan, depth };
     const res = await this.ask(req);
     if (res.allow) {
-      const m: Mode = res.mode === "default" ? "default" : "acceptEdits";
+      const m: Mode = res.mode === "default" ? "default" : "auto";
       this.setMode(m);
-      return `Kế hoạch được duyệt. Đã thoát chế độ plan (${m === "acceptEdits" ? "tự động duyệt sửa file" : "mỗi thay đổi sẽ được hỏi"}). Hãy thực hiện theo kế hoạch rồi kiểm chứng.`;
+      return `Kế hoạch được duyệt. Đã thoát chế độ plan (${m === "auto" ? "tự duyệt việc thường ngày" : "mỗi thay đổi sẽ được hỏi"}). Hãy thực hiện theo kế hoạch rồi kiểm chứng.`;
     }
     return `Người dùng chưa duyệt.${res.note ? " Góp ý: " + res.note + "." : ""} Hãy chỉnh kế hoạch rồi gọi lại exit_plan_mode.`;
   }
@@ -682,6 +684,7 @@ export class Agent {
     try {
       for (let step = 0; step < maxSteps; step++) {
         if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
+        if (this.depth === 0) for (const q of s.queue.splice(0)) this.messages.push({ role: "user", content: "[Tin nhắn mới của người dùng, gửi khi bạn đang làm việc. Hãy tính đến nó ngay từ bước này]\n" + q });
         if (maxSteps >= 10 && maxSteps - step === Math.max(3, Math.floor(maxSteps * 0.15))) this.messages.push({ role: "user", content: `[Hệ thống] Chỉ còn ${maxSteps - step} bước trong lượt này. Hãy ưu tiên hoàn thành phần quan trọng nhất, rồi tóm tắt: đã làm gì và còn thiếu gì.` });
         await this.manageContext();
         const resp = await this.callModel(signal);
@@ -699,6 +702,7 @@ export class Agent {
             if (s.mode !== "plan") continue;
             if (fb.startsWith("Người dùng chưa duyệt")) continue;
           }
+          if (this.depth === 0 && s.queue.length) continue; // người dùng vừa nhắn thêm: trả lời luôn trong lượt này
           if (resp.finish === "length") s.emit({ type: "notice", level: "warn", text: "Câu trả lời bị cắt do hết độ dài tối đa." });
           if (this.depth === 0 && s.hooks) {
             const hr = await s.hooks.run("Stop", { prompt: userText }, signal);

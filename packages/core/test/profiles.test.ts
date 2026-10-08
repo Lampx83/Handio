@@ -29,7 +29,7 @@ describe("hồ sơ Code / Work", () => {
     expect(sys).toContain("NEVER overwrite the user's original files");
     const st = await work.c.getState();
     expect(st.profile).toBe("work");
-    expect(st.allowedModes).toEqual(["default", "acceptEdits", "plan"]);
+    expect(st.allowedModes).toEqual(["default", "acceptEdits", "auto", "plan", "bypass"]);
     expect(st.commands.map((c) => c.name)).toEqual(expect.arrayContaining(["tomtat", "soanthao", "bangtinh", "trinhchieu", "rasoat", "congvan", "hopdong", "email"]));
     expect(st.commands.map((c) => c.name)).not.toContain("fix-tests");
     expect(st.suggestions).toEqual(PROFILES.work.suggestions);
@@ -37,14 +37,13 @@ describe("hồ sơ Code / Work", () => {
     expect((await code.c.getState()).commands.map((c) => c.name)).toEqual(expect.arrayContaining(["init", "vibe", "review", "fix-tests"]));
     expect((await code.c.getState()).allowedModes).toContain("bypass");
   });
-  it("Work không bật được bypass (kể cả cài đặt cấu hình bypass); lệnh slash cũng bị từ chối", async () => {
-    const { c, events } = await makeController([{ text: "ok" }], { profile: "work", settings: { mode: "bypass" } });
-    expect((await c.getState()).mode).toBe("default");
+  it("Work chọn được Toàn quyền trong phiên; chính sách quản trị có thể cấm", async () => {
+    const { c } = await makeController([{ text: "ok" }], { profile: "work", settings: { mode: "auto" } });
+    expect((await c.getState()).mode).toBe("auto");
     await c.setMode("bypass");
-    expect((await c.getState()).mode).toBe("default");
-    await c.send("/mode bypass");
-    expect((await c.getState()).mode).toBe("default");
-    expect(events.some((e: any) => e.type === "notice" && /bypass/.test(e.text))).toBe(true);
+    expect((await c.getState()).mode).toBe("bypass");
+    await c.send("/mode auto");
+    expect((await c.getState()).mode).toBe("auto");
   });
   it("lệnh /tomtat chạy như một lượt chat với nội dung đã mở rộng", async () => {
     const { c, llm } = await makeController([{ text: "ok" }], { profile: "work" });
@@ -156,11 +155,11 @@ describe("chính sách quản trị", () => {
     const c = await mk({ allowBypass: false, disableBash: true }, { mode: "bypass" });
     const st = await c.getState();
     expect(st.allowedModes).not.toContain("bypass");
-    expect(st.mode).toBe("default");
+    expect(st.mode).toBe("auto");
     expect(st.capabilities.exec).toBe(true); // môi trường có exec nhưng công cụ bị gỡ
     expect([...c.currentSession.tools.keys()]).not.toContain("bash");
     await c.setMode("bypass");
-    expect((await c.getState()).mode).toBe("default");
+    expect((await c.getState()).mode).toBe("auto");
   });
   it("mặc định của bản phát hành áp dụng khi người dùng chưa đặt; parsePolicy lọc dữ liệu lạ", async () => {
     const { parsePolicy } = await import("../src");

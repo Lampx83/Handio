@@ -217,3 +217,34 @@ export function isReadonlySegment(s: Segment, root: string): boolean {
   }
   return false;
 }
+
+// ---------------------------------------------------------------- việc thường ngày (chế độ “Tự động”)
+
+const PKG_ROUTINE = new Set(["run", "run-script", "test", "t", "build", "start", "install", "i", "ci", "add", "ls", "list", "outdated", "init"]);
+const TOOLS_ROUTINE = new Set(["tsc", "vitest", "jest", "pytest", "eslint", "prettier", "ruff", "mypy", "black", "make", "mkdir", "touch", "cp", "mv", "cd", "node", "python", "python3", "pwd"]);
+const GIT_ROUTINE = new Set(["add", "commit", "status", "diff", "log", "show", "branch", "tag", "checkout", "switch", "restore", "stash", "init"]);
+const GIT_DISCARD = new Set([".", "-f", "--force", "--discard-changes", "-B", "-C"]);
+
+/**
+ * Lệnh thường ngày khi lập trình, an toàn để tự chạy trong dự án: build/test/cài gói, tạo/chép/đổi tên, git cục bộ.
+ * KHÔNG gồm: xoá (rm), đẩy lên mạng (git push/pull), chạy gói tải về (npx), đổi quyền, sudo, ghi ra file bằng `>`, đường dẫn ra ngoài dự án.
+ */
+export function isRoutineSegment(s: Segment, root: string): boolean {
+  if (isReadonlySegment(s, root)) return true;
+  if (s.redirectsOut || !s.argv.length) return false;
+  const [cmd, ...args] = s.argv;
+  if (args.some((a) => !a.startsWith("-") && isSensitivePath(a))) return false;
+  if (args.some((a) => pathEscapes(a, root))) return false;
+  if (["npm", "pnpm", "yarn"].includes(cmd)) return !!args[0] && PKG_ROUTINE.has(args[0]);
+  if (cmd === "pip" || cmd === "pip3") return ["install", "list", "freeze", "show"].includes(args[0] ?? "");
+  if (cmd === "uv") return ["pip", "sync", "add", "run", "venv"].includes(args[0] ?? "");
+  if (cmd === "cargo") return ["build", "test", "run", "check", "fmt", "clippy"].includes(args[0] ?? "");
+  if (cmd === "go") return ["build", "test", "run", "vet", "fmt", "mod"].includes(args[0] ?? "");
+  if (cmd === "git") {
+    const sub = args[0];
+    if (!sub || sub.startsWith("-") || !GIT_ROUTINE.has(sub)) return false;
+    if (["checkout", "switch", "restore"].includes(sub) && args.slice(1).some((a) => GIT_DISCARD.has(a))) return false; // sẽ bỏ thay đổi chưa lưu
+    return !args.some((a) => a.startsWith("--exec") || a.startsWith("--output"));
+  }
+  return TOOLS_ROUTINE.has(cmd);
+}

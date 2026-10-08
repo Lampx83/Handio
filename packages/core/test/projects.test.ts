@@ -45,7 +45,7 @@ describe("thứ tự tab và hồ sơ Design", () => {
     expect(tools).not.toContain("run_javascript");
     const st = await c.getState();
     expect(st.commands.map((x) => x.name)).toEqual(expect.arrayContaining(["poster", "landing", "bienthe"]));
-    expect(st.allowedModes).not.toContain("bypass");
+    expect(st.allowedModes).toContain("auto");
   });
 });
 
