@@ -1,0 +1,11 @@
+[Unit]
+Description=NEU Agent - lam moi trang tong quan quan tri (10 phut/lan)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Persistent=true
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target

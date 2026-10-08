@@ -265,6 +265,16 @@ class ServerTests(unittest.TestCase):
             self.assertEqual(st, 404, bad)
             self.assertNotIn(b"SECRET", body)
 
+    def test_admin_root_prefers_index_html(self):
+        idx = os.path.join(self.reports, "index.html")
+        with open(idx, "w") as f:
+            f.write("<h1>tong quan</h1>")
+        try:
+            self.assertIn(b"tong quan", self.req("GET", "/admin/", email="admin@neu.edu.vn")[1])
+            self.assertIn("báo cáo".encode(), self.req("GET", "/admin/latest", email="admin@neu.edu.vn")[1])
+        finally:
+            os.unlink(idx)
+
     def test_admin_denied_when_no_admin_file(self):
         saved = self.cfg.admins_file
         try:

@@ -7,7 +7,7 @@ kiểm tra chặt theo lược đồ (schema.json, dùng chung với mã TypeScr
   POST /diag            nginx đã xác thực SSO và gắn X-User-Email. Thân <=16 KB, <=200 sự kiện. Giới hạn tốc độ theo người dùng.
   GET  /healthz         {"ok":true} (bộ thu còn sống; chỉ cục bộ)
   GET  /public-healthz  200 {"ok":true} | 503 {"ok":false}  — dựa vào health.json do healthz.py ghi (cũ >15 phút = false)
-  GET  /admin/[tệp]     báo cáo chất lượng (tĩnh) cho quản trị viên: chỉ khi X-User-Email nằm trong admins.txt
+  GET  /admin/[tệp]     trang tổng quan (index.html) + báo cáo chất lượng (tĩnh) cho quản trị viên: chỉ khi X-User-Email nằm trong admins.txt
 
 Định danh: uid = HMAC-SHA256(bí mật máy chủ, email viết thường)[:16 hex]. Email KHÔNG được lưu, KHÔNG được ghi nhật ký.
 Dữ liệu: mỗi sự kiện một dòng {"ts_srv","uid","a":{app},"e":{event}} vào <DIAG_DIR>/YYYY-MM-DD.jsonl (UTC, quyền 0600); xoá sau 90 ngày.
@@ -348,7 +348,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(403, {"ok": False, "error": "forbidden"})
         name = p[len("/admin/"):] if p.startswith("/admin/") else ""
         if name in ("", "latest"):
-            name = "latest.html"
+            name = "index.html" if name == "" and os.path.isfile(os.path.join(c.reports_dir, "index.html")) else "latest.html"
         if not ADMIN_FILE_RE.match(name):
             return self._send(404, {"ok": False})
         full = os.path.realpath(os.path.join(c.reports_dir, name))

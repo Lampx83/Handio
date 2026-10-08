@@ -32,9 +32,9 @@ SNIP=/etc/nginx/snippets/neu-agent-locations.conf
 TS=$(date +%Y%m%d%H%M%S)
 BAK=/var/backups/neu-agent-diag/$TS
 SERVICES="neu-agent-diag.service"
-TIMERS="neu-agent-diag-report.timer neu-agent-healthz.timer"
-UNITS="neu-agent-diag.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer"
-CODE="collector.py report.py healthz.py schema.json"
+TIMERS="neu-agent-diag-report.timer neu-agent-healthz.timer neu-agent-diag-stats.timer"
+UNITS="neu-agent-diag.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer"
+CODE="collector.py report.py stats.py healthz.py schema.json"
 
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
 command -v python3 >/dev/null && command -v systemctl >/dev/null || { echo "Thiếu python3 hoặc systemctl."; exit 1; }
@@ -62,7 +62,7 @@ for a in "${ADMIN_LIST[@]:-}"; do
   [[ "$a" =~ ^[A-Za-z0-9._%+\'-]{1,64}@[A-Za-z0-9.-]{1,190}$ ]] || { echo "Email quản trị không hợp lệ: $a"; exit 1; }
 done
 
-for f in $CODE neu-agent-diag.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag.logrotate; do
+for f in $CODE neu-agent-diag.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer neu-agent-diag.logrotate; do
   [ -f "$HERE/$f" ] || { echo "Thiếu $HERE/$f"; exit 1; }
 done
 
@@ -160,6 +160,8 @@ c_admin=$(code http://127.0.0.1:4190/admin/ || true)                            
 systemctl start neu-agent-healthz.service 2>/dev/null || true       # tạo health.json (có thể báo lỗi nếu oauth2/cổng mô hình đang lỗi; không chặn cài)
 rep_ok=1; systemctl start neu-agent-diag-report.service || rep_ok=0 # báo cáo đầu tiên (trống) để trang quản trị có nội dung
 [ -s "$VAR/reports/latest.html" ] || rep_ok=0
+systemctl start neu-agent-diag-stats.service || rep_ok=0            # trang tổng quan quản trị (index.html)
+[ -s "$VAR/reports/index.html" ] || rep_ok=0
 echo "Kiểm tra: bộ thu=$c_health | POST sai lược đồ=$c_bad(400) | thiếu danh tính=$c_noid(401) | admin khi chưa đăng nhập=$c_admin(403) | báo cáo=$([ $rep_ok = 1 ] && echo ok || echo LỖI)"
 [ "$c_health" = '{"ok":true}' ] && [ "$c_bad" = 400 ] && [ "$c_noid" = 401 ] && [ "$c_admin" = 403 ] && [ $rep_ok = 1 ] || { echo "Kiểm tra sau cài THẤT BẠI"; exit 1; }
 

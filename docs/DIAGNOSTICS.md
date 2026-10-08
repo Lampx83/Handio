@@ -52,6 +52,20 @@ sudo ./diag/install-diag.sh --admin ban@neu.edu.vn           # người dùng ne
 - Gợi ý bằng mô hình (tuỳ chọn): đặt key vào `/etc/neu-agent/llm-key` (600) rồi chạy lại `install-diag.sh`. Chỉ gửi **số liệu tổng hợp** (không sự kiện thô, không chuỗi tự do) tới `http://192.0.2.10:8037`; kết quả là *bản nháp* ghi rõ cần người kiểm tra.
 - Lưu ý: `access_log` của máy chủ ảo này nay chỉ ghi JSON ở tệp trên (không còn ghi vào `access.log` chung).
 
+## 4b. Trang quản trị tổng quan — `https://ai.neu.edu.vn/agent/admin/`
+
+Chỉ email trong `/etc/neu-agent/admins.txt` mới xem được. Trang mặc định (`index.html`, do `deploy/220/diag/stats.py` tạo, **tự làm mới mỗi 10 phút** bởi `neu-agent-diag-stats.timer`) gồm:
+
+- **Số người dùng**: 24 giờ / 7 ngày / 30 ngày / cả 90 ngày giữ dữ liệu; người dùng mới 7 ngày; tỷ lệ quay lại (tuần này so với tuần trước); số máy cài hoạt động.
+- **Biểu đồ 30 ngày**: người dùng hoạt động, người dùng mới, lượt làm việc (kèm lượt lỗi), lệnh gọi mô hình qua nginx (kèm 5xx), lượt tải bản cài, lượt Desktop kiểm tra cập nhật; lượt làm việc theo giờ trong ngày (giờ VN).
+- **Cơ cấu**: phiên bản, nền tảng, tab Work/Code/Design, mô hình (người dùng, máy, lượt).
+- **Bảng người dùng** (100 người đầu theo số lượt 30 ngày): *mã giả danh* 8 ký tự, lần đầu/gần nhất, số ngày dùng, lượt, tab/nền tảng/phiên bản chính.
+- Tình trạng hệ thống (`health.json`) và đường dẫn tới báo cáo chất lượng hằng ngày (`latest.html`) cùng `stats.json`.
+
+Giới hạn cần biết: (1) chỉ thấy người **có gửi chẩn đoán** (tắt trong Cài đặt/`policy.json` thì không hiện); (2) người dùng chỉ là mã giả danh — không có email, đúng cam kết ở mục 1; muốn tra mã ứng với ai, tự tính `HMAC-SHA256(diag-secret, email_viết_thường)[:8 hex]` trên máy 220; (3) nhật ký nginx chỉ giữ 14 ngày nên số tải/lệnh gọi mô hình theo ngày được **cộng dồn từ lúc cài trang này** vào `reports/nginx-daily.json`; (4) lượt tải = yêu cầu HTTP 200 tới tệp `.dmg/.exe/...` (route nginx `download_pkg`; cần chạy lại `sudo ./install.sh <key>` để nginx có route này); (5) đổi `diag-secret` thì mã người dùng đổi theo.
+
+Cập nhật: `sudo ./install.sh <key mô hình>` (nginx) rồi `sudo ./diag/install-diag.sh`; chạy ngay: `sudo systemctl start neu-agent-diag-stats.service`.
+
 ## 5. Đọc báo cáo
 
 Mở `latest.html` (một tệp tĩnh). Từ trên xuống: các số chính; **“Phát hiện & đề xuất cải tiến”** (quy tắc theo ngưỡng, xếp cao → thấp, mỗi mục có *bằng chứng* và *đề xuất*); gợi ý của mô hình (nếu bật); **bất thường** so với 7 ngày trước (tăng ≥2 lần hoặc *mới xuất hiện*: loại lỗi, tín hiệu, phiên bản, mô hình, công cụ thất bại); bảng chi tiết (kết quả lượt, lỗi LLM, công cụ, tín hiệu, cổng mô hình p50/p95, độ trễ, phiên bản/nền tảng). Dưới `min_turns` lượt thì không kết luận về tỷ lệ. `$request_time` của luồng streaming gồm cả thời gian sinh văn bản (không phải chỉ token đầu).
