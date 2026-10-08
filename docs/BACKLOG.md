@@ -8,13 +8,23 @@ Cách dùng và chấm điểm: xem [CAI-TIEN.md](CAI-TIEN.md). Cập nhật m�
 
 | ID | Việc | Bằng chứng (ngày) | Tác động | Công sức | Cách đo thành công | Trạng thái |
 |---|---|---|---|---|---|---|
-| B-01 | Giảm lỗi công cụ: `run_javascript`, `read_file`, `list_dir`, `edit_file`, `write_file` (hướng dẫn công cụ/đường dẫn/thông báo lỗi cho mô hình, kiểm tra tham số sớm) | 8/10/2026, 25 người, 263 lượt: tỷ lệ lỗi `run_javascript` 49/65 (75%), `read_file` 71/150 (47%), `edit_file` 16/56 (29%), `list_dir` 38/141 (27%), `write_file` 59/322 (18%) | 5 | M | Tỷ lệ lỗi từng công cụ < 15%; tín hiệu `repeat_tool_fail` giảm ≥ 50% | đề xuất |
-| B-02 | Giảm lặp và chạm giới hạn bước (phát hiện lặp sớm, gợi ý đổi cách làm, hỏi lại người dùng) | 27 tín hiệu `repeat_tool_fail`, 13 `loop`, 9 `step_limit` trên 263 lượt; 8 lượt kết thúc vì lặp | 5 | M | `loop` + `step_limit` < 3% số lượt (hiện ≈ 6%) | đề xuất |
+| B-01 | Giảm lỗi công cụ: `run_javascript`, `read_file`, `list_dir`, `edit_file`, `write_file` (hướng dẫn công cụ/đường dẫn/thông báo lỗi cho mô hình, kiểm tra tham số sớm) | 8/10/2026, 25 người, 263 lượt: tỷ lệ lỗi `run_javascript` 49/65 (75%), `read_file` 71/150 (47%), `edit_file` 16/56 (29%), `list_dir` 38/141 (27%), `write_file` 59/322 (18%) | 5 | M | Tỷ lệ lỗi từng công cụ < 15%; tín hiệu `repeat_tool_fail` giảm ≥ 50% | đã làm trong 0.2.0 (đo lại sau 1–2 tuần; xem ghi chú dưới bảng) |
+| B-02 | Giảm lặp và chạm giới hạn bước (phát hiện lặp sớm, gợi ý đổi cách làm, hỏi lại người dùng) | 27 tín hiệu `repeat_tool_fail`, 13 `loop`, 9 `step_limit` trên 263 lượt; 8 lượt kết thúc vì lặp | 5 | M | `loop` + `step_limit` < 3% số lượt (hiện ≈ 6%) | đã làm trong 0.2.0 (đo lại) |
 | B-03 | Giảm token gửi lên mỗi lượt (nén ngữ cảnh sớm hơn, cắt kết quả công cụ dài, bộ nhớ đệm tiền tố nếu máy chủ hỗ trợ) | Trong một ngày: ~14,6 triệu token prompt so với ~0,33 triệu token trả lời (≈ 44:1); p95 thời gian một lượt ~263 giây | 4 | M | Prompt/trả lời < 20:1; p95 một lượt < 120 giây | đề xuất |
 | B-04 | Tab **Work** ít được dùng sâu: nhiều người thử nhưng ít lượt | 14 người dùng nhưng chỉ 37 lượt (≈ 2,6 lượt/người) so với tab **Code** 217 lượt/23 người (≈ 9,4) | 4 | M | Lượt/người tab Work ≥ 5 sau 2 tuần; người dùng Work quay lại | đề xuất (cần hỏi vài người dùng Work vì sao) |
 | B-05 | Kéo người dùng quay lại: gợi ý bài/mẫu đầu tiên, nhắc lộ trình học | 3/25 người chỉ làm 1 lượt; chưa có ai dùng ≥ 2 ngày (dữ liệu mới có 1 ngày: đo lại sau 2 tuần) | 4 | S | Tỷ lệ “dùng ≥ 2 ngày” và tỷ lệ quay lại tuần tăng | đề xuất (chờ thêm dữ liệu) |
 | B-06 | Bản web là kênh chính — kiểm tra trải nghiệm web trước, Desktop sau | 20/25 người dùng qua web, 10 Windows, 3 macOS | 3 | S | Điểm lỗi web ≤ Desktop; theo dõi tỷ lệ cài Desktop | đề xuất |
 | B-07 | Phản hồi chậm: token đầu tiên p95 > 5 giây | p95 thời gian tới token đầu ≈ 5,3 giây (p50 ≈ 1,0 giây) | 3 | M | p95 < 3 giây (cần phối hợp phía mô hình/cổng) | đề xuất |
+
+**Ghi chú B-01 (quan trọng khi đo):** con số lỗi `run_javascript` 75% phần lớn là **chương trình/test của học viên chạy hỏng trong bài tập sửa lỗi** (kết quả bình thường), không phải công cụ hỏng. Từ 0.2.0 chẩn đoán có mã lý do (`program` tách riêng) nên trang quản trị chỉ tính "công cụ lỗi" thật; số liệu trước và sau 0.2.0 **không so trực tiếp được**: dùng mục "Vì sao công cụ thất bại" để so từng lý do. Còn lại (`read_file` 47%, `list_dir` 27%) chủ yếu do đoán sai đường dẫn: 0.2.0 thêm gợi ý đường dẫn đúng.
+
+## Việc mới (từ buổi rà soát 8/10)
+
+| ID | Việc | Vì sao | Tác động | Công sức | Trạng thái |
+|---|---|---|---|---|---|
+| B-08 | **Lưu có đồng ý** prompt và câu trả lời để cải tiến: bật "Chia sẻ để cải tiến" hoặc nút chia sẻ từng cuộc trò chuyện; tự xoá thông tin nhạy cảm trên máy trước khi gửi; kho riêng, chỉ quản trị viên xem, giữ 180 ngày, xoá theo yêu cầu | Dữ liệu hành vi cho biết *cái gì* hỏng nhưng không cho biết *vì sao*; cần nội dung nhưng phải minh bạch (Nghị định 13/2023) | 5 | L | chờ chủ dự án xác nhận mô hình đồng ý |
+| B-09 | **Bộ ca kiểm thử (eval)** cố định lấy từ tác vụ thật đã đồng ý và ẩn danh; chạy lại mỗi khi đổi prompt/công cụ để đo "thông minh hơn" bằng số | Không đo được thì không biết cải tiến có thật không | 5 | L | đề xuất (phụ thuộc B-08) |
+| B-10 | Phản hồi 👍/👎 sau câu trả lời kèm lý do chọn sẵn; khảo sát ngắn định kỳ | Tín hiệu rõ nhất, người dùng tự gửi, ít rủi ro nhất | 4 | M | đề xuất |
 
 ## Theo dõi (chưa có bằng chứng người dùng cần)
 - Thêm lựa chọn mô hình/chi phí theo nhiệm vụ (mô hình nhỏ cho việc đơn giản): chờ báo cáo quý về chất lượng mô hình mở.
@@ -22,4 +32,5 @@ Cách dùng và chấm điểm: xem [CAI-TIEN.md](CAI-TIEN.md). Cập nhật m�
 - Phản hồi trực tiếp trong ứng dụng (👍/👎 sau câu trả lời, khảo sát ngắn) để hiểu *vì sao* — cần quyết định về thông báo và công tắc trước ([CAI-TIEN.md](CAI-TIEN.md), mục Quyền riêng tư).
 
 ## Đã làm
+- 2026-10-08 — Ô nhập prompt gọn kiểu Claude: chế độ, mô hình, mức ngữ cảnh dưới ô nhập (0.2.0).
 - 2026-10-08 — Trang quản trị tổng quan và cơ chế phát hành/cập nhật (thông báo, tải có kiểm mã băm, `minVersion`, CHANGELOG, `version:bump`) — [RELEASE.md](RELEASE.md).

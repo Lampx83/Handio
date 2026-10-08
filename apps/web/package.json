@@ -1,6 +1,6 @@
 {
   "name": "@neu/agent-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,5 +8,8 @@
     "dev": "node build.mjs && node dev/server.mjs",
     "start": "node dev/server.mjs"
   },
-  "dependencies": { "@neu/agent-core": "*", "@neu/agent-ui": "*" }
+  "dependencies": {
+    "@neu/agent-core": "*",
+    "@neu/agent-ui": "*"
+  }
 }
