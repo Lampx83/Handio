@@ -14,6 +14,7 @@ SNIP=/etc/nginx/snippets/neu-agent-locations.conf
 SNIPA=/etc/nginx/snippets/neu-agent-auth.conf
 WEBROOT=/var/www/neu-agent
 DLROOT=/var/www/neu-agent-dl
+GUIDEROOT=/var/www/neu-agent-guide
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TS=$(date +%Y%m%d%H%M%S)
 
@@ -65,6 +66,13 @@ if [ -d "$HERE/downloads" ] && ls "$HERE/downloads" | grep -q .; then
   if [ -f "$HERE/downloads/SHA256SUMS.txt" ]; then (cd "$HERE/downloads" && sha256sum -c SHA256SUMS.txt >/dev/null) || { echo "Mã băm các bản cài không khớp SHA256SUMS.txt. Dừng."; exit 1; }; fi
   mkdir -p "$DLROOT"; cp -f "$HERE/downloads/"* "$DLROOT/"; chmod 755 "$DLROOT"; chmod 644 "$DLROOT"/*
   echo "Đã cập nhật bản cài Desktop: $(ls "$DLROOT" | tr '\n' ' ')"
+fi
+
+# 1c) trang giới thiệu/hướng dẫn công khai: guide-public/ -> /var/www/neu-agent-guide (thay nguyên thư mục để không sót ảnh cũ)
+if [ -f "$HERE/guide-public/index.html" ]; then
+  rm -rf "$GUIDEROOT.new"; mkdir -p "$GUIDEROOT.new"; cp -R "$HERE/guide-public/." "$GUIDEROOT.new/"
+  chmod -R a+rX "$GUIDEROOT.new"; rm -rf "$GUIDEROOT"; mv "$GUIDEROOT.new" "$GUIDEROOT"
+  echo "Đã cập nhật trang hướng dẫn công khai: $GUIDEROOT"
 fi
 
 # 2) cấu hình nginx (key chỉ nằm ở tệp conf.d, quyền 640)

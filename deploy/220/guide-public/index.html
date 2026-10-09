@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEU Agent — Giới thiệu và hướng dẫn</title>
+<meta name="description" content="NEU Agent: trợ lý AI của Trường Đại học Kinh tế Quốc dân cho viết mã, làm việc với tệp và thiết kế. Xem ảnh và demo trước khi đăng nhập.">
+<style>
+:root{color-scheme:light dark;--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#5d636b;--border:#dedcd3;--accent:#0b4a9e;--accent-text:#fff;--soft:#e8f0fb}
+@media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#a0a4ac;--border:#34363b;--accent:#5b9bff;--accent-text:#0b1220;--soft:#1d2736}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0}
+.brand{font-weight:800;font-size:20px;color:var(--accent);text-decoration:none}
+nav a{margin-left:16px;color:var(--muted);text-decoration:none;font-size:14px}
+nav a:hover{color:var(--accent)}
+.btn{display:inline-block;padding:11px 22px;border-radius:10px;font-weight:700;text-decoration:none;border:1px solid var(--accent);background:var(--accent);color:var(--accent-text)}
+.btn.ghost{background:transparent;color:var(--accent)}
+.hero{text-align:center;padding:36px 0 24px}
+.hero h1{font-size:clamp(28px,5vw,44px);line-height:1.2;margin:0 0 12px}
+.hero p{max-width:640px;margin:0 auto 22px;color:var(--muted);font-size:18px}
+.cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.hero small{display:block;margin-top:12px;color:var(--muted)}
+h2{font-size:26px;margin:0 0 6px}
+section{padding:34px 0}
+.lead{color:var(--muted);margin:0 0 20px}
+img{max-width:100%;height:auto;display:block}
+.shot{border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--panel);box-shadow:0 6px 24px rgba(0,0,0,.12)}
+/* ---- demo trình chiếu thuần CSS ---- */
+.demo input{position:absolute;opacity:0;pointer-events:none}
+.demo .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.demo .tabs label{padding:8px 14px;border:1px solid var(--border);border-radius:999px;cursor:pointer;background:var(--panel);font-size:14px;font-weight:600}
+.demo .slide{display:none}
+.demo .slide .cap{margin:14px 2px 0;font-size:17px}
+.demo .slide .cap b{color:var(--accent)}
+#s1:checked~.tabs label[for=s1],#s2:checked~.tabs label[for=s2],#s3:checked~.tabs label[for=s3],#s4:checked~.tabs label[for=s4],#s5:checked~.tabs label[for=s5]{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+#s1:checked~.slides .p1,#s2:checked~.slides .p2,#s3:checked~.slides .p3,#s4:checked~.slides .p4,#s5:checked~.slides .p5{display:block}
+.demo input:focus-visible~.tabs label{outline:2px solid var(--accent);outline-offset:2px}
+/* ---- thẻ ---- */
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.card .body{padding:16px 18px 18px}
+.card h3{margin:0 0 6px;font-size:19px}
+.card p{margin:0 0 8px;color:var(--muted);font-size:15px}
+.card ul{margin:6px 0 0;padding-left:18px;font-size:14.5px}
+.feat{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+.feat h3{margin:0 0 4px;font-size:17px}.feat p{margin:0;color:var(--muted);font-size:15px}
+.steps{counter-reset:s;display:grid;gap:12px;padding:0;list-style:none}
+.steps li{counter-increment:s;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px 14px 56px;position:relative}
+.steps li:before{content:counter(s);position:absolute;left:14px;top:12px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-text);display:grid;place-items:center;font-weight:800}
+details{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:10px}
+summary{cursor:pointer;font-weight:600}
+details p{margin:8px 0 0;color:var(--muted)}
+.two{display:grid;gap:22px;grid-template-columns:1fr;align-items:center}
+@media(min-width:820px){.two{grid-template-columns:1fr 1.1fr}}
+.band{background:var(--soft);border-radius:18px;padding:28px 22px;text-align:center}
+footer{padding:28px 0 40px;color:var(--muted);font-size:14px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="#top">NEU Agent</a>
+    <nav><a href="#demo">Demo</a><a href="#tab">Ba chế độ</a><a href="#tip">Điểm nổi bật</a><a href="#faq">Hỏi đáp</a><a href="changelog.html">Có gì mới</a></nav>
+  </header>
+
+  <div class="hero" id="top">
+    <h1>Nói vài câu, nhận sản phẩm hoàn chỉnh</h1>
+    <p>Trợ lý AI của Trường Đại học Kinh tế Quốc dân: viết và sửa mã, xử lý tài liệu, làm thiết kế. Bạn mô tả ngắn gọn, NEU Agent tự hiểu ý, làm đủ việc, tự kiểm tra rồi mới báo kết quả.</p>
+    <div class="cta">
+      <a class="btn" href="/agent/">Đăng nhập để dùng</a>
+      <a class="btn ghost" href="#demo">Xem demo</a>
+    </div>
+    <small>Dùng tài khoản @neu.edu.vn hoặc @st.neu.edu.vn · Bản web và bản cài cho máy tính</small>
+  </div>
+
+  <section id="demo">
+    <h2>Xem NEU Agent hoạt động</h2>
+    <p class="lead">Bấm từng bước. Đây là ảnh chụp từ ứng dụng thật, không cần đăng nhập để xem.</p>
+    <div class="demo">
+      <input type="radio" name="d" id="s1" checked><input type="radio" name="d" id="s2"><input type="radio" name="d" id="s3"><input type="radio" name="d" id="s4"><input type="radio" name="d" id="s5">
+      <div class="tabs">
+        <label for="s1">1. Chọn việc</label><label for="s2">2. Có sẵn dự án mẫu</label><label for="s3">3. Thiết kế</label><label for="s4">4. Chỉ vào để sửa</label><label for="s5">5. Học dần</label>
+      </div>
+      <div class="slides">
+        <div class="slide p1"><div class="shot"><img src="img/work.jpg" width="800" height="600" alt="Màn hình chính chế độ Work"></div><p class="cap"><b>Chọn Work, Code hoặc Design</b> rồi gõ điều bạn muốn, ngắn cũng được. Ví dụ: “tóm tắt các tệp này thành báo cáo một trang”.</p></div>
+        <div class="slide p2"><div class="shot"><img src="img/tao-du-an.jpg" width="800" height="600" alt="Tạo dự án mẫu Web ghi chú"></div><p class="cap"><b>Một cú bấm có ngay dự án mẫu</b> (web ghi chú, bảng điểm, trang giới thiệu…). Vừa học vừa thử, không cần chuẩn bị gì.</p></div>
+        <div class="slide p3"><div class="shot"><img src="img/design.jpg" width="800" height="600" alt="Bản xem trước thiết kế"></div><p class="cap"><b>Bản xem trước hiện ngay bên phải.</b> Xuất PDF hoặc PNG, đổi kích thước màn hình máy tính, điện thoại.</p></div>
+        <div class="slide p4"><div class="shot"><img src="img/chi-vao-de-sua.jpg" width="800" height="600" alt="Chỉ vào để sửa"></div><p class="cap"><b>Bấm vào đúng chỗ muốn đổi</b>, rồi chọn “To hơn”, “Đổi màu”… hoặc gõ vài chữ. Không cần mô tả “cái nút ở góc dưới bên phải”.</p></div>
+        <div class="slide p5"><div class="shot"><img src="img/hoc.jpg" width="800" height="600" alt="Bài học vibe coding"></div><p class="cap"><b>Học vibe coding ngay trong ứng dụng</b>: 12 buổi, 16 bài tập, 7 dự án mẫu. Nút 💡 chứa mẹo, thủ thuật và tình huống mẫu cho từng chế độ.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tab">
+    <h2>Ba chế độ cho ba kiểu việc</h2>
+    <p class="lead">Chuyển qua lại bất kỳ lúc nào. Mỗi chế độ có sẵn “cách làm việc” riêng, bạn chỉ cần nói mục tiêu.</p>
+    <div class="grid">
+      <div class="card"><img src="img/code.jpg" width="800" height="600" alt="Chế độ Code" loading="lazy"><div class="body"><h3>Code</h3><p>Viết, sửa lỗi, chạy thử và kiểm tra mã trong thư mục của bạn.</p><ul><li>Tự chạy thử, thấy lỗi thì tự sửa tiếp</li><li>Giao diện web gọn gàng, dùng được trên điện thoại</li><li>Nhớ ngữ cảnh dự án qua lệnh <code>/init</code></li></ul></div></div>
+      <div class="card"><img src="img/work.jpg" width="800" height="600" alt="Chế độ Work" loading="lazy"><div class="body"><h3>Work</h3><p>Đọc, tóm tắt, soạn báo cáo, tổng hợp bảng từ tệp của bạn.</p><ul><li>Yêu cầu ngắn vẫn ra bản hoàn chỉnh</li><li>Hỏi lại tối đa một câu khi thật cần</li><li>Tự đọc lại kết quả trước khi trả</li></ul></div></div>
+      <div class="card"><img src="img/design.jpg" width="800" height="600" alt="Chế độ Design" loading="lazy"><div class="body"><h3>Design</h3><p>Trang giới thiệu, poster, slide, mẫu biểu có bản xem trước trực tiếp.</p><ul><li>Bố cục, màu sắc, chữ được chọn sẵn cho hài hoà</li><li>Chỉ vào phần muốn sửa là xong</li><li>Xuất PDF, PNG</li></ul></div></div>
+    </div>
+  </section>
+
+  <section id="tip">
+    <h2>Điểm nổi bật</h2>
+    <p class="lead">Những thứ làm NEU Agent khác một khung chat thông thường.</p>
+    <div class="grid">
+      <div class="feat"><h3>Nói ít, hiểu nhiều</h3><p>Một câu ngắn được hiểu thành yêu cầu đầy đủ: có bố cục, xử lý lỗi, trình bày đẹp. Bạn không phải viết bản mô tả dài.</p></div>
+      <div class="feat"><h3>Tự kiểm tra trước khi báo xong</h3><p>Với mã thì chạy thử; với tài liệu và thiết kế thì đọc lại. Thấy sai thì sửa luôn.</p></div>
+      <div class="feat"><h3>Chỉ vào để sửa</h3><p>Bấm vào phần tử trên bản xem trước thiết kế, chỉ sửa đúng chỗ đó, không đụng phần còn lại.</p></div>
+      <div class="feat"><h3>Riêng tư</h3><p>Tệp của bạn nằm trên máy bạn. Số liệu cải tiến chỉ gồm con số và mã lỗi, tuyệt đối không có nội dung trò chuyện hay tệp, và bạn tắt được trong phần Cài đặt.</p></div>
+      <div class="feat"><h3>Hạn mức công bằng</h3><p>Mỗi người có hạn mức token mỗi ngày (sinh viên 1 triệu, giảng viên 10 triệu), có thêm 10% để hoàn tất lượt đang làm.</p></div>
+      <div class="feat"><h3>Web và Desktop</h3><p>Dùng ngay trên trình duyệt, hoặc cài bản cho macOS và Windows để làm việc trực tiếp trong thư mục của bạn.</p></div>
+    </div>
+  </section>
+
+  <section id="guide">
+    <div class="two">
+      <div>
+        <h2>Sau khi đăng nhập: nhiều mẹo hơn</h2>
+        <p class="lead">Nút 💡 ở góc trên có hướng dẫn riêng cho từng chế độ: mẹo, thủ thuật, tình huống mẫu bấm là chạy, phím tắt, cách xử lý khi gặp sự cố. Có ô tìm kiếm (gõ không dấu cũng được) và mục “Có gì mới”.</p>
+        <a class="btn ghost" href="changelog.html">Xem nhật ký thay đổi</a>
+      </div>
+      <div class="shot"><img src="img/huong-dan.jpg" width="800" height="600" alt="Hộp hướng dẫn trong ứng dụng" loading="lazy"></div>
+    </div>
+  </section>
+
+  <section id="start">
+    <h2>Bắt đầu trong 3 bước</h2>
+    <ol class="steps">
+      <li><b>Đăng nhập</b> bằng tài khoản Microsoft của trường (@neu.edu.vn hoặc @st.neu.edu.vn).</li>
+      <li><b>Chọn chế độ</b> Work, Code hoặc Design, hoặc bấm “Dự án mẫu” để thử ngay.</li>
+      <li><b>Gõ điều bạn muốn</b>, càng ngắn càng tốt. Cần thêm thì nói tiếp, nó nhớ phần trước.</li>
+    </ol>
+    <p style="margin-top:18px"><a class="btn" href="/agent/">Đăng nhập NEU Agent</a></p>
+  </section>
+
+  <section id="log">
+    <div class="two">
+      <div class="shot"><img src="img/nhat-ky.jpg" width="800" height="600" alt="Nhật ký thay đổi trong ứng dụng" loading="lazy"></div>
+      <div>
+        <h2>Mỗi phiên bản đều ghi rõ sửa gì</h2>
+        <p class="lead">Mọi thay đổi đều có trong nhật ký, xem được ngay trong ứng dụng (cuối thanh bên) và trên trang này, kể cả khi chưa đăng nhập.</p>
+        <a class="btn ghost" href="changelog.html">Mở nhật ký thay đổi</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <h2>Hỏi nhanh đáp gọn</h2>
+    <details><summary>Ai dùng được?</summary><p>Cán bộ, giảng viên và sinh viên có tài khoản @neu.edu.vn hoặc @st.neu.edu.vn.</p></details>
+    <details><summary>Dữ liệu của tôi có bị gửi đi đâu không?</summary><p>Nội dung bạn trao đổi với mô hình được gửi tới máy chủ mô hình của trường để trả lời. Tệp trong thư mục làm việc chỉ được đọc khi cần cho yêu cầu của bạn. Số liệu cải tiến ứng dụng chỉ gồm con số, không có nội dung, và có thể tắt.</p></details>
+    <details><summary>Nên dùng bản web hay bản cài?</summary><p>Bản web mở là dùng. Bản cài (macOS, Windows) làm việc trực tiếp với thư mục trên máy và nhận thông báo khi có bản mới. Tải bản cài sau khi đăng nhập, có kèm mã băm SHA-256 để kiểm tra.</p></details>
+    <details><summary>Gặp cảnh báo “nhà phát hành không xác định” khi cài?</summary><p>Bản cài hiện chưa ký số nên macOS và Windows sẽ cảnh báo. Hãy so mã băm SHA-256 trên trang tải với tệp bạn vừa tải rồi mới mở.</p></details>
+    <details><summary>Báo hết hạn mức thì sao?</summary><p>Hạn mức tính lại mỗi ngày. Thanh trạng thái cho biết bạn đã dùng bao nhiêu và khi nào được làm mới.</p></details>
+  </section>
+
+  <footer>NEU Agent · Trường Đại học Kinh tế Quốc dân · <a href="/agent/">Đăng nhập</a> · <a href="changelog.html">Nhật ký thay đổi</a></footer>
+</div>
+</body>
+</html>

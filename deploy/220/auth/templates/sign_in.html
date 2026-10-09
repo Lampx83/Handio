@@ -16,6 +16,7 @@ button,input[type=submit]{width:100%;padding:11px 14px;border-radius:10px;border
 input[type=text],input[type=password]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);font:inherit;background:var(--bg);color:var(--text)}
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--border)}
 form{display:grid;gap:10px;margin:0}.note{text-align:center;color:var(--muted);font-size:12.5px;margin:0}
+.guide{display:block;text-align:center;text-decoration:none;color:var(--accent);font-weight:600;border-top:1px solid var(--border);padding-top:14px}
 </style>
 </head>
 <body>
@@ -35,6 +36,7 @@ form{display:grid;gap:10px;margin:0}.note{text-align:center;color:var(--muted);f
     <input type="submit" value="Đăng nhập">
   </form>
   {{ end }}
+  <a class="guide" href="/agent/guide/">Xem giới thiệu, ảnh và demo hệ thống</a>
 </div>
 </body>
 </html>

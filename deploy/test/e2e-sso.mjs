@@ -44,15 +44,18 @@ try {
   fs.mkdirSync(path.join(t, "snippets"), { recursive: true });
   fs.mkdirSync(path.join(t, "web"), { recursive: true });
   fs.mkdirSync(path.join(t, "dl"), { recursive: true });
+  fs.mkdirSync(path.join(t, "guide"), { recursive: true });
   const rd = (f) => fs.readFileSync(path.join(d220, f), "utf8");
   fs.writeFileSync(path.join(t, "conf.d/neu-agent.conf"), rd("neu-agent.http.conf").replace("__NEU_AGENT_KEY__", "testkey").replace("default        0;", "default        0;\n    172.16.0.0/12  1;"));
-  const fix = (s) => s.replaceAll("/etc/nginx/snippets/", "/t/snippets/").replaceAll("/var/www/neu-agent-dl/", "/t/dl/").replaceAll("/var/www/neu-agent/", "/t/web/").replaceAll("127.0.0.1:4180", "e2e-oauth:4180").replaceAll("http://192.0.2.10:8037", "http://e2e-gw:80");
+  const fix = (s) => s.replaceAll("/etc/nginx/snippets/", "/t/snippets/").replaceAll("/var/www/neu-agent-dl/", "/t/dl/").replaceAll("/var/www/neu-agent-guide/", "/t/guide/").replaceAll("/var/www/neu-agent/", "/t/web/").replaceAll("127.0.0.1:4180", "e2e-oauth:4180").replaceAll("http://192.0.2.10:8037", "http://e2e-gw:80");
   fs.writeFileSync(path.join(t, "snippets/neu-agent-locations.conf"), fix(rd("neu-agent.locations.conf")));
   fs.writeFileSync(path.join(t, "snippets/neu-agent-auth.conf"), fix(rd("neu-agent-auth.conf")));
   fs.writeFileSync(path.join(t, "server.conf"), fix(rd("neu-agent.server.conf")));
   fs.writeFileSync(path.join(t, "nginx.conf"), `pid /tmp/n.pid; error_log /dev/stderr info;\nevents {}\nhttp { access_log off; resolver 127.0.0.11; include /t/conf.d/*.conf; include /t/server.conf; }\n`);
   fs.writeFileSync(path.join(t, "web/index.html"), "<html>NEU-AGENT-APP</html>");
   fs.writeFileSync(path.join(t, "dl/SHA256SUMS.txt"), "0000  x.dmg\n");
+  fs.writeFileSync(path.join(t, "guide/index.html"), "<html>NEU-GUIDE-PUBLIC</html>");
+  fs.writeFileSync(path.join(t, "guide/changelog.html"), "<html>NEU-CHANGELOG-PUBLIC</html>");
   // gateway giả: trả lại những gì nó nhận được
   const gw = path.join(tmp, "gw");
   fs.mkdirSync(gw);
@@ -107,6 +110,11 @@ try {
   check("chưa đăng nhập: API trả 401 JSON login_required (không chuyển hướng)", api0.status === 401 && /login_required/.test(api0.body) && /json/.test(api0.headers["content-type"]), api0.body.slice(0, 60));
   const dl0 = await req("/agent/download/SHA256SUMS.txt");
   check("chưa đăng nhập: trang tải về cũng phải đăng nhập", dl0.status === 302);
+  const g0 = await req("/agent/guide/");
+  check("chưa đăng nhập: trang hướng dẫn công khai /agent/guide/ xem được (200, không chuyển tới đăng nhập)", g0.status === 200 && /NEU-GUIDE-PUBLIC/.test(g0.body), String(g0.status));
+  check("trang hướng dẫn công khai: CSP chặt (không cho script), nosniff", /default-src 'none'/.test(g0.headers["content-security-policy"] ?? "") && !/script-src/.test(g0.headers["content-security-policy"] ?? "") && g0.headers["x-content-type-options"] === "nosniff");
+  check("nhật ký thay đổi công khai xem được; /agent/guide chuyển về có dấu gạch", (await req("/agent/guide/changelog.html")).status === 200 && (await req("/agent/guide")).status === 301);
+  check("trang hướng dẫn công khai không nhận POST", (await req("/agent/guide/", { method: "POST", body: "x" })).status === 403);
   const w0 = await req("/agent/sandbox-worker.js");
   check("chưa đăng nhập: tệp web (worker) không đọc được", w0.status === 302);
   check("đường dẫn nội bộ /agent/oauth2/auth không gọi trực tiếp được từ ngoài", (await req("/agent/oauth2/auth")).status === 404);
@@ -157,6 +165,7 @@ try {
   // ---------------------------------------------------------------- đăng nhập bằng tên + mật khẩu (tài khoản do quản trị tạo)
   const si = await req("/agent/oauth2/sign_in?rd=/agent/");
   check("trang đăng nhập (tiếng Việt) có nút Microsoft và form tên + mật khẩu", si.status === 200 && /Đăng nhập Microsoft/.test(si.body) && /name="username"/.test(si.body) && /name="password"/.test(si.body) && /autocomplete="current-password"/.test(si.body));
+  check("trang đăng nhập có liên kết tới hướng dẫn công khai /agent/guide/", /href="\/agent\/guide\/"/.test(si.body));
   const siBare = await req("/agent/oauth2/sign_in");
   const siRd = await req("/agent/oauth2/sign_in?rd=/agent/download/");
   check("vào trang đăng nhập không kèm đích: sau khi đăng nhập về /agent/ (không phải trang chủ /)", (siBare.body.match(/name="rd" value="\/agent\/"/g) ?? []).length === 2 && !/name="rd" value="\/"/.test(siBare.body), (siBare.body.match(/name="rd"[^>]*>/g) ?? []).join(" "));

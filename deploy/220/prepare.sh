@@ -7,6 +7,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"; ROOT="$HERE/../.."; REL="$ROOT/apps/deskt
 (cd "$ROOT" && NODE_ENV=production npm run build -w @neu/agent-web >/dev/null)
 COPYFILE_DISABLE=1 tar --no-xattrs -czf "$HERE/web.tar.gz" -C "$ROOT/apps/web/dist" .
 echo "web.tar.gz: $(du -h "$HERE/web.tar.gz" | cut -f1)"
+# trang nhật ký thay đổi công khai (/agent/guide/changelog.html) lấy từ CHANGELOG.md
+(cd "$ROOT" && node scripts/version.mjs changelog-html deploy/220/guide-public/changelog.html >/dev/null)
 [ -f "$REL/SHA256SUMS.txt" ] || { echo "Chưa có $REL/SHA256SUMS.txt: chạy npm run dist -w @neu/agent-desktop trước."; exit 1; }
 DL="$HERE/downloads"; mkdir -p "$DL"
 VER=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$REL/latest.json")
