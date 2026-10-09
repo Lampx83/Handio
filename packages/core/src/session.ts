@@ -249,8 +249,12 @@ export class Session {
     return parts.join("\n");
   }
 
-  track(usage: { prompt_tokens?: number; completion_tokens?: number }, chars: number): void {
+  cachedTokens = 0;
+
+  track(usage: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } }, chars: number): void {
     this.calls++;
+    const ct = usage.prompt_tokens_details?.cached_tokens;
+    if (typeof ct === "number" && ct > 0) this.cachedTokens += ct;
     const pt = usage.prompt_tokens ?? 0;
     this.promptTokens += pt;
     this.completionTokens += usage.completion_tokens ?? 0;
@@ -563,7 +567,7 @@ export class Session {
     return Math.min(99, Math.floor((100 * this.main.estimateTokens()) / this.o.getSettings().contextTokens));
   }
   emitUsage(): void {
-    this.emit({ type: "usage", promptTokens: this.promptTokens, completionTokens: this.completionTokens, contextPct: this.contextPct(), calls: this.calls });
+    this.emit({ type: "usage", promptTokens: this.promptTokens, completionTokens: this.completionTokens, contextPct: this.contextPct(), calls: this.calls, cachedTokens: this.cachedTokens });
   }
   publicSettings() {
     return toPublic(this.o.getSettings());
@@ -602,9 +606,40 @@ export class Agent {
     return n;
   }
 
+  /**
+   * Khi agent đọc lại CẢ MỘT tệp đã đọc trước đó, kết quả đọc cũ của tệp ấy là dư thừa (bản mới đầy đủ và mới hơn nằm ngay sau): thay bằng một dòng ngắn
+   * để không gửi lại hàng nghìn token ở mọi bước sau. Không đụng tới lần đọc theo đoạn (offset) hay tệp khác.
+   */
+  private dedupeReads(call: { id: string; name: string; arguments: string }): number {
+    if (call.name !== "read_file") return 0;
+    const last = this.messages[this.messages.length - 1];
+    if (!last || last.role !== "tool" || last.tool_call_id !== call.id || (last.content ?? "").startsWith("Lỗi")) return 0;
+    const whole = (args: string): string | null => {
+      try {
+        const a = JSON.parse(args) as { path?: unknown; offset?: unknown; limit?: unknown };
+        // chỉ lần đọc CẢ tệp (không offset, không giới hạn số dòng): đọc theo đoạn không thay thế được nhau
+        return typeof a.path === "string" && a.path && !(Number(a.offset) > 1) && !(Number(a.limit) > 0) ? a.path : null;
+      } catch {
+        return null;
+      }
+    };
+    const p = whole(call.arguments);
+    if (!p) return 0;
+    const older = new Set<string>();
+    for (const m of this.messages) for (const tc of m.role === "assistant" ? (m.tool_calls ?? []) : []) if (tc.id !== call.id && tc.function.name === "read_file" && whole(tc.function.arguments) === p) older.add(tc.id);
+    let n = 0;
+    for (const m of this.messages) {
+      if (m.role === "tool" && m.tool_call_id && older.has(m.tool_call_id) && (m.content?.length ?? 0) > 300 && !m.content!.endsWith(PRUNE_MARK)) {
+        m.content = "(nội dung cũ của tệp này đã được thay bằng lần đọc mới hơn ở bên dưới) " + PRUNE_MARK;
+        n++;
+      }
+    }
+    return n;
+  }
+
   private async manageContext(): Promise<void> {
     const limit = this.s.o.getSettings().contextTokens;
-    if (this.estimateTokens() > 0.55 * limit && this.pruneToolResults()) this.s.emit({ type: "notice", level: "info", text: "Đã lược bớt kết quả công cụ cũ để tiết kiệm ngữ cảnh." });
+    if (this.estimateTokens() > 0.45 * limit && this.pruneToolResults()) this.s.emit({ type: "notice", level: "info", text: "Đã lược bớt kết quả công cụ cũ để tiết kiệm ngữ cảnh." });
     if (this.estimateTokens() > 0.75 * limit) await this.compact("", true);
   }
 
@@ -728,6 +763,7 @@ export class Agent {
           if (this.repeatN >= 3) result += `\n[Cảnh báo] Bạn đã gọi cùng công cụ với cùng tham số ${this.repeatN} lần liên tiếp mà không tiến triển. Hãy đổi cách tiếp cận, hoặc dừng lại và báo cáo người dùng.`;
           result += this.watch(c.name, key, result);
           this.messages.push({ role: "tool", tool_call_id: c.id, content: result });
+          this.dedupeReads(c);
         }
         if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
         if (this.repeatN >= 5) {
@@ -829,6 +865,7 @@ export class Agent {
     }
     if (!resp) throw new LlmError("Không gọi được mô hình.");
     s.track(resp.usage, system.length + JSON.stringify(this.messages).length);
+    if (this.depth === 0) s.emitUsage(); // sau MỖI lần gọi mô hình: thước ngữ cảnh cập nhật ngay và chẩn đoán biết đỉnh token của từng lượt
     s.emitUsage();
     return resp;
   }

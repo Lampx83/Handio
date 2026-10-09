@@ -818,6 +818,20 @@ export class LocalController implements AgentController {
     }
     return id;
   }
+  track(act: string): void {
+    try {
+      this.diag?.noteUi(String(act));
+    } catch {
+      /* chẩn đoán không bao giờ làm hỏng ứng dụng */
+    }
+  }
+  feedback(v: "up" | "down", reason?: string): void {
+    try {
+      this.diag?.noteFeedback(String(v), reason === undefined ? undefined : String(reason));
+    } catch {
+      /* như trên */
+    }
+  }
   async diagnosticsStatus(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }> {
     return { available: !!this.diag, enabled: !!this.diag && this.diagEnabled(), lockedByPolicy: this.o.policy?.diagnostics === false };
   }

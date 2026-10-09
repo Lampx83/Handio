@@ -508,3 +508,6 @@ dialog.wt-dlg input { flex: 1; min-width: 0; }
 .quota-chip { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; color: var(--warn); }
 .quota-chip[data-state="grace"], .quota-chip[data-state="exceeded"] { color: var(--err); font-weight: 600; }
 .quota-chip[hidden] { display: none; }
+.fb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; font-size: 12.5px; color: var(--muted); }
+.fb-btn { border: 1px solid var(--border); background: transparent; border-radius: 8px; padding: 1px 9px; cursor: pointer; font-size: 15px; opacity: .75; }
+.fb-btn:hover { opacity: 1; background: var(--panel2); }

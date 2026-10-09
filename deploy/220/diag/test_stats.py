@@ -263,6 +263,23 @@ class StatsTest(unittest.TestCase):
         d = S.nginx_daily(rows)[S.vn_day(day_ts(0))]
         self.assertEqual((d["chat"], d["chat_5xx"], d["chat_p50"], d["chat_st"], d["diag_st"]), (4, 1, 4.0, {"200": 3, "502": 1}, {"400": 1}))
 
+    def test_new_token_metrics_features_and_feedback(self):
+        recs = [rec(day_ts(0, 3), turn_ev(calls=4, peak_prompt_tok=9000, cached_tok=6000, tool_out_tok=3000, pruned=1, first_tool_s=3, prompt_tok=30000), uid="a" * 16),
+                rec(day_ts(0, 4), turn_ev(calls=2, peak_prompt_tok=5000, cached_tok=0, tool_out_tok=1000, first_tool_s=5, prompt_tok=8000), uid="a" * 16),
+                rec(day_ts(0, 4), turn_ev(prompt_tok=1000), uid="b" * 16),                                               # bản cũ: không có số đo mới
+                rec(day_ts(0, 3), {"t": "ui", "act": "suggestion"}, uid="a" * 16), rec(day_ts(0, 3), {"t": "ui", "act": "suggestion"}, uid="b" * 16), rec(day_ts(0, 3), {"t": "ui", "act": "attach"}, uid="a" * 16),
+                rec(day_ts(0, 3), {"t": "feedback", "v": "up"}, uid="a" * 16), rec(day_ts(0, 3), {"t": "feedback", "v": "down", "reason": "slow"}, uid="a" * 16), rec(day_ts(0, 3), {"t": "feedback", "v": "down"}, uid="b" * 16)]
+        write_diag(self.diag, recs)
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
+        today = j["series"][-1]
+        self.assertEqual((today["calls_per_turn"], today["peak_prompt_avg"], today["tool_out_per_turn"], today["pruned"], today["first_tool_p50"], today["turns_v2"]), (3.0, 7000.0, 2000.0, 1, 4.0, 2))
+        self.assertAlmostEqual(today["cached_ratio"], 6000 / 39000)
+        self.assertEqual(j["ui"], {"suggestion": 2, "attach": 1})
+        self.assertEqual(j["feedback"], {"up": 1, "down": 2, "reasons": {"slow": 1, "none": 1}})
+        h = slurp(os.path.join(self.out, "index.html"))
+        for frag in ("Tính năng được dùng", "Bấm gợi ý trên màn hình chào", "Phản hồi của người dùng", "Chậm", "Token đi đâu"):
+            self.assertIn(frag, h)
+
     def test_empty_data_still_renders(self):
         S.run(self.diag, self.log, self.out, os.path.join(self.tmp.name, "none.json"), NOW)
         h = slurp(os.path.join(self.out, "index.html"))

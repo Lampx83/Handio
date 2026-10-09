@@ -38,13 +38,13 @@ export function mountShell(root: HTMLElement, controllers: Partial<Record<Profil
     leftHost,
     h("span", { class: "brand" }, opts.productName ?? "NEU Agent"),
     h("div", { class: "tabs", role: "tablist", "aria-label": "Chế độ làm việc" }, ...ids.map((id) => {
-      const b = h("button", { class: "tab", type: "button", role: "tab", id: "tab-" + id, "aria-controls": "panel-" + id, onclick: () => select(id) },
+      const b = h("button", { class: "tab", type: "button", role: "tab", id: "tab-" + id, "aria-controls": "panel-" + id, onclick: () => (id !== active && controllers[id]?.track?.("tab_switch"), select(id)) },
         h("span", { class: "tl" }, PROFILES[id].label), h("span", { class: "dot", "aria-hidden": "true" }));
       tabs.set(id, b);
       return b;
     })),
     rightHost,
-    opts.downloadsBase ? h("button", { class: "iconbtn dl-btn", type: "button", title: "Tải ứng dụng Desktop cho macOS/Windows", onclick: () => void openDownload(opts.downloadsBase!, opts.install) }, "⬇ Tải ứng dụng") : null,
+    opts.downloadsBase ? h("button", { class: "iconbtn dl-btn", type: "button", title: "Tải ứng dụng Desktop cho macOS/Windows", onclick: () => (controllers[active]?.track?.("download_open"), void openDownload(opts.downloadsBase!, opts.install)) }, "⬇ Tải ứng dụng") : null,
   );
   const body = h("div", { class: "panels" });
   root.append(h("div", { class: "shell" }, bar, body));

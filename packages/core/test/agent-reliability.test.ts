@@ -179,3 +179,104 @@ describe("lỗi đăng nhập luôn kèm việc cần làm", () => {
     expect(err).toMatchObject({ status: 401, kind: "auth", code: "login_required" });
   });
 });
+
+describe("chẩn đoán v2: số đo token, việc dùng tính năng và phản hồi (không nội dung)", () => {
+  const T0 = 1_800_000_000_000;
+  const mk = () => {
+    const sent: any[] = [];
+    const clock = { t: T0 };
+    const r = new DiagnosticsRecorder({
+      endpoint: "/agent/diag", enabled: () => true, version: "0.4.0", platform: "web", context: () => ({ profile: "code", model: "m", install: "0123456789abcdef0123456789abcdef" }),
+      fetch: (async (_u: string, init: RequestInit) => (sent.push(JSON.parse(String(init.body))), new Response("{}"))) as unknown as typeof fetch, now: () => clock.t, flushDelayMs: 1_000_000,
+    });
+    return { r, sent, clock };
+  };
+  const usage = (p: number, c: number, calls: number, cached = 0): SessionEvent => ({ type: "usage", promptTokens: p, completionTokens: c, contextPct: 10, calls, cachedTokens: cached });
+
+  it("lượt có số lần gọi, đỉnh lời nhắc, token đệm, kết quả công cụ, lược bớt và thời gian tới công cụ đầu tiên", async () => {
+    const { r, sent, clock } = mk();
+    r.onEvent({ type: "turn_start" });
+    clock.t += 2000;
+    r.onEvent({ type: "tool_start", id: "a", name: "read_file", summary: "x", args: { path: "p" }, depth: 0 });
+    r.onEvent({ type: "tool_result", id: "a", name: "read_file", ok: true, output: "x".repeat(3000), depth: 0 });
+    r.onEvent(usage(4000, 100, 1, 1000));                       // lần gọi 1: lời nhắc 4000, đệm 1000
+    r.onEvent({ type: "notice", level: "info", text: "Đã lược bớt kết quả công cụ cũ để tiết kiệm ngữ cảnh." });
+    r.onEvent(usage(4000 + 9000, 250, 2, 4000));                // lần gọi 2: lời nhắc 9000 (đỉnh), đệm +3000
+    r.onEvent(usage(13000, 250, 2, 4000));                      // sự kiện lặp sau lượt: không tính thêm
+    r.onEvent({ type: "turn_end", interrupted: false, final: "" });
+    await r.flush();
+    const t = sent.flatMap((p) => p.events).find((e) => e.t === "turn");
+    expect(t).toMatchObject({ calls: 2, peak_prompt_tok: 9000, cached_tok: 4000, tool_out_tok: 1000, pruned: 1, first_tool_s: 2, prompt_tok: 13000, completion_tok: 250 });
+  });
+
+  it("noteUi/noteFeedback chỉ nhận mã trong danh sách; chuỗi lạ bị bỏ, không rò", async () => {
+    const { r, sent } = mk();
+    r.noteUi("suggestion");
+    r.noteUi("/Users/mac/luong-2026.xlsx");
+    r.noteUi("tab_switch ; DROP");
+    r.noteFeedback("down", "slow");
+    r.noteFeedback("down", "ghi chú tự do: lương của An là 20 triệu");
+    r.noteFeedback("xyz");
+    await r.flush();
+    const evs = sent.flatMap((p) => p.events);
+    expect(evs.filter((e) => e.t === "ui").map((e) => e.act)).toEqual(["suggestion"]);
+    expect(evs.filter((e) => e.t === "feedback")).toMatchObject([{ v: "down", reason: "slow" }, { v: "down" }]);
+    expect(JSON.stringify(sent)).not.toMatch(/luong|lương|DROP/);
+    expect(evs.filter((e) => e.t === "feedback")[1]).not.toHaveProperty("reason");
+  });
+
+  it("controller.track/feedback không ném lỗi dù chưa cấu hình chẩn đoán", async () => {
+    const { c } = await makeController([{ text: "x" }]);
+    expect(() => c.track("suggestion")).not.toThrow();
+    expect(() => c.feedback("up")).not.toThrow();
+    expect(() => c.feedback("down", "không-có-trong-danh-sách")).not.toThrow();
+  });
+});
+
+describe("giảm token: không gửi lại nội dung tệp đã được đọc lại", () => {
+  const big = (n: string) => `${n}\n` + "dòng nội dung dài của tệp ".repeat(40);
+  it("đọc lại cả một tệp thì lần đọc cũ chỉ còn một dòng; tệp khác và đọc theo đoạn không bị đụng", async () => {
+    const seed = { "a.txt": big("A"), "b.txt": big("B") };
+    const { c, llm } = await makeController([
+      { calls: [{ name: "read_file", args: { path: "a.txt" } }] },
+      { calls: [{ name: "read_file", args: { path: "b.txt" } }] },
+      { calls: [{ name: "read_file", args: { path: "a.txt", offset: 2, limit: 3 } }] },   // theo đoạn: giữ nguyên
+      { calls: [{ name: "read_file", args: { path: "a.txt" } }] },                         // đọc lại cả tệp: lần 1 thành dòng ngắn
+      { text: "xong" },
+    ], { seed });
+    await c.send("đọc");
+    const toolMsgs = llm.calls.at(-1)!.messages.filter((m: any) => m.role === "tool").map((m: any) => String(m.content));
+    expect(toolMsgs).toHaveLength(4);
+    expect(toolMsgs[0]).toContain("đã được thay bằng lần đọc mới hơn");
+    expect(toolMsgs[0].length).toBeLessThan(200);
+    expect(toolMsgs[1]).toContain("dòng nội dung dài");     // b.txt giữ nguyên
+    expect(toolMsgs[2]).toContain("dòng nội dung dài");     // đọc đoạn giữ nguyên
+    expect(toolMsgs[3]).toContain("dòng nội dung dài");     // lần đọc mới nhất đầy đủ
+  });
+
+  it("lần đọc MỘT PHẦN (có limit) không thay thế và không làm mất nội dung lần đọc cả tệp", async () => {
+    const { c, llm } = await makeController([
+      { calls: [{ name: "read_file", args: { path: "a.txt" } }] },
+      { calls: [{ name: "read_file", args: { path: "a.txt", limit: 1 } }] },
+      { text: "xong" },
+    ], { seed: { "a.txt": big("A") } });
+    await c.send("đọc");
+    const tool = llm.calls.at(-1)!.messages.filter((m: any) => m.role === "tool").map((m: any) => String(m.content));
+    expect(tool[0]).toContain("dòng nội dung dài");
+  });
+
+  it("kết quả công cụ cũ được lược bớt khi ngữ cảnh phình to, kết quả mới nhất luôn đầy đủ", async () => {
+    const seed: Record<string, string> = {};
+    const calls: any[] = [];
+    for (let i = 0; i < 8; i++) {
+      seed[`f${i}.txt`] = big(String(i)).repeat(4);
+      calls.push({ calls: [{ name: "read_file", args: { path: `f${i}.txt` } }] });
+    }
+    calls.push({ text: "xong" });
+    const { c, llm } = await makeController(calls, { seed, settings: { contextTokens: 12000 } as any });
+    await c.send("đọc nhiều");
+    const last = llm.calls.at(-1)!.messages.filter((m: any) => m.role === "tool").map((m: any) => String(m.content));
+    expect(last.some((m: string) => m.endsWith("[đã lược để tiết kiệm ngữ cảnh]"))).toBe(true);
+    expect(last.at(-1)).not.toContain("[đã lược để tiết kiệm ngữ cảnh]");   // kết quả mới nhất luôn đầy đủ
+  });
+});

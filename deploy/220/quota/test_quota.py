@@ -204,6 +204,29 @@ class FlowTests(GatewayCase):
         row = self.row("select requests,prompt,completion,estimated,lim from usage")
         self.assertEqual(row, (2, 20, 10, 0, 1_000_000))
 
+    def test_cached_prompt_tokens_are_recorded(self):
+        usage = {"prompt_tokens": 1000, "completion_tokens": 50, "prompt_tokens_details": {"cached_tokens": 800}}
+        self.up.stream_body = b"".join(b"data: " + json.dumps(e).encode() + b"\n\n" for e in ({"choices": [{"delta": {"content": "x"}}]}, {"choices": [], "usage": usage})) + b"data: [DONE]\n\n"
+        self.assertEqual(self.post()[0], 200)
+        self.assertEqual(self.row("select tokens,prompt,cached from usage"), (1050, 1000, 800))
+        self.assertEqual(Q.cached_of({"prompt_tokens_details": None}), 0)
+        self.assertEqual(Q.cached_of({"prompt_tokens_details": {"cached_tokens": "x"}}), 0)
+
+    def test_old_database_is_upgraded_with_cached_column(self):
+        import sqlite3 as sq
+        p = os.path.join(self.tmp.name, "old", "u.db")
+        os.makedirs(os.path.dirname(p))
+        c = sq.connect(p)
+        c.execute("CREATE TABLE usage(day TEXT, uid TEXT, tier TEXT NOT NULL DEFAULT '', lim INTEGER NOT NULL DEFAULT -1, tokens INTEGER NOT NULL DEFAULT 0, prompt INTEGER NOT NULL DEFAULT 0, completion INTEGER NOT NULL DEFAULT 0, requests INTEGER NOT NULL DEFAULT 0, estimated INTEGER NOT NULL DEFAULT 0, blocked INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(day,uid))")
+        c.execute("INSERT INTO usage(day,uid,tokens) VALUES('2026-01-01','x',5)")
+        c.commit()
+        c.close()
+        st = Q.Store(p)
+        self.addCleanup(st.close)
+        st.add("2026-01-02", "y", "student", 1, 10, 5, cached=7)
+        self.assertEqual(st.db.execute("select cached from usage where uid='y'").fetchone()[0], 7)
+        self.assertEqual(st.used("2026-01-01", "x"), 5)
+
     def test_non_stream_response_counted(self):
         st, out, _ = self.post(body={"model": "m", "messages": [], "stream": False})
         self.assertEqual(st, 200)

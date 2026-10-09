@@ -18,6 +18,9 @@ Mục tiêu: hệ thống **tự phát hiện vấn đề** (lỗi mô hình/c�
 | Sự kiện | Trường (tất cả là mã/số/boolean) |
 |---|---|
 | `turn` (mỗi lượt làm việc) | `end` (ok/interrupted/error/step_limit/loop), `dur_s`, `ttft_ms`, `steps`, `tools`, `tool_fail`, `prompt_tok`, `completion_tok`, `ctx_pct`, `compactions`, `perm_allow`, `perm_deny` |
+| `turn` (bổ sung từ 0.4.0) | `calls` (số lần gọi mô hình), `peak_prompt_tok` (lời nhắc lớn nhất của một lần gọi), `cached_tok` (token lời nhắc dùng lại từ bộ nhớ đệm), `tool_out_tok` (ước lượng token của kết quả công cụ đã gửi lại), `pruned` (số lần lược bớt kết quả cũ), `first_tool_s` (giây tới công cụ đầu tiên): để biết token đi đâu |
+| `ui` | `act`: việc người dùng làm trong giao diện, **chỉ mã** (`suggestion`, `template`, `attach`, `new_chat`, `tab_switch`, `settings_open`, `mode_change`, `run_click`…): để biết tính năng nào được dùng/bỏ qua |
+| `feedback` | `v` (`up`/`down`) và `reason` chọn sẵn (`wrong`/`incomplete`/`slow`/`confusing`/`other`): người dùng **tự bấm** 👍/👎 sau câu trả lời; không có chữ tự do |
 | `tool` | `name` (danh sách cố định, `mcp`, `other`), `ok`, `dur` (lt1s/lt5s/lt30s/lt2m/ge2m), `err` (khi lỗi; **chỉ mã** như `not_found`, `read_first`, `no_match`, `sandbox`, `program`, `denied`…; từ bản 0.2.0) |
 | `llm_error` | `kind` (context/auth/rate/server/network/insecure/quota/unexpected/other), `status` (mã HTTP) |
 | `llm_retry` | `kind` (network/rate/server) |

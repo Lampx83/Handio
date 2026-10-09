@@ -38,6 +38,8 @@ export interface ParsedToolCall {
 export interface Usage {
   prompt_tokens?: number;
   completion_tokens?: number;
+  /** vLLM/OpenAI: số token lời nhắc được dùng lại từ bộ nhớ đệm tiền tố (nếu máy chủ báo). */
+  prompt_tokens_details?: { cached_tokens?: number };
 }
 export interface ChatResult {
   content: string;

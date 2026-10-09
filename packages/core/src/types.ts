@@ -54,7 +54,7 @@ export type SessionEvent =
   | { type: "todos"; todos: Todo[] }
   | { type: "mode"; mode: Mode }
   | { type: "quota"; quota: QuotaInfo }
-  | { type: "usage"; promptTokens: number; completionTokens: number; contextPct: number; calls: number }
+  | { type: "usage"; promptTokens: number; completionTokens: number; contextPct: number; calls: number; /** token lời nhắc dùng lại từ bộ nhớ đệm (cộng dồn; 0 nếu máy chủ không báo) */ cachedTokens?: number }
   | { type: "notice"; level: "info" | "warn" | "error"; text: string; /** Hành động gợi ý cho người dùng: "login" = hiện nút Đăng nhập lại. */ action?: "login" }
   | { type: "files_changed"; paths: string[] }
   | { type: "summary"; turn: number; files: ChangeFile[]; /** Đã chạy kiểm tra sau lần sửa cuối chưa */ verify: "ok" | "fail" | "none" }
@@ -217,6 +217,10 @@ export interface AgentController {
   procedureSave?(name: string, description?: string): Promise<{ ok: true; name: string } | { error: string }>;
   procedureRemove?(name: string): Promise<void>;
   /** Chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md): trạng thái; xem trước gói “Báo lỗi” (JSON đúng như sẽ gửi, null nếu bị cấm); gửi chính gói đó. */
+  /** Ghi một việc người dùng làm trong giao diện (mã trong DIAG_UI_ACTS), cho chẩn đoán không chứa nội dung. Không có = bỏ qua. */
+  track?(act: string): void;
+  /** Phản hồi 👍/👎 (kèm lý do chọn sẵn) cho câu trả lời vừa rồi. */
+  feedback?(v: "up" | "down", reason?: string): void;
   diagnosticsStatus?(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }>;
   diagnosticsPreview?(note: string): Promise<string | null>;
   diagnosticsSend?(): Promise<{ ok: boolean }>;

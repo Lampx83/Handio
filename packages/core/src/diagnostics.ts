@@ -28,6 +28,9 @@ export const DIAG_TOOLS: string[] = [
 export const DIAG_SIGNALS = ["loop", "step_limit", "repeat_tool_fail", "slow_first_token", "slow_turn", "ctx_high", "early_interrupt", "perm_denied", "empty_output", "invalid_tool_args", "unknown_tool", "truncated", "context_overflow"];
 /** Lý do công cụ thất bại (chỉ mã): xem ToolErrorKind trong tools.ts. "program" = chương trình/test của người dùng chạy hỏng (kết quả bình thường, không phải lỗi công cụ); "denied" = bị từ chối quyền. */
 export const DIAG_TOOL_ERRORS = ["not_found", "outside_project", "read_first", "stale", "binary", "bad_args", "no_match", "ambiguous", "wrong_type", "sandbox", "program", "timeout", "unsupported", "denied", "hook", "unknown_tool", "bad_json", "internal", "other"];
+/** Việc người dùng làm trong giao diện (chỉ MÃ, không có nội dung): để biết tính năng nào được dùng/bỏ qua. */
+export const DIAG_UI_ACTS = ["tab_switch", "suggestion", "template", "attach", "learn_open", "settings_open", "new_chat", "open_chat", "mode_change", "model_change", "run_click", "changes_open", "login_prompt", "update_banner", "update_download", "download_open", "slash_command", "mention_file", "stop_click"];
+export const DIAG_FEEDBACK_REASONS = ["wrong", "slow", "incomplete", "confusing", "other"];
 export const DIAG_PLATFORMS = ["web", "mac", "win", "linux", "other"];
 export const DIAG_PROFILES = ["work", "code", "design"];
 
@@ -57,6 +60,13 @@ export const DIAG_SCHEMA = {
       compactions: { k: "int", min: 0, max: 100 },
       perm_allow: { k: "int", min: 0, max: 5000 },
       perm_deny: { k: "int", min: 0, max: 5000 },
+      /** Số lần gọi mô hình trong lượt; lời nhắc lớn nhất của một lần gọi; token lời nhắc lấy từ bộ nhớ đệm; ước lượng token của kết quả công cụ đã gửi lại; số lần lược bớt kết quả cũ; giây tới công cụ đầu tiên. */
+      calls: { k: "int", min: 0, max: 5000 },
+      peak_prompt_tok: { k: "int", min: 0, max: 1000000000 },
+      cached_tok: { k: "int", min: 0, max: 1000000000 },
+      tool_out_tok: { k: "int", min: 0, max: 1000000000 },
+      pruned: { k: "int", min: 0, max: 5000 },
+      first_tool_s: { k: "int", min: 0, max: 86400 },
     },
     tool: {
       name: { k: "tool", req: true },
@@ -74,6 +84,8 @@ export const DIAG_SCHEMA = {
       tool: { k: "tool" },
       n: { k: "int", min: 0, max: 100000 },
     },
+    ui: { act: { k: "enum", v: DIAG_UI_ACTS, req: true } },
+    feedback: { v: { k: "enum", v: ["up", "down"], req: true }, reason: { k: "enum", v: DIAG_FEEDBACK_REASONS } },
     report: { note: { k: "text", max: 500 } },
   },
 } as const;
@@ -273,6 +285,12 @@ interface TurnState {
   c0: number;
   ctx: number;
   compactions: number;
+  calls: number;
+  peakP: number;
+  cached: number;
+  toolOut: number;
+  pruned: number;
+  firstTool?: number;
   permAllow: number;
   permDeny: number;
   denyBy: Map<string, number>;
@@ -304,6 +322,7 @@ export class DiagnosticsRecorder {
   private turn: TurnState | null = null;
   private lastP = 0;
   private lastC = 0;
+  private lastCached = 0;
   private failures = 0;
   private nextAllowed = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
@@ -368,7 +387,7 @@ export class DiagnosticsRecorder {
   }
 
   private newTurn(): TurnState {
-    return { start: this.now(), steps: 0, tools: 0, fails: 0, toolStart: new Map(), failBy: new Map(), repKey: "", repN: 0, p0: this.lastP, c0: this.lastC, ctx: 0, compactions: 0, permAllow: 0, permDeny: 0, denyBy: new Map(), permTool: new Map(), interrupted: false, err: false, stepLimit: false, loopStop: false, emptyPending: false, signals: new Set() };
+    return { start: this.now(), steps: 0, tools: 0, fails: 0, toolStart: new Map(), failBy: new Map(), repKey: "", repN: 0, p0: this.lastP, c0: this.lastC, ctx: 0, compactions: 0, calls: 0, peakP: 0, cached: 0, toolOut: 0, pruned: 0, permAllow: 0, permDeny: 0, denyBy: new Map(), permTool: new Map(), interrupted: false, err: false, stepLimit: false, loopStop: false, emptyPending: false, signals: new Set() };
   }
 
   private signal(code: string, tool?: string, n?: number): void {
@@ -408,6 +427,7 @@ export class DiagnosticsRecorder {
         t.emptyPending = false;
         if (!t.firstOut && e.depth === 0) t.firstOut = this.now();
         t.toolStart.set(e.id, this.now());
+        if (t.firstTool === undefined && e.depth === 0) t.firstTool = this.now();
         const key = e.name + "\u0000" + fnv(safeJson(e.args));
         t.repN = key === t.repKey ? t.repN + 1 : 1;
         t.repKey = key;
@@ -418,6 +438,7 @@ export class DiagnosticsRecorder {
       case "tool_result": {
         if (!t) return;
         t.tools++;
+        t.toolOut += Math.round(e.output.length / 3);
         const name = safeToolName(e.name);
         const st = t.toolStart.get(e.id);
         t.toolStart.delete(e.id);
@@ -451,17 +472,27 @@ export class DiagnosticsRecorder {
         }
         return;
       }
-      case "usage":
+      case "usage": {
+        const dp = e.promptTokens - this.lastP; // lời nhắc của MỘT lần gọi (sự kiện được phát sau mỗi lần gọi)
+        const dc = (e.cachedTokens ?? 0) - this.lastCached;
+        if (t && dp > 0) {
+          t.calls++;
+          t.peakP = Math.max(t.peakP, dp);
+        }
+        if (t && dc > 0) t.cached += dc;
+        this.lastCached = e.cachedTokens ?? 0;
         this.lastP = e.promptTokens;
         this.lastC = e.completionTokens;
         if (t) t.ctx = Math.max(t.ctx, e.contextPct);
         return;
+      }
       case "notice":
         this.onNotice(e.text);
         return;
       case "reset":
         this.lastP = 0;
         this.lastC = 0;
+        this.lastCached = 0;
         if (t) {
           t.p0 = 0;
           t.c0 = 0;
@@ -483,6 +514,9 @@ export class DiagnosticsRecorder {
       if (t) t.loopStop = true;
       if (!t || ![...t.signals].some((k) => k.startsWith("loop"))) this.signal("loop", undefined, t?.repN);
     } else if (/^Ngữ cảnh đầy, đang rút gọn/.test(text)) this.signal("context_overflow");
+    else if (/^Đã lược bớt kết quả công cụ cũ/.test(text)) {
+      if (t) t.pruned++;
+    }
     else if (/^Đang tóm tắt hội thoại/.test(text)) {
       if (t) t.compactions++;
     } else if (/^Câu trả lời bị cắt/.test(text)) this.signal("truncated");
@@ -514,6 +548,12 @@ export class DiagnosticsRecorder {
       prompt_tok: Math.max(0, this.lastP - t.p0), completion_tok: Math.max(0, this.lastC - t.c0), ctx_pct: t.ctx, compactions: t.compactions, perm_allow: t.permAllow, perm_deny: t.permDeny,
     };
     if (ttft !== undefined) ev.ttft_ms = ttft;
+    if (t.calls) ev.calls = t.calls;
+    if (t.peakP) ev.peak_prompt_tok = t.peakP;
+    if (t.cached) ev.cached_tok = t.cached;
+    if (t.toolOut) ev.tool_out_tok = t.toolOut;
+    if (t.pruned) ev.pruned = t.pruned;
+    if (t.firstTool !== undefined) ev.first_tool_s = Math.round((t.firstTool - t.start) / 1000);
     this.push(ev);
     this.schedule(this.o.flushDelayMs ?? 5000);
   }
@@ -608,6 +648,20 @@ export class DiagnosticsRecorder {
 
   // ---- "Báo lỗi": xem trước đúng gói sẽ gửi, rồi gửi chính gói đó
   /** Dựng gói báo lỗi (các sự kiện gần đây + ghi chú ngắn của người dùng). Trả về chuỗi JSON đúng như sẽ gửi, hoặc null nếu bị cấm. */
+  /** Ghi một việc người dùng làm trong giao diện (chỉ mã trong danh sách DIAG_UI_ACTS). Không bao giờ ném lỗi. */
+  noteUi(act: string): void {
+    if (!DIAG_UI_ACTS.includes(act)) return;
+    this.push({ t: "ui", ts: this.ts(), act });
+  }
+
+  /** Phản hồi 👍/👎 của người dùng kèm lý do chọn sẵn (không có chữ tự do). */
+  noteFeedback(v: string, reason?: string): void {
+    if (v !== "up" && v !== "down") return;
+    const ev: Record<string, unknown> = { t: "feedback", ts: this.ts(), v };
+    if (reason && DIAG_FEEDBACK_REASONS.includes(reason)) ev.reason = reason;
+    this.push(ev);
+  }
+
   prepareReport(note: string): string | null {
     try {
       if (this.disposed || this.o.forbidden?.()) return null;

@@ -147,8 +147,11 @@ class Store:
         self.db.execute("""CREATE TABLE IF NOT EXISTS usage(
             day TEXT NOT NULL, uid TEXT NOT NULL, tier TEXT NOT NULL DEFAULT '', lim INTEGER NOT NULL DEFAULT -1,
             tokens INTEGER NOT NULL DEFAULT 0, prompt INTEGER NOT NULL DEFAULT 0, completion INTEGER NOT NULL DEFAULT 0,
-            requests INTEGER NOT NULL DEFAULT 0, estimated INTEGER NOT NULL DEFAULT 0, blocked INTEGER NOT NULL DEFAULT 0,
+            requests INTEGER NOT NULL DEFAULT 0, estimated INTEGER NOT NULL DEFAULT 0, blocked INTEGER NOT NULL DEFAULT 0, cached INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY(day, uid))""")
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(usage)")}
+        if "cached" not in cols:  # nâng cấp CSDL cũ (chưa có cột token bộ nhớ đệm)
+            self.db.execute("ALTER TABLE usage ADD COLUMN cached INTEGER NOT NULL DEFAULT 0")
         self.lock = threading.Lock()
         self.last_prune = 0
 
@@ -157,13 +160,13 @@ class Store:
             r = self.db.execute("SELECT tokens FROM usage WHERE day=? AND uid=?", (day, uid)).fetchone()
         return r[0] if r else 0
 
-    def add(self, day, uid, tier, lim, prompt, completion, estimated=False):
+    def add(self, day, uid, tier, lim, prompt, completion, estimated=False, cached=0):
         with self.lock:
             self.db.execute(
-                "INSERT INTO usage(day,uid,tier,lim,tokens,prompt,completion,requests,estimated) VALUES(?,?,?,?,?,?,?,1,?) "
+                "INSERT INTO usage(day,uid,tier,lim,tokens,prompt,completion,requests,estimated,cached) VALUES(?,?,?,?,?,?,?,1,?,?) "
                 "ON CONFLICT(day,uid) DO UPDATE SET tier=excluded.tier, lim=excluded.lim, tokens=tokens+excluded.tokens, prompt=prompt+excluded.prompt, "
-                "completion=completion+excluded.completion, requests=requests+1, estimated=estimated+excluded.estimated",
-                (day, uid, tier, -1 if lim is None else lim, prompt + completion, prompt, completion, 1 if estimated else 0))
+                "completion=completion+excluded.completion, requests=requests+1, estimated=estimated+excluded.estimated, cached=cached+excluded.cached",
+                (day, uid, tier, -1 if lim is None else lim, prompt + completion, prompt, completion, 1 if estimated else 0, cached))
 
     def block(self, day, uid, tier, lim):
         with self.lock:
@@ -263,6 +266,15 @@ class UsageSniffer:
             for k in ("content", "reasoning_content", "reasoning"):
                 if isinstance(d.get(k), str):
                     self.out_chars += len(d[k])
+
+
+def cached_of(usage):
+    """Số token lời nhắc được dùng lại từ bộ nhớ đệm tiền tố (vLLM/OpenAI: prompt_tokens_details.cached_tokens); 0 nếu máy chủ không báo."""
+    try:
+        v = usage["prompt_tokens_details"]["cached_tokens"]
+        return int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0 else 0
+    except (TypeError, KeyError):
+        return 0
 
 
 def tokens_of(usage):
@@ -436,7 +448,7 @@ class Handler(BaseHTTPRequestHandler):
         est = False
         if t is None:  # không có usage (ngắt giữa chừng hoặc mô hình không trả): ước lượng từ kích thước, đánh dấu
             t, est = (len(raw) // 3, sniff.out_chars // 3), True
-        c.store.add(day, uid, q["tier"], limit, t[0], t[1], est)
+        c.store.add(day, uid, q["tier"], limit, t[0], t[1], est, 0 if est else cached_of(sniff.usage))
 
 
 def make_server(ctx, host="127.0.0.1", port=4191):

@@ -26,7 +26,7 @@ const stat = (f: ChangeFile): (HTMLElement | string)[] => (f.sensitive ? [h("spa
 export class CodeTools {
   readonly buttons: HTMLElement[];
   readonly panel = h("aside", { class: "ch-host", hidden: true, "aria-label": "Thay đổi" });
-  private chBtn = h("button", { class: "iconbtn chbtn", type: "button", hidden: true, "aria-label": "Thay đổi", title: "Các tệp agent đã đổi (/diff)", onclick: () => this.togglePanel() });
+  private chBtn = h("button", { class: "iconbtn chbtn", type: "button", hidden: true, "aria-label": "Thay đổi", title: "Các tệp agent đã đổi (/diff)", onclick: () => (this.ctl.track?.("changes_open"), this.togglePanel()) });
   private rwBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Quay lại", title: "Quay lại một lượt trước (/rewind, Esc hai lần)", onclick: () => void this.openRewind() }, "↶");
   private runBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Chạy", title: "Chạy / kiểm thử dự án", onclick: () => void this.toggleRun() }, "▶");
   private modelBtn = h("button", { class: "iconbtn modelbtn", type: "button", hidden: true, "aria-label": "Mô hình", "aria-haspopup": "menu", title: "Đổi mô hình", onclick: () => void this.toggleModels() });
@@ -244,6 +244,7 @@ export class CodeTools {
   }
 
   private async toggleModels(): Promise<void> {
+    this.ctl.track?.("model_change");
     if (this.pop?.classList.contains("modelmenu2")) return this.closePop();
     const cur = (await this.ctl.getState()).model;
     let list: string[] = [];
@@ -272,6 +273,7 @@ export class CodeTools {
   }
 
   private async toggleRun(): Promise<void> {
+    this.ctl.track?.("run_click");
     if (this.pop?.classList.contains("runmenu")) return this.closePop();
     this.showPop(this.suggestions.map((s) => ({
       label: (s.kind === "test" ? "✓ " : "▶ ") + s.command,

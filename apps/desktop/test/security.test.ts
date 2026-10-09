@@ -245,3 +245,15 @@ describe("tham số kênh đăng nhập", () => {
     for (const bad of [undefined, null, true, { value: "true" }, { value: 1 }, {}, { value: true, extra: 1 }, { val: true }]) expect(authArgsOk("remember", bad), JSON.stringify(bad)).toBe(false);
   });
 });
+
+describe("IPC chẩn đoán: track và feedback chỉ nhận mã ngắn", () => {
+  it("track chỉ nhận một chuỗi [a-z_]; feedback nhận up/down và lý do tuỳ chọn", () => {
+    const v = IPC_VALIDATORS;
+    expect(IPC_METHODS.has("track") && IPC_METHODS.has("feedback")).toBe(true);
+    expect(v.track(["suggestion"])).toBe(true);
+    for (const bad of [[], ["a", "b"], [1], ["Có Dấu"], ["x".repeat(40)], ["../etc"], [{ a: 1 }]]) expect(v.track(bad as unknown[]), JSON.stringify(bad)).toBe(false);
+    expect(v.feedback(["up"])).toBe(true);
+    expect(v.feedback(["down", "slow"])).toBe(true);
+    for (const bad of [[], ["maybe"], ["up", "a b"], ["up", 1], ["up", "x", "y"], ["down", "Rất tệ, lương của An 20tr"]]) expect(v.feedback(bad as unknown[]), JSON.stringify(bad)).toBe(false);
+  });
+});

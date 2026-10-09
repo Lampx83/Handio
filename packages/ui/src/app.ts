@@ -105,8 +105,8 @@ class App {
   private projBox = h("div", { class: "proj", hidden: true });
   private chatsEl = h("div", { class: "chats", role: "list", "aria-label": "Các cuộc trò chuyện" });
   private chatsHead = h("h4", { class: "chats-h", hidden: true }, "Trò chuyện");
-  private newChatBtn = h("button", { class: "btn newchat", type: "button", onclick: () => void this.ctl.newSession() }, "＋ Cuộc trò chuyện mới");
-  private newBtn = h("button", { class: "iconbtn", type: "button", "aria-label": "Cuộc trò chuyện mới", title: "Cuộc trò chuyện mới (/clear)", onclick: () => void this.ctl.newSession() }, "＋ Mới");
+  private newChatBtn = h("button", { class: "btn newchat", type: "button", onclick: () => (this.t("new_chat"), void this.ctl.newSession()) }, "＋ Cuộc trò chuyện mới");
+  private newBtn = h("button", { class: "iconbtn", type: "button", "aria-label": "Cuộc trò chuyện mới", title: "Cuộc trò chuyện mới (/clear)", onclick: () => (this.t("new_chat"), void this.ctl.newSession()) }, "＋ Mới");
   private learnBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Học vibe coding", title: "Bài học, bài tập chấm tự động, dự án mẫu", onclick: () => this.openLearning() }, "📚 Học");
   private pv: DesignPreview | null = null;
   private pvHost = h("div", { class: "pv-host", hidden: true });
@@ -210,7 +210,7 @@ class App {
     const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.input,
       // dưới ô nhập (giống Claude): trái = chế độ chạy + mẫu prompt; phải = mức ngữ cảnh, mô hình, Gửi
       h("div", { class: "bar" },
-        h("button", { class: "cbtn plus", type: "button", title: "Đính kèm tệp", "aria-label": "Đính kèm tệp", onclick: () => this.fileInput.click() }, "+"),
+        h("button", { class: "cbtn plus", type: "button", title: "Đính kèm tệp", "aria-label": "Đính kèm tệp", onclick: () => (this.t("attach"), this.fileInput.click()) }, "+"),
         h("div", { class: "mode-wrap", style: { position: "relative" } }, this.modePill),
         h("button", { class: "btn sm", type: "button", title: "Chèn khung Mục tiêu – Ngữ cảnh – Ràng buộc", onclick: () => this.insertTemplate() }, "Mẫu prompt"),
         this.hintEl, h("span", { class: "grow" }),
@@ -273,6 +273,7 @@ class App {
 
   private async refresh(first = false): Promise<void> {
     this.state = await this.ctl.getState();
+    void this.ctl.diagnosticsStatus?.().then((d) => (this.diagOn = !!d?.enabled)).catch(() => undefined);
     this.busy = this.state.busy;
     this.wsEl.textContent = this.state.workspace;
     this.wsEl.title = this.state.workspace;
@@ -333,7 +334,7 @@ class App {
     this.feedInner.append(h("div", { class: "welcome" },
       h("h2", {}, st.welcomeTitle),
       h("div", {}, line),
-      h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip", type: "button", onclick: () => void this.submit(x) }, x)))));
+      h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip", type: "button", onclick: () => (this.t("suggestion"), void this.submit(x)) }, x)))));
   }
 
   // ------------------------------------------------------------------ dự án và lịch sử trò chuyện
@@ -364,6 +365,7 @@ class App {
 
   /** Mở lại một cuộc trò chuyện đã lưu: dựng lại nội dung và tiếp tục hỏi với đúng ngữ cảnh cũ. */
   private async openChat(id: string): Promise<void> {
+    this.t("open_chat");
     if (this.busy || id === this.state.chatId) return;
     const r = await this.ctl.chatOpen!(id);
     if ("error" in r) return void this.append(h("div", { class: "notice error" }, r.error));
@@ -469,7 +471,7 @@ class App {
           const go = this.opts.onLogin;
           this.append(h("div", { class: "notice error", role: "alert" }, h("div", {}, e.text),
             go === null ? h("div", { class: "notice-sub" }, "Bản này không bật đăng nhập nên không đăng nhập lại được. Nếu bạn đang chạy bản phát triển, hãy chạy lại với NEU_AUTH_FORCE=1, hoặc đổi địa chỉ máy chủ ở Cài đặt.")
-              : h("div", { class: "notice-sub" }, h("button", { class: "btn primary sm", type: "button", onclick: () => (go ?? (() => location.reload()))() }, "Đăng nhập lại"), " rồi gửi lại yêu cầu của bạn.")));
+              : h("div", { class: "notice-sub" }, h("button", { class: "btn primary sm", type: "button", onclick: () => (this.t("login_prompt"), (go ?? (() => location.reload()))()) }, "Đăng nhập lại"), " rồi gửi lại yêu cầu của bạn.")));
           break;
         }
         this.append(h("div", { class: "notice " + e.level, role: e.level === "error" ? "alert" : "status" }, e.text));
@@ -493,6 +495,7 @@ class App {
         this.pending = null;
         if (e.interrupted) this.append(h("div", { class: "notice warn" }, "Đã dừng theo yêu cầu."));
         if (!this.visible) this.opts.onAttention?.("done");
+        if (!e.interrupted) this.appendFeedback();
         this.paintBusy();
         this.input.focus();
         void this.paintChats();
@@ -684,12 +687,13 @@ class App {
   }
 
   private onSendClick(): void {
-    if (this.busy && !this.input.value.trim()) this.ctl.interrupt();
+    if (this.busy && !this.input.value.trim()) (this.t("stop_click"), this.ctl.interrupt());
     else void this.submit(this.input.value);
   }
 
   private async submit(text: string): Promise<void> {
     const t = text.trim();
+    if (t.startsWith("/")) this.t("slash_command");
     if (t && this.codeTools.handleSlash(t)) {
       this.input.value = "";
       this.autoGrow();
@@ -894,6 +898,7 @@ class App {
   }
 
   private insertTemplate(): void {
+    this.t("template");
     if (!this.input.value.trim()) this.input.value = PROMPT_TEMPLATE;
     else this.input.value += (this.input.value.endsWith("\n") ? "" : "\n") + PROMPT_TEMPLATE;
     this.autoGrow();
@@ -914,6 +919,7 @@ class App {
 
   // ------------------------------------------------------------------ học tập
   private openLearning(): void {
+    this.t("learn_open");
     void openLearn(this.ctl, {
       onTry: (p) => {
         this.input.value = p;
@@ -926,6 +932,36 @@ class App {
         void this.loadTree([path]);
       },
     });
+  }
+
+  /** Ghi một việc người dùng làm trong giao diện cho chẩn đoán (chỉ MÃ, không nội dung). Không bao giờ ném lỗi. */
+  private t(act: string): void {
+    try {
+      this.ctl.track?.(act);
+    } catch {
+      /* bỏ qua */
+    }
+  }
+
+  /** Hàng "Câu trả lời có ích không?" sau mỗi lượt: 👍, hoặc 👎 kèm lý do chọn sẵn (không có chữ tự do). Chỉ hiện khi gửi số liệu chẩn đoán đang bật. */
+  private diagOn = false;
+  private fbRow: HTMLElement | null = null;
+  private appendFeedback(): void {
+    if (!this.ctl.feedback || !this.diagOn) return;
+    this.fbRow?.remove();
+    const row = h("div", { class: "fb", role: "group", "aria-label": "Đánh giá câu trả lời" }, h("span", { class: "fb-q" }, "Câu trả lời có ích không?"));
+    const done = () => {
+      row.replaceChildren(h("span", { class: "fb-q" }, "Cảm ơn bạn đã phản hồi 🙏"));
+      setTimeout(() => row.remove(), 4000);
+    };
+    const up = h("button", { class: "fb-btn", type: "button", title: "Có ích", "aria-label": "Có ích", onclick: () => (this.ctl.feedback!("up"), done()) }, "👍");
+    const down = h("button", { class: "fb-btn", type: "button", title: "Chưa tốt", "aria-label": "Chưa tốt", onclick: () => {
+      row.replaceChildren(h("span", { class: "fb-q" }, "Vì sao chưa tốt?"), ...[["wrong", "Sai/không đúng ý"], ["incomplete", "Chưa làm xong"], ["slow", "Chậm"], ["confusing", "Khó hiểu"], ["other", "Khác"]].map(([k, label]) =>
+        h("button", { class: "chip", type: "button", onclick: () => (this.ctl.feedback!("down", k), done()) }, label)));
+    } }, "👎");
+    row.append(up, down);
+    this.fbRow = row;
+    this.append(row);
   }
 
   // ------------------------------------------------------------------ hạn mức token trong ngày
@@ -951,7 +987,7 @@ class App {
     if (this.modeMenu) return this.closeModeMenu();
     const m = h("div", { class: "menu modemenu", role: "menu" }, ...this.state.allowedModes.map((k) =>
       h("div", { class: "it" + (k === this.state.mode ? " sel" : ""), role: "menuitemradio", "aria-checked": String(k === this.state.mode), tabindex: "0",
-        onclick: async () => { this.closeModeMenu(); await this.ctl.setMode(k); },
+        onclick: async () => { this.closeModeMenu(); this.t("mode_change"); await this.ctl.setMode(k); },
         onkeydown: (ev: KeyboardEvent) => ev.key === "Enter" && (ev.target as HTMLElement).click() },
       h("span", { class: "k", style: { color: `var(--mode-${k})` } }, MODE_INFO[k].label), h("span", { class: "d" }, MODE_INFO[k].desc))));
     this.modePill.parentElement!.append(m);
@@ -1032,7 +1068,7 @@ class App {
     clear(this.sideActions);
     const c = this.state.capabilities;
     this.sideActions.append(
-      h("button", { class: "btn sm", type: "button", title: "Thêm tệp từ máy của bạn (hoặc kéo thả vào cửa sổ)", onclick: () => this.fileInput.click() }, "＋ Thêm tệp"),
+      h("button", { class: "btn sm", type: "button", title: "Thêm tệp từ máy của bạn (hoặc kéo thả vào cửa sổ)", onclick: () => (this.t("attach"), this.fileInput.click()) }, "＋ Thêm tệp"),
       c.revealWorkspace ? h("button", { class: "btn sm", type: "button", title: "Mở thư mục trong Finder/Explorer", onclick: () => void this.ctl.revealWorkspace?.() }, "Mở thư mục") : h("button", { class: "btn sm", type: "button", title: "Tải cả thư mục về dạng .zip", onclick: () => void this.zip() }, "⬇ Zip"),
       h("button", { class: "btn sm", type: "button", title: "Làm mới", "aria-label": "Làm mới danh sách tệp", onclick: () => void this.loadTree() }, "↻"));
   }
@@ -1060,6 +1096,7 @@ class App {
 
   // ------------------------------------------------------------------ cài đặt
   private openSettings(): void {
+    this.t("settings_open");
     openSettingsDialog(this.ctl, this.state, this.opts.account, () => void this.refresh());
   }
 }

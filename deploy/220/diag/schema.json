@@ -136,6 +136,36 @@
         "k": "int",
         "min": 0,
         "max": 5000
+      },
+      "calls": {
+        "k": "int",
+        "min": 0,
+        "max": 5000
+      },
+      "peak_prompt_tok": {
+        "k": "int",
+        "min": 0,
+        "max": 1000000000
+      },
+      "cached_tok": {
+        "k": "int",
+        "min": 0,
+        "max": 1000000000
+      },
+      "tool_out_tok": {
+        "k": "int",
+        "min": 0,
+        "max": 1000000000
+      },
+      "pruned": {
+        "k": "int",
+        "min": 0,
+        "max": 5000
+      },
+      "first_tool_s": {
+        "k": "int",
+        "min": 0,
+        "max": 86400
       }
     },
     "tool": {
@@ -243,6 +273,53 @@
         "k": "int",
         "min": 0,
         "max": 100000
+      }
+    },
+    "ui": {
+      "act": {
+        "k": "enum",
+        "v": [
+          "tab_switch",
+          "suggestion",
+          "template",
+          "attach",
+          "learn_open",
+          "settings_open",
+          "new_chat",
+          "open_chat",
+          "mode_change",
+          "model_change",
+          "run_click",
+          "changes_open",
+          "login_prompt",
+          "update_banner",
+          "update_download",
+          "download_open",
+          "slash_command",
+          "mention_file",
+          "stop_click"
+        ],
+        "req": true
+      }
+    },
+    "feedback": {
+      "v": {
+        "k": "enum",
+        "v": [
+          "up",
+          "down"
+        ],
+        "req": true
+      },
+      "reason": {
+        "k": "enum",
+        "v": [
+          "wrong",
+          "slow",
+          "incomplete",
+          "confusing",
+          "other"
+        ]
       }
     },
     "report": {

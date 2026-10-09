@@ -35,6 +35,10 @@ STATUS_CLS = {"mới": "bn", "hoạt động": "ba", "ngủ đông": "bd"}
 ERR_VI = {"not_found": "Không có file/thư mục", "outside_project": "Đường dẫn ngoài dự án", "read_first": "Sửa trước khi đọc", "stale": "File đã đổi sau khi đọc", "binary": "File nhị phân", "bad_args": "Thiếu/sai tham số",
           "no_match": "Không tìm thấy đoạn cần sửa", "ambiguous": "Đoạn cần sửa không duy nhất", "wrong_type": "Nhầm file/thư mục", "sandbox": "Dùng thứ sandbox không có", "program": "Chương trình/test của người dùng lỗi (bình thường)",
           "timeout": "Quá thời gian", "unsupported": "Không hỗ trợ", "denied": "Bị từ chối quyền", "hook": "Bị hook chặn", "unknown_tool": "Công cụ không tồn tại", "bad_json": "Tham số không phải JSON", "internal": "Lỗi nội bộ", "other": "Khác", "unknown": "Chưa rõ (bản cũ)"}
+UI_VI = {"tab_switch": "Chuyển tab", "suggestion": "Bấm gợi ý trên màn hình chào", "template": "Dùng 'Mẫu prompt'", "attach": "Đính kèm tệp", "learn_open": "Mở bài học", "settings_open": "Mở Cài đặt", "new_chat": "Cuộc trò chuyện mới",
+         "open_chat": "Mở lại cuộc trò chuyện cũ", "mode_change": "Đổi chế độ chạy", "model_change": "Mở danh sách mô hình", "run_click": "Bấm Chạy", "changes_open": "Xem thay đổi", "login_prompt": "Bấm Đăng nhập lại", "update_banner": "Thấy thông báo cập nhật",
+         "update_download": "Tải bản cập nhật", "download_open": "Mở hộp Tải ứng dụng", "slash_command": "Dùng lệnh /", "mention_file": "Nhắc tệp bằng @", "stop_click": "Bấm Dừng"}
+FB_VI = {"wrong": "Sai/không đúng ý", "incomplete": "Chưa làm xong", "slow": "Chậm", "confusing": "Khó hiểu", "other": "Khác", "none": "Không chọn lý do"}
 NOT_TOOL_FAULT = ("program", "denied")  # kết quả bình thường/ý người dùng, không tính là công cụ lỗi
 
 
@@ -101,7 +105,8 @@ def compute(recs, daily, now, findings=None, release=None, quota=None):
     days = [(datetime.date.fromisoformat(today) - datetime.timedelta(days=i)).isoformat() for i in range(DAYS - 1, -1, -1)]
     t30 = t - DAYS * 86400
     U = {}
-    D = collections.defaultdict(lambda: {"users": set(), "installs": set(), "turns": 0, "out": collections.Counter(), "dur": [], "ttft": [], "ptok": 0, "ctok": 0, "tool_calls": 0, "tool_fails": 0, "signals": 0, "llm_errors": 0, "retries": 0})
+    D = collections.defaultdict(lambda: {"users": set(), "installs": set(), "turns": 0, "out": collections.Counter(), "dur": [], "ttft": [], "ptok": 0, "ctok": 0, "tool_calls": 0, "tool_fails": 0, "signals": 0, "llm_errors": 0, "retries": 0, "calls": 0, "peak": [], "cached": 0, "tool_out": 0, "pruned": 0, "first_tool": [], "turns_v2": 0})
+    ui_acts, fb, ui_day = collections.Counter(), collections.Counter(), collections.defaultdict(collections.Counter)
     heat = [[0] * 24 for _ in range(7)]
     dist = {k: collections.defaultdict(lambda: {"users": set(), "installs": set(), "turns": 0}) for k in ("version", "platform", "profile", "model")}
     tools = collections.defaultdict(lambda: {"calls": 0, "fails": 0, "prog": 0})
@@ -149,6 +154,16 @@ def compute(recs, daily, now, findings=None, release=None, quota=None):
                 pd["ttft"].append(e["ttft_ms"])
             pd["ptok"] += e.get("prompt_tok", 0)
             pd["ctok"] += e.get("completion_tok", 0)
+            if "calls" in e:   # bản ứng dụng mới (có số đo token chi tiết)
+                pd["turns_v2"] += 1
+                pd["calls"] += e.get("calls", 0)
+                pd["cached"] += e.get("cached_tok", 0)
+                pd["tool_out"] += e.get("tool_out_tok", 0)
+                pd["pruned"] += e.get("pruned", 0)
+                if e.get("peak_prompt_tok"):
+                    pd["peak"].append(e["peak_prompt_tok"])
+                if "first_tool_s" in e:
+                    pd["first_tool"].append(e["first_tool_s"])
             if in30:
                 u["turns30"] += 1
                 heat[dt.weekday()][dt.hour] += 1
@@ -175,6 +190,15 @@ def compute(recs, daily, now, findings=None, release=None, quota=None):
                 llm_err[e.get("kind", "?")] += 1
         elif et == "llm_retry":
             pd["retries"] += 1
+        elif et == "ui":
+            if in30:
+                ui_acts[e.get("act", "?")] += 1
+            ui_day[day][e.get("act", "?")] += 1
+        elif et == "feedback":
+            if in30:
+                fb[e.get("v", "?")] += 1
+                if e.get("v") == "down":
+                    fb["why:" + (e.get("reason") or "none")] += 1
         if in30:
             for k in dist:
                 x = dist[k][str(a.get(k, "?"))]
@@ -217,6 +241,9 @@ def compute(recs, daily, now, findings=None, release=None, quota=None):
             "ptok": pd["ptok"] if pd else 0, "ctok": pd["ctok"] if pd else 0,
             "tool_calls": pd["tool_calls"] if pd else 0, "tool_fails": pd["tool_fails"] if pd else 0,
             "signals": pd["signals"] if pd else 0, "llm_errors": pd["llm_errors"] if pd else 0,
+            "calls_per_turn": R.ratio(pd["calls"], pd["turns_v2"]) if pd and pd["turns_v2"] else None, "peak_prompt_avg": (sum(pd["peak"]) / len(pd["peak"])) if pd and pd["peak"] else None,
+            "cached_ratio": R.ratio(pd["cached"], pd["ptok"]) if pd and pd["ptok"] and pd["cached"] else None, "tool_out_per_turn": R.ratio(pd["tool_out"], pd["turns_v2"]) if pd and pd["turns_v2"] else None,
+            "pruned": pd["pruned"] if pd else 0, "first_tool_p50": R.pct(pd["first_tool"], 50) if pd and pd["first_tool"] else None, "turns_v2": pd["turns_v2"] if pd else 0,
             "chat": ng.get("chat", 0), "chat_5xx": ng.get("chat_5xx", 0), "chat_p50": ng.get("chat_p50"), "chat_p95": ng.get("chat_p95"), "chat_st": ng.get("chat_st", {}), "diag_st": ng.get("diag_st", {}), "diag": ng.get("diag", 0), "pkg": ng.get("pkg", 0), "update_check": ng.get("update_check", 0)})
     spark_days = days[-SPARK_DAYS:]
     seg = {"new": 0, "active": 0, "dormant": 0}
@@ -250,6 +277,7 @@ def compute(recs, daily, now, findings=None, release=None, quota=None):
         "dist": dists, "hours": hours, "heat": heat, "outcomes30": {k: outcomes30.get(k, 0) for k in OUTCOMES},
         "tools": sorted(({"name": k, **v} for k, v in tools.items()), key=lambda x: -x["calls"]), "tool_errors": dict(tool_err.most_common()), "signals": dict(signals.most_common()), "llm_errors": dict(llm_err.most_common()),
         "release": release_info(release, dists["version"], kpi["users_30d"]), "quota": quota,
+        "ui": dict(ui_acts.most_common()), "feedback": {"up": fb.get("up", 0), "down": fb.get("down", 0), "reasons": {k[4:]: v for k, v in fb.items() if k.startswith("why:")}},
         "findings": findings or [], "downloads_total": sum(v.get("pkg", 0) for v in daily.values()), "daily_first": min(daily) if daily else None}
 
 
@@ -494,6 +522,11 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
     o.append('<div class="card"><h3>Thời gian một lượt</h3>%s%s</div>' % (lines([("p50", col("dur_p50"), "s1"), ("p95", col("dur_p95"), "s3")], lab, unit=" s"), legend([("p50 (trung vị)", "s1"), ("p95", "s3")])))
     o.append('<div class="card"><h3>Thời gian tới token đầu tiên</h3>%s%s</div>' % (lines([("p50", col("ttft_p50"), "s1"), ("p95", col("ttft_p95"), "s3")], lab, unit=" ms"), legend([("p50", "s1"), ("p95", "s3")])))
     o.append('<div class="card"><h3>Token mỗi ngày</h3>%s%s</div>' % (stack([("Prompt", col("ptok"), "s6"), ("Trả lời", col("ctok"), "s5")], lab, links=dl), legend([("Prompt (gửi lên)", "s6"), ("Trả lời (sinh ra)", "s5")])))
+    if any(x["turns_v2"] for x in ser):
+        o.append('<div class="card"><h3>Token đi đâu: lời nhắc trung bình một lần gọi</h3><p class="sub">đỉnh lời nhắc của một lần gọi, trung bình mỗi lượt (từ bản ứng dụng có số đo mới)</p>%s</div>' % lines([("Đỉnh lời nhắc (token)", col("peak_prompt_avg"), "s1")], lab, unit=" tok", links=dl))
+        o.append('<div class="card"><h3>Số lần gọi mô hình và kết quả công cụ mỗi lượt</h3>%s%s</div>' % (lines([("Lần gọi/lượt", col("calls_per_turn"), "s3"), ("Token kết quả công cụ/lượt ÷ 1000", [None if v is None else v / 1000 for v in col("tool_out_per_turn")], "s4")], lab, links=dl), legend([("Lần gọi mô hình/lượt", "s3"), ("Kết quả công cụ gửi lại/lượt (nghìn token)", "s4")])))
+        if any(x["cached_ratio"] for x in ser):
+            o.append('<div class="card"><h3>Token lời nhắc dùng lại từ bộ nhớ đệm</h3><p class="sub">%% số token lời nhắc được máy chủ dùng lại (càng cao càng tiết kiệm)</p>%s</div>' % lines([("Bộ nhớ đệm", [None if v is None else 100 * v for v in col("cached_ratio")], "s2")], lab, unit="%", links=dl))
     o.append('<div class="card"><h3>Lệnh gọi mô hình qua nginx</h3><p class="sub">đỏ: lỗi 5xx của cổng mô hình</p>%s</div>' % bars(col("chat"), lab, col("chat_5xx"), links=dl))
     o.append('<div class="card"><h3>Độ trễ cổng mô hình (nginx)</h3><p class="sub">thời gian cả yêu cầu chat thành công, gồm sinh văn bản</p>%s%s</div>' % (lines([("p50", col("chat_p50"), "s1"), ("p95", col("chat_p95"), "s3")], lab, unit=" s", links=dl), legend([("p50", "s1"), ("p95", "s3")])))
     o.append('<div class="card"><h3>Công cụ: số lần gọi và tỷ lệ lỗi</h3>%s</div>' % hbars([(x["name"], x["calls"], "%d · lỗi %s%s" % (x["calls"], R._p(R.ratio(x["fails"], x["calls"])), " (+%d chương trình lỗi)" % x["prog"] if x.get("prog") else "")) for x in S["tools"][:12]]))
@@ -514,6 +547,15 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
         o.append('<div class="card"><h3>Phát hành &amp; cập nhật</h3><p class="sub">tệp latest.json đang phục vụ</p><div class="mini"><div><b>%s</b><span>bản đang phát hành%s</span></div><div><b>%s</b><span>đã dùng bản này</span></div><div><b>%s</b><span>phiên bản tối thiểu%s</span></div></div>%s</div>'
                  % (_e(rl["version"]), " · " + _e(rl["released"]) if rl.get("released") else "", "—" if rl["adoption"] is None else R._p(rl["adoption"]), _e(rl["min"] or "chưa đặt"), " · %d người dưới mức" % rl["below_min"] if rl.get("below_min") else "",
                     '<p class="note" style="white-space:pre-wrap">%s</p>' % _e(rl["notes"]) if rl.get("notes") else ""))
+    ui = S.get("ui") or {}
+    o.append('<div class="card"><h3>Tính năng được dùng <small>số lần bấm, 30 ngày</small></h3><p class="sub">chỉ từ bản ứng dụng có ghi nhận; không có nội dung</p>%s%s</div>' % (
+        hbars([(UI_VI.get(k, k), v, str(v)) for k, v in list(ui.items())[:14]]) if ui else '<p class="note">Chưa có dữ liệu (cần người dùng cập nhật bản mới).</p>',
+        '<p class="note">Chưa ai dùng: %s</p>' % _e(", ".join(UI_VI[k] for k in UI_VI if k not in ui and k not in ("update_banner", "update_download", "mention_file"))) if ui else ""))
+    fbk = S.get("feedback") or {}
+    if fbk.get("up") or fbk.get("down"):
+        tot = fbk["up"] + fbk["down"]
+        o.append('<div class="card"><h3>Phản hồi của người dùng <small>30 ngày</small></h3><div class="mini"><div><b>👍 %d</b><span>có ích</span></div><div><b>👎 %d</b><span>chưa tốt</span></div><div><b>%s</b><span>hài lòng</span></div></div>%s</div>' % (
+            fbk["up"], fbk["down"], R._p(fbk["up"] / tot), hbars([(FB_VI.get(k, k), v, str(v)) for k, v in sorted(fbk["reasons"].items(), key=lambda kv: -kv[1])], "bad") if fbk["reasons"] else ""))
     o.append('<div class="card"><h3>Bản đồ nhiệt: lượt theo thứ và giờ</h3><p class="sub">giờ Việt Nam; càng đậm càng nhiều lượt</p>%s</div>' % heatmap(S["heat"]))
     o.append('<div class="card"><h3>Lượt làm việc theo giờ trong ngày</h3>%s</div>' % stack([("Lượt", S["hours"], "s1")], ["%02d:00" % h for h in range(24)], trim=0))
     o.append('<div class="card"><h3>Tải bản cài mỗi ngày</h3>%s</div>' % stack([("Lượt tải", col("pkg"), "s2")], lab))
