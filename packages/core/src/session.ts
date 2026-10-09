@@ -82,7 +82,7 @@ export class Session {
   turnNo = 0;
   readonly turnMarks = new WeakMap<ChatMessage, number>();
   /** Việc đã làm trong lượt hiện tại: để biết đã chạy kiểm tra sau lần sửa cuối chưa. */
-  turnLog = { seq: 0, lastEdit: 0, checks: [] as { seq: number; ok: boolean }[] };
+  turnLog = { seq: 0, lastEdit: 0, checks: [] as { seq: number; ok: boolean }[], reads: [] as number[] };
   readonly main: Agent;
 
   private constructor(readonly o: SessionOptions, root: string) {
@@ -481,13 +481,14 @@ export class Session {
   beginTurn(userMsg: ChatMessage): void {
     this.ctx.turn = ++this.turnNo;
     this.turnMarks.set(userMsg, this.ctx.turn);
-    this.turnLog = { seq: 0, lastEdit: 0, checks: [] };
+    this.turnLog = { seq: 0, lastEdit: 0, checks: [], reads: [] };
   }
 
   /** Ghi nhận một công cụ vừa chạy xong (để biết đã kiểm chứng sau lần sửa cuối chưa). */
   noteTool(name: string, passed: boolean, wrote: boolean): void {
     const L = this.turnLog;
     if (name === "bash" || name === "run_javascript") L.checks.push({ seq: ++L.seq, ok: passed });
+    if (passed && (name === "read_document" || name === "read_file")) L.reads.push(++L.seq); // đọc lại để kiểm tra
     if (wrote) L.lastEdit = ++L.seq;
   }
 
@@ -585,6 +586,7 @@ export class Agent {
   private cycleN = 0;
   private failRun = { tool: "", sig: "", n: 0 };
   private stopWhy = "";
+  private nudges = 0;
 
   constructor(private s: Session, private def: AgentDef | null = null, private depth = 0) {}
 
@@ -604,6 +606,29 @@ export class Agent {
       }
     }
     return n;
+  }
+
+  /**
+   * Cổng tự kiểm tra (một lần mỗi lượt): agent sắp báo cáo xong nhưng vừa tạo/sửa tệp mà chưa kiểm chứng → nhắc làm ngay.
+   * Code: chưa chạy thử / lần chạy cuối bị lỗi. Work/Design: chưa đọc lại tệp vừa tạo. Không làm gì nếu môi trường không có công cụ để kiểm chứng.
+   */
+  private verifyNudge(): string | null {
+    const s = this.s;
+    const L = s.turnLog;
+    if (this.nudges >= 1 || !L.lastEdit) return null;
+    if (s.profile === "code") {
+      if (!s.tools.has("bash") && !s.tools.has("run_javascript")) return null;
+      const after = L.checks.filter((c) => c.seq > L.lastEdit);
+      if (!after.length) return "[Hệ thống] Bạn vừa tạo hoặc sửa tệp nhưng CHƯA chạy thử. Hãy chạy chương trình hoặc bộ kiểm thử ngay bây giờ (bash hoặc run_javascript; máy chủ web thì chạy nền), đọc kết quả thật, sửa lỗi nếu có, rồi mới báo cáo. Nếu thật sự không chạy được thì nói rõ lý do cho người dùng.";
+      if (!after[after.length - 1].ok) return "[Hệ thống] Lần chạy kiểm tra gần nhất của bạn bị LỖI. Hãy đọc lỗi, tìm nguyên nhân gốc, sửa rồi chạy lại cho đến khi qua; đừng báo là đã xong khi chưa qua.";
+      return null;
+    }
+    if (!L.reads.some((r) => r > L.lastEdit)) {
+      return s.profile === "work"
+        ? "[Hệ thống] Bạn vừa tạo hoặc sửa tài liệu nhưng chưa ĐỌC LẠI để kiểm tra. Hãy read_document lại tệp vừa tạo, đối chiếu số liệu, công thức, tên riêng và thể thức với nguồn, sửa chỗ sai rồi mới báo cáo."
+        : "[Hệ thống] Bạn vừa tạo hoặc sửa thiết kế nhưng chưa ĐỌC LẠI để kiểm tra. Hãy read_file tệp vừa ghi và chạy danh sách kiểm tra (không có <script>/tài nguyên ngoài, thẻ đã đóng, đúng khổ, dấu tiếng Việt đúng, chữ không tràn khung), sửa chỗ sai rồi mới báo cáo.";
+    }
+    return null;
   }
 
   /**
@@ -716,6 +741,7 @@ export class Agent {
     this.cycleN = 0;
     this.failRun = { tool: "", sig: "", n: 0 };
     this.stopWhy = "";
+    this.nudges = 0;
     try {
       for (let step = 0; step < maxSteps; step++) {
         if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
@@ -748,6 +774,14 @@ export class Agent {
               this.messages.push({ role: "user", content: "[Hook Stop phản hồi]\n" + hr.message });
               continue;
             }
+          }
+          const nudge = this.depth === 0 && !signal?.aborted ? this.verifyNudge() : null;
+          if (nudge) {
+            // cổng tự kiểm tra: vừa tạo/sửa mà chưa chạy thử / chưa đọc lại thì nhắc MỘT lần trước khi cho báo cáo
+            this.nudges++;
+            s.emit({ type: "notice", level: "info", text: "Đang tự kiểm tra lại kết quả trước khi báo cáo…" });
+            this.messages.push({ role: "user", content: nudge });
+            continue;
           }
           return final;
         }

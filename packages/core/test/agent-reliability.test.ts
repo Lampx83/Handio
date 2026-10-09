@@ -280,3 +280,71 @@ describe("giảm token: không gửi lại nội dung tệp đã được đọc
     expect(last.at(-1)).not.toContain("[đã lược để tiết kiệm ngữ cảnh]");   // kết quả mới nhất luôn đầy đủ
   });
 });
+
+describe("cổng tự kiểm tra: vừa tạo/sửa mà chưa kiểm chứng thì nhắc một lần trước khi báo cáo", () => {
+  const withExec = (seed: Record<string, string> = {}, code = 0) => {
+    const env = new MemoryEnv("/ws", seed);
+    (env as any).exec = async () => ({ output: code ? "AssertionError: lỗi" : "OK", code, timedOut: false });
+    return env;
+  };
+  const sysMsgs = (llm: any) => llm.calls.flatMap((c: any) => c.messages).filter((m: any) => m.role === "user" && String(m.content).startsWith("[Hệ thống]")).map((m: any) => String(m.content)).filter((m: string, i: number, a: string[]) => a.indexOf(m) === i);   // mỗi tin xuất hiện lại ở các lần gọi sau: lấy một lần
+  const nudgeNotices = (events: any[]) => events.filter((e) => e.type === "notice" && /tự kiểm tra lại/.test(e.text)).length;
+
+  it("Code: tạo tệp rồi báo xong mà chưa chạy → nhắc chạy thử; chạy xong thì kết thúc, không nhắc lần hai", async () => {
+    const { c, events, llm } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "app.js", content: "console.log(1)" } }] },
+      { text: "Xong rồi!" },                                                  // chưa chạy → bị nhắc
+      { calls: [{ name: "bash", args: { command: "node app.js" } }] },
+      { text: "Đã chạy: OK." },
+    ], { env: withExec() });
+    await c.send("làm app");
+    expect(nudgeNotices(events)).toBe(1);
+    expect(sysMsgs(llm).filter((m: string) => m.includes("CHƯA chạy thử"))).toHaveLength(1);
+    expect(events.filter((e: any) => e.type === "message_end").at(-1)).toMatchObject({ text: "Đã chạy: OK." });
+    expect(llm.calls).toHaveLength(4);
+  });
+
+  it("Code: lần chạy gần nhất bị lỗi → nhắc sửa và chạy lại; chỉ nhắc một lần dù mô hình vẫn báo xong", async () => {
+    const { c, events, llm } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "a.js", content: "x" } }] },
+      { calls: [{ name: "bash", args: { command: "node a.js" } }] },
+      { text: "Xong." },                                                     // lần chạy lỗi → bị nhắc
+      { text: "Vẫn xong." },                                                  // không nhắc lần hai
+    ], { env: withExec({}, 1) });
+    await c.send("x");
+    expect(nudgeNotices(events)).toBe(1);
+    expect(sysMsgs(llm).some((m: string) => m.includes("bị LỖI"))).toBe(true);
+    expect(events.at(-1)).toMatchObject({ type: "turn_end" });
+  });
+
+  it("Code: không nhắc khi chưa sửa gì, đã chạy sau lần sửa cuối, hoặc môi trường không có công cụ chạy", async () => {
+    const a = await makeController([{ text: "Chỉ trả lời." }], { env: withExec() });
+    await a.c.send("giải thích");
+    expect(nudgeNotices(a.events)).toBe(0);
+    const b = await makeController([{ calls: [{ name: "write_file", args: { path: "a.js", content: "x" } }] }, { calls: [{ name: "bash", args: { command: "node a.js" } }] }, { text: "Xong." }], { env: withExec() });
+    await b.c.send("x");
+    expect(nudgeNotices(b.events)).toBe(0);
+    const c = await makeController([{ calls: [{ name: "write_file", args: { path: "a.js", content: "x" } }] }, { text: "Xong." }]);   // MemoryEnv không có bash/run_javascript
+    await c.c.send("x");
+    expect(nudgeNotices(c.events)).toBe(0);
+  });
+
+  it("Work: tạo tệp mà chưa đọc lại → nhắc đọc lại để đối chiếu; đã đọc lại thì thôi", async () => {
+    const a = await makeController([{ calls: [{ name: "write_file", args: { path: "bao-cao.md", content: "# Báo cáo" } }] }, { text: "Xong." }, { calls: [{ name: "read_file", args: { path: "bao-cao.md" } }] }, { text: "Đã kiểm tra." }], { profile: "work" });
+    await a.c.send("soạn báo cáo");
+    expect(nudgeNotices(a.events)).toBe(1);
+    expect(sysMsgs(a.llm).some((m: string) => m.includes("ĐỌC LẠI"))).toBe(true);
+    const b = await makeController([{ calls: [{ name: "write_file", args: { path: "bao-cao.md", content: "# Báo cáo" } }] }, { calls: [{ name: "read_file", args: { path: "bao-cao.md" } }] }, { text: "Xong." }], { profile: "work" });
+    await b.c.send("soạn báo cáo");
+    expect(nudgeNotices(b.events)).toBe(0);
+  });
+
+  it("tin nhắc là tin nội bộ: không hiện như câu hỏi của người dùng và không làm đổi tiêu đề/số lượt", async () => {
+    const { isInternalUser } = await import("../src/projects");
+    expect(isInternalUser("[Hệ thống] Bạn vừa tạo hoặc sửa tệp nhưng CHƯA chạy thử.")).toBe(true);
+    const { c } = await makeController([{ calls: [{ name: "write_file", args: { path: "a.js", content: "x" } }] }, { text: "Xong." }, { text: "Ok." }], { env: withExec() });
+    await c.send("làm app");
+    const state = await c.getState();
+    expect(state.chatTitle ?? "làm app").toContain("làm app");
+  });
+});
