@@ -11,6 +11,7 @@
 |---|---|---|
 | Mở/cập nhật pull request, hoặc vào `main` | `ci.yml` | `typecheck` + 413 bài vitest + dựng web; 81 bài Python (chẩn đoán, quản lý tài khoản); `bash -n` + shellcheck mọi script; e2e Docker: nginx + SSO thật, script cài 220/222, khoá SSH triển khai. **Không dùng bí mật nào** (PR từ fork cũng chạy được an toàn). |
 | Vào `main` | `deploy.yml` | Chạy lại CI → dựng web → đóng gói → gửi qua SSH tới 220 → `install.sh` (và `install-diag.sh` nếu phần chẩn đoán/tài khoản đổi) → kiểm tra `healthz`, `/agent/` (302), API chưa đăng nhập (401), trang đăng nhập (200). Hai lần triển khai không bao giờ chạy cùng lúc. |
+| Chạy tay (Actions → Deploy check) | `deploy-check.yml` | Chỉ thử kết nối GitHub → máy 220, không triển khai gì. |
 | Chạy tay (Actions → Deploy → Run workflow) | `deploy.yml` | Chọn `deploy` (triển khai lại `main`) hoặc `rollback` (quay lại bản trước). |
 | Gắn tag `v*` | `release.yml` | Dựng + ký bản Desktop (xem `docs/RELEASE-SIGNING.md`). |
 
@@ -51,7 +52,7 @@ shred -u ./deploy_key 2>/dev/null || rm -P ./deploy_key             # xoá khoá
 
 ### 3.3 Bật tự triển khai
 
-1. Chạy thử: Actions → **Deploy** → Run workflow (khi `DEPLOY_ENABLED` còn tắt, job triển khai bị bỏ qua; đặt biến rồi chạy lại).
+1. Kiểm tra kết nối trước, không triển khai gì: Actions → **Deploy check** → Run workflow (SSH tới máy chủ, in bản đang chạy, thử `healthz`). Báo lỗi ở bước nào thì lỗi ở đó (tường lửa chặn IP GitHub, sai khoá, sai khoá host).
 2. `gh variable set DEPLOY_ENABLED --body true` → từ đó mỗi lần vào `main` đều tự triển khai.
 3. Làm các bước bảo vệ nhánh ở mục 2.
 
