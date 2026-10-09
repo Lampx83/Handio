@@ -1,0 +1,45 @@
+# Kiểm tra KẾT NỐI triển khai mà KHÔNG triển khai gì: GitHub → máy 220 (SSH khoá hạn chế) → in bản đang chạy.
+# Dùng sau khi thiết lập CI/CD hoặc khi nghi ngờ tường lửa/khoá (Actions → Deploy check → Run workflow). Xem docs/CICD.md.
+name: Deploy check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    name: Kết nối tới máy 220
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
+      SITE: ${{ vars.DEPLOY_SITE_URL || 'https://ai.neu.edu.vn' }}
+    steps:
+      - name: Cấu hình SSH (khoá host được ghim)
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_PORT" ] && [ -n "$KEY" ] && [ -n "$KNOWN" ] || { echo "::error::Thiếu cấu hình triển khai (xem docs/CICD.md)."; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key; chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; chmod 644 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOC
+          Host neu220
+            HostName $DEPLOY_HOST
+            Port $DEPLOY_PORT
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            ConnectTimeout 20
+          EOC
+      - name: Hỏi máy chủ đang chạy bản nào
+        run: ssh neu220 status < /dev/null
+      - name: Kiểm tra site thật
+        run: |
+          hz=$(curl -s --max-time 15 "$SITE/agent/healthz" || true); echo "healthz: $hz"
+          [ "$hz" = '{"ok":true}' ]
