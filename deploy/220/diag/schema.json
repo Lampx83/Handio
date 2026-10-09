@@ -298,7 +298,8 @@
           "slash_command",
           "mention_file",
           "stop_click",
-          "point_edit"
+          "point_edit",
+          "guide_open"
         ],
         "req": true
       }

@@ -531,3 +531,21 @@ dialog.chlog .cl-body { overflow: auto; padding: 4px 18px 18px; }
 .cl-cur { font-size: 11.5px; padding: 0 8px; border-radius: 99px; border: 1px solid var(--accent); color: var(--accent); }
 .cl-st { color: var(--muted); font-size: 12.5px; font-weight: 600; margin: 8px 0 2px; text-transform: uppercase; letter-spacing: .3px; }
 .cl-sec ul { margin: 0; padding-left: 20px; } .cl-sec li { margin: 3px 0; font-size: 13.5px; }
+.tip-row { margin-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 13px; color: var(--muted); max-width: 520px; text-align: center; }
+.tip-b { border: 0; background: transparent; color: var(--accent); cursor: pointer; font-size: 13px; text-decoration: underline; }
+dialog.guide { width: min(900px, 97vw); height: min(680px, 90vh); padding: 0; display: flex; flex-direction: column; }
+dialog.guide[open] { display: flex; }
+dialog.guide .dh { gap: 10px; }
+.gd-search { flex: 1; min-width: 0; border: 1px solid var(--border); background: var(--bg); color: inherit; border-radius: 8px; padding: 5px 10px; font: inherit; }
+.gd-main { flex: 1; min-height: 0; display: flex; }
+.gd-nav { width: 210px; flex: none; border-right: 1px solid var(--border); padding: 8px; display: flex; flex-direction: column; gap: 2px; overflow: auto; }
+.gd-nb { text-align: left; border: 0; background: transparent; color: inherit; padding: 7px 10px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13.5px; }
+.gd-nb:hover, .gd-nb[aria-current="true"] { background: var(--accent-soft); }
+.gd-body { flex: 1; overflow: auto; padding: 4px 18px 20px; }
+.gd-h { margin: 14px 0 4px; font-size: 16px; }
+.gd-intro { color: var(--muted); margin: 0 0 10px; }
+.gd-item { border: 1px solid var(--border); background: var(--panel); border-radius: 10px; padding: 10px 12px; margin: 8px 0; }
+.gd-item h4 { margin: 0 0 3px; font-size: 14.5px; } .gd-item p { margin: 0; color: var(--muted); font-size: 13.5px; }
+.gd-try { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.gd-try code { flex: 1; min-width: 0; white-space: normal; background: var(--panel2); border-radius: 6px; padding: 4px 8px; font-size: 12.5px; }
+@media (max-width: 700px) { .gd-main { flex-direction: column; } .gd-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); } .gd-nb { white-space: nowrap; } }

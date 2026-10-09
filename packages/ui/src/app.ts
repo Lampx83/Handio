@@ -5,6 +5,8 @@ import { treeIcon } from "./icons";
 import { openSettings as openSettingsDialog, type AccountInfo } from "./settings-ui";
 import { accountChip } from "./account-ui";
 import { versionLink } from "./changelog-ui";
+import { openGuide } from "./guide-ui";
+import { TIPS, type GuideTab } from "./guide-content";
 import { DesignPreview } from "./preview";
 import { ago, openInstructions, openNewProject, toggleProjectMenu } from "./projects-ui";
 import { openLearn } from "./learn";
@@ -188,6 +190,7 @@ class App {
       ...this.workTools.buttons,
       this.learnBtn,
       this.newBtn,
+      h("button", { class: "iconbtn", type: "button", "aria-label": "Hướng dẫn", title: "Hướng dẫn: mẹo, thủ thuật, tình huống mẫu", onclick: () => this.openGuideDlg() }, "💡"),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Cài đặt", title: "Cài đặt", onclick: () => this.openSettings() }, "⚙"),
     ];
     let head: HTMLElement | null = null;
@@ -336,7 +339,15 @@ class App {
     this.feedInner.append(h("div", { class: "welcome" },
       h("h2", {}, st.welcomeTitle),
       h("div", {}, line),
-      h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip", type: "button", onclick: () => (this.t("suggestion"), void this.submit(x)) }, x)))));
+      h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip", type: "button", onclick: () => (this.t("suggestion"), void this.submit(x)) }, x))),
+      this.tipEl(st.profile as GuideTab)));
+  }
+
+  /** Mẹo ngắn luân phiên trên màn hình chào + lối vào Hướng dẫn. */
+  private tipEl(profile: GuideTab): HTMLElement {
+    const tips = TIPS[profile] ?? [];
+    const tip = tips.length ? tips[Math.floor(Date.now() / 60000) % tips.length] : "";
+    return h("div", { class: "tip-row" }, tip ? h("span", { class: "tip-t" }, "💡 " + tip) : null, h("button", { class: "tip-b", type: "button", onclick: () => this.openGuideDlg() }, "Xem hướng dẫn"));
   }
 
   // ------------------------------------------------------------------ dự án và lịch sử trò chuyện
@@ -1097,6 +1108,11 @@ class App {
   }
 
   // ------------------------------------------------------------------ cài đặt
+  private openGuideDlg(): void {
+    const p = (this.state?.profile ?? "code") as GuideTab;
+    openGuide({ profile: p, track: (a) => this.t(a), onTry: (text) => { this.input.value = text; this.autoGrow(); this.input.focus(); } });
+  }
+
   private openSettings(): void {
     this.t("settings_open");
     openSettingsDialog(this.ctl, this.state, this.opts.account, () => void this.refresh());
