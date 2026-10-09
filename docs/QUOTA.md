@@ -4,7 +4,7 @@ Mỗi người dùng đăng nhập có một **hạn mức token mỗi ngày** �
 
 | Bậc | Ai | Hạn mức mặc định / ngày |
 |---|---|---|
-| Sinh viên | email `@st.neu.edu.vn` (và tài khoản tên + mật khẩu do quản trị cấp) | **1.000.000** token |
+| Sinh viên | email `@st.neu.edu.vn` (và tài khoản tên + mật khẩu do quản trị cấp) | **5.000.000** token |
 | Giảng viên/cán bộ | email `@neu.edu.vn` | **10.000.000** token |
 | Quản trị viên | email trong `/etc/neu-agent/admins.txt` | không giới hạn |
 | Tự dán key riêng ở Cài đặt | — | không tính (dùng hạn mức của chính key đó) |

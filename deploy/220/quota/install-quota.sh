@@ -59,7 +59,7 @@ trap 'rc=$?; [ $rc -ne 0 ] && rollback; exit $rc' EXIT
 # ---- thư mục dữ liệu, cấu hình mặc định (không ghi đè)
 install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" /var/lib/neu-agent "$VAR"
 install -d -m 0750 -o root -g root "$ETC"
-if [ ! -f "$CONF" ]; then install -m 0640 -o root -g root "$HERE/quota.default.json" "$CONF"; echo "Đã tạo cấu hình mặc định $CONF (sinh viên 1.000.000, giảng viên 10.000.000 token/ngày)."; fi
+if [ ! -f "$CONF" ]; then install -m 0640 -o root -g root "$HERE/quota.default.json" "$CONF"; echo "Đã tạo cấu hình mặc định $CONF (sinh viên 5.000.000, giảng viên 10.000.000 token/ngày)."; fi
 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$CONF" || { echo "$CONF không phải JSON hợp lệ."; exit 1; }
 
 # ---- mã + dịch vụ

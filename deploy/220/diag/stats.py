@@ -583,7 +583,7 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
         o.append("<h3>Người dùng đang dùng nhiều hạn mức hôm nay <small>(từ 50% trở lên; mã giả danh)</small></h3>")
         o.append(table(["Mã", "Bậc", "Token", "Hạn mức", "Đã dùng", "Yêu cầu", "Bị chặn"], [[u["id"], u["tier"], format(u["tokens"], ",").replace(",", "."), "không giới hạn" if u["limit"] is None else format(u["limit"], ",").replace(",", "."),
                                                                                               "—" if u["pct"] is None else "%s%%" % u["pct"], u["requests"], u["blocked"]] for u in hot] or [["—", "", "", "", "", "", ""]]))
-        o.append('<p class="note">Đổi hạn mức trên máy 220: <code>sudo ~/neu-agent-220/quota/quota.sh show | mode | tier | set</code>. Mặc định sinh viên 1 triệu, giảng viên 10 triệu token/ngày; vượt thêm 10%% để hoàn tất việc đang làm. Tra mã ứng với ai: <code>quota.sh uid &lt;email&gt;</code>.</p>')
+        o.append('<p class="note">Đổi hạn mức trên máy 220: <code>sudo ~/neu-agent-220/quota/quota.sh show | mode | tier | set</code>. Mặc định sinh viên 5 triệu, giảng viên 10 triệu token/ngày; vượt thêm 10%% để hoàn tất việc đang làm. Tra mã ứng với ai: <code>quota.sh uid &lt;email&gt;</code>.</p>')
 
     # ---- người dùng
     o.append('<h2 id="nguoi-dung">Người dùng <small>%d người đứng đầu theo số lượt 30 ngày · bấm mã để xem chi tiết từng người</small></h2>' % S["users_listed"])

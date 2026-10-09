@@ -37,7 +37,7 @@ KEEP_DAYS = 400
 
 DEFAULT_CONFIG = {
     "mode": "enforce",                      # enforce | observe (chỉ đếm)
-    "tiers": {"student": 1_000_000, "staff": 10_000_000},
+    "tiers": {"student": 5_000_000, "staff": 10_000_000},
     "domains": {"st.neu.edu.vn": "student", "neu.edu.vn": "staff"},
     "default_tier": "student",              # tên đăng nhập không có email và tên miền lạ
     "grace_pct": 10,                        # được vượt thêm để hoàn tất việc đang làm

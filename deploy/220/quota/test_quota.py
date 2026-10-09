@@ -79,7 +79,7 @@ class GatewayCase(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         d = self.tmp.name
         self.cfg_path, self.admins_path, self.db_path = os.path.join(d, "quota.json"), os.path.join(d, "admins.txt"), os.path.join(d, "q", "usage.db")
-        self.write_cfg({})
+        self.write_cfg({"tiers": {"student": 1_000_000, "staff": 10_000_000}})   # cố định thang 1 triệu để các bài thử cơ chế không phụ thuộc mặc định
         with open(self.admins_path, "w") as f:
             f.write("# quản trị\nadmin@neu.edu.vn\n")
         self.up = FakeUpstream()
@@ -136,9 +136,9 @@ class GatewayCase(unittest.TestCase):
 class PureTests(unittest.TestCase):
     def test_tiers_and_limits(self):
         cfg = Q.load_config("/không/có")
-        self.assertEqual(Q.limit_for(cfg, SV, set()), (1_000_000, "student"))
+        self.assertEqual(Q.limit_for(cfg, SV, set()), (5_000_000, "student"))
         self.assertEqual(Q.limit_for(cfg, GV, set()), (10_000_000, "staff"))
-        self.assertEqual(Q.limit_for(cfg, "khach01", set()), (1_000_000, "student"))        # tài khoản tên + mật khẩu
+        self.assertEqual(Q.limit_for(cfg, "khach01", set()), (5_000_000, "student"))        # tài khoản tên + mật khẩu
         self.assertEqual(Q.limit_for(cfg, "x@lop.st.neu.edu.vn", set())[1], "student")       # tên miền con
         self.assertEqual(Q.limit_for(cfg, "x@gmail.com", set())[1], "student")
         self.assertEqual(Q.limit_for(cfg, "admin@neu.edu.vn", {"admin@neu.edu.vn"}), (None, "admin"))
@@ -165,7 +165,7 @@ class PureTests(unittest.TestCase):
         self.assertEqual(cfg["overrides"], {"c@d.vn": 9})
         with open(p, "w") as f:
             f.write("{hỏng")
-        self.assertEqual(Q.load_config(p)["tiers"]["student"], 1_000_000)  # hỏng → mặc định an toàn
+        self.assertEqual(Q.load_config(p)["tiers"]["student"], 5_000_000)  # hỏng → mặc định an toàn
 
     def test_day_and_reset_in_vietnam_time(self):
         ts = 1_800_000_000  # 2027-01-15 08:00 UTC = 15:00 giờ VN

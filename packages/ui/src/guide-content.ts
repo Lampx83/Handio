@@ -75,7 +75,7 @@ const COMMON_AFTER: GuideSection[] = [
   {
     id: "rieng-tu", title: "Hạn mức & riêng tư", icon: "🔒",
     items: [
-      { t: "Hạn mức token mỗi ngày", d: "Sinh viên 1 triệu, giảng viên 10 triệu token/ngày. Hết thì đợi sang ngày hôm sau; được vượt thêm khoảng 10% để hoàn tất việc đang làm. Việc dài tốn nhiều token hơn việc ngắn." },
+      { t: "Hạn mức token mỗi ngày", d: "Sinh viên 5 triệu, giảng viên 10 triệu token/ngày. Hết thì đợi sang ngày hôm sau; được vượt thêm khoảng 10% để hoàn tất việc đang làm. Việc dài tốn nhiều token hơn việc ngắn." },
       { t: "Mẹo tiết kiệm token", d: "Bắt đầu cuộc trò chuyện mới (＋) khi đổi chủ đề; nói rõ tệp cần xem bằng @; tránh dán cả tệp lớn khi chỉ cần một đoạn." },
       { t: "Dữ liệu của bạn", d: "Tệp nằm trong thư mục dự án trên máy bạn. Hệ thống chỉ gửi số liệu chẩn đoán KHÔNG có nội dung (tắt được ở Cài đặt)." },
       { t: "Đừng dán mật khẩu, khoá truy cập", d: "Agent không cần chúng. Nếu cần khoá API, hãy lưu vào tệp .env và nhờ agent đọc từ biến môi trường." },
