@@ -92,4 +92,33 @@ describe("tab Code: /plan, /memory, /usage, /effort, ultrathink, dán ảnh, s�
     expect(r.saved).toEqual(["anh-dan-20261009-1.png"]);
     expect(env.snapshot()["/ws/anh-dan-20261009-1.png"]).toBeDefined();
   });
+
+  it("/init dặn tạo CLAUDE.md một dòng @AGENTS.md và kiểm tra .gitignore; /commit không git add bừa và hỏi trước khi git init", async () => {
+    const { c, llm } = await makeController([{ text: "ok" }]);
+    await c.send("/init");
+    const init = String(llm.calls[0].messages.at(-1)!.content);
+    expect(init).toContain("`@AGENTS.md`");
+    expect(init).toContain(".gitignore");
+    await c.send("/commit");
+    const commit = String(llm.calls[1].messages.at(-1)!.content);
+    expect(commit).toContain("never `git add .` blindly");
+    expect(commit).toContain("wait for the user's yes");
+    expect(commit).toContain("NEVER run `git push`");
+  });
+
+  it("chế độ plan yêu cầu kế hoạch có tệp sẽ sửa, bước kiểm tra và câu hỏi mở", async () => {
+    const { c, llm } = await makeController([{ text: "ok" }], { settings: { mode: "plan" }, decide: () => ({ allow: false }) });
+    await c.send("làm gì đó");
+    const sys = String(llm.calls[0].messages[0].content);
+    expect(sys).toContain("files to change and anything you will NOT touch");
+    expect(sys).toContain("how you will check each step");
+  });
+
+  it("/context liệt kê từng tệp hướng dẫn đang nạp", async () => {
+    const { c, events } = await makeController([{ text: "ok" }], { seed: { ...SEED, "AGENTS.md": "Luôn dùng tab.", "CLAUDE.md": "@AGENTS.md" } });
+    await c.send("/context");
+    const n = notices(events).at(-1)!;
+    expect(n).toMatch(/AGENTS\.md\s+\S+/);
+    expect(n).toMatch(/CLAUDE\.md\s+\S+/);
+  });
 });
