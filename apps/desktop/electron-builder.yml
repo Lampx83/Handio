@@ -16,6 +16,8 @@ extraResources:
     to: packs
     filter: ["**/*.md", "**/*.json", "**/*.txt", "**/*.csv", "!**/.*"]
 asar: true
+# Chỉ giữ gói ngôn ngữ của Chromium/macOS cho tiếng Việt và tiếng Anh (bỏ ~55 ngôn ngữ còn lại: nhẹ hơn ~8 MB mỗi bản cài)
+electronLanguages: [vi, en-US]
 compression: maximum
 npmRebuild: false
 nodeGypRebuild: false

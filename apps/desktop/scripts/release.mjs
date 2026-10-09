@@ -48,5 +48,6 @@ const cliArgs = [...(wantMac ? macArgs : []), ...(wantWin ? winArgs : [])];
 // electron-builder tự bỏ qua chứng chỉ Windows khi không có WIN_CSC_*; tránh dùng nhầm chứng chỉ macOS (CSC_LINK) để ký .exe
 const childEnv = { ...(wantWin && !winCert ? { CSC_LINK: wantMac ? env.CSC_LINK : "" } : {}), ...(localSign && !macSign ? { NEU_LOCAL_SIGN_NAME: LOCAL_ID } : {}) };
 run("npx", [...builder, ...cliArgs], { env: childEnv });
+run("node", ["scripts/recompress-dmg.mjs"]);
 run("node", ["scripts/verify-signature.mjs"]);
 run("node", ["scripts/release-info.mjs"]);

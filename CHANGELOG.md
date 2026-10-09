@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thay đổi
+- **Bản cài Desktop nhẹ hơn, tải nhanh hơn**: bỏ các gói ngôn ngữ thừa (chỉ giữ tiếng Việt và tiếng Anh, nhẹ hơn ~8 MB) và nén lại bản macOS bằng LZMA (nhẹ hơn ~17%, khoảng 120 → 98 MB). Chức năng không đổi.
+
 ## [0.5.0] - 2026-10-09
 
 ### Thêm
