@@ -7,8 +7,8 @@ import { resolveSafe, ToolError, type Tool } from "./tools";
  * Chung cho mọi tổ chức: dùng chính mô hình đang cấu hình, không cần máy chủ OCR riêng; mô hình không đọc được ảnh thì báo lỗi rõ.
  */
 
-/** Giới hạn ảnh gửi đi (sau khi thu nhỏ): cổng máy chủ nhận tối đa ~4 MB cho một yêu cầu, base64 phình thêm 1/3. */
-export const VISION_MAX_SEND = 2_400_000;
+/** Giới hạn ảnh gửi đi (sau khi thu nhỏ): nginx ở máy 222 cho thân yêu cầu tối đa 2 MB (máy 220 và cổng hạn mức 4 MB), base64 phình thêm 1/3. */
+export const VISION_MAX_SEND = 1_400_000;
 const MAX_READ = 30_000_000;
 const SHRINK_ABOVE = 500_000;
 const MAX_OUT = 20_000;

@@ -45,7 +45,7 @@ Dọn OJ Judge cũ trên 220: `sudo ./remove-oj-judge.sh` (mặc định chỉ l
 
 ### Công cụ web cho agent (tìm kiếm + tải trang) và đọc ảnh
 
-- **Đọc ảnh/OCR** không cần dịch vụ riêng: công cụ `read_image` gửi ảnh cho chính mô hình (Qwen3.5 đọc được ảnh, chữ tiếng Việt chính xác). Ảnh được thu nhỏ ở máy người dùng (≤ 2,4 MB) và đi qua cổng hạn mức như mọi lượt chat, nên tính vào hạn mức token; nginx 220 và 222 cho thân yêu cầu tới 4 MB. Mô hình khác không đọc được ảnh thì công cụ báo lỗi rõ.
+- **Đọc ảnh/OCR** không cần dịch vụ riêng: công cụ `read_image` gửi ảnh cho chính mô hình (Qwen3.5 đọc được ảnh, chữ tiếng Việt chính xác). Ảnh được thu nhỏ ở máy người dùng (≤ 1,4 MB, vừa giới hạn thân yêu cầu 2 MB của nginx 222) và đi qua cổng hạn mức như mọi lượt chat, nên tính vào hạn mức token. Muốn cho ảnh lớn hơn: tăng `client_max_body_size` ở 222 (đã sửa thành 4m trong `deploy/222`, cần `sudo ./install.sh` ở 222) và `VISION_MAX_SEND` trong `packages/core/src/vision.ts`. Mô hình khác không đọc được ảnh thì công cụ báo lỗi rõ.
 - **Tìm web + đọc trang** (`web_search`, `fetch_page`, từ gói `packs/tim-kiem-web`) cần dịch vụ ở `deploy/220/tools/`: SearXNG tự dựng (Docker, ảnh ghim mã băm, chỉ nghe 127.0.0.1:8899, không cần khoá API) + `tools.py` (127.0.0.1:4192; giới hạn theo người dùng, **chặn truy cập mạng nội bộ** bằng cả mã lẫn `IPAddressDeny` của systemd, không ghi nội dung truy vấn). Nginx mở `/agent/tools/search` và `/agent/tools/fetch` (phải đăng nhập, chỉ GET).
   ```bash
   scp -r deploy/220 220:~/neu-agent-220

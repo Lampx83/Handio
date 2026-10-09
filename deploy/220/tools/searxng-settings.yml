@@ -1,9 +1,14 @@
 # Cấu hình SearXNG (máy tìm kiếm tự dựng) cho dịch vụ công cụ web của NEU Agent. Chỉ nghe 127.0.0.1; người dùng không gọi trực tiếp.
 # __SECRET__ được install-tools.sh thay bằng chuỗi ngẫu nhiên khi cài (không đưa vào mã nguồn).
-use_default_settings:
-  engines:
-    # các nguồn luôn bị chặn/chậm từ máy chủ (CAPTCHA, quá nhiều yêu cầu, timeout) hoặc không dùng được trong container: bỏ để khỏi chờ vô ích
-    remove: [duckduckgo, brave, wikidata, ahmia, torch]
+use_default_settings: true
+# các nguồn luôn bị chặn/chậm từ máy chủ (CAPTCHA, quá nhiều yêu cầu, timeout) hoặc không dùng được trong container: tắt để khỏi chờ vô ích
+# (dùng disabled thay vì remove: bỏ hẳn một nguồn làm SearXNG báo KeyError ở các cấu hình mặc định tham chiếu tới nó)
+engines:
+  - { name: duckduckgo, disabled: true }
+  - { name: brave, disabled: true }
+  - { name: wikidata, disabled: true }
+  - { name: ahmia, disabled: true }
+  - { name: torch, disabled: true }
 general:
   instance_name: "neu-agent-search"
   enable_metrics: false
