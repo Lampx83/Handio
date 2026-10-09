@@ -9,6 +9,12 @@ files:
   - dist/**/*
   - package.json
   - "!dist/**/*.map"
+# Gói mở rộng của tổ chức (thư mục packs/ ở gốc kho mã, xem docs/EXTENSIONS.md): đi kèm bản cài, đọc lúc chạy.
+# Tổ chức khác chỉ cần thay nội dung thư mục packs/ — không đụng mã lõi.
+extraResources:
+  - from: ../../packs
+    to: packs
+    filter: ["**/*.md", "**/*.json", "**/*.txt", "**/*.csv", "!**/.*"]
 asar: true
 compression: maximum
 npmRebuild: false

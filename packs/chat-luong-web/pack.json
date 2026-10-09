@@ -1,0 +1,1 @@
+{ "id": "chat-luong-web", "name": "Chất lượng giao diện web", "version": "1.0.0", "description": "Kiểm tra giao diện web trước khi giao: dễ đọc, dùng được trên điện thoại, truy cập được, nhanh.", "profiles": ["code", "design"] }

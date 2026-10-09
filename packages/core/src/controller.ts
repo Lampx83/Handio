@@ -14,6 +14,7 @@ import { Session } from "./session";
 import { badCitations, docViewOf, listProcedures, removeProcedure, saveProcedure, type Procedure } from "./work-ctl";
 import type { DocView } from "./office/locate";
 import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
+import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
 import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk } from "./tools";
 import type { AgentController, PermissionRequest, PermissionResponse, QuotaInfo, RewindPoint, SessionEvent, Settings, UiState } from "./types";
@@ -45,6 +46,8 @@ export interface ControllerOptions {
   openUrl?: (url: string) => Promise<void>;
   revealWorkspace?: () => Promise<void>;
   resetWorkspace?: () => Promise<void>;
+  /** Gói mở rộng của quản trị/người dùng (xem packs.ts). Gói trong thư mục dự án được lõi tự đọc. */
+  packs?: () => Promise<RawPack[]>;
   /** Nhiều dự án (thư mục) trong cùng một tab. */
   projects?: ProjectHost;
   /** Lưu lịch sử trò chuyện theo dự án. */
@@ -153,7 +156,22 @@ export class LocalController implements AgentController {
     this.settings = this.applyPolicy(normalizeSettings(await this.o.store.load(), this.o.defaults));
   }
 
-  private makeSession(): Promise<Session> {
+  private async makeSession(): Promise<Session> {
+    // Gói mở rộng: của quản trị/người dùng do ứng dụng cung cấp + gói nằm trong dự án (.neuagent/packs, không tin cậy)
+    const raws: RawPack[] = [];
+    try {
+      raws.push(...((await this.o.packs?.()) ?? []));
+    } catch {
+      /* không đọc được gói: chạy không có gói */
+    }
+    raws.push(...(await readProjectPacks(this.o.env, this.o.env.root)));
+    const { packs, notices } = parsePacks(raws);
+    const sess = await this.makeSessionWith(packs);
+    sess.startupNotices.push(...notices);
+    return sess;
+  }
+
+  private makeSessionWith(packs: LoadedPack[]): Promise<Session> {
     return Session.create({
       env: this.o.env,
       profile: this.o.profile ?? "code",
@@ -167,6 +185,7 @@ export class LocalController implements AgentController {
       askPermission: (req) => this.askUser(req),
       project: this.project,
       trustProject: this.trusted,
+      packs,
     });
   }
 

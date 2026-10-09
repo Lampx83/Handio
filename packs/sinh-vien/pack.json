@@ -1,0 +1,1 @@
+{ "id": "sinh-vien", "name": "Đồng hành sinh viên", "version": "1.0.0", "description": "Làm đồ án/khoá luận có quy trình, giải thích lỗi dễ hiểu, ôn tập chủ động.", "profiles": ["code", "work"] }

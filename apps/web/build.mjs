@@ -1,6 +1,7 @@
 import { build } from "esbuild";
 import fs from "node:fs";
 import { changelogData } from "../../scripts/version.mjs";
+import { writePacksJson } from "../../scripts/packs.mjs";
 
 // nhật ký thay đổi và phiên bản được nhúng lúc dựng: người dùng xem được cả khi không có mạng
 const pkgVersion = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
@@ -13,3 +14,5 @@ fs.mkdirSync("dist", { recursive: true });
 await build({ ...common, entryPoints: ["src/main.ts"], outdir: "dist", entryNames: "app", chunkNames: "chunks/[name]-[hash]", splitting: true, format: "esm", loader: { ".css": "css" }, define: { "process.env.NODE_ENV": '"production"', __CHANGELOG__: JSON.stringify(changelog), __APP_VERSION__: JSON.stringify(pkgVersion) } });
 await build({ ...common, entryPoints: ["src/sandbox-worker.ts"], outfile: "dist/sandbox-worker.js", format: "iife" });
 for (const f of ["index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png"]) fs.copyFileSync(f, "dist/" + f);
+// gói mở rộng của tổ chức (packs/ hoặc NEU_PACKS_DIR): bản web đọc packs.json lúc mở
+writePacksJson("dist/packs.json");

@@ -22,6 +22,7 @@ export * from "./policy";
 export * from "./processes";
 export * from "./hooks";
 export * from "./mcp";
+export * from "./packs";
 export * from "./learning";
 export * from "./design-templates";
 export * from "./projects";

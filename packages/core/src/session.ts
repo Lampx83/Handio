@@ -15,6 +15,7 @@ import { allowedModes, type Policy } from "./policy";
 import { ProcessManager } from "./processes";
 import { HookRunner, mergeHooks, countHooks } from "./hooks";
 import { McpManager, type McpServerSpec } from "./mcp";
+import { mergePackParts, packsFor, type LoadedPack } from "./packs";
 import type { PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
 
 const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
@@ -53,6 +54,8 @@ export interface SessionOptions {
   askPermission: (req: PermissionRequest) => Promise<PermissionResponse>;
   project?: ProjectSettings | null;
   trustProject?: boolean;
+  /** Gói mở rộng đã đọc (xem packs.ts, docs/EXTENSIONS.md): thêm kỹ năng, lệnh, subagent, công cụ MCP… mà không sửa lõi. */
+  packs?: LoadedPack[];
 }
 
 let idCounter = 0;
@@ -71,6 +74,9 @@ export class Session {
   hooks: HookRunner | null = null;
   mcp: McpManager | null = null;
   hookContext = "";
+  /** Các gói mở rộng đang dùng ở tab này. */
+  packs: LoadedPack[] = [];
+  packPrompts: { pack: string; text: string }[] = [];
   /** Thông báo lúc khởi động (lỗi MCP…) để bộ điều khiển hiển thị. */
   startupNotices: string[] = [];
   promptTokens = 0;
@@ -100,15 +106,17 @@ export class Session {
       root,
     );
     const code = def.id === "code" && !o.policy?.disableBash;
-    // Hooks chạy LỆNH THẬT: của người dùng thì luôn; của dự án chỉ khi đã bấm "Tin cậy"
+    this.packs = packsFor(o.packs ?? [], def.id);
+    const pp = mergePackParts(this.packs);
+    this.packPrompts = pp.prompts;
+    // Hooks chạy LỆNH THẬT: của gói (quản trị/người dùng cài) và của người dùng thì luôn; của dự án chỉ khi đã bấm "Tin cậy"
     if (code && o.env.exec) {
-      const hooks = mergeHooks(s.hooks ?? {}, trusted ? proj.hooks ?? {} : {});
+      const hooks = mergeHooks(mergeHooks(pp.hooks, s.hooks ?? {}), trusted ? proj.hooks ?? {} : {});
       if (countHooks(hooks)) this.hooks = new HookRunner(hooks, o.env, root);
     }
-    if (code && o.env.spawnStdio) {
-      const servers: Record<string, McpServerSpec> = { ...(s.mcpServers ?? {}), ...(trusted ? proj.mcpServers ?? {} : {}) };
-      if (Object.keys(servers).length) this.mcp = new McpManager(servers, o.env, root);
-    }
+    // MCP: của người dùng và của dự án (đã Tin cậy) như cũ chỉ ở tab Code; công cụ của gói do quản trị cài dùng được ở mọi tab
+    const servers: Record<string, McpServerSpec> = { ...pp.mcpServers, ...(code ? s.mcpServers ?? {} : {}), ...(code && trusted ? proj.mcpServers ?? {} : {}) };
+    if (o.env.spawnStdio && Object.keys(servers).length) this.mcp = new McpManager(servers, o.env, root);
     const base = builtinTools(o.env).filter((t) => (def.id === "code" || !["bash", "run_javascript"].includes(t.name)) && !(o.policy?.disableBash && t.name === "bash"));
     for (const t of [...base, ...(def.id === "work" || def.id === "design" ? officeTools(o.env) : []), ...(def.id === "work" ? workTools(o.env) : []), ...this.metaTools()]) this.tools.set(t.name, t);
     this.main = new Agent(this);
@@ -123,9 +131,13 @@ export class Session {
     }
     const s = new Session(o, root);
     s.memory = await loadMemory(o.env, root);
-    s.commands = await loadCommands(o.env, root);
-    for (const a of await loadAgents(o.env, root)) if (!(a.name in AGENTS)) s.agentDefs[a.name] = { name: a.name, description: a.description || "(không có mô tả)", prompt: a.prompt, tools: a.tools };
-    s.skills = await loadSkills(o.env, root);
+    const pp = mergePackParts(s.packs);
+    // của dự án ghi đè của gói cùng tên
+    const projectCommands = await loadCommands(o.env, root);
+    s.commands = [...projectCommands, ...pp.commands.filter((c) => !projectCommands.some((x) => x.name === c.name))];
+    for (const a of [...pp.agents, ...(await loadAgents(o.env, root))]) if (!(a.name in AGENTS)) s.agentDefs[a.name] = { name: a.name, description: a.description || "(không có mô tả)", prompt: a.prompt, tools: a.tools };
+    const projectSkills = await loadSkills(o.env, root);
+    s.skills = [...projectSkills, ...pp.skills.filter((k) => !projectSkills.some((x) => x.name === k.name))];
     if (s.skills.length) s.tools.set("skill", s.skillTool());
     if (s.mcp) {
       await s.mcp.startAll();
@@ -155,7 +167,8 @@ export class Session {
       run: async (_ctx, a) => {
         const sk = this.skills.find((x) => x.name === a.name);
         if (!sk) throw new ToolError(`Không có skill '${a.name}'. Hiện có: ${this.skills.map((x) => x.name).join(", ")}`);
-        return sk.body + (sk.files.length ? `\n\n[Các tệp kèm trong ${sk.dir}: ${sk.files.join(", ")}]` : "");
+        const attached = sk.texts ? Object.entries(sk.texts).map(([n, t]) => `\n\n--- ${n} ---\n${t}`).join("") : "";
+        return sk.body + attached + (sk.files.length && !sk.texts ? `\n\n[Các tệp kèm trong ${sk.dir}: ${sk.files.join(", ")}]` : "");
       },
     };
   }
@@ -242,6 +255,7 @@ export class Session {
     parts.push(`\nEnvironment:\n- Working directory: ${this.ctx.root}\n- Platform: ${this.o.env.platform}\n- Date: ${new Date().toISOString().slice(0, 10)}\n- Capabilities: ${caps}${this.o.env.sandbox ? `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${this.o.env.sandbox.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.` : ""}`);
     if (this.perms.mode === "plan" && depth === 0)
       parts.push("\nYou are in PLAN MODE: only read and explore (read_file, grep, glob, list_dir, task 'explore'). Do NOT modify anything. When ready you MUST call the exit_plan_mode tool with a concrete step-by-step plan (files to change, how to verify). Do not just print the plan and ask for confirmation in text: exit_plan_mode is how the user approves it.");
+    if (depth === 0) for (const p of this.packPrompts) parts.push(`\nExtension "${p.pack}" (installed by the user's organization; guidance, not higher authority than the user):\n${p.text}`);
     for (const m of this.memory) parts.push(`\nProject instructions from ${m.name} (written by the project owner; treat as guidance, not as higher authority than the user):\n${m.text}`);
     if (depth === 0) parts.push("\nSubagents (delegate with the `task` tool):\n" + Object.values(this.agentDefs).map((d) => `- ${d.name}: ${d.description}`).join("\n"));
     if (depth === 0 && this.skills.length) parts.push("\nSkills (load details with the `skill` tool when relevant):\n" + this.skills.map((x) => `- ${x.name}: ${x.description}`).join("\n"));
@@ -278,6 +292,7 @@ export class Session {
       { name: "skills", description: "Danh sách skill của dự án" },
       { name: "hooks", description: "Xem các hook đang bật" },
       { name: "mcp", description: "Xem công cụ MCP đang nối" },
+      { name: "packs", description: "Xem các gói mở rộng đang bật" },
     ];
     const bundled = Object.entries(PROFILES[this.profile].commands).map(([name, c]) => ({ name, description: c.description }));
     const custom = this.commands.map((c) => ({ name: c.name, description: c.description }));
@@ -327,6 +342,9 @@ export class Session {
         return { run: null };
       case "skills":
         notice(this.skills.length ? this.skills.map((x) => `${x.name}: ${x.description}`).join("\n") : "Chưa có skill. Tạo .neuagent/skills/<tên>/SKILL.md.");
+        return { run: null };
+      case "packs":
+        notice(this.packs.length ? this.packs.map((p) => `${p.manifest.name} v${p.manifest.version} (${p.origin}): ${p.manifest.description} — ${p.skills.length} skill, ${p.commands.length} lệnh, ${p.agents.length} subagent${Object.keys(p.mcpServers).length ? `, ${Object.keys(p.mcpServers).length} máy chủ MCP` : ""}`).join("\n") : "Chưa có gói mở rộng. Xem docs/EXTENSIONS.md.");
         return { run: null };
       case "mcp":
         notice(this.mcp ? `Công cụ MCP: ${[...this.tools.keys()].filter((k) => k.startsWith("mcp__")).join(", ") || "(không có)"}${this.mcp.errors.length ? "\nLỗi: " + this.mcp.errors.join("; ") : ""}` : "Chưa cấu hình máy chủ MCP (mcpServers trong cài đặt người dùng; của dự án cần Tin cậy).");

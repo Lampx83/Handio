@@ -1,0 +1,1 @@
+{ "id": "phan-tich-du-lieu", "name": "Phân tích dữ liệu", "version": "1.0.0", "description": "Làm sạch và phân tích bảng số liệu, khảo sát Likert, báo cáo kèm biểu đồ.", "profiles": ["work", "code"] }

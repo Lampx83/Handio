@@ -30,7 +30,7 @@ export interface CustomCommand {
   body: string;
 }
 
-function frontmatter(text: string): { meta: Record<string, string>; body: string } {
+export function frontmatter(text: string): { meta: Record<string, string>; body: string } {
   const m = /^---\s*\n([\s\S]*?)\n---\s*\n?([\s\S]*)$/.exec(text);
   if (!m) return { meta: {}, body: text };
   const meta: Record<string, string> = {};
@@ -81,8 +81,8 @@ export function expandCommand(body: string, args: string): string {
 
 // ---------------------------------------------------------------- subagent và skill tuỳ biến
 
-const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$/;
-const splitList = (v: string | undefined): string[] | null => {
+export const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,40}$/;
+export const splitList = (v: string | undefined): string[] | null => {
   if (!v) return null;
   const items = v.replace(/^\[|\]$/g, "").split(",").map((x) => x.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
   return items.length ? items : null;
@@ -128,6 +128,8 @@ export interface CustomSkill {
   body: string;
   dir: string;
   files: string[];
+  /** Nội dung chữ của các tệp kèm theo khi skill đến từ gói mở rộng (không nằm trong thư mục dự án để đọc bằng read_file). */
+  texts?: Record<string, string>;
 }
 
 /** Skill: thư mục `.neuagent/skills/<tên>/SKILL.md` (frontmatter name/description) + các tệp kèm theo. */

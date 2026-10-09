@@ -1,0 +1,1 @@
+{ "id": "van-phong-tu-dong", "name": "Văn phòng tự động", "version": "1.0.0", "description": "Việc lặp lại trên nhiều tệp: tổng hợp thư mục, đối chiếu hai bảng, gộp nhiều tệp, soát lỗi hàng loạt.", "profiles": ["work"] }

@@ -1,5 +1,5 @@
 import "@neu/agent-ui/style.css";
-import { buildWorkSamples, KvChatStore, KvProjectHost, LocalController, MemoryEnv, SAMPLE_DESIGN, SAMPLE_PROJECT, type AgentController, type Env, type Profile, type ProjectInfo, type Settings, type SettingsStore, type TrustStore } from "@neu/agent-core";
+import { buildWorkSamples, KvChatStore, KvProjectHost, LocalController, MemoryEnv, SAMPLE_DESIGN, SAMPLE_PROJECT, type AgentController, type Env, type Profile, type ProjectInfo, type RawPack, type Settings, type SettingsStore, type TrustStore } from "@neu/agent-core";
 import { mountShell } from "@neu/agent-ui";
 import { autosave, restore, wipe } from "./persist";
 import { runJsSandbox } from "./sandbox";
@@ -148,6 +148,17 @@ window.addEventListener("beforeinstallprompt", (e) => {
   installEvent = e as typeof installEvent;
 });
 
+async function fetchOrgPacks(): Promise<RawPack[]> {
+  try {
+    const r = await authFetch(new URL("packs.json", document.baseURI).href);
+    if (!r.ok || !(r.headers.get("content-type") ?? "").includes("json")) return [];
+    const j = (await r.json()) as { packs?: { dir?: unknown; files?: unknown }[] };
+    return (Array.isArray(j.packs) ? j.packs : []).filter((p) => typeof p.dir === "string" && p.files && typeof p.files === "object").map((p) => ({ dir: p.dir as string, origin: "org" as const, files: p.files as Record<string, string> }));
+  } catch {
+    return [];
+  }
+}
+
 async function main(): Promise<void> {
   const hasMock = await mockAvailable();
   // Đường dẫn tương đối theo trang (…/agent/ → …/agent/vllm/v1): nginx cùng nguồn chuyển tới gateway và tự gắn key
@@ -163,13 +174,15 @@ async function main(): Promise<void> {
   }
   if (ls.get("neu.settings") === null) ls.set("neu.settings", JSON.stringify({ baseUrl: gateway }));
 
+  // Gói mở rộng của tổ chức (docs/EXTENSIONS.md): packs.json sinh lúc dựng từ thư mục packs/. Không có thì chạy không có gói.
+  const orgPacks = await fetchOrgPacks();
   const chats = (profile: Profile) => new KvChatStore({ get: (k) => ls.get(k), set: (k, v) => ls.set(k, v) }, `neu.chats.${profile}`);
   const make = async (profile: Profile, root: string, legacySeed: Seed, legacyName: string, defaultName: string): Promise<LocalController> => {
     const p = makeProjects(profile, root, legacySeed, legacyName, defaultName);
     if (ls.get("neu.nosample.v1") === null) await p.dropSample().catch(() => undefined);
     const st = await p.host.list();
     const env = await p.host.open(st.active);
-    return LocalController.create({ env, profile, store, defaults: { mode: "auto" }, trust, realFs: false, presets, fetchImpl: authFetch, diagnostics: { endpoint: new URL("diag", document.baseURI).href, version: "0.1.0", platform: "web", enabled: () => location.protocol === "https:" }, projects: p.host, chats: chats(profile) });
+    return LocalController.create({ env, profile, store, packs: async () => orgPacks, defaults: { mode: "auto" }, trust, realFs: false, presets, fetchImpl: authFetch, diagnostics: { endpoint: new URL("diag", document.baseURI).href, version: "0.1.0", platform: "web", enabled: () => location.protocol === "https:" }, projects: p.host, chats: chats(profile) });
   };
   const controllers: Partial<Record<Profile, AgentController>> = {
     work: await make("work", "/work", buildWorkSamples, "Dự án mẫu", "Dự án của tôi"),

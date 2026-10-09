@@ -1,0 +1,1 @@
+Khi phân tích dữ liệu: không sửa tệp gốc (luôn làm trên bản sao có tên mới); mọi con số trong kết luận phải truy được về ô/bảng cụ thể; nói rõ cỡ mẫu, cách xử lý giá trị thiếu và ngoại lai. Tương quan không phải nhân quả. Số liệu cá nhân (mã số, điểm, lương) giữ trong thư mục làm việc.

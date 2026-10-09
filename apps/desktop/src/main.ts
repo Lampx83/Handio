@@ -2,8 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, sessi
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
-import { buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
-import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, type KeyCodec } from "@neu/agent-env-node";
+import { buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
+import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, readPackDirs, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { Updater, UPDATE_METHODS } from "./updater";
 import { APP_ORIGIN, AUTH_METHODS, authArgsOk, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
@@ -59,6 +59,22 @@ async function loadPolicy(): Promise<Policy> {
     }
   }
   return {};
+}
+
+// ---------------------------------------------------------------- gói mở rộng (docs/EXTENSIONS.md)
+// Gói của tổ chức: thư mục `packs` cạnh policy.json (quản trị đặt), `resources/packs` đi kèm bản cài, hoặc NEU_PACKS_DIR khi phát triển.
+// Gói của người dùng: <userData>/packs. Cả hai được tin cậy (gói trong dự án thì lõi tự đọc và không tin cậy).
+async function loadPacks(): Promise<RawPack[]> {
+  const orgDirs = [
+    process.platform === "darwin" ? "/Library/Application Support/NEU Agent/packs" : "",
+    process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "NEU Agent", "packs") : "",
+    app.isPackaged ? path.join(process.resourcesPath, "packs") : "",
+    __DEV__ && process.env.NEU_PACKS_DIR ? process.env.NEU_PACKS_DIR : "",
+  ].filter(Boolean);
+  const out: RawPack[] = [];
+  for (const d of orgDirs) out.push(...(await readPackDirs(d, "org")));
+  out.push(...(await readPackDirs(path.join(userData(), "packs"), "user")));
+  return out;
 }
 
 // ---------------------------------------------------------------- thư mục làm việc & cài đặt
@@ -292,6 +308,7 @@ async function buildController(profile: Profile): Promise<LocalController> {
     diagnostics: { endpoint: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/diag"), headers: (): Record<string, string> => auth?.peekHeaders() ?? {}, enabled: () => !!auth && !SMOKE, version: app.getVersion(), platform: process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : "linux" },
     authHosts: [new URL(__DEFAULT_BASE_URL__).host],
     realFs: true,
+    packs: loadPacks,
     projects: host,
     chats: chatStore(),
     renderDesign: profile === "design" ? renderDesign : undefined,
