@@ -1,6 +1,8 @@
 # Phát hành NEU Agent Desktop: dựng (mac arm64/x64, Windows), KÝ SỐ nếu có chứng chỉ, kiểm tra chữ ký, tạo mã băm + latest.json
 # (ghi chú lấy từ CHANGELOG.md), ĐƯA LÊN MÁY CHỦ để người dùng thấy "Có bản mới" và tải được, và tạo trang phát hành trên GitHub.
 #
+# Lưu ý biểu thức: với tag/workflow_call `inputs.publish_to_server` rỗng; `rỗng != false` trong GitHub Actions là FALSE (cả hai quy về 0), nên điều kiện
+# so sánh CHUỖI (`format('{0}', …) != 'false'`: chỉ bỏ qua khi người chạy tay bỏ chọn) (lần phát hành 0.4.0/0.5.0 đầu tiên từng bỏ qua việc đưa lên máy chủ vì lỗi này).
 # Kích hoạt:
 #   - TỰ ĐỘNG: deploy.yml gọi workflow này sau khi triển khai web thành công mà phiên bản trong package.json CHƯA có tag (workflow_call);
 #   - đẩy tag `v*` (quy trình phát hành tay: docs/RELEASE.md);
@@ -148,7 +150,7 @@ jobs:
           retention-days: 30
 
       - name: Thiết lập SSH
-        if: ${{ inputs.publish_to_server != false && vars.DEPLOY_ENABLED == 'true' }}
+        if: ${{ format('{0}', inputs.publish_to_server) != 'false' && vars.DEPLOY_ENABLED == 'true' }}
         uses: ./.github/actions/ssh-setup
         with:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -158,7 +160,7 @@ jobs:
           user: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
       - name: Đưa lên máy chủ 220 (người dùng thấy "Có bản mới" và tải được)
         id: server
-        if: ${{ inputs.publish_to_server != false && vars.DEPLOY_ENABLED == 'true' }}
+        if: ${{ format('{0}', inputs.publish_to_server) != 'false' && vars.DEPLOY_ENABLED == 'true' }}
         run: |
           set -euo pipefail
           tar -C pub --owner=0 --group=0 --numeric-owner -czf desktop.tgz .
@@ -178,6 +180,8 @@ jobs:
           if gh release view "v$VER" >/dev/null 2>&1; then
             gh release upload "v$VER" out/* --clobber
             gh release edit "v$VER" --notes-file release-notes.md
+            # bản nháp tạo từ lần chạy trước (chưa đưa lên được máy chủ): đã đưa lên máy chủ thành công thì công bố luôn
+            [ -n "$draft" ] || gh release edit "v$VER" --draft=false --latest
           else
             gh release create "v$VER" out/* --target "$GITHUB_SHA" --title "NEU Agent $VER" --notes-file release-notes.md $draft
           fi
