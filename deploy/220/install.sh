@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Cài NEU Agent (web + proxy mô hình + đăng nhập SSO + bản tải) trên máy 220. Chạy bằng sudo trong thư mục chứa các tệp này.
 #   sudo ./auth/install-auth.sh               (làm TRƯỚC, một lần: dịch vụ đăng nhập)
-#   sudo ./install.sh <key mô hình>           cài hoặc cập nhật (chép web.tar.gz / downloads/ mới rồi chạy lại lệnh này)
+#   sudo ./install.sh <key mô hình>           cài lần đầu (cập nhật sau đó không cần key: tự dùng lại key đang chạy)
+#   sudo ./install.sh                         cập nhật (chép web.tar.gz / downloads/ mới rồi chạy lại lệnh này)
 #   sudo ./install.sh --uninstall             gỡ cấu hình nginx của NEU Agent (giữ tệp web và dịch vụ đăng nhập)
 # An toàn: sao lưu cấu hình, nginx -t trước khi nạp lại, tự khôi phục nếu lỗi hoặc kiểm tra sau cài thất bại; không đụng tới các site khác.
 set -euo pipefail
@@ -25,7 +26,9 @@ if [ "${1:-}" = "--uninstall" ]; then
 fi
 
 KEY="${NEU_AGENT_KEY:-${1:-}}"
-[ -n "$KEY" ] || { echo "Thiếu key mô hình. Ví dụ: sudo ./install.sh <key>"; exit 1; }
+# Cập nhật không cần nhập lại key: dùng lại key đang chạy trong cấu hình đã cài (để CI/CD tự triển khai mà KHÔNG phải giữ key ở GitHub)
+if [ -z "$KEY" ] && [ -r "$CONFD" ]; then KEY=$(sed -n 's/^[[:space:]]*""[[:space:]]*"\([A-Za-z0-9._-]\{1,\}\)";.*$/\1/p' "$CONFD" | head -1); fi
+[ -n "$KEY" ] || { echo "Thiếu key mô hình (chưa cài lần nào). Ví dụ: sudo ./install.sh <key>"; exit 1; }
 case "$KEY" in *[!A-Za-z0-9._-]*) echo "Key chỉ được chứa chữ, số, . _ -"; exit 1;; esac
 for f in web.tar.gz neu-agent.http.conf neu-agent.server.conf neu-agent.locations.conf neu-agent-auth.conf; do [ -f "$HERE/$f" ] || { echo "Thiếu $HERE/$f"; exit 1; }; done
 systemctl is-active --quiet neu-agent-oauth2 || { echo "Dịch vụ đăng nhập chưa chạy. Chạy trước: sudo ./auth/install-auth.sh"; exit 1; }

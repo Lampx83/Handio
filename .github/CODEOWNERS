@@ -1,0 +1,6 @@
+# Người duyệt bắt buộc cho phần chạy với quyền cao hoặc quyết định bảo mật (bật "Require review from Code Owners" ở nhánh main).
+*                      @Lampx83
+/deploy/               @Lampx83
+/.github/              @Lampx83
+/docs/SECURITY.md      @Lampx83
+/apps/desktop/src/security.ts @Lampx83

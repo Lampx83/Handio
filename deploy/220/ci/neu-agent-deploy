@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# neu-agent-deploy — NHẬN gói triển khai từ CI (GitHub Actions) qua stdin, KIỂM TRA, chép sang thư mục của root rồi ÁP DỤNG.
+# Cài ở /usr/local/sbin/neu-agent-deploy (root:root 0755) bởi ci/setup-ci.sh. Được gọi qua `sudo -n` từ khoá SSH bị hạn chế
+# (authorized_keys: restrict,command="sudo -n /usr/local/sbin/neu-agent-deploy \"$SSH_ORIGINAL_COMMAND\""), nên khoá CI chỉ làm được đúng việc này.
+#
+#   neu-agent-deploy <sha256-của-gói>  < bundle.tar.gz     triển khai
+#   neu-agent-deploy rollback                               quay lại bản trước (root-owned, giữ 5 bản gần nhất)
+#   neu-agent-deploy status                                 in bản đang chạy
+#
+# Quy tắc an toàn:
+#  - gói <= 400 MB, mã băm SHA-256 phải khớp giá trị CI báo;
+#  - chỉ nhận tệp thường/thư mục, không đường dẫn tuyệt đối/".."/liên kết/thiết bị; giải nén vào thư mục root (neu-deploy không sửa được sau khi nhận);
+#  - script cài (install.sh, install-diag.sh) chạy từ BẢN SAO của root, không phải từ thư mục người khác ghi được;
+#  - mỗi lần chỉ một tiến trình (flock); mọi bước dùng lại script cài đã kiểm thử (tự sao lưu, kiểm tra sau cài, tự khôi phục).
+# Không tự cài: dịch vụ đăng nhập (auth/install-auth.sh, cần mã bí mật), máy 222. Hai việc đó làm tay.
+set -euo pipefail
+umask 027
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+BASE="${NEU_DEPLOY_BASE:-/opt/neu-agent-deploy}"
+REL="$BASE/releases"
+INC="$BASE/incoming"
+MAX_BYTES="${NEU_DEPLOY_MAX_BYTES:-$((400 * 1024 * 1024))}"   # đổi bằng biến môi trường chỉ để kiểm thử (sudo xoá biến môi trường của người gọi)
+KEEP=5
+
+[ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng root (qua sudo)."; exit 1; }
+install -d -m 0750 -o root -g root "$BASE" "$REL" "$INC"
+exec 9>"$BASE/lock"
+flock -n 9 || { echo "Đang có một lần triển khai khác. Thử lại sau."; exit 75; }
+
+ARG="${1:-}"
+current() { readlink "$BASE/current" 2>/dev/null || true; }
+group_hash() { # băm nhóm tệp để biết nhóm nào thay đổi giữa hai bản; $1 = thư mục bản
+  local d="$1"; shift
+  (cd "$d" 2>/dev/null && for f in "$@"; do [ -e "$f" ] && find "$f" -type f -print0 | sort -z | xargs -0 sha256sum 2>/dev/null; done | sha256sum | cut -d' ' -f1) || echo none
+}
+
+apply() { # $1 = thư mục bản (root-owned); $2 = thư mục bản đang chạy (có thể rỗng)
+  local d="$1" old="${2:-}"
+  echo "== nginx + web: install.sh"
+  (cd "$d" && bash ./install.sh) || return 1
+  local nd od
+  nd=$(group_hash "$d" diag users.sh); od=none; [ -n "$old" ] && od=$(group_hash "$old" diag users.sh)
+  if [ "$nd" != "$od" ] && [ -f "$d/diag/install-diag.sh" ]; then
+    echo "== chẩn đoán + quản lý tài khoản: diag/install-diag.sh (có thay đổi)"
+    (cd "$d" && bash ./diag/install-diag.sh) || return 1
+  else
+    echo "== chẩn đoán + quản lý tài khoản: không đổi, bỏ qua"
+  fi
+  local hz; hz=$(curl -s --max-time 10 -H "Host: ai.neu.edu.vn" http://127.0.0.1/agent/healthz || true)
+  echo "== kiểm tra cuối: /agent/healthz=$hz"
+  case "$hz" in '{"ok":true}'*) ;; *) echo "healthz không báo ok"; return 1;; esac
+}
+
+prune() {
+  (cd "$REL" && ls -1dt */ 2>/dev/null | tail -n +$((KEEP + 1)) | while read -r d; do
+    [ "$BASE/releases/${d%/}" = "$(current)" ] || [ "$BASE/releases/${d%/}" = "$(readlink "$BASE/previous" 2>/dev/null || true)" ] || rm -rf "$REL/${d%/}"
+  done) || true
+}
+
+case "$ARG" in
+  status)
+    echo "đang chạy: $(current)"; echo "bản trước: $(readlink "$BASE/previous" 2>/dev/null || echo -)"; [ -f "$(current)/MANIFEST" ] && cat "$(current)/MANIFEST"; exit 0;;
+  rollback)
+    prev=$(readlink "$BASE/previous" 2>/dev/null || true)
+    [ -n "$prev" ] && [ -d "$prev" ] || { echo "Chưa có bản trước để quay lại."; exit 1; }
+    cur=$(current)
+    echo "Quay lại: $prev"
+    apply "$prev" "$cur" || { echo "ROLLBACK THẤT BẠI"; exit 1; }
+    ln -sfn "$prev" "$BASE/current"; [ -n "$cur" ] && ln -sfn "$cur" "$BASE/previous"
+    echo "ROLLED_BACK $prev"; exit 0;;
+esac
+
+[[ "$ARG" =~ ^[0-9a-f]{64}$ ]] || { echo "Cách dùng: neu-agent-deploy <sha256 64 ký tự hex> < gói.tar.gz | rollback | status"; exit 2; }
+
+# ---------------------------------------------------------------- 1) nhận + kiểm
+B="$INC/bundle.tar.gz"
+rm -f "$B"
+head -c $((MAX_BYTES + 1)) > "$B"
+SIZE=$(stat -c %s "$B")
+[ "$SIZE" -gt 0 ] && [ "$SIZE" -le "$MAX_BYTES" ] || { rm -f "$B"; echo "Gói rỗng hoặc quá lớn (> 400 MB)."; exit 1; }
+GOT=$(sha256sum "$B" | cut -d' ' -f1)
+[ "$GOT" = "$ARG" ] || { rm -f "$B"; echo "Mã băm không khớp (nhận $GOT, CI báo $ARG). Dừng."; exit 1; }
+# danh sách phải sạch: chỉ - (tệp) và d (thư mục); không tuyệt đối, không "..", không liên kết/thiết bị
+if ! tar -tvzf "$B" >"$INC/list.txt" 2>"$INC/list.err"; then rm -f "$B"; echo "Không đọc được gói (không phải tar.gz hợp lệ)."; exit 1; fi
+if awk '{t=substr($1,1,1); if (t!="-" && t!="d") bad=1} END{exit bad?0:1}' "$INC/list.txt"; then rm -f "$B"; echo "Gói chứa liên kết/thiết bị: bị từ chối."; exit 1; fi
+tar -tzf "$B" | awk '/^\// || /(^|\/)\.\.(\/|$)/ {bad=1} END{exit bad?0:1}' && { rm -f "$B"; echo "Gói có đường dẫn nguy hiểm (tuyệt đối hoặc ..): bị từ chối."; exit 1; }
+
+# ---------------------------------------------------------------- 2) chép sang thư mục của root
+ID="$(date -u +%Y%m%d-%H%M%S)-${ARG:0:8}"
+D="$REL/$ID"
+rm -rf "$D"; mkdir -p "$D"
+tar -xzf "$B" -C "$D" --no-same-owner --no-same-permissions
+rm -f "$B"
+chown -R root:root "$D"; chmod -R go-w "$D"; find "$D" -type f \( -name '*.sh' -o -name 'install*.sh' \) -exec chmod 0750 {} +
+for f in install.sh web.tar.gz neu-agent.http.conf neu-agent.server.conf neu-agent.locations.conf neu-agent-auth.conf; do
+  [ -f "$D/$f" ] || { rm -rf "$D"; echo "Gói thiếu $f. Bị từ chối."; exit 1; }
+done
+echo "Đã nhận $ID ($SIZE byte, SHA-256 khớp)."
+
+# ---------------------------------------------------------------- 3) áp dụng
+OLD=$(current)
+if apply "$D" "$OLD"; then
+  [ -n "$OLD" ] && ln -sfn "$OLD" "$BASE/previous"
+  ln -sfn "$D" "$BASE/current"
+  prune
+  echo "DEPLOYED $ID"
+else
+  echo "!! Triển khai $ID THẤT BẠI."
+  if [ -n "$OLD" ] && [ -d "$OLD" ]; then
+    echo "!! Đưa nginx + web về bản đang chạy trước đó ($OLD)…"
+    (cd "$OLD" && bash ./install.sh >/dev/null 2>&1) && echo "Đã đưa về bản trước." || echo "KHÔNG đưa về được tự động: cần kiểm tra tay."
+  fi
+  rm -rf "$D"
+  exit 1
+fi

@@ -1,0 +1,112 @@
+# CD: mỗi lần mã vào nhánh main (sau khi CI xanh) → dựng web, đóng gói, gửi qua SSH tới máy 220 và áp dụng; rồi kiểm tra site thật.
+# Chưa bật cho tới khi đặt biến repo DEPLOY_ENABLED=true (Settings → Secrets and variables → Actions → Variables). Hướng dẫn đầy đủ: docs/CICD.md
+#
+# Phía máy chủ chỉ có MỘT khoá SSH hạn chế (ci/setup-ci.sh): chỉ chạy được `neu-agent-deploy` (nhận gói, kiểm tra mã băm và đường dẫn,
+# chép sang thư mục của root rồi chạy install.sh / install-diag.sh đã kiểm thử, tự khôi phục nếu lỗi). KHÔNG có shell từ xa.
+# Không tự triển khai: dịch vụ đăng nhập (auth/install-auth.sh), máy 222, bản Desktop (do release.yml khi gắn tag).
+name: Deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Việc cần làm"
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+permissions:
+  contents: read
+concurrency:
+  group: deploy-production      # không bao giờ hai lần triển khai cùng lúc; lần sau xếp hàng chờ
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Triển khai lên máy 220
+    needs: ci
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production          # có thể thêm "Required reviewers" ở Settings → Environments để bắt duyệt tay trước khi triển khai
+      url: https://ai.neu.edu.vn/agent/
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
+      SITE: ${{ vars.DEPLOY_SITE_URL || 'https://ai.neu.edu.vn' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cấu hình SSH (khoá host được GHIM sẵn, không tin lần đầu)
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_PORT" ] && [ -n "$KEY" ] && [ -n "$KNOWN" ] || { echo "::error::Thiếu cấu hình triển khai (biến DEPLOY_HOST, DEPLOY_PORT; bí mật DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS). Xem docs/CICD.md."; exit 1; }
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key; chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; chmod 644 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host neu220
+            HostName $DEPLOY_HOST
+            Port $DEPLOY_PORT
+            User $DEPLOY_USER
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            ServerAliveInterval 20
+            ConnectTimeout 20
+          EOF
+
+      - name: Quay lại bản trước (chỉ khi chọn rollback)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'rollback' }}
+        run: ssh neu220 rollback
+
+      - uses: actions/setup-node@v4
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.action == 'rollback') }}
+        with: { node-version: 22, cache: npm }
+      - name: Dựng web
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.action == 'rollback') }}
+        run: |
+          npm ci
+          NODE_ENV=production npm run build -w @neu/agent-web
+      - name: Đóng gói bản triển khai
+        id: pack
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.action == 'rollback') }}
+        run: |
+          set -euo pipefail
+          rm -rf stage && mkdir stage
+          # mọi thứ của deploy/220 trừ tệp nặng/sinh ra: downloads/ (bản cài Desktop do release.yml lo), gói oauth2-proxy
+          tar -C deploy/220 --exclude='./downloads' --exclude='./auth/*.tar.gz' --exclude='./web.tar.gz' --exclude='__pycache__' --exclude='.unittest.log' -cf - . | tar -C stage -xf -
+          tar -C apps/web/dist -czf stage/web.tar.gz .
+          printf 'commit=%s\nrun=%s\nactor=%s\ntime=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_ACTOR" "$(date -u +%FT%TZ)" > stage/MANIFEST
+          tar -C stage --owner=0 --group=0 --numeric-owner -czf bundle.tgz .
+          SHA=$(sha256sum bundle.tgz | cut -d' ' -f1)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Gói: $(du -h bundle.tgz | cut -f1), SHA-256 $SHA"
+      - name: Gửi và áp dụng trên máy 220
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.action == 'rollback') }}
+        run: ssh neu220 "${{ steps.pack.outputs.sha }}" < bundle.tgz | tee deploy.log
+      - name: Kiểm tra site thật
+        run: |
+          set -euo pipefail
+          for _try in 1 2 3 4 5 6; do hz=$(curl -s --max-time 15 "$SITE/agent/healthz" || true); [ "$hz" = '{"ok":true}' ] && break; sleep 10; done
+          echo "healthz: $hz"; [ "$hz" = '{"ok":true}' ] || { echo "::error::healthz không báo ok sau khi triển khai"; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/"); echo "/agent/ → $code"; [ "$code" = 302 ] || { echo "::error::/agent/ phải chuyển tới đăng nhập (302), nhận $code"; exit 1; }
+          api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/vllm/v1/models"); echo "API chưa đăng nhập → $api"; [ "$api" = 401 ] || { echo "::error::API chưa đăng nhập phải trả 401, nhận $api"; exit 1; }
+          sig=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/oauth2/sign_in"); echo "trang đăng nhập → $sig"; [ "$sig" = 200 ] || { echo "::error::trang đăng nhập không phục vụ được"; exit 1; }
+      - name: Tóm tắt
+        if: always()
+        run: |
+          {
+            echo "### Triển khai ${{ github.sha }}"
+            echo '```'
+            tail -n 25 deploy.log 2>/dev/null || echo "(không có nhật ký)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

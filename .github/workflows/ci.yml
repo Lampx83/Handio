@@ -1,0 +1,74 @@
+# CI: chạy MỌI bộ kiểm thử cho mọi pull request và mọi lần vào main. Không dùng bí mật nào (an toàn với PR từ nhánh/fork).
+# Cũng được deploy.yml gọi lại (workflow_call) để chỉ triển khai khi CI xanh.
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  node:
+    name: Mã nguồn (kiểu, kiểm thử, dựng web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run version:check          # mọi gói cùng phiên bản và CHANGELOG.md có mục cho phiên bản đó
+      - run: npm run typecheck
+      - run: npx vitest run
+      - name: Dựng bản web (bản phát hành)
+        run: NODE_ENV=production npm run build -w @neu/agent-web
+
+  python:
+    name: "Máy chủ (Python — chẩn đoán, quản lý tài khoản)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kiểm thử
+        working-directory: deploy/220/diag
+        run: python3 -W ignore -m unittest discover -s . -p 'test_*.py'
+
+  shell:
+    name: Script triển khai (cú pháp + shellcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n mọi script
+        run: |
+          set -e
+          find deploy -type f \( -name '*.sh' -o -name 'neu-agent-deploy' \) -print0 | xargs -0 -n1 bash -n
+      - name: shellcheck (chỉ lỗi nghiêm trọng)
+        run: |
+          find deploy -type f \( -name '*.sh' -o -name 'neu-agent-deploy' \) -print0 | xargs -0 shellcheck --severity=error --shell=bash
+
+  e2e:
+    name: Thử nginx + SSO + cài đặt + triển khai (Docker)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Kéo ảnh Docker dùng cho bài thử
+        run: |
+          docker pull nginx:1.24
+          docker pull quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
+          docker pull ubuntu:24.04
+      - name: Đăng nhập SSO (nginx thật + oauth2-proxy thật + máy chủ OIDC giả)
+        run: node deploy/test/e2e-sso.mjs
+      - name: Script cài đặt 220/222 (nginx thật, có kiểm tra tự khôi phục)
+        run: node deploy/test/e2e-install.mjs
+      - name: Máy chủ nhận bản triển khai (khoá SSH hạn chế, gói xấu, rollback)
+        run: node deploy/test/e2e-deploy.mjs
