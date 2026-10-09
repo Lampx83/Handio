@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hướng dẫn sử dụng NEU Agent</title>
+<meta name="description" content="Hướng dẫn sử dụng NEU Agent: đăng nhập, ba chế độ Work, Code, Design, cách viết yêu cầu, lệnh /, phím tắt, hạn mức và xử lý sự cố.">
+<style>
+:root{color-scheme:light dark;--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#5d636b;--border:#dedcd3;--accent:#0b4a9e;--accent-text:#fff;--soft:#e8f0fb;--code:#eef0f3}
+@media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#a0a4ac;--border:#34363b;--accent:#5b9bff;--accent-text:#0b1220;--soft:#1d2736;--code:#2a2c31}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+a{color:var(--accent)}
+code,kbd{background:var(--code);border-radius:5px;padding:1px 6px;font:13.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+kbd{border:1px solid var(--border);border-bottom-width:2px}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;flex-wrap:wrap}
+.brand{font-weight:800;font-size:20px;color:var(--accent);text-decoration:none}
+nav.main a{margin-left:16px;color:var(--muted);text-decoration:none;font-size:14px}
+nav.main a:hover,nav.main a[aria-current]{color:var(--accent)}
+.btn{display:inline-block;padding:10px 20px;border-radius:10px;font-weight:700;text-decoration:none;border:1px solid var(--accent);background:var(--accent);color:var(--accent-text)}
+.btn.ghost{background:transparent;color:var(--accent)}
+h1{font-size:clamp(26px,4.5vw,38px);line-height:1.2;margin:18px 0 8px}
+.sub{color:var(--muted);margin:0 0 20px;font-size:17px;max-width:680px}
+.layout{display:grid;gap:24px;grid-template-columns:1fr;align-items:start}
+@media(min-width:900px){.layout{grid-template-columns:210px 1fr}.toc{position:sticky;top:16px}}
+.toc{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+.toc b{display:block;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.toc a{display:block;padding:4px 0;color:var(--text);text-decoration:none;font-size:14.5px}
+.toc a:hover{color:var(--accent)}
+@media(max-width:899px){.toc a{display:inline-block;margin-right:14px}}
+section{padding:6px 0 26px}
+h2{font-size:24px;margin:0 0 6px}
+h3{font-size:17px;margin:18px 0 6px}
+.lead{color:var(--muted);margin:0 0 14px}
+p{margin:0 0 10px}
+.steps{counter-reset:s;display:grid;gap:10px;padding:0;list-style:none;margin:0 0 6px}
+.steps li{counter-increment:s;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px 12px 54px;position:relative}
+.steps li:before{content:counter(s);position:absolute;left:12px;top:10px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-text);display:grid;place-items:center;font-weight:800}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
+.card h3{margin:0 0 4px;font-size:18px}
+.card p{color:var(--muted);font-size:15px;margin:0 0 8px}
+.card ul{margin:0;padding-left:18px;font-size:14.5px}
+.tbl{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:13px;color:var(--muted);background:var(--soft)}
+tr:last-child td{border-bottom:0}
+td:first-child{white-space:nowrap}
+.note{background:var(--soft);border-radius:12px;padding:10px 14px;margin:12px 0;font-size:15px}
+details{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:8px}
+summary{cursor:pointer;font-weight:600}
+details p,details ul{margin:8px 0 0;color:var(--muted)}
+ul.plain{margin:0 0 10px;padding-left:20px}
+ul.plain li{margin-bottom:4px}
+.eg{border-left:3px solid var(--accent);padding:2px 0 2px 12px;margin:6px 0;color:var(--muted);font-style:italic}
+footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="./">NEU Agent</a>
+    <nav class="main"><a href="./">Giới thiệu</a><a href="help.html" aria-current="page">Hướng dẫn sử dụng</a><a href="changelog.html">Có gì mới</a></nav>
+    <a class="btn" href="/agent/">Đăng nhập</a>
+  </header>
+
+  <h1>Hướng dẫn sử dụng</h1>
+  <p class="sub">Từ lần đăng nhập đầu tiên đến khi xử lý được việc khó. Đọc từ trên xuống, hoặc nhảy thẳng tới mục bạn cần.</p>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Mục lục">
+      <b>Mục lục</b>
+      <a href="#bat-dau">Bắt đầu</a>
+      <a href="#che-do">Work, Code, Design</a>
+      <a href="#viet-yeu-cau">Viết yêu cầu</a>
+      <a href="#giao-dien">Làm quen giao diện</a>
+      <a href="#quyen">Chế độ chạy</a>
+      <a href="#lenh">Lệnh / và phím tắt</a>
+      <a href="#may-tinh">Bản cài máy tính</a>
+      <a href="#han-muc">Hạn mức, riêng tư</a>
+      <a href="#su-co">Gặp sự cố</a>
+      <a href="#hoi-dap">Hỏi đáp</a>
+    </nav>
+
+    <main>
+      <section id="bat-dau">
+        <h2>Bắt đầu</h2>
+        <p class="lead">Ai cũng phải đăng nhập. Dùng ngay trên trình duyệt, không cần cài gì.</p>
+        <ol class="steps">
+          <li><b>Đăng nhập.</b> Mở <a href="/agent/">trang NEU Agent</a>, chọn đăng nhập Microsoft bằng <code>@neu.edu.vn</code> (cán bộ, giảng viên) hoặc <code>@st.neu.edu.vn</code> (sinh viên). Nếu được quản trị cấp tài khoản tên + mật khẩu thì nhập vào ô tương ứng.</li>
+          <li><b>Chọn chế độ</b> ở đầu cạnh bên: <b>Work</b>, <b>Code</b> hoặc <b>Design</b>. Muốn thử nhanh, bấm “Dự án mẫu”.</li>
+          <li><b>Gõ điều bạn muốn</b> vào ô nhập rồi nhấn <kbd>Enter</kbd>. Kết quả hiện ở khung trò chuyện và trong thư mục dự án.</li>
+        </ol>
+        <p class="note">Gõ ít cũng được. Nói <b>kết quả</b> bạn cần, agent tự quyết phần còn lại và ghi “Giả định” ở cuối để bạn chỉnh.</p>
+      </section>
+
+      <section id="che-do">
+        <h2>Work, Code, Design</h2>
+        <p class="lead">Chuyển qua lại bất kỳ lúc nào. Mỗi chế độ có dự án và lịch sử riêng.</p>
+        <div class="grid">
+          <div class="card"><h3>Work</h3><p>Cho công việc văn phòng với Word, Excel, PowerPoint, PDF.</p>
+            <ul><li>Tóm tắt, soạn thông báo, công văn, biên bản</li><li>Tính điểm, bảng tổng hợp bằng công thức</li><li>Làm slide từ tài liệu</li><li>Hỏi đáp từ tài liệu, có trích dẫn bấm xem được</li></ul>
+            <div class="eg">“Soạn thông báo họp tổng kết học kỳ, thứ Sáu tuần sau”</div></div>
+          <div class="card"><h3>Code</h3><p>Cho học và làm lập trình (vibe coding).</p>
+            <ul><li>Viết ứng dụng từ một câu mô tả</li><li>Tự chạy thử, đọc lỗi, sửa tiếp</li><li>Giải thích dự án có sẵn, viết test</li><li>Nút 📚 Học: bài học và bài tập tự chấm</li></ul>
+            <div class="eg">“Làm app danh sách việc cần làm, lưu lại khi tải lại trang”</div></div>
+          <div class="card"><h3>Design</h3><p>Poster, landing page, slide, logo, thiệp, infographic.</p>
+            <ul><li>Xem trước ngay bên phải, chọn khổ A4, vuông, story, slide</li><li>🎯 Chỉ vào để sửa đúng chỗ</li><li>Xuất PDF, PNG (bản máy tính); bản web tải HTML</li></ul>
+            <div class="eg">“Poster A4 hội thảo AI trong giáo dục, phong cách hiện đại”</div></div>
+        </div>
+        <h3>Đưa tệp cho agent</h3>
+        <p>Kéo thả tệp vào cửa sổ hoặc bấm <b>＋</b>. Hỗ trợ Word, Excel, PowerPoint, PDF, ảnh (png, jpg, webp) và mã nguồn. Kết quả lưu thành <b>tệp mới</b>, bản gốc không bị ghi đè (muốn ghi đè thì nói rõ).</p>
+      </section>
+
+      <section id="viet-yeu-cau">
+        <h2>Viết yêu cầu để ra kết quả tốt</h2>
+        <ul class="plain">
+          <li><b>Việc gì – cho ai – cảm giác mong muốn.</b> Ví dụ: “Trang giới thiệu CLB lập trình, cho tân sinh viên, trẻ trung”.</li>
+          <li><b>Mô tả kết quả, không mô tả cách làm.</b> Nói “có giỏ hàng, lưu khi tải lại trang”, không cần nói dùng thư viện gì.</li>
+          <li><b>Mỗi lần sửa một ý.</b> “Tiêu đề to hơn”, rồi “nền xanh nhạt”, chính xác hơn sửa dồn.</li>
+          <li><b>Cho mẫu thay vì giải thích.</b> Đính kèm tệp mẫu hoặc nói “giống tệp X nhưng đổi Y”.</li>
+          <li><b>Gặp lỗi thì dán nguyên thông báo</b> (hoặc dán ảnh chụp lỗi bằng <kbd>Ctrl</kbd>+<kbd>V</kbd>), không cần tóm tắt.</li>
+          <li><b>Việc lớn: chọn “Lập kế hoạch”.</b> Agent chỉ đọc và đề xuất các bước, bạn duyệt rồi mới làm.</li>
+          <li><b>Chỗ chưa biết, agent không bịa.</b> Nó để dấu <code>[cần bổ sung]</code> cho bạn điền (tên, số văn bản, số liệu…).</li>
+          <li><b>Nhờ tra cứu web</b> khi cần thông tin mới hoặc bên ngoài; agent trả lời kèm nguồn. Đừng đưa họ tên, mã số, điểm vào câu tìm kiếm vì từ khoá được gửi ra ngoài hệ thống.</li>
+        </ul>
+      </section>
+
+      <section id="giao-dien">
+        <h2>Làm quen giao diện</h2>
+        <h3>Dự án và lịch sử</h3>
+        <p>Mỗi chế độ có nhiều <b>dự án</b> (một thư mục + hướng dẫn riêng). Bấm tên dự án ở cạnh bên để chuyển, tạo mới, đổi tên hoặc bỏ khỏi danh sách (không xoá tệp). Mỗi dự án lưu các <b>cuộc trò chuyện</b>; bấm để mở lại và hỏi tiếp đúng ngữ cảnh cũ. Đổi chủ đề thì mở cuộc trò chuyện mới (＋) cho đỡ tốn token.</p>
+        <h3>Các nút thường dùng</h3>
+        <div class="tbl"><table>
+          <tr><th>Nút</th><th>Làm gì</th></tr>
+          <tr><td>＋</td><td>Đính kèm tệp</td></tr>
+          <tr><td>■ Dừng</td><td>Dừng agent đang làm, rồi nói hướng khác</td></tr>
+          <tr><td>▶ (Code)</td><td>Chạy và xem bản đang làm</td></tr>
+          <tr><td>± (Code)</td><td>Xem các tệp đã đổi, từng dòng</td></tr>
+          <tr><td>↶ Quay lại</td><td>Về một lượt trước, khôi phục luôn các tệp đã đổi</td></tr>
+          <tr><td>🎯 (Design)</td><td>Chỉ vào phần muốn sửa trên bản xem trước</td></tr>
+          <tr><td>📚 Học (Code)</td><td>Bài học ngắn và bài tập tự chấm trên dự án mẫu</td></tr>
+          <tr><td>💡</td><td>Hướng dẫn trong ứng dụng: mẹo, tình huống mẫu bấm là chạy, tìm không dấu được</td></tr>
+          <tr><td>⚙ Cài đặt</td><td>Giao diện sáng/tối, mô hình, quyền, tài khoản, báo lỗi</td></tr>
+        </table></div>
+        <h3>Nhắc tệp, chạy lệnh</h3>
+        <p>Gõ <code>@</code> để nhắc tệp hoặc thư mục: “Sửa <code>@báo-cáo.docx</code> cho gọn hơn”. Ở Code, gõ <code>!lệnh</code> (ví dụ <code>!npm test</code>) để chạy ngay; kết quả được đưa vào cuộc trò chuyện để agent đọc.</p>
+      </section>
+
+      <section id="quyen">
+        <h2>Chế độ chạy: ai quyết định gì</h2>
+        <p class="lead">Chọn ở dưới ô nhập, hoặc nhấn <kbd>Shift</kbd>+<kbd>Tab</kbd> để đổi nhanh.</p>
+        <div class="tbl"><table>
+          <tr><th>Chế độ</th><th>Hành vi</th></tr>
+          <tr><td>Hỏi trước</td><td>Đọc tự do. Sửa tệp và chạy lệnh phải được bạn duyệt (có hiện phần thay đổi).</td></tr>
+          <tr><td>Tự động</td><td>Tự lo việc thường ngày (sửa tệp, build, test, git). Chỉ hỏi khi quan trọng: xoá, mạng, tệp bí mật. Đủ cho đa số việc.</td></tr>
+          <tr><td>Lập kế hoạch</td><td>Chỉ đọc. Agent đề xuất kế hoạch để bạn duyệt trước khi làm.</td></tr>
+          <tr><td>Toàn quyền</td><td>Không hỏi gì (vẫn chặn lệnh phá hoại nặng). Chỉ dùng trong thư mục thử nghiệm; quản trị có thể tắt chế độ này.</td></tr>
+        </table></div>
+        <p class="note">Mỗi chế độ làm việc chỉ có các mức phù hợp (ví dụ Work không có terminal). Thấy hộp xin quyền thì đọc phần thay đổi rồi mới bấm <b>Cho phép</b>.</p>
+      </section>
+
+      <section id="lenh">
+        <h2>Lệnh / và phím tắt</h2>
+        <p class="lead">Gõ <code>/</code> trong ô nhập để xem danh sách đầy đủ và lọc tiếp. <code>/help</code> liệt kê lệnh của chế độ hiện tại.</p>
+        <h3>Lệnh chung</h3>
+        <div class="tbl"><table>
+          <tr><th>Lệnh</th><th>Công dụng</th></tr>
+          <tr><td>/clear</td><td>Xoá hội thoại, bắt đầu phiên mới</td></tr>
+          <tr><td>/compact</td><td>Tóm tắt hội thoại để giải phóng ngữ cảnh</td></tr>
+          <tr><td>/undo</td><td>Hoàn tác thay đổi tệp gần nhất của agent</td></tr>
+          <tr><td>/plan</td><td>Vào chế độ lập kế hoạch; có thể kèm việc: <code>/plan làm trang đăng ký</code></td></tr>
+          <tr><td>/mode</td><td>Đổi chế độ chạy</td></tr>
+          <tr><td>/usage</td><td>Token đã dùng và hạn mức hôm nay</td></tr>
+          <tr><td>/status, /context</td><td>Mô hình, chế độ, thư mục; ngữ cảnh đang dùng vào việc gì</td></tr>
+          <tr><td>/memory</td><td>Các tệp hướng dẫn đang nạp (AGENTS.md…)</td></tr>
+          <tr><td>/branch</td><td>Sao chép hội thoại sang cuộc mới để thử hướng khác</td></tr>
+          <tr><td>/effort</td><td>Mức suy luận: <code>/effort high</code> để suy luận sâu</td></tr>
+          <tr><td>/packs</td><td>Các gói mở rộng đang bật</td></tr>
+        </table></div>
+        <h3>Theo từng chế độ</h3>
+        <div class="tbl"><table>
+          <tr><th>Chế độ</th><th>Lệnh</th></tr>
+          <tr><td>Code</td><td><code>/init</code> tạo AGENTS.md (quy ước dự án) · <code>/review</code> nhận xét thay đổi · <code>/commit</code> tạo commit · <code>/explain</code> giải thích cho người mới · <code>/fix-tests</code> chạy test và sửa đến khi qua · <code>/vibe</code> làm app nhỏ từ ý tưởng · <code>/caithien</code> cải thiện một prompt · <code>/diff</code> · <code>/rewind</code></td></tr>
+          <tr><td>Work</td><td><code>/tomtat</code> · <code>/soanthao</code> · <code>/bangtinh</code> · <code>/trinhchieu</code> · <code>/rasoat</code> rà soát chính tả, số liệu, thể thức · <code>/hoidap</code> hỏi đáp có trích dẫn · <code>/tronthu</code> trộn thư hàng loạt · <code>/quetcanhan</code> quét dữ liệu cá nhân · <code>/bangtonghop</code> bảng tổng hợp</td></tr>
+          <tr><td>Design</td><td><code>/bienthe</code> tạo phiên bản khác (màu, bố cục) thành tệp mới, không mất bản cũ</td></tr>
+        </table></div>
+        <h3>Phím tắt</h3>
+        <div class="tbl"><table>
+          <tr><th>Phím</th><th>Tác dụng</th></tr>
+          <tr><td><kbd>Enter</kbd> · <kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Gửi · xuống dòng</td></tr>
+          <tr><td><kbd>↑</kbd> trong ô nhập</td><td>Gọi lại các câu đã gửi</td></tr>
+          <tr><td><kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Đổi chế độ chạy</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Dừng agent</td></tr>
+          <tr><td><kbd>Esc</kbd> hai lần</td><td>Quay lại lượt trước, kể cả khôi phục tệp</td></tr>
+        </table></div>
+        <p class="note">Agent đang làm mà bạn nhớ thêm ý? Cứ gõ tiếp: tin nhắn được xếp hàng và agent đọc ở bước kế tiếp.</p>
+      </section>
+
+      <section id="may-tinh">
+        <h2>Bản cài cho máy tính</h2>
+        <p class="lead">Dùng web là đủ cho đa số việc. Bản cài (macOS, Windows) làm việc trực tiếp trong thư mục thật trên máy, chạy lệnh thật ở tab Code, xuất PDF/PNG ở Design và tự báo khi có bản mới.</p>
+        <ol class="steps">
+          <li>Đăng nhập web, vào <a href="/agent/download/">trang tải bản cài</a>. Chọn <code>.dmg</code> (macOS: chip Apple <code>arm64</code>, chip Intel <code>x64</code>) hoặc <code>.exe</code> (Windows 64-bit).</li>
+          <li>So mã băm SHA-256 của tệp với <code>SHA256SUMS.txt</code> cùng trang.</li>
+          <li><b>macOS:</b> kéo NEU Agent vào Applications. <b>Windows:</b> chạy tệp <code>.exe</code> (không cần quyền quản trị).</li>
+          <li>Mở ứng dụng, chọn <b>Đăng nhập Microsoft</b>; trình duyệt mở ra để bạn đăng nhập.</li>
+        </ol>
+        <div class="note">Bản cài hiện <b>chưa ký số</b> nên hệ điều hành sẽ cảnh báo “nhà phát hành không xác định”. Chỉ mở khi mã băm khớp. macOS: bấm chuột phải vào ứng dụng → <b>Mở</b> (macOS 15: Cài đặt hệ thống → Quyền riêng tư &amp; Bảo mật → <b>Vẫn mở</b>). Windows: <b>Thông tin thêm → Vẫn chạy</b>. Chi tiết trong tệp <code>HUONG-DAN-CAI-DAT.md</code> cùng trang tải.</div>
+        <p>Ở tab Code trên Windows, muốn chạy Python, Node, Git thì cần cài sẵn các công cụ đó (nên cài Git for Windows).</p>
+      </section>
+
+      <section id="han-muc">
+        <h2>Hạn mức và riêng tư</h2>
+        <h3>Hạn mức token mỗi ngày</h3>
+        <ul class="plain">
+          <li>Sinh viên 1 triệu, giảng viên 10 triệu token mỗi ngày; được vượt thêm khoảng 10% để hoàn tất lượt đang làm.</li>
+          <li>Hạn mức làm mới lúc <b>00:00 giờ Việt Nam</b>. Dưới ô nhập có nhãn nhắc khi bạn đã dùng từ 80%; gõ <code>/usage</code> để xem.</li>
+          <li>Hết hạn mức vẫn xem và sửa tệp thủ công được.</li>
+          <li>Tiết kiệm: mở cuộc trò chuyện mới khi đổi chủ đề, nhắc đúng tệp bằng <code>@</code>, đừng dán cả tệp lớn khi chỉ cần một đoạn.</li>
+        </ul>
+        <h3>Dữ liệu của bạn</h3>
+        <ul class="plain">
+          <li>Nội dung trao đổi được gửi tới máy chủ mô hình của Khoa CNTT để trả lời. Tệp chỉ được đọc khi cần cho yêu cầu của bạn.</li>
+          <li>Bản web lưu dự án và lịch sử <b>trong trình duyệt của bạn</b>; máy chủ không giữ tệp. Xoá dữ liệu trình duyệt là mất, hãy tải về những gì cần giữ.</li>
+          <li>Số liệu cải tiến ứng dụng chỉ gồm con số và mã lỗi, <b>không</b> có nội dung trò chuyện hay tên tệp; tắt được ở Cài đặt.</li>
+          <li>Đừng dán mật khẩu hay khoá truy cập cho agent. Cần khoá API thì lưu vào tệp <code>.env</code> và nhờ agent đọc từ biến môi trường.</li>
+        </ul>
+      </section>
+
+      <section id="su-co">
+        <h2>Gặp sự cố</h2>
+        <div class="tbl"><table>
+          <tr><th>Hiện tượng</th><th>Cách xử lý</th></tr>
+          <tr><td>“Phiên đăng nhập đã hết hạn”</td><td>Bấm <b>Đăng nhập lại</b> ngay trong thông báo. Cuộc trò chuyện và tệp vẫn còn.</td></tr>
+          <tr><td>“Đã dùng hết hạn mức hôm nay”</td><td>Đợi đến 00:00. Trong lúc đó vẫn xem và sửa tệp thủ công.</td></tr>
+          <tr><td>“Đã hết số bước”</td><td>Gõ “tiếp tục”. Agent làm tiếp từ chỗ dừng và tóm tắt đã làm gì.</td></tr>
+          <tr><td>Agent làm lâu hoặc quay vòng</td><td>Bấm ■ Dừng rồi nói hướng khác, hoặc “thử cách khác”. Vài chục giây là bình thường với việc nhiều bước.</td></tr>
+          <tr><td>Kết quả sai ý</td><td><kbd>Esc</kbd> hai lần (hoặc ↶ Quay lại) để về lượt trước, rồi nói lại một ý cụ thể hơn.</td></tr>
+          <tr><td>Tab Code báo không tìm thấy <code>node</code>, <code>python</code>, <code>git</code></td><td>Bản cài máy tính: cài công cụ đó rồi mở lại ứng dụng.</td></tr>
+          <tr><td>Chữ trong ảnh đọc sai</td><td>Chữ nhỏ, số tiền, ngày, số hiệu có thể sai: đối chiếu lại. PDF bản scan thì xuất từng trang thành ảnh trước.</td></tr>
+          <tr><td>Không vào được web</td><td>Thử tải lại trang, đăng nhập lại. Vẫn không được thì báo cho người quản trị.</td></tr>
+        </table></div>
+        <p style="margin-top:12px">Lỗi lặp lại? Mở <b>Cài đặt → Báo lỗi…</b>: bạn xem trước đúng dữ liệu sẽ gửi (chỉ số liệu, không có nội dung) rồi mới gửi cho nhóm phát triển.</p>
+      </section>
+
+      <section id="hoi-dap">
+        <h2>Hỏi đáp</h2>
+        <details><summary>Ai dùng được?</summary><p>Cán bộ, giảng viên và sinh viên có tài khoản @neu.edu.vn hoặc @st.neu.edu.vn, cùng các tài khoản nội bộ do quản trị cấp.</p></details>
+        <details><summary>Agent có tự xoá hay sửa tệp của tôi không?</summary><p>Chỉ trong thư mục dự án, và theo chế độ chạy bạn chọn. Ở “Hỏi trước” mọi thay đổi đều chờ bạn duyệt; xoá và đụng tệp bí mật luôn được hỏi. Dùng ± để xem và ↶ để hoàn tác.</p></details>
+        <details><summary>Agent đưa số liệu có đáng tin không?</summary><p>Nó tự đọc lại và tính lại trước khi báo, nhưng vẫn có thể sai. Với số tiền, ngày tháng, số hiệu, điểm số: hãy đối chiếu với nguồn. Nói “kiểm tra lại số liệu so với file gốc” để có bảng đối chiếu.</p></details>
+        <details><summary>Excel của agent có phải số gõ tay?</summary><p>Không. Kết quả là công thức (<code>=SUM…</code>), nên sửa dữ liệu là tự tính lại.</p></details>
+        <details><summary>Tôi sửa văn bản của người khác thì sao?</summary><p>Nói “sửa có theo dõi”: thay đổi hiện dưới dạng Track Changes trong Word để người kia chấp nhận hoặc từ chối.</p></details>
+        <details><summary>Bản web hay bản cài?</summary><p>Bản web luôn là bản mới nhất và mở là dùng. Bản cài hợp khi bạn muốn làm việc trực tiếp trong thư mục trên máy, chạy lệnh thật hoặc xuất PDF/PNG.</p></details>
+        <details><summary>Tôi muốn đề xuất tính năng hoặc báo lỗi?</summary><p>Dùng <b>Cài đặt → Báo lỗi…</b> hoặc liên hệ người quản trị đơn vị. Các thay đổi mới nằm ở <a href="changelog.html">nhật ký thay đổi</a>.</p></details>
+      </section>
+    </main>
+  </div>
+
+  <footer>NEU Agent · Trường Đại học Kinh tế Quốc dân · <a href="./">Giới thiệu</a> · <a href="changelog.html">Nhật ký thay đổi</a> · <a href="/agent/">Đăng nhập</a></footer>
+</div>
+</body>
+</html>

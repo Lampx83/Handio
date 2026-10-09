@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Trang “Hướng dẫn sử dụng”** công khai (`/agent/guide/help.html`, xem được cả khi chưa đăng nhập): bắt đầu, ba chế độ Work/Code/Design, cách viết yêu cầu, các chế độ chạy, lệnh `/` và phím tắt, cài bản máy tính, hạn mức và riêng tư, xử lý sự cố, hỏi đáp. Có liên kết từ trang giới thiệu.
+
 ### Thay đổi
 - **Bản cài Desktop nhẹ hơn, tải nhanh hơn**: bỏ các gói ngôn ngữ thừa (chỉ giữ tiếng Việt và tiếng Anh, nhẹ hơn ~8 MB) và nén lại bản macOS bằng LZMA (nhẹ hơn ~17%, khoảng 120 → 98 MB). Chức năng không đổi.
 

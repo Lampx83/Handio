@@ -56,6 +56,7 @@ try {
   fs.writeFileSync(path.join(t, "dl/SHA256SUMS.txt"), "0000  x.dmg\n");
   fs.writeFileSync(path.join(t, "guide/index.html"), "<html>NEU-GUIDE-PUBLIC</html>");
   fs.writeFileSync(path.join(t, "guide/changelog.html"), "<html>NEU-CHANGELOG-PUBLIC</html>");
+  fs.writeFileSync(path.join(t, "guide/help.html"), "<html>NEU-HELP-PUBLIC</html>");
   // gateway giả: trả lại những gì nó nhận được
   const gw = path.join(tmp, "gw");
   fs.mkdirSync(gw);
@@ -114,6 +115,8 @@ try {
   check("chưa đăng nhập: trang hướng dẫn công khai /agent/guide/ xem được (200, không chuyển tới đăng nhập)", g0.status === 200 && /NEU-GUIDE-PUBLIC/.test(g0.body), String(g0.status));
   check("trang hướng dẫn công khai: CSP chặt (không cho script), nosniff", /default-src 'none'/.test(g0.headers["content-security-policy"] ?? "") && !/script-src/.test(g0.headers["content-security-policy"] ?? "") && g0.headers["x-content-type-options"] === "nosniff");
   check("nhật ký thay đổi công khai xem được; /agent/guide chuyển về có dấu gạch", (await req("/agent/guide/changelog.html")).status === 200 && (await req("/agent/guide")).status === 301);
+  const hlp = await req("/agent/guide/help.html");
+  check("chưa đăng nhập: trang hướng dẫn sử dụng /agent/guide/help.html xem được", hlp.status === 200 && /NEU-HELP-PUBLIC/.test(hlp.body), String(hlp.status));
   check("trang hướng dẫn công khai không nhận POST", (await req("/agent/guide/", { method: "POST", body: "x" })).status === 403);
   const w0 = await req("/agent/sandbox-worker.js");
   check("chưa đăng nhập: tệp web (worker) không đọc được", w0.status === 302);
