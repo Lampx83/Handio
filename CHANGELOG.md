@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.5.0] - 2026-10-09
+
 ### Thêm
 - **Tệp hướng dẫn nạp đầy đủ như Claude Code / Antigravity** (tab Code):
   - `@đường/dẫn` trong `AGENTS.md`/`CLAUDE.md` nạp kèm nội dung tệp được trỏ tới (tối đa 4 cấp). `CLAUDE.md` chỉ ghi `@AGENTS.md` nay đúng nghĩa: nội dung chỉ nạp một lần. Không nạp tệp bí mật, tệp ngoài dự án, đoạn mã hay email.
