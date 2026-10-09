@@ -40,7 +40,8 @@ try {
   // gói thử: chỉ cấu hình + web.tar.gz (không chép bản cài nặng)
   const pkg = (name, files) => { ex(name, "mkdir -p /deploy/222"); for (const f of files) sh("docker", ["cp", path.join(deploy, f), `${name}:/deploy/${f}`]); };
   ex("neu-220", "mkdir -p /deploy/220/downloads");
-  for (const f of ["install.sh", "neu-agent.http.conf", "neu-agent.server.conf", "neu-agent.locations.conf", "neu-agent-auth.conf", "web.tar.gz"]) sh("docker", ["cp", path.join(deploy, "220", f), `neu-220:/deploy/220/${f}`]);
+  for (const f of ["install.sh", "neu-agent.http.conf", "neu-agent.server.conf", "neu-agent.locations.conf", "neu-agent-auth.conf"]) sh("docker", ["cp", path.join(deploy, "220", f), `neu-220:/deploy/220/${f}`]);
+  ex("neu-220", "cd /deploy/220 && mkdir -p w && echo '<html>NEU-AGENT-APP</html>' > w/index.html && tar -czf web.tar.gz -C w . && rm -rf w");
   // bản cài giả (không phụ thuộc số phiên bản/bản ghi thật trong deploy/220/downloads, nơi có thể có nhiều phiên bản)
   ex("neu-220", "cd /deploy/220/downloads && echo -n x > NEU-Agent-0.1.0-mac-arm64.dmg && sha256sum NEU-Agent-0.1.0-mac-arm64.dmg > SHA256SUMS.txt");
   pkg("neu-222", ["222/install.sh", "222/neu-agent-locations.conf"]);
