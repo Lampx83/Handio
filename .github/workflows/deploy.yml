@@ -66,7 +66,7 @@ jobs:
 
       - name: Quay lại bản trước (chỉ khi chọn rollback)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'rollback' }}
-        run: ssh neu220 rollback
+        run: ssh neu220 rollback < /dev/null
 
       - uses: actions/setup-node@v4
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.action == 'rollback') }}
