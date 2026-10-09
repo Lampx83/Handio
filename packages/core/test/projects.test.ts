@@ -147,3 +147,32 @@ describe("lịch sử trò chuyện", () => {
     expect(h[1]).toEqual({ kind: "tool", name: "read_file", text: "a.txt" });
   });
 });
+
+describe("/branch: tách nhánh hội thoại", () => {
+  it("sao chép hội thoại sang cuộc trò chuyện mới, giữ nguyên bản gốc, tiêu đề có (nhánh)", async () => {
+    const { c, llm } = await setup("code");
+    await c.send("Làm A");
+    const [orig] = await c.chatList();
+    expect(orig.turns).toBe(1);
+    await c.send("/branch");
+    const list = await c.chatList();
+    expect(list).toHaveLength(2);
+    const branch = list.find((x) => x.id !== orig.id)!;
+    expect(branch.title).toMatch(/\(nhánh\)$/);
+    expect(branch.turns).toBe(1);
+    await c.send("Làm B trên nhánh");
+    const after = await c.chatList();
+    expect(after.find((x) => x.id === orig.id)!.turns).toBe(1); // bản gốc không đổi
+    expect(after.find((x) => x.id === branch.id)!.turns).toBe(2);
+    expect(after.find((x) => x.id === branch.id)!.title).toMatch(/\(nhánh\)$/);
+    expect(JSON.stringify(llm.calls.at(-1)!.messages)).toContain("Làm A"); // nhánh thấy lịch sử cũ
+    const opened = await c.chatOpen(orig.id);
+    expect("error" in opened).toBe(false);
+  });
+  it("chưa có hội thoại thì không tách", async () => {
+    const { c, events } = await setup("code");
+    await c.send("/branch");
+    expect((await c.chatList())).toHaveLength(0);
+    expect(events.some((e: any) => e.type === "notice" && /Chưa có gì để tách nhánh/.test(e.text))).toBe(true);
+  });
+});

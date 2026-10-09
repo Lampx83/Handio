@@ -5,6 +5,22 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Tệp hướng dẫn nạp đầy đủ như Claude Code / Antigravity** (tab Code):
+  - `@đường/dẫn` trong `AGENTS.md`/`CLAUDE.md` nạp kèm nội dung tệp được trỏ tới (tối đa 4 cấp). `CLAUDE.md` chỉ ghi `@AGENTS.md` nay đúng nghĩa: nội dung chỉ nạp một lần. Không nạp tệp bí mật, tệp ngoài dự án, đoạn mã hay email.
+  - **Hướng dẫn toàn cục** `~/.neuagent/AGENTS.md` (áp dụng cho mọi dự án), nạp trước hướng dẫn của dự án.
+  - **Hướng dẫn theo thư mục con**: `AGENTS.md`/`CLAUDE.md` trong `src/`… chỉ nạp khi agent đọc hoặc sửa tệp trong thư mục đó (có thông báo “Đã nạp hướng dẫn: …”).
+  - **Quy tắc theo phạm vi** trong `.neuagent/rules/`, `.agents/rules/` (Antigravity) hoặc `.claude/rules/` (Claude Code): `trigger: always_on | glob | model_decision | manual`, `globs:` hoặc `paths:`. Quy tắc `glob` (ví dụ `*.py`) chỉ nạp khi agent đụng tới tệp khớp.
+
+- **Dán ảnh bằng Ctrl+V** vào ô nhập (ảnh chụp màn hình, ảnh lỗi giao diện…): ảnh được lưu vào thư mục làm việc và `@tên-ảnh` được chèn vào prompt để agent đọc bằng `read_image`. `@ảnh.png` gõ tay cũng dùng được.
+- **Sửa kế hoạch trước khi duyệt**: ở hộp duyệt kế hoạch bấm *Sửa kế hoạch* (hoặc Ctrl+G) để tự chỉnh nội dung; agent làm theo đúng bản bạn sửa.
+- Lệnh mới: **`/plan [việc cần làm]`** (vào chế độ lập kế hoạch, có thể kèm yêu cầu), **`/memory`** (các tệp hướng dẫn đang nạp và quy tắc chưa nạp), **`/usage`** (token đã dùng trong phiên và hạn mức hôm nay), **`/effort high|low`** (bật/tắt suy luận sâu). Thêm chữ **`ultrathink`** vào một prompt để chỉ bật suy luận sâu cho lượt đó.
+- **`/branch`** (hoặc `/fork`): tách nhánh hội thoại — sao chép cuộc trò chuyện hiện tại sang một cuộc mới (tiêu đề có “(nhánh)”) để thử hướng khác, bản gốc vẫn ở Lịch sử. Tệp trong thư mục làm việc vẫn dùng chung. `/memory` còn mở luôn khung sửa `AGENTS.md` của dự án.
+
+### Thay đổi
+- `AGENTS.md`/`CLAUDE.md` ở thư mục con và các tệp quy tắc luôn cần bạn duyệt khi agent muốn sửa (như `AGENTS.md` ở gốc).
+- `/context` gọi mục hướng dẫn là “Hướng dẫn dự án” và tính cả các tệp nạp thêm.
+
 ## [0.4.0] - 2026-10-09
 
 ### Thêm

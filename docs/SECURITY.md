@@ -20,7 +20,8 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 - **Lệnh phá hoại** (`sudo`, `rm -rf` thư mục gốc/dự án, `git push --force`, tải về rồi chạy thẳng, bọc trong `bash -c`/`env`…) bị chặn ở **mọi** chế độ.
 - **Tệp nhạy cảm** (`.env`, `*.pem`, `id_rsa`, `.npmrc`, `.aws/`, `.ssh/`, `credentials`…): đọc/ghi luôn phải hỏi (kể cả chế độ tự động); tìm kiếm hàng loạt bỏ qua chúng.
 - **Nội dung web không tin cậy (“taint”):** sau khi agent đọc một trang web, mọi thao tác ghi/chạy lệnh/tải web trong lượt đó bị hỏi lại, **kể cả khi đã bật tự động duyệt**, và có cảnh báo.
-- Cấu hình nằm trong thư mục dự án **không tin cậy**: không đổi được máy chủ/key; quy tắc `allow` của dự án chỉ có hiệu lực khi người dùng bấm “Tin cậy”; sửa `.neuagent/**`, `.git/**`, `AGENTS.md`… luôn hỏi.
+- Cấu hình nằm trong thư mục dự án **không tin cậy**: không đổi được máy chủ/key; quy tắc `allow` của dự án chỉ có hiệu lực khi người dùng bấm “Tin cậy”; sửa `.neuagent/**`, `.git/**`, `AGENTS.md`/`CLAUDE.md` (mọi thư mục), `.agents/rules/**`, `.claude/rules/**`… luôn hỏi (vì nội dung các tệp này đi thẳng vào lời nhắc hệ thống).
+- **Nạp hướng dẫn (`@import`):** chỉ nạp tệp nằm trong dự án (hướng dẫn toàn cục: trong `~/.neuagent/`), kiểm tra cả liên kết tượng trưng, không nạp tệp nhạy cảm, tối đa 4 cấp, có giới hạn ký tự.
 - Đường dẫn bị giới hạn trong thư mục làm việc (resolve cả liên kết tượng trưng).
 
 **Cách ly việc chạy lệnh**

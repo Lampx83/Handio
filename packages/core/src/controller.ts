@@ -95,6 +95,8 @@ export class LocalController implements AgentController {
   private projectId = "";
   private projectName = "";
   private chatId = newId();
+  /** Cuộc trò chuyện do /branch tạo: tiêu đề có thêm “(nhánh)”. */
+  private branches = new Set<string>();
   private rawInputs: string[] = [];
   /** Công cụ đã dùng trong lượt hiện tại và việc làm xong gần nhất (cho "Lưu thành quy trình" của tab Work). */
   private turnTools: string[] = [];
@@ -288,6 +290,13 @@ export class LocalController implements AgentController {
         await this.modelCommand(modelCmd[1]?.trim());
         return;
       }
+      const info = /^\/(usage|effort|branch|fork)(?:\s+(.+))?$/.exec(text.trim());
+      if (info) {
+        if (info[1] === "usage") this.usageCommand();
+        else if (info[1] === "effort") await this.effortCommand(info[2]?.trim().toLowerCase());
+        else await this.branchCommand();
+        return;
+      }
       const r = await this.session.handleInput(text);
       if (r.reset) {
         await this.newSession();
@@ -311,7 +320,7 @@ export class LocalController implements AgentController {
         resolve({ allow: false, note: "Bị ngắt." });
         this.pending.delete(id);
       }
-      await this.persistChat(turn);
+      if (ranTurn || turn.chatId === this.chatId) await this.persistChat(turn); // lệnh như /branch đã đổi cuộc trò chuyện thì không ghi đè bản cũ
       // tổng kết lượt (tab Code): các tệp đã đổi + đã chạy kiểm tra chưa
       if (ranTurn && turn.session === this.session && (this.o.profile ?? "code") === "code") {
         const sm = await this.session.turnSummary().catch(() => null);
@@ -337,7 +346,7 @@ export class LocalController implements AgentController {
     const turns = countTurns(msgs);
     if (!turns) return;
     try {
-      await store.save(t.projectId, { id: t.chatId, title: chatTitle(msgs), updated: Date.now(), turns, messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined });
+      await store.save(t.projectId, { id: t.chatId, title: chatTitle(msgs) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined });
     } catch {
       /* không lưu được lịch sử (đầy bộ nhớ…): bỏ qua, không ảnh hưởng công việc */
     }
@@ -366,6 +375,34 @@ export class LocalController implements AgentController {
     } catch (e) {
       this.fire({ type: "notice", level: "warn", text: (e as Error).message });
     }
+  }
+
+  /** `/usage`: token của phiên này và hạn mức hôm nay. */
+  private usageCommand(): void {
+    const q = this.quota;
+    const quota = !q ? "" : q.state === "unlimited" || !q.limit ? "\nHạn mức hôm nay: không giới hạn" : `\nHạn mức hôm nay: ${q.used}/${q.limit} token (${q.pct ?? Math.round((100 * q.used) / q.limit)}%), làm mới lúc ${new Date(q.resetAt * 1000).toLocaleString("vi-VN")}`;
+    this.fire({ type: "notice", level: "info", text: this.session.usageReport() + quota });
+  }
+
+  /** `/branch`: tách nhánh: sao chép hội thoại hiện tại sang một cuộc trò chuyện mới để thử hướng khác; bản gốc vẫn nằm trong Lịch sử. */
+  private async branchCommand(): Promise<void> {
+    const note = (text: string, level: "info" | "warn" = "info") => this.fire({ type: "notice", level, text });
+    if (!countTurns(this.session.main.messages)) return note("Chưa có gì để tách nhánh: hãy trò chuyện với agent trước.", "warn");
+    if (!this.o.chats) return note("Bản này không lưu lịch sử trò chuyện nên chưa tách nhánh được.", "warn");
+    this.chatId = newId();
+    this.branches.add(this.chatId);
+    await this.persistChat({ projectId: this.projectId, chatId: this.chatId, session: this.session });
+    note("Đã tách nhánh: từ đây bạn làm tiếp trên bản sao, bản gốc vẫn ở Lịch sử. Hội thoại được sao chép; tệp trong thư mục làm việc vẫn dùng chung (dùng /rewind hoặc Git nếu cần quay lại).");
+  }
+
+  /** `/effort`: bật/tắt suy luận sâu (mô hình “nghĩ” trước khi trả lời: kỹ hơn nhưng chậm hơn). */
+  private async effortCommand(arg?: string): Promise<void> {
+    const note = (text: string, level: "info" | "warn" = "info") => this.fire({ type: "notice", level, text });
+    if (arg === undefined) return note(`Suy luận sâu: ${this.settings.thinking ? "bật (high)" : "tắt (low)"}. Dùng /effort high hoặc /effort low. Thêm “ultrathink” vào một prompt để chỉ bật cho lượt đó.`);
+    const on = ["high", "max", "on", "bat", "bật"].includes(arg);
+    if (!on && !["low", "medium", "off", "tat", "tắt"].includes(arg)) return note("Dùng: /effort high (suy luận sâu) hoặc /effort low.", "warn");
+    await this.saveSettings({ thinking: on });
+    note(on ? "Đã bật suy luận sâu: trả lời kỹ hơn nhưng chậm hơn." : "Đã tắt suy luận sâu.");
   }
 
   /** `/model`: liệt kê mô hình trên máy chủ; `/model <tên|số>` để chọn. */
@@ -685,6 +722,7 @@ export class LocalController implements AgentController {
     this.session = await this.makeSession();
     this.session.main.messages = saved.messages;
     this.chatId = saved.id;
+    if (saved.title.endsWith(" (nhánh)")) this.branches.add(saved.id);
     this.rawInputs = saved.inputs && saved.inputs.length === countTurns(saved.messages) ? [...saved.inputs] : [];
     return { id: saved.id, title: saved.title, history: messagesToHistory(saved.messages, saved.inputs) };
   }

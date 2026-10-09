@@ -254,6 +254,12 @@ class App {
         setTimeout(() => ((b as HTMLElement).textContent = "Sao chép"), 1500);
       }
     });
+    this.input.addEventListener("paste", (e) => {
+      const imgs = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
+      if (!imgs.length) return;
+      e.preventDefault();
+      void this.pasteImages(imgs);
+    });
     this.input.addEventListener("input", () => {
       this.autoGrow();
       this.updateSlash();
@@ -638,12 +644,30 @@ class App {
     let deny: () => void;
     if (req.kind === "plan") {
       const plan = h("div", { class: "plan msg-ai", html: renderMarkdown(req.plan ?? "") });
-      allow = () => respond({ allow: true, mode: "auto" });
+      const editor = h("textarea", { class: "plan-edit", "aria-label": "Sửa kế hoạch", spellcheck: false, hidden: true }) as HTMLTextAreaElement;
+      editor.value = req.plan ?? "";
+      const edited = () => (!editor.hidden && editor.value.trim() !== (req.plan ?? "").trim() ? editor.value : undefined);
+      const toggleEdit = () => {
+        editor.hidden = !editor.hidden;
+        plan.hidden = !editor.hidden;
+        editBtn.textContent = editor.hidden ? "Sửa kế hoạch " : "Xem kế hoạch ";
+        editBtn.append(h("kbd", {}, "Ctrl+G"));
+        if (!editor.hidden) editor.focus();
+      };
+      const editBtn = h("button", { class: "btn", type: "button", title: "Tự sửa kế hoạch rồi duyệt: agent làm theo bản bạn sửa", onclick: toggleEdit }, "Sửa kế hoạch ", h("kbd", {}, "Ctrl+G"));
+      ask.addEventListener("keydown", (e) => {
+        if (e.ctrlKey && e.key.toLowerCase() === "g") {
+          e.preventDefault();
+          toggleEdit();
+        }
+      });
+      allow = () => respond({ allow: true, mode: "auto", plan: edited() });
       deny = () => respond({ allow: false, note: note.value.trim() || undefined });
-      ask.append(h("div", { class: "q" }, "Agent đề xuất kế hoạch này. Duyệt chứ?"), plan,
+      ask.append(h("div", { class: "q" }, "Agent đề xuất kế hoạch này. Duyệt chứ?"), plan, editor,
         h("div", { class: "row" },
-          h("button", { class: "btn primary", type: "button", onclick: () => respond({ allow: true, mode: "auto" }) }, "Duyệt, tự làm"),
-          h("button", { class: "btn", type: "button", onclick: () => respond({ allow: true, mode: "default" }) }, "Duyệt, hỏi từng thay đổi"),
+          h("button", { class: "btn primary", type: "button", onclick: () => respond({ allow: true, mode: "auto", plan: edited() }) }, "Duyệt, tự làm"),
+          h("button", { class: "btn", type: "button", onclick: () => respond({ allow: true, mode: "default", plan: edited() }) }, "Duyệt, hỏi từng thay đổi"),
+          editBtn,
           note, h("button", { class: "btn danger", type: "button", onclick: deny }, "Chưa, tiếp tục lập kế hoạch")));
     } else {
       allow = (always) => respond({ allow: true, always });
@@ -733,6 +757,7 @@ class App {
     this.busy = true;
     this.paintBusy();
     await this.ctl.send(t);
+    if (/^\/memory\s*$/.test(t) && this.ctl.instructionsGet && this.ctl.instructionsSet) void openInstructions(this.ctl, this.state, () => void this.refresh());
     const st = await this.ctl.getState();
     this.state.commands = st.commands;
     this.state.todos = st.todos;
@@ -777,7 +802,7 @@ class App {
           this.input.value = "/" + c.name + " ";
           this.closeSlash();
           this.autoGrow();
-          if (e.key === "Enter" && ["help", "clear", "undo", "context", "compact", "status", "diff", "rewind"].includes(c.name)) void this.submit("/" + c.name);
+          if (e.key === "Enter" && ["help", "clear", "undo", "context", "compact", "status", "diff", "rewind", "memory", "usage", "branch"].includes(c.name)) void this.submit("/" + c.name);
         }
         return;
       }
@@ -787,7 +812,10 @@ class App {
         return;
       }
     }
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.ctrlKey && e.key.toLowerCase() === "g" && this.pending?.req.kind === "plan") {
+      e.preventDefault();
+      this.pending.el.dispatchEvent(new KeyboardEvent("keydown", { key: "g", ctrlKey: true }));
+    } else if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void this.submit(this.input.value);
     } else if (e.key === "Tab" && e.shiftKey) {
@@ -1093,6 +1121,30 @@ class App {
     this.dropWelcome();
     if (r.saved.length) this.append(h("div", { class: "notice" }, "Đã thêm vào thư mục làm việc: " + r.saved.join(", ")));
     for (const e of r.errors) this.append(h("div", { class: "notice warn" }, e));
+    void this.loadTree(r.saved);
+  }
+
+  /** Ctrl+V với ảnh (vd. ảnh chụp màn hình): lưu vào thư mục làm việc và chèn `@tên` vào prompt để agent đọc bằng read_image. */
+  private async pasteImages(imgs: File[]): Promise<void> {
+    const d = new Date();
+    const p2 = (n: number) => String(n).padStart(2, "0");
+    const stamp = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+    const files = await Promise.all(imgs.slice(0, 5).map(async (f, i) => ({ name: `anh-dan-${stamp}${imgs.length > 1 ? "-" + (i + 1) : ""}.${f.type === "image/jpeg" ? "jpg" : (f.type.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "")}`, data: new Uint8Array(await f.arrayBuffer()) })));
+    const r = await this.ctl.uploadFiles(files);
+    this.dropWelcome();
+    for (const e of r.errors) this.append(h("div", { class: "notice warn" }, e));
+    const refs = r.saved.filter((n) => !/\s/.test(n)).map((n) => "@" + n);
+    if (refs.length) {
+      const el = this.input;
+      const before = el.value.slice(0, el.selectionStart ?? el.value.length);
+      const after = el.value.slice(el.selectionEnd ?? el.value.length);
+      const ins = (before && !/\s$/.test(before) ? " " : "") + refs.join(" ") + " ";
+      el.value = before + ins + after;
+      el.selectionStart = el.selectionEnd = before.length + ins.length;
+      this.autoGrow();
+      el.focus();
+    }
+    if (r.saved.length) this.append(h("div", { class: "notice" }, "Đã lưu ảnh dán vào thư mục làm việc: " + r.saved.join(", ")));
     void this.loadTree(r.saved);
   }
 

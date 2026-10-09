@@ -34,6 +34,7 @@ Nút **📚 Học** ở tab Code mở: 12 bài học (8 buổi FIT-VIBE + chuyê
 - **↶ Quay lại** (`/rewind`, hoặc Esc hai lần): cắt hội thoại về trước một lượt và khôi phục luôn các tệp đã đổi từ đó.
 - **Thẻ tổng kết** cuối lượt (kiểu Walkthrough): số tệp, +/−, đã chạy kiểm tra sau lần sửa cuối chưa.
 - **`/status`**, **`/context`** (chia nhỏ ngữ cảnh: lời nhắc, công cụ, AGENTS.md, hội thoại), **`@thư_mục/`** đính kèm cây thư mục.
+- **Hướng dẫn cho agent**: `AGENTS.md` (+ `CLAUDE.md` chỉ ghi `@AGENTS.md`), `@import`, toàn cục `~/.neuagent/AGENTS.md`, `AGENTS.md` trong thư mục con, quy tắc theo phạm vi ở `.agents/rules/` (hoặc `.neuagent/rules/`, `.claude/rules/`).
 - **🤖 chọn mô hình** nhanh ở thanh trên; **▶ Chạy** (Desktop) gợi ý lệnh chạy/test từ `package.json`, `*.py`, `index.html`… và nhờ agent chạy (vẫn phải duyệt).
 
 ### Tab Work giống NotebookLM / Microsoft 365 Copilot / Claude Cowork

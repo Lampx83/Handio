@@ -40,6 +40,8 @@ export interface PermissionResponse {
   note?: string;
   /** Với kế hoạch: chế độ chuyển sang sau khi duyệt. */
   mode?: Mode;
+  /** Với kế hoạch: bản kế hoạch người dùng đã tự sửa trước khi duyệt (agent làm theo bản này). */
+  plan?: string;
 }
 
 export type SessionEvent =

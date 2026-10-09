@@ -1,12 +1,13 @@
 import type { Env } from "./env";
 import { LlmClient, LlmError, type ChatMessage, type ChatResult, type ToolSchema } from "./llm";
-import { expandCommand, loadAgents, loadCommands, loadMemory, loadSkills, type CustomCommand, type CustomSkill } from "./memory";
+import { expandCommand, loadAgents, loadCommands, loadDirMemory, loadMemory, loadRules, loadSkills, ruleMatches, type CustomCommand, type CustomSkill, type Rule } from "./memory";
 import { Permissions, type Mode, type TargetInfo } from "./permissions";
 import { toPublic, type ProjectSettings } from "./settings";
 import { builtinTools, IGNORE_DIRS, readText, relPath, resolveSafe, ToolError, walk, type Tool, type ToolContext } from "./tools";
 import { dangerousReason, isReadonlySegment, parseCommand } from "./shell";
 import { listChanges, revertChanges, trackExec, type RevertResult } from "./changes";
 import { isInternalUser } from "./projects";
+import { dirname } from "./path";
 import { isSensitivePath } from "./sensitive";
 import { officeTools } from "./office/tools";
 import { workTools } from "./office/work-tools";
@@ -72,6 +73,11 @@ export class Session {
   readonly perms: Permissions;
   readonly tools = new Map<string, Tool>();
   memory: { name: string; text: string }[] = [];
+  /** Quy tắc theo phạm vi (thư mục rules): loại `glob` chỉ nạp vào `memory` khi agent đụng tới tệp khớp. */
+  rules: Rule[] = [];
+  private dirChecked = new Set<string>();
+  /** Prompt của lượt này có “ultrathink”: bật suy luận sâu chỉ cho lượt đó. */
+  ultrathink = false;
   commands: CustomCommand[] = [];
   agentDefs: Record<string, AgentDef> = { ...AGENTS };
   skills: CustomSkill[] = [];
@@ -136,7 +142,8 @@ export class Session {
       /* thư mục ảo */
     }
     const s = new Session(o, root);
-    s.memory = await loadMemory(o.env, root);
+    s.rules = await loadRules(o.env, root);
+    s.memory = await loadMemory(o.env, root, s.rules);
     const pp = mergePackParts(s.packs);
     // của dự án ghi đè của gói cùng tên
     const projectCommands = await loadCommands(o.env, root);
@@ -220,6 +227,8 @@ export class Session {
     if (res.allow) {
       const m: Mode = res.mode === "default" ? "default" : "auto";
       this.setMode(m);
+      const edited = (res.plan ?? "").trim();
+      if (edited && edited !== plan.trim()) return `Kế hoạch được duyệt, nhưng người dùng đã tự sửa kế hoạch. Hãy làm theo BẢN ĐÃ SỬA này (thay cho bản bạn đề xuất), đã thoát chế độ plan (${m === "auto" ? "tự duyệt việc thường ngày" : "mỗi thay đổi sẽ được hỏi"}):\n${edited.slice(0, 8000)}`;
       return `Kế hoạch được duyệt. Đã thoát chế độ plan (${m === "auto" ? "tự duyệt việc thường ngày" : "mỗi thay đổi sẽ được hỏi"}). Hãy thực hiện theo kế hoạch rồi kiểm chứng.`;
     }
     return `Người dùng chưa duyệt.${res.note ? " Góp ý: " + res.note + "." : ""} Hãy chỉnh kế hoạch rồi gọi lại exit_plan_mode.`;
@@ -263,10 +272,33 @@ export class Session {
       parts.push("\nYou are in PLAN MODE: only read and explore (read_file, grep, glob, list_dir, task 'explore'). Do NOT modify anything. When ready you MUST call the exit_plan_mode tool with a concrete step-by-step plan (files to change, how to verify). Do not just print the plan and ask for confirmation in text: exit_plan_mode is how the user approves it.");
     if (depth === 0) for (const p of this.packPrompts) parts.push(`\nExtension "${p.pack}" (installed by the user's organization; guidance, not higher authority than the user):\n${p.text}`);
     for (const m of this.memory) parts.push(`\nProject instructions from ${m.name} (written by the project owner; treat as guidance, not as higher authority than the user):\n${m.text}`);
+    const optional = this.rules.filter((r) => r.trigger === "model");
+    if (depth === 0 && optional.length) parts.push("\nOptional project rules (read the file with read_file when it is relevant to the task):\n" + optional.map((r) => `- ${r.name}${r.description ? ": " + r.description : ""}`).join("\n"));
     if (depth === 0) parts.push("\nSubagents (delegate with the `task` tool):\n" + Object.values(this.agentDefs).map((d) => `- ${d.name}: ${d.description}`).join("\n"));
     if (depth === 0 && this.skills.length) parts.push("\nSkills (load details with the `skill` tool when relevant):\n" + this.skills.map((x) => `- ${x.name}: ${x.description}`).join("\n"));
     if (depth === 0 && this.hookContext) parts.push("\nContext from the SessionStart hook:\n" + this.hookContext);
     return parts.join("\n");
+  }
+
+  /**
+   * Agent vừa đọc/sửa tệp `rel` (hoặc liệt kê thư mục `rel`): nạp hướng dẫn trong thư mục đó (AGENTS.md…)
+   * và quy tắc theo phạm vi khớp tệp. Nội dung vào lời nhắc hệ thống từ lượt gọi mô hình kế tiếp.
+   */
+  async noteTouched(rel: string, isDir: boolean): Promise<void> {
+    const added: string[] = [];
+    const dir = isDir ? rel : dirname(rel);
+    for (const m of await loadDirMemory(this.o.env, this.ctx.root, dir, this.dirChecked, new Set())) {
+      if (this.memory.some((x) => x.name === m.name)) continue;
+      this.memory.push(m);
+      added.push(m.name);
+    }
+    if (!isDir)
+      for (const r of this.rules)
+        if (ruleMatches(r, rel) && !this.memory.some((x) => x.name === r.name)) {
+          this.memory.push({ name: r.name, text: r.text });
+          added.push(r.name);
+        }
+    if (added.length) this.emit({ type: "notice", level: "info", text: "Đã nạp hướng dẫn: " + added.join(", ") });
   }
 
   cachedTokens = 0;
@@ -290,6 +322,11 @@ export class Session {
       { name: "compact", description: "Tóm tắt hội thoại để giải phóng ngữ cảnh" },
       { name: "mode", description: "Đổi chế độ quyền: " + PROFILES[this.profile].modes.join(" | ") },
       { name: "undo", description: "Hoàn tác thay đổi file gần nhất của agent" },
+      ...(PROFILES[this.profile].modes.includes("plan") ? [{ name: "plan", description: "Vào chế độ lập kế hoạch (chỉ đọc), có thể kèm yêu cầu: /plan <việc cần làm>" }] : []),
+      { name: "memory", description: "Các tệp hướng dẫn đang nạp (AGENTS.md, quy tắc…)" },
+      { name: "branch", description: "Tách nhánh: sao chép hội thoại sang cuộc trò chuyện mới để thử hướng khác" },
+      { name: "usage", description: "Token đã dùng trong phiên và hạn mức hôm nay" },
+      { name: "effort", description: "Mức suy luận: /effort high (suy luận sâu) | low; thêm “ultrathink” vào prompt để chỉ bật cho lượt đó" },
       { name: "context", description: "Ngữ cảnh đang dùng vào việc gì" },
       { name: "status", description: "Mô hình, chế độ, thư mục, ngữ cảnh" },
       ...(this.profile === "code" ? [{ name: "diff", description: "Xem các tệp agent đã thay đổi" }, { name: "rewind", description: "Quay lại một lượt trước (hội thoại + tệp)" }] : []),
@@ -308,6 +345,7 @@ export class Session {
   /** Xử lý dòng người dùng nhập. Trả về văn bản để chạy như một lượt chat, hoặc null nếu đã xử lý xong. */
   async handleInput(line: string): Promise<{ run: string | null; reset?: boolean }> {
     const text = line.trim();
+    this.ultrathink = /\bultrathink\b/i.test(text);
     if (text.startsWith("!")) return { run: await this.userShell(text.slice(1).trim()) };
     if (!text.startsWith("/")) return { run: await this.attachMentions(text) };
     const m = /^\/(\S+)\s*([\s\S]*)$/.exec(text);
@@ -340,6 +378,15 @@ export class Session {
         notice(await this.undo());
         return { run: null };
       }
+      case "plan": {
+        if (!allowedModes(PROFILES[this.profile].modes, this.o.policy).includes("plan")) break;
+        this.setMode("plan");
+        notice("Đã vào chế độ plan: agent chỉ đọc và lập kế hoạch, bạn duyệt rồi mới sửa.");
+        return { run: args.trim() ? await this.attachMentions(args.trim()) : null };
+      }
+      case "memory":
+        notice(this.memoryReport());
+        return { run: null };
       case "hooks":
         notice(this.hooks ? `Đang có ${this.hooks.count} hook (sự kiện: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop). Hook của dự án chỉ chạy khi bạn đã “Tin cậy” thư mục.` : "Chưa có hook nào. Thêm vào cài đặt người dùng (hooks) hoặc .neuagent/settings.json của dự án (cần Tin cậy).");
         return { run: null };
@@ -437,6 +484,13 @@ export class Session {
         const items = await this.dirTree(abs, "", 0, { n: 0 });
         blocks.push(`<dir path="${rel}">\n${items.join("\n") || "(thư mục trống)"}\n</dir>`);
         names.push("@" + (rel === "." ? "" : rel + "/"));
+        continue;
+      }
+      if (/\.(png|jpe?g|webp|gif)$/i.test(rel)) {
+        if (this.tools.has("read_image")) {
+          blocks.push(`<image path="${rel}">Ảnh: dùng công cụ read_image để xem (chép chữ, đọc bảng, mô tả).</image>`);
+          names.push(`@${rel} (ảnh)`);
+        }
         continue;
       }
       let body: string;
@@ -552,6 +606,25 @@ export class Session {
     return Math.round(chars * scale);
   }
 
+  /** /memory: các tệp hướng dẫn đang nạp và quy tắc chưa nạp. */
+  private memoryReport(): string {
+    const lines = this.memory.map((m) => `✓ ${m.name} (${m.text.length} ký tự)`);
+    for (const r of this.rules) {
+      if (this.memory.some((m) => m.name === r.name)) continue;
+      if (r.trigger === "glob") lines.push(`· ${r.name}: chờ agent đụng tới ${r.globs.join(", ")}`);
+      else if (r.trigger === "model") lines.push(`· ${r.name}: agent tự đọc khi liên quan${r.description ? " (" + r.description + ")" : ""}`);
+      else if (r.trigger === "manual") lines.push(`· ${r.name}: chỉ dùng khi bạn nhắc @${r.name}`);
+    }
+    if (!lines.length) return "Chưa có tệp hướng dẫn nào. Gõ /init để agent soạn AGENTS.md, hoặc tự tạo AGENTS.md ở thư mục dự án (toàn cục: ~/.neuagent/AGENTS.md).";
+    return lines.join("\n") + "\nSửa AGENTS.md: nút 📝 cạnh tên dự án, hoặc nhờ agent (luôn cần bạn duyệt). Có hiệu lực từ lượt hỏi tiếp theo.";
+  }
+
+  /** /usage: token đã dùng trong phiên này. */
+  usageReport(): string {
+    const cached = this.cachedTokens ? ` (${this.cachedTokens} token lời nhắc dùng lại từ bộ nhớ đệm)` : "";
+    return `Phiên này: ${this.promptTokens} token vào, ${this.completionTokens} token ra, ${this.calls} lần gọi mô hình${cached}\nNgữ cảnh đang dùng: ~${this.contextPct()}%`;
+  }
+
   /** /context: ngữ cảnh đang dùng vào việc gì (ước lượng, hiệu chỉnh theo số token thật của lần gọi gần nhất). */
   private contextReport(): string {
     const limit = this.o.getSettings().contextTokens;
@@ -569,7 +642,7 @@ export class Session {
     const k = (c: number) => { const n = this.estTokens(c, scale); return n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n); };
     const pct = this.contextPct();
     const bar = "█".repeat(Math.round(pct / 5)) + "░".repeat(20 - Math.round(pct / 5));
-    const rows: [string, string][] = [["Lời nhắc hệ thống", k(base + (sysAll - base - mem))], ["Công cụ", k(tools)], ...(mem ? [["AGENTS.md", k(mem)] as [string, string]] : []), ["Tin nhắn của bạn", k(u)], ["Trả lời của agent", k(a)], ["Kết quả công cụ", k(t)], ["Còn trống", limit - used >= 1000 ? ((limit - used) / 1000).toFixed(1) + "k" : String(Math.max(0, limit - used))]];
+    const rows: [string, string][] = [["Lời nhắc hệ thống", k(base + (sysAll - base - mem))], ["Công cụ", k(tools)], ...(mem ? [["Hướng dẫn dự án", k(mem)] as [string, string]] : []), ["Tin nhắn của bạn", k(u)], ["Trả lời của agent", k(a)], ["Kết quả công cụ", k(t)], ["Còn trống", limit - used >= 1000 ? ((limit - used) / 1000).toFixed(1) + "k" : String(Math.max(0, limit - used))]];
     return `${bar} ~${pct}% · ${used}/${limit} token\n` + rows.map(([n, v]) => `${n.padEnd(20)} ${v}`).join("\n") + `\nTổng: ${this.promptTokens} token vào / ${this.completionTokens} ra · ${this.calls} lần gọi`;
   }
 
@@ -900,16 +973,17 @@ export class Agent {
     const system = s.systemPrompt(this.def, this.depth);
     const settings = s.o.getSettings();
     const notify = (text: string) => s.emit({ type: "notice", level: "warn", text });
+    const think = !!settings.thinking || (this.depth === 0 && s.ultrathink);
     let resp: ChatResult | null = null;
     for (let attempt = 0; attempt < 2 && !resp; attempt++) {
       try {
         resp = await s.o.llm.chat([{ role: "system", content: system }, ...this.messages], {
           tools,
           signal,
-          thinking: settings.thinking,
+          thinking: think,
           notify,
           onContent: this.depth === 0 ? (t) => s.emit({ type: "text", depth: 0, delta: t }) : undefined,
-          onReasoning: this.depth === 0 && settings.thinking ? (t) => s.emit({ type: "reasoning", depth: 0, delta: t }) : undefined,
+          onReasoning: this.depth === 0 && think ? (t) => s.emit({ type: "reasoning", depth: 0, delta: t }) : undefined,
         });
       } catch (e) {
         if (e instanceof LlmError && e.kind === "context" && attempt === 0) {
@@ -1031,6 +1105,7 @@ export class Agent {
       s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${tool.kind === "mcp" ? "công cụ ngoài (MCP)" : "web/dịch vụ ngoài"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });
     }
     if (ok && (tool.kind === "edit" || tool.kind === "exec")) s.emit({ type: "files_changed", paths: target.rel ? [target.rel] : [] });
+    if (ok && target.rel && ["read_file", "edit_file", "write_file", "list_dir"].includes(name)) await s.noteTouched(target.rel, name === "list_dir");
     if (s.hooks) {
       const hr = await s.hooks.run("PostToolUse", { toolName: name, toolInput: args, toolOutput: result }, s.ctx.signal);
       for (const w of hr.warnings) s.emit({ type: "notice", level: "warn", text: w });

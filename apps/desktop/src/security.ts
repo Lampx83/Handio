@@ -93,7 +93,7 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   getState: (a) => a.length === 0,
   send: (a) => a.length === 1 && str(a[0], MAX_TEXT),
   interrupt: (a) => a.length === 0,
-  respondPermission: (a) => a.length === 2 && str(a[0], 100) && isObj(a[1]) && typeof a[1].allow === "boolean" && (a[1].always === undefined || typeof a[1].always === "boolean") && (a[1].note === undefined || str(a[1].note, 2000)) && (a[1].mode === undefined || MODES.includes(a[1].mode as string)),
+  respondPermission: (a) => a.length === 2 && str(a[0], 100) && isObj(a[1]) && typeof a[1].allow === "boolean" && (a[1].always === undefined || typeof a[1].always === "boolean") && (a[1].note === undefined || str(a[1].note, 2000)) && (a[1].mode === undefined || MODES.includes(a[1].mode as string)) && (a[1].plan === undefined || str(a[1].plan, 20000)),
   setMode: (a) => a.length === 1 && typeof a[0] === "string" && MODES.includes(a[0]),
   newSession: (a) => a.length === 0,
   listDir: (a) => a.length === 1 && str(a[0], 1000),

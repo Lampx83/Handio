@@ -59,6 +59,9 @@ describe("kiểm tra yêu cầu IPC", () => {
     expect(ok("respondPermission", "id1", { allow: true, always: false })).toBe(true);
     expect(ok("respondPermission", "id1", { allow: "yes" })).toBe(false);
     expect(ok("respondPermission", "id1", { allow: true, mode: "god" })).toBe(false);
+    expect(ok("respondPermission", "id1", { allow: true, mode: "auto", plan: "1. làm A" })).toBe(true);
+    expect(ok("respondPermission", "id1", { allow: true, plan: 5 })).toBe(false);
+    expect(ok("respondPermission", "id1", { allow: true, plan: "x".repeat(20001) })).toBe(false);
     expect(ok("listDir", "src")).toBe(true);
     expect(ok("listDir", { path: "x" })).toBe(false);
   });
