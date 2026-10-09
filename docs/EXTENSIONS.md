@@ -15,7 +15,8 @@ packs/<id>/
   skills/<tên>/SKILL.md     quy trình/kiến thức agent nạp khi cần (+ tệp kèm .md/.txt/.json…)
   commands/<tên>.md         lệnh /tên; thư mục con thành "a:b"; $ARGUMENTS, $1…$9
   agents/<tên>.md           subagent chuyên biệt (name, description, tools)
-  mcp.json                  máy chủ MCP = công cụ mới (tìm web, email, lịch…)   — chỉ gói org/user
+  tools.json                công cụ gọi dịch vụ HTTP của tổ chức (tìm web…)      — chỉ gói org/user
+  mcp.json                  máy chủ MCP = công cụ mới (email, lịch…)             — chỉ gói org/user
   hooks.json                hook chạy lệnh theo sự kiện                         — chỉ gói org/user
 ```
 
@@ -42,20 +43,33 @@ Soạn đề cương cho môn: $ARGUMENTS …
 | **user** — người dùng tự cài | Desktop: `<thư mục dữ liệu ứng dụng>/packs/` | có |
 | **project** — nằm trong dự án | `<dự án>/.neuagent/packs/<tên>/` | **không** |
 
-- Gói **không tin cậy** (trong dự án) chỉ được có *nội dung chữ* (kỹ năng, lệnh, subagent, lời dặn). `mcp.json` và `hooks.json` bị bỏ qua và có cảnh báo, vì chúng chạy chương trình thật. Lý do: một thư mục tải từ nơi lạ không được tự chạy mã trên máy bạn.
+- Gói **không tin cậy** (trong dự án) chỉ được có *nội dung chữ* (kỹ năng, lệnh, subagent, lời dặn). `mcp.json`, `hooks.json` và `tools.json` bị bỏ qua và có cảnh báo, vì chúng chạy chương trình thật hoặc gọi dịch vụ. Lý do: một thư mục tải từ nơi lạ không được tự chạy mã trên máy bạn.
 - Trùng `id`: gói gần người dùng hơn thắng (project > user > org). Trùng tên lệnh/skill/subagent: phần của **dự án** ghi đè gói; giữa các gói, gói đứng trước (theo tên thư mục) thắng.
 - Gói hỏng (JSON sai, id lạ) bị bỏ qua và hiện thành thông báo khởi động; không làm hỏng ứng dụng. Giới hạn: ≤ 300 tệp/gói, mỗi tệp ≤ 100 KB.
 - Nội dung đọc từ gói là hướng dẫn cho agent, không có quyền cao hơn người dùng; quyền công cụ (hỏi trước khi ghi/chạy) vẫn áp dụng như thường.
 
 Trong ứng dụng: gõ `/packs` xem gói đang bật; lệnh của gói hiện trong danh sách `/`.
 
-## 3. Thêm công cụ mới (MCP)
+## 3. Thêm công cụ mới
+
+### 3a. Công cụ HTTP (`tools.json`) — chạy được cả ở bản web lẫn Desktop
+Nối agent với dịch vụ của tổ chức (tìm web, tra cứu nội bộ…) bằng khai báo, không cần mã. Địa chỉ luôn là đường dẫn **dưới địa chỉ gốc dịch vụ của ứng dụng** (`toolsBase`: web = thư mục của trang, vd `https://ai.neu.edu.vn/agent/`; Desktop = máy chủ của tổ chức), kèm đăng nhập sẵn có; không gọi được máy chủ khác.
+```json
+{ "web_search": {
+    "description": "Search the web …",
+    "readonly": true,
+    "parameters": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] },
+    "http": { "method": "GET", "path": "tools/search", "query": { "q": "{query}" } } } }
+```
+`{tên}` được thay bằng đối số công cụ (tham số trống thì bỏ). `POST` có thể kèm `body` JSON. Dịch vụ nên trả **văn bản gọn** cho mô hình (≤ 20.000 ký tự). `readonly: true` = chỉ tra cứu, không hỏi từng lần; bỏ trống = hỏi như `web_fetch` (nên dùng cho công cụ mà địa chỉ/đối số có thể đi tới máy chủ ngoài). Kết quả luôn là dữ liệu không tin cậy: sau khi nhận, ghi file/chạy lệnh được hỏi lại. Bộ gói `tim-kiem-web` là ví dụ; dịch vụ phía sau nó ở `deploy/220/tools/` (xem [DEPLOY.md](DEPLOY.md), mục “Công cụ web”).
+
+### 3b. Công cụ MCP (`mcp.json`)
 
 Công cụ mới (tìm kiếm web, đọc email, lịch, hệ thống nội bộ) thêm qua `mcp.json` của gói **org/user**:
 ```json
 { "tim-kiem": { "command": "node", "args": ["server.js"], "env": { "SEARCH_URL": "https://…" } } }
 ```
-Máy chủ MCP chạy cục bộ (cần Desktop; bản web không chạy được chương trình). Công cụ MCP của gói dùng được ở mọi tab; kết quả từ MCP là dữ liệu không tin cậy (sau khi nhận, ghi file/chạy lệnh được hỏi lại).
+Máy chủ MCP chạy cục bộ trên máy người dùng (chỉ Desktop; bản web không chạy được chương trình, hãy dùng 3a). Công cụ MCP của gói dùng được ở mọi tab; kết quả từ MCP là dữ liệu không tin cậy (sau khi nhận, ghi file/chạy lệnh được hỏi lại).
 
 ## 4. Triển khai cho tổ chức khác
 

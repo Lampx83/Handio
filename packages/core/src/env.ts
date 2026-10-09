@@ -49,6 +49,8 @@ export interface Env {
   spawnStdio?(command: string, args: string[], opts: { cwd: string; env?: Record<string, string>; onLine: (line: string) => void; onStderr?: (text: string) => void; onExit: (code: number) => void }): { write(line: string): void; stop(): void };
   runJs?(code: string, opts: { timeoutMs: number; files: Record<string, string>; cwd?: string }): Promise<RunJsResult>;
   fetchUrl?(url: string, opts: { maxChars: number; signal?: AbortSignal }): Promise<string>;
+  /** Thu nhỏ ảnh (cạnh dài ≤ maxSide, JPEG) để gửi cho mô hình đọc ảnh; trả null nếu không làm được. Bản web dùng canvas, Desktop dùng nativeImage. */
+  shrinkImage?(bytes: Uint8Array, mime: string, opts: { maxSide: number; quality: number }): Promise<{ bytes: Uint8Array; mime: string } | null>;
   /** Chuyển Word/Excel/PowerPoint sang PDF (cần LibreOffice trên máy); không có thì để trống. */
   convertToPdf?(input: string, output: string, opts: { timeoutMs: number; signal?: AbortSignal }): Promise<void>;
 }
@@ -69,6 +71,7 @@ export class MemoryEnv implements Env {
   spawn?: Env["spawn"];
   spawnStdio?: Env["spawnStdio"];
   fetchUrl?: Env["fetchUrl"];
+  shrinkImage?: Env["shrinkImage"];
   /** Gọi sau mỗi thay đổi (để lưu bền, vd IndexedDB). */
   onChange?: () => void;
 

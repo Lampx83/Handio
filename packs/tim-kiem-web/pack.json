@@ -1,0 +1,1 @@
+{ "id": "tim-kiem-web", "name": "Tìm kiếm web", "version": "1.0.0", "description": "Tìm thông tin trên web và đọc trang web công khai (qua dịch vụ của tổ chức), có nêu nguồn.", "profiles": ["work", "code", "design"] }

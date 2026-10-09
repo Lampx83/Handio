@@ -26,6 +26,12 @@ export interface ChatMessage {
   tool_calls?: ToolCallMsg[];
   tool_call_id?: string;
 }
+/** Tin nhắn có ảnh (chỉ dùng cho việc đọc ảnh: LlmClient.vision). */
+export type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } };
+export interface VisionMessage {
+  role: "user";
+  content: ContentPart[];
+}
 export interface ToolSchema {
   type: "function";
   function: { name: string; description: string; parameters: unknown };
@@ -228,7 +234,13 @@ export class LlmClient {
     return (j.data ?? []).map((m) => m.id);
   }
 
-  async chat(messages: ChatMessage[], o: ChatOptions = {}): Promise<ChatResult> {
+  /** Nhờ mô hình đọc một ảnh (data URL) theo chỉ dẫn: chép chữ (OCR), mô tả biểu đồ, trích bảng… Trả về văn bản. Không dùng công cụ, không suy luận. */
+  async vision(imageDataUrl: string, instruction: string, o: { signal?: AbortSignal; maxTokens?: number } = {}): Promise<string> {
+    const r = await this.chat([{ role: "user", content: [{ type: "text", text: instruction }, { type: "image_url", image_url: { url: imageDataUrl } }] }], { signal: o.signal, maxTokens: o.maxTokens ?? 4096, temperature: 0, thinking: false, retries: 2 });
+    return r.content.trim();
+  }
+
+  async chat(messages: ReadonlyArray<ChatMessage | VisionMessage>, o: ChatOptions = {}): Promise<ChatResult> {
     const c = this.getConfig();
     assertSecureEndpoint(c.baseUrl, c.allowInsecure);
     const body: Record<string, unknown> = {

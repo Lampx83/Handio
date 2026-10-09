@@ -23,6 +23,8 @@ export * from "./processes";
 export * from "./hooks";
 export * from "./mcp";
 export * from "./packs";
+export * from "./http-tools";
+export * from "./vision";
 export * from "./learning";
 export * from "./design-templates";
 export * from "./projects";

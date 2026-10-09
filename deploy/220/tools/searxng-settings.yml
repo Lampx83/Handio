@@ -1,0 +1,22 @@
+# Cấu hình SearXNG (máy tìm kiếm tự dựng) cho dịch vụ công cụ web của NEU Agent. Chỉ nghe 127.0.0.1; người dùng không gọi trực tiếp.
+# __SECRET__ được install-tools.sh thay bằng chuỗi ngẫu nhiên khi cài (không đưa vào mã nguồn).
+use_default_settings:
+  engines:
+    # các nguồn luôn bị chặn/chậm từ máy chủ (CAPTCHA, quá nhiều yêu cầu, timeout) hoặc không dùng được trong container: bỏ để khỏi chờ vô ích
+    remove: [duckduckgo, brave, wikidata, ahmia, torch]
+general:
+  instance_name: "neu-agent-search"
+  enable_metrics: false
+server:
+  secret_key: "__SECRET__"
+  limiter: false          # đã có giới hạn theo người dùng ở tools.py và nginx
+  public_instance: false
+  image_proxy: false
+search:
+  safe_search: 1
+  formats: [json]
+  default_lang: auto
+  autocomplete: ""
+outgoing:
+  request_timeout: 6.0
+  max_request_timeout: 10.0

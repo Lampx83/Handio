@@ -1,0 +1,28 @@
+{
+  "web_search": {
+    "description": "Search the web (Vietnamese and English) and get up to 10 results, each with title, URL and a snippet. Use it for current or external facts: regulations, prices, news, product docs, error messages, examples. After searching, read the 1-3 most relevant results with fetch_page before answering, and cite the URLs you used. Keep the query short (keywords, at most about 12 words) and never put personal data, passwords or file contents in it.",
+    "readonly": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "search keywords" },
+        "count": { "type": "integer", "description": "number of results, default 6, max 10" },
+        "recent": { "type": "string", "enum": ["day", "week", "month", "year"], "description": "only results from this period (for news or recent changes)" }
+      },
+      "required": ["query"]
+    },
+    "http": { "method": "GET", "path": "tools/search", "query": { "q": "{query}", "n": "{count}", "time_range": "{recent}" } }
+  },
+  "fetch_page": {
+    "description": "Download one public web page (http/https) and return its main text (headings, lists, tables), to read a search result in full. Does not run JavaScript, cannot open PDFs, images or pages that need a login. Never put personal data or file contents in the URL.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "description": "full http(s) address, usually taken from web_search results" },
+        "max_chars": { "type": "integer", "description": "default 12000, max 30000" }
+      },
+      "required": ["url"]
+    },
+    "http": { "method": "GET", "path": "tools/fetch", "query": { "url": "{url}", "max_chars": "{max_chars}" } }
+  }
+}

@@ -47,7 +47,7 @@ try {
   fs.mkdirSync(path.join(t, "guide"), { recursive: true });
   const rd = (f) => fs.readFileSync(path.join(d220, f), "utf8");
   fs.writeFileSync(path.join(t, "conf.d/neu-agent.conf"), rd("neu-agent.http.conf").replace("__NEU_AGENT_KEY__", "testkey").replace("default        0;", "default        0;\n    172.16.0.0/12  1;"));
-  const fix = (s) => s.replaceAll("/etc/nginx/snippets/", "/t/snippets/").replaceAll("/var/www/neu-agent-dl/", "/t/dl/").replaceAll("/var/www/neu-agent-guide/", "/t/guide/").replaceAll("/var/www/neu-agent/", "/t/web/").replaceAll("127.0.0.1:4180", "e2e-oauth:4180").replaceAll("http://192.0.2.10:8037", "http://e2e-gw:80");
+  const fix = (s) => s.replaceAll("http://127.0.0.1:4192", "http://e2e-gw").replaceAll("/etc/nginx/snippets/", "/t/snippets/").replaceAll("/var/www/neu-agent-dl/", "/t/dl/").replaceAll("/var/www/neu-agent-guide/", "/t/guide/").replaceAll("/var/www/neu-agent/", "/t/web/").replaceAll("127.0.0.1:4180", "e2e-oauth:4180").replaceAll("http://192.0.2.10:8037", "http://e2e-gw:80");
   fs.writeFileSync(path.join(t, "snippets/neu-agent-locations.conf"), fix(rd("neu-agent.locations.conf")));
   fs.writeFileSync(path.join(t, "snippets/neu-agent-auth.conf"), fix(rd("neu-agent-auth.conf")));
   fs.writeFileSync(path.join(t, "server.conf"), fix(rd("neu-agent.server.conf")));
@@ -142,6 +142,15 @@ try {
   check("đã đăng nhập: API tới gateway; key do MÁY CHỦ gắn, Authorization bị gỡ, gửi kèm email người dùng", api1.status === 200 && j1.key === "testkey" && j1.auth === "" && j1.user === "lan@neu.edu.vn" && j1.uri === "/vllm/v1/models", JSON.stringify(j1));
   const api2 = await req("/agent/vllm/v1/models", { headers: { Cookie: cookie, "x-ollama-seckey": "key-rieng" } });
   check("người dùng tự dán key riêng thì dùng key của họ", JSON.parse(api2.body).key === "key-rieng");
+  // công cụ web (tìm kiếm / tải trang): phải đăng nhập, chỉ GET, danh tính do nginx gắn, tham số đi nguyên vẹn (dịch vụ thật nghe 4192; ở đây giả bằng gateway echo)
+  const tl0 = await req("/agent/tools/search?q=neu");
+  check("công cụ web: chưa đăng nhập → 401 JSON login_required (không chuyển hướng)", tl0.status === 401 && /login_required/.test(tl0.body), String(tl0.status));
+  const tl1 = await req("/agent/tools/search?q=h%E1%BB%8Dc+ph%C3%AD&n=3", { headers: { Cookie: cookie } });
+  const tj = JSON.parse(tl1.body || "{}");
+  check("công cụ web: đã đăng nhập → tới dịch vụ với đường dẫn/tham số nguyên vẹn, email người dùng, không kèm Authorization", tl1.status === 200 && tj.uri === "/tools/search?q=h%E1%BB%8Dc+ph%C3%AD&n=3" && tj.user === "lan@neu.edu.vn" && tj.auth === "" && tj.key === "", tl1.body);
+  const tl2 = await req("/agent/tools/fetch?url=https%3A%2F%2Fa.vn%2F%3Fx%3D1%26y%3D2", { headers: { Cookie: cookie } });
+  check("công cụ web: địa chỉ trang trong tham số url đi nguyên vẹn", JSON.parse(tl2.body || "{}").uri === "/tools/fetch?url=https%3A%2F%2Fa.vn%2F%3Fx%3D1%26y%3D2", tl2.body);
+  check("công cụ web: POST/DELETE bị chặn (403), đường dẫn lạ 404", (await req("/agent/tools/search?q=a", { method: "POST", headers: { Cookie: cookie }, body: "x" })).status === 403 && (await req("/agent/tools/other", { headers: { Cookie: cookie } })).status === 404);
   check("đường dẫn lạ / embeddings bị chặn", (await req("/agent/vllm/v1/embeddings", { headers: { Cookie: cookie } })).status !== 200 && (await req("/agent/vllm/v1/models", { headers: { Cookie: cookie }, method: "DELETE" })).status !== 200);
 
   const ui = await req("/agent/oauth2/userinfo", { headers: { Cookie: cookie } });

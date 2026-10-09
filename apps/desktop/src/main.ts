@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, safeStorage, session, shell, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, safeStorage, session, shell, type MenuItemConstructorOptions } from "electron";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
@@ -143,7 +143,24 @@ interface Registry {
   projects: ProjectInfo[];
 }
 const chatStore = () => new JsonChatStore(path.join(userData(), "chats"));
-const makeEnv = (profile: Profile, dir: string) => new NodeEnv(dir, { allowExec: profile === "code", sandbox: process.platform === "darwin" ? { network: policy.bashNetwork !== false } : false });
+// Thu nhỏ ảnh cho công cụ read_image (đọc ảnh/OCR bằng mô hình): nativeImage của Electron, chỉ xử lý trong bộ nhớ
+const shrinkImage: NonNullable<NodeEnv["shrinkImage"]> = async (bytes, _mime, o) => {
+  try {
+    const img = nativeImage.createFromBuffer(Buffer.from(bytes));
+    if (img.isEmpty()) return null;
+    const { width, height } = img.getSize();
+    const scale = Math.min(1, o.maxSide / Math.max(width, height));
+    const out = scale < 1 ? img.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: "good" }) : img;
+    return { bytes: new Uint8Array(out.toJPEG(Math.round(o.quality * 100))), mime: "image/jpeg" };
+  } catch {
+    return null;
+  }
+};
+const makeEnv = (profile: Profile, dir: string) => {
+  const env = new NodeEnv(dir, { allowExec: profile === "code", sandbox: process.platform === "darwin" ? { network: policy.bashNetwork !== false } : false });
+  env.shrinkImage = shrinkImage;
+  return env;
+};
 
 /** Thư mục chứa các dự án do ứng dụng tạo: Tài liệu/NEU Agent/<Work|Code|Design>/<tên>. */
 function projectsParent(profile: Profile): string {
@@ -309,6 +326,7 @@ async function buildController(profile: Profile): Promise<LocalController> {
     authHosts: [new URL(__DEFAULT_BASE_URL__).host],
     realFs: true,
     packs: loadPacks,
+    toolsBase: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/"),
     projects: host,
     chats: chatStore(),
     renderDesign: profile === "design" ? renderDesign : undefined,

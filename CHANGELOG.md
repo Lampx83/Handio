@@ -6,6 +6,10 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Đọc ảnh và bản scan (OCR)**: agent đọc ảnh chụp, ảnh scan, ảnh chụp màn hình (png, jpg, webp, gif) bằng chính mô hình — chữ tiếng Việt có dấu, bảng và biểu đồ. Thả ảnh vào dự án rồi nhờ đọc, hoặc dùng lệnh `/doc-anh` (ảnh → Word) và `/anh-thanh-bang` (bảng trong ảnh → Excel có công thức). Ảnh lớn được tự thu nhỏ. Chữ nhỏ, số tiền, ngày và số hiệu cần đối chiếu lại.
+- **Tìm kiếm web có nguồn** (gói *Tìm kiếm web*): agent tìm trên web, đọc trang công khai và trả lời kèm địa chỉ nguồn, cả ở bản web lẫn Desktop. Mỗi người có giới hạn lượt tìm; từ khoá và địa chỉ trang không được kèm dữ liệu cá nhân. Địa chỉ nội bộ của trường bị chặn.
+- **Công cụ HTTP của gói mở rộng** (`tools.json`): tổ chức nối agent với dịch vụ riêng mà không sửa mã lõi (xem `docs/EXTENSIONS.md`).
+- Hướng dẫn trong ứng dụng có mục mới “Đọc ảnh, tìm web & lệnh mở rộng”.
 - **Gói mở rộng**: thêm tính năng cho NEU Agent mà không sửa mã nguồn lõi (kỹ năng, lệnh `/tên`, subagent, lời dặn, công cụ MCP), nên triển khai cho tổ chức khác chỉ cần thay bộ gói. Gõ `/packs` để xem gói đang bật. Gói nằm trong dự án (`.neuagent/packs`) chỉ được có nội dung chữ, không chạy chương trình. Xem `docs/EXTENSIONS.md`.
 - **Sáu gói đi kèm** (thư mục `packs/`): *Nghiên cứu có nguồn* (`/nghien-cuu`, `/so-sanh`, `/phan-bien`), *Công cụ cho giảng viên* (`/de-cuong-mon-hoc`, `/de-thi`, `/rubric`, `/nhan-xet-bai-lam`, `/bai-giang`), *Phân tích dữ liệu* (`/phan-tich`, `/lam-sach`, kỹ năng khảo sát Likert), *Chất lượng giao diện web* (`/soat-giao-dien`), *Đồng hành sinh viên* (`/do-an`, `/giai-thich-loi`, `/on-tap`), *Văn phòng tự động* (`/tong-hop-thu-muc`, `/doi-chieu`, `/soat-loi`).
 - **Trang giới thiệu và hướng dẫn công khai** `https://ai.neu.edu.vn/agent/guide/` cho người chưa đăng nhập: ảnh chụp thật, demo từng bước (Work/Code/Design, dự án mẫu, Chỉ vào để sửa, học vibe coding), điểm nổi bật, 3 bước bắt đầu và hỏi đáp; trang đăng nhập có liên kết tới đó. Kèm **nhật ký thay đổi công khai** `/agent/guide/changelog.html` (tạo tự động từ CHANGELOG mỗi lần phát hành).

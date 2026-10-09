@@ -10,7 +10,7 @@ describe("hướng dẫn trong ứng dụng", () => {
       expect(ids).toEqual(expect.arrayContaining(["bat-dau", "tinh-huong", "meo"]));
       expect(TIPS[tab].length).toBeGreaterThanOrEqual(4);
     }
-    expect(GUIDE_COMMON.map((s) => s.id)).toEqual(["noi-it", "phim-tat", "van-de", "rieng-tu"]);
+    expect(GUIDE_COMMON.map((s) => s.id)).toEqual(["noi-it", "anh-web", "phim-tat", "van-de", "rieng-tu"]);
   });
 
   it("nội dung đầy đặn: nhiều mẹo/tình huống, mỗi mục có tiêu đề và mô tả, câu mẫu đủ dài và không có chữ giữ chỗ (XXX, TBD, FIXME)", () => {

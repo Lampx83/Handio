@@ -3,6 +3,7 @@ import { buildWorkSamples, KvChatStore, KvProjectHost, LocalController, MemoryEn
 import { mountShell } from "@neu/agent-ui";
 import { autosave, restore, wipe } from "./persist";
 import { runJsSandbox } from "./sandbox";
+import { shrinkImageBrowser } from "./image";
 
 const ls = {
   get: (k: string): string | null => {
@@ -69,6 +70,7 @@ function makeProjects(profile: Profile, root: string, legacySeed: Seed, legacyNa
       const save = autosave(keyOf(info), env);
       await save();
       if (profile === "code") env.runJs = runJsSandbox;
+      env.shrinkImage = shrinkImageBrowser;
       cur = { info, env };
       return env as Env;
     },
@@ -182,7 +184,7 @@ async function main(): Promise<void> {
     if (ls.get("neu.nosample.v1") === null) await p.dropSample().catch(() => undefined);
     const st = await p.host.list();
     const env = await p.host.open(st.active);
-    return LocalController.create({ env, profile, store, packs: async () => orgPacks, defaults: { mode: "auto" }, trust, realFs: false, presets, fetchImpl: authFetch, diagnostics: { endpoint: new URL("diag", document.baseURI).href, version: "0.1.0", platform: "web", enabled: () => location.protocol === "https:" }, projects: p.host, chats: chats(profile) });
+    return LocalController.create({ env, profile, store, packs: async () => orgPacks, toolsBase: new URL(".", document.baseURI).href, defaults: { mode: "auto" }, trust, realFs: false, presets, fetchImpl: authFetch, diagnostics: { endpoint: new URL("diag", document.baseURI).href, version: "0.1.0", platform: "web", enabled: () => location.protocol === "https:" }, projects: p.host, chats: chats(profile) });
   };
   const controllers: Partial<Record<Profile, AgentController>> = {
     work: await make("work", "/work", buildWorkSamples, "Dự án mẫu", "Dự án của tôi"),

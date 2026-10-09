@@ -22,7 +22,7 @@ export type FieldSpec =
 
 export const DIAG_TOOLS: string[] = [
   "read_file", "list_dir", "glob", "grep", "edit_file", "write_file", "todo_write", "bash", "bash_output", "kill_process", "run_javascript",
-  "check_package", "web_fetch", "read_document", "find_in_documents", "create_docx", "docx_replace", "create_xlsx", "xlsx_edit", "create_pptx",
+  "check_package", "web_fetch", "read_image", "web_search", "fetch_page", "xlsx_pivot", "merge_check", "merge_documents", "scan_pii", "redact_pii", "read_document", "find_in_documents", "create_docx", "docx_replace", "create_xlsx", "xlsx_edit", "create_pptx",
   "convert_to_pdf", "skill", "task", "exit_plan_mode", "mcp", "other",
 ];
 export const DIAG_SIGNALS = ["loop", "step_limit", "repeat_tool_fail", "slow_first_token", "slow_turn", "ctx_high", "early_interrupt", "perm_denied", "empty_output", "invalid_tool_args", "unknown_tool", "truncated", "context_overflow"];

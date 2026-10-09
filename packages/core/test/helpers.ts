@@ -32,7 +32,7 @@ export const SEED = {
   ".env": "SECRET=1\n",
 };
 
-export async function makeController(script: ConstructorParameters<typeof FakeLlm>[0], opts: { packs?: import("../src").RawPack[]; seed?: Record<string, string>; settings?: Partial<Settings>; decide?: (r: PermissionRequest) => PermissionResponse | Promise<PermissionResponse>; env?: MemoryEnv; trusted?: boolean; profile?: "code" | "work" | "design" } = {}) {
+export async function makeController(script: ConstructorParameters<typeof FakeLlm>[0], opts: { packs?: import("../src").RawPack[]; toolsBase?: string; fetchImpl?: typeof fetch; seed?: Record<string, string>; settings?: Partial<Settings>; decide?: (r: PermissionRequest) => PermissionResponse | Promise<PermissionResponse>; env?: MemoryEnv; trusted?: boolean; profile?: "code" | "work" | "design" } = {}) {
   const env = opts.env ?? new MemoryEnv("/ws", opts.seed ?? SEED);
   let saved: Partial<Settings> = { ...opts.settings };
   const trustedMap = new Map<string, boolean>([[env.root, !!opts.trusted]]);
@@ -41,6 +41,8 @@ export async function makeController(script: ConstructorParameters<typeof FakeLl
     profile: opts.profile,
     realFs: false,
     packs: opts.packs ? async () => opts.packs! : undefined,
+    toolsBase: opts.toolsBase,
+    fetchImpl: opts.fetchImpl,
     store: { load: async () => saved, save: async (s) => void (saved = s) },
     trust: { isTrusted: async (r) => !!trustedMap.get(r), setTrusted: async (r, t) => void trustedMap.set(r, t) },
   });

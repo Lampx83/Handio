@@ -1,0 +1,44 @@
+[Unit]
+Description=NEU Agent - cong cu web cho agent: tim kiem + tai trang (127.0.0.1:4192)
+After=network.target neu-agent-search.service
+
+[Service]
+User=neu-tools
+Group=neu-tools
+ExecStart=/usr/bin/python3 /usr/local/lib/neu-agent-tools/tools.py
+Restart=always
+RestartSec=3
+# Dịch vụ này tải địa chỉ do người dùng đưa ra: ngoài kiểm tra trong mã (tools.py), hạt nhân cũng chặn đường tới mạng nội bộ
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+# Được phép: chính máy này (nginx, SearXNG, DNS stub) và Internet công cộng. Cấm: mạng nội bộ/LAN, link-local (metadata đám mây), CGNAT.
+IPAddressAllow=localhost
+IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
+UMask=0077
+MemoryMax=384M
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

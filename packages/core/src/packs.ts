@@ -3,6 +3,7 @@ import { join } from "./path";
 import { frontmatter, SAFE_NAME, type CustomCommand, type CustomSkill, type CustomAgent } from "./memory";
 import { sanitizeHooks, type HooksConfig } from "./hooks";
 import { sanitizeMcpServers, type McpServerSpec } from "./mcp";
+import { sanitizeHttpTools, type HttpToolSpec } from "./http-tools";
 import type { Profile } from "./profiles";
 
 /**
@@ -47,6 +48,8 @@ export interface LoadedPack {
   agents: CustomAgent[];
   mcpServers: Record<string, McpServerSpec>;
   hooks: HooksConfig;
+  /** Công cụ gọi dịch vụ HTTP của tổ chức (tools.json). */
+  httpTools: Record<string, HttpToolSpec>;
 }
 
 export const PACK_LIMITS = { files: 300, fileChars: 100_000, prompt: 6000, skills: 50, commands: 150, agents: 30, skillTexts: 40_000 };
@@ -133,11 +136,13 @@ export function parsePack(raw: RawPack): { pack?: LoadedPack; error?: string; wa
   const trusted = raw.origin !== "project";
   let mcpServers: Record<string, McpServerSpec> = {};
   let hooks: HooksConfig = {};
+  let httpTools: Record<string, HttpToolSpec> = {};
   if (trusted) {
     mcpServers = sanitizeMcpServers(parseJson(f["mcp.json"]));
     hooks = sanitizeHooks(parseJson(f["hooks.json"]));
-  } else if (f["mcp.json"] || f["hooks.json"]) {
-    warnings.push(`gói '${id}' nằm trong dự án nên bị bỏ qua mcp.json/hooks.json (chỉ gói do quản trị hoặc chính bạn cài mới được chạy chương trình)`);
+    httpTools = sanitizeHttpTools(parseJson(f["tools.json"]));
+  } else if (f["mcp.json"] || f["hooks.json"] || f["tools.json"]) {
+    warnings.push(`gói '${id}' nằm trong dự án nên bị bỏ qua mcp.json/hooks.json/tools.json (chỉ gói do quản trị hoặc chính bạn cài mới được chạy chương trình hay gọi dịch vụ)`);
   }
 
   let prompt = (f["prompt.md"] ?? "").trim();
@@ -145,7 +150,7 @@ export function parsePack(raw: RawPack): { pack?: LoadedPack; error?: string; wa
     prompt = prompt.slice(0, PACK_LIMITS.prompt) + "\n… (đã cắt bớt)";
     warnings.push(`gói '${id}': prompt.md dài quá, đã cắt bớt`);
   }
-  return { pack: { manifest, origin: raw.origin, prompt, commands, skills, agents, mcpServers, hooks }, warnings };
+  return { pack: { manifest, origin: raw.origin, prompt, commands, skills, agents, mcpServers, hooks, httpTools }, warnings };
 }
 
 const RANK: Record<PackOrigin, number> = { project: 3, user: 2, org: 1 };
@@ -217,12 +222,14 @@ export function mergePackParts(packs: readonly LoadedPack[]): {
   prompts: { pack: string; text: string }[];
   mcpServers: Record<string, McpServerSpec>;
   hooks: HooksConfig;
+  httpTools: Record<string, HttpToolSpec>;
 } {
   const commands = new Map<string, CustomCommand>();
   const skills = new Map<string, CustomSkill>();
   const agents = new Map<string, CustomAgent>();
   const mcpServers: Record<string, McpServerSpec> = {};
   const hooks: HooksConfig = {};
+  const httpTools: Record<string, HttpToolSpec> = {};
   const prompts: { pack: string; text: string }[] = [];
   for (const p of packs) {
     for (const c of p.commands) if (!commands.has(c.name)) commands.set(c.name, c);
@@ -230,7 +237,8 @@ export function mergePackParts(packs: readonly LoadedPack[]): {
     for (const a of p.agents) if (!agents.has(a.name)) agents.set(a.name, a);
     for (const [k, v] of Object.entries(p.mcpServers)) if (!(k in mcpServers)) mcpServers[k] = v;
     for (const [ev, entries] of Object.entries(p.hooks) as [keyof HooksConfig, NonNullable<HooksConfig[keyof HooksConfig]>][]) hooks[ev] = [...(hooks[ev] ?? []), ...entries];
+    for (const [k, v] of Object.entries(p.httpTools)) if (!(k in httpTools)) httpTools[k] = v;
     if (p.prompt) prompts.push({ pack: p.manifest.name, text: p.prompt });
   }
-  return { commands: [...commands.values()], skills: [...skills.values()], agents: [...agents.values()], prompts, mcpServers, hooks };
+  return { commands: [...commands.values()], skills: [...skills.values()], agents: [...agents.values()], prompts, mcpServers, hooks, httpTools };
 }

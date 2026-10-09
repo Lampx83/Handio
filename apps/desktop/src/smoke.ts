@@ -174,7 +174,7 @@ export async function runSmoke(c: Ctx): Promise<number> {
     const stD = await design.getState();
     check("Design: có công cụ file + Office, không có terminal, có xuất PDF/PNG", !stD.capabilities.exec && stD.capabilities.renderDesign && stD.commands.some((x) => x.name === "poster"));
     await js(`window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI)); document.querySelector('#tab-design').click(); 1`);
-    check("Design: khung xem trước hiện poster mẫu trong iframe cách ly", await waitFor(`(() => { const f = document.querySelector('#panel-design .pv-frame'); return !!f && f.getAttribute('sandbox') === '' && f.srcdoc.includes('Trí tuệ nhân tạo'); })()`, 10000));
+    check("Design: khung xem trước hiện poster mẫu trong iframe cách ly (không cho chạy script)", await waitFor(`(() => { const f = document.querySelector('#panel-design .pv-frame'); return !!f && (f.getAttribute('sandbox') ?? '').split(' ').every((x) => x === '' || x === 'allow-same-origin') && f.srcdoc.includes('Trí tuệ nhân tạo'); })()`, 10000));
     await sleep(600);
     await shot("05-design");
     // đợi tới khi poster hiện trên màn hình (chụp sớm quá sẽ thấy nền)

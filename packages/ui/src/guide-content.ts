@@ -36,6 +36,19 @@ const COMMON_AFTER: GuideSection[] = [
     ],
   },
   {
+    id: "anh-web", title: "Đọc ảnh, tìm web & lệnh mở rộng", icon: "🔎",
+    intro: "NEU Agent đọc được ảnh (chữ tiếng Việt, bảng, biểu đồ) và tìm thông tin trên web có nêu nguồn. Hai việc này dùng thêm token, nên hãy nêu rõ bạn cần gì.",
+    items: [
+      { t: "Đọc ảnh chụp, bản scan", d: "Thả ảnh (png, jpg, webp) vào dự án rồi nhờ đọc: chữ tiếng Việt, bảng và biểu đồ đều đọc được. Chữ nhỏ, số tiền, ngày và số hiệu có thể sai: hãy đối chiếu lại. Ảnh lớn được tự thu nhỏ; PDF bản scan thì xuất từng trang thành ảnh trước.", tryIt: "Đọc các ảnh trong thư mục và chuyển thành một văn bản Word, chỗ nào không đọc được thì ghi rõ." },
+      { t: "Bảng trong ảnh → Excel", d: "Chụp bảng điểm, bảng giá, danh sách rồi nói “chuyển thành Excel có công thức”. Agent đọc từng ô, tính lại tổng và báo nếu lệch so với ảnh.", tryIt: "Chuyển bảng trong ảnh thành Excel, tính tổng bằng công thức và so với tổng ghi trong ảnh." },
+      { t: "Dán ảnh chụp lỗi thay vì gõ lại", d: "Ở tab Code, thả ảnh chụp màn hình lỗi vào dự án và nói “sửa lỗi trong ảnh”: agent đọc thông báo trong ảnh rồi làm việc với đúng dòng lỗi." },
+      { t: "Tìm trên web, có nguồn", d: "Hỏi những gì cần thông tin bên ngoài hoặc mới thay đổi (quy định, giá, tin tức, tài liệu). Agent tìm, đọc vài trang đáng tin và trả lời kèm địa chỉ nguồn. Đọc một trang web sẽ hỏi bạn cho phép; chọn “luôn cho phép” nếu muốn bớt hỏi.", tryIt: "Tìm quy định mới nhất về chuẩn đầu ra ngoại ngữ của sinh viên đại học và tóm tắt, kèm nguồn." },
+      { t: "Đừng đưa dữ liệu cá nhân vào câu tìm kiếm", d: "Từ khoá và địa chỉ trang được gửi ra ngoài hệ thống. Hãy tìm bằng từ khoá chung, không kèm họ tên, mã số, điểm hay nội dung tệp riêng tư." },
+      { t: "Có giới hạn tìm kiếm", d: "Mỗi người có số lượt tìm và tải trang trong 10 phút để tránh bị các máy tìm kiếm chặn. Chạm giới hạn thì agent báo và làm tiếp với những gì đã có." },
+      { t: "Gõ / để xem lệnh mở rộng", d: "Ngoài lệnh có sẵn còn có các lệnh theo nghiệp vụ như /nghien-cuu, /so-sanh, /phan-tich, /de-thi, /rubric, /soat-giao-dien, /doc-anh… Gõ /packs để xem các gói mở rộng đang bật." },
+    ],
+  },
+  {
     id: "phim-tat", title: "Phím tắt & thao tác nhanh", icon: "⌨️",
     items: [
       { t: "Enter gửi · Shift+Enter xuống dòng", d: "Phím ↑ trong ô nhập gọi lại các câu bạn đã gửi." },

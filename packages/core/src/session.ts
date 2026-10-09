@@ -16,6 +16,8 @@ import { ProcessManager } from "./processes";
 import { HookRunner, mergeHooks, countHooks } from "./hooks";
 import { McpManager, type McpServerSpec } from "./mcp";
 import { mergePackParts, packsFor, type LoadedPack } from "./packs";
+import { buildHttpTools, type HttpToolRuntime } from "./http-tools";
+import { visionTool } from "./vision";
 import type { PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
 
 const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
@@ -56,6 +58,8 @@ export interface SessionOptions {
   trustProject?: boolean;
   /** Gói mở rộng đã đọc (xem packs.ts, docs/EXTENSIONS.md): thêm kỹ năng, lệnh, subagent, công cụ MCP… mà không sửa lõi. */
   packs?: LoadedPack[];
+  /** Nơi gọi các công cụ HTTP do gói khai báo (tools.json): địa chỉ gốc của tổ chức + cách gọi có đăng nhập. Không đặt = các công cụ đó không bật. */
+  httpTools?: HttpToolRuntime;
 }
 
 let idCounter = 0;
@@ -118,7 +122,9 @@ export class Session {
     const servers: Record<string, McpServerSpec> = { ...pp.mcpServers, ...(code ? s.mcpServers ?? {} : {}), ...(code && trusted ? proj.mcpServers ?? {} : {}) };
     if (o.env.spawnStdio && Object.keys(servers).length) this.mcp = new McpManager(servers, o.env, root);
     const base = builtinTools(o.env).filter((t) => (def.id === "code" || !["bash", "run_javascript"].includes(t.name)) && !(o.policy?.disableBash && t.name === "bash"));
-    for (const t of [...base, ...(def.id === "work" || def.id === "design" ? officeTools(o.env) : []), ...(def.id === "work" ? workTools(o.env) : []), ...this.metaTools()]) this.tools.set(t.name, t);
+    const vision = visionTool(o.env, () => this.o.llm);
+    const httpTools = o.httpTools ? buildHttpTools(pp.httpTools, o.httpTools) : [];
+    for (const t of [...base, vision, ...httpTools, ...(def.id === "work" || def.id === "design" ? officeTools(o.env) : []), ...(def.id === "work" ? workTools(o.env) : []), ...this.metaTools()]) this.tools.set(t.name, t);
     this.main = new Agent(this);
   }
 
@@ -1020,9 +1026,9 @@ export class Agent {
     if (result.length > MAX_TOOL_CHARS) result = result.slice(0, MAX_TOOL_CHARS) + `\n… (đã cắt bớt ${result.length - MAX_TOOL_CHARS} ký tự)`;
     this.done(tc, name, ok, result, ok ? undefined : errKind);
     s.noteTool(name, ok && !(name === "bash" && /\[(mã thoát [1-9]\d*|Hết thời gian)/.test(result.slice(-80))), s.ctx.undoStack.length > undoBefore);
-    if (ok && (name === "web_fetch" || tool.kind === "mcp") && !s.perms.tainted) {
+    if (ok && (tool.kind === "net" || tool.kind === "mcp") && !s.perms.tainted) {
       s.perms.tainted = true;
-      s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${name === "web_fetch" ? "web" : "công cụ ngoài (MCP)"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });
+      s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${tool.kind === "mcp" ? "công cụ ngoài (MCP)" : "web/dịch vụ ngoài"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });
     }
     if (ok && (tool.kind === "edit" || tool.kind === "exec")) s.emit({ type: "files_changed", paths: target.rel ? [target.rel] : [] });
     if (s.hooks) {

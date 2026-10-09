@@ -1,0 +1,22 @@
+[Unit]
+Description=NEU Agent - may tim kiem SearXNG (127.0.0.1:8899, chay trong Docker)
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+# Ảnh được ghim theo mã băm: cập nhật có chủ đích (xem docs/DEPLOY.md, mục "Công cụ web"), không để watchtower tự đổi.
+ExecStartPre=-/usr/bin/docker rm -f neu-agent-search
+ExecStart=/usr/bin/docker run --rm --name neu-agent-search \
+  --label com.centurylinklabs.watchtower.enable=false \
+  --read-only --tmpfs /tmp --tmpfs /var/cache/searxng --tmpfs /run \
+  --cap-drop ALL --security-opt no-new-privileges --memory 1g --cpus 1.5 --pids-limit 256 \
+  -p 127.0.0.1:8899:8080 \
+  -v /etc/neu-agent/searxng-settings.yml:/etc/searxng/settings.yml:ro \
+  searxng/searxng@sha256:8c1e68e5b8eee8f5cdc6c4745df364b0c72269024a7a9b2a3ef34ee72b66e75e
+ExecStop=/usr/bin/docker stop -t 10 neu-agent-search
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

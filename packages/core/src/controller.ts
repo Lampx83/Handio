@@ -15,6 +15,7 @@ import { badCitations, docViewOf, listProcedures, removeProcedure, saveProcedure
 import type { DocView } from "./office/locate";
 import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
+import type { HttpToolRuntime } from "./http-tools";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
 import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk } from "./tools";
 import type { AgentController, PermissionRequest, PermissionResponse, QuotaInfo, RewindPoint, SessionEvent, Settings, UiState } from "./types";
@@ -58,6 +59,8 @@ export interface ControllerOptions {
   authHeaders?: () => Promise<Record<string, string> | null>;
   authHosts?: string[];
   fetchImpl?: typeof fetch;
+  /** Địa chỉ gốc các dịch vụ của tổ chức cho công cụ HTTP của gói (tools.json), vd https://ai.neu.edu.vn/agent/. Không đặt = công cụ HTTP của gói không bật. */
+  toolsBase?: string;
   /** Tự chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md). Không đặt = không ghi, không gửi gì. Tắt được bằng Settings.diagnostics hoặc policy.diagnostics=false. */
   diagnostics?: { endpoint: string; headers?(): Record<string, string>; enabled?(): boolean; version: string; build?: string; platform: string; fetch?: typeof fetch };
 }
@@ -171,6 +174,20 @@ export class LocalController implements AgentController {
     return sess;
   }
 
+  private httpToolRuntime(): HttpToolRuntime | undefined {
+    const base = this.o.toolsBase;
+    if (!base) return undefined;
+    let host = "";
+    try {
+      host = new URL(base).host;
+    } catch {
+      return undefined;
+    }
+    // tiêu đề đăng nhập chỉ gửi tới máy chủ của tổ chức (authHosts), như khi gọi mô hình
+    const mayAuth = !!this.o.authHeaders && (this.o.authHosts ?? []).includes(host);
+    return { base, fetch: this.o.fetchImpl ?? ((...a) => fetch(...a)), headers: mayAuth ? this.o.authHeaders : undefined };
+  }
+
   private makeSessionWith(packs: LoadedPack[]): Promise<Session> {
     return Session.create({
       env: this.o.env,
@@ -186,6 +203,7 @@ export class LocalController implements AgentController {
       project: this.project,
       trustProject: this.trusted,
       packs,
+      httpTools: this.httpToolRuntime(),
     });
   }
 

@@ -8,9 +8,10 @@ Thư mục này là **bộ gói của NEU**. Triển khai cho tổ chức khác:
 
 | Gói | Dành cho | Có gì |
 |---|---|---|
+| `tim-kiem-web` | mọi tab | công cụ `web_search` + `fetch_page` (cần dịch vụ công cụ web, xem docs/DEPLOY.md) |
 | `research` | mọi tab | nghiên cứu có nguồn, so sánh, phản biện |
 | `giang-vien` | Work | đề cương môn học, đề thi + đáp án, rubric chấm điểm, phản hồi bài làm |
 | `phan-tich-du-lieu` | Work, Code | làm sạch và phân tích bảng số liệu, khảo sát Likert, báo cáo có biểu đồ |
 | `chat-luong-web` | Code, Design | kiểm tra giao diện (a11y, responsive, hiệu năng), subagent soát giao diện |
 | `sinh-vien` | Code, Work | làm đồ án/khoá luận, giải thích lỗi, ôn tập |
-| `van-phong-tu-dong` | Work | gộp, đối chiếu, tổng hợp hàng loạt tệp trong thư mục |
+| `van-phong-tu-dong` | Work | gộp, đối chiếu, tổng hợp hàng loạt tệp; đọc ảnh/scan thành Word, bảng trong ảnh thành Excel |

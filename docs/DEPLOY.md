@@ -43,6 +43,18 @@ Mỗi script tự sao lưu, chạy `nginx -t`, **tự khôi phục nếu lỗi h
 
 Dọn OJ Judge cũ trên 220: `sudo ./remove-oj-judge.sh` (mặc định chỉ liệt kê), thêm `--yes` để xoá, `--purge-data` để xoá cả dữ liệu.
 
+### Công cụ web cho agent (tìm kiếm + tải trang) và đọc ảnh
+
+- **Đọc ảnh/OCR** không cần dịch vụ riêng: công cụ `read_image` gửi ảnh cho chính mô hình (Qwen3.5 đọc được ảnh, chữ tiếng Việt chính xác). Ảnh được thu nhỏ ở máy người dùng (≤ 2,4 MB) và đi qua cổng hạn mức như mọi lượt chat, nên tính vào hạn mức token; nginx 220 và 222 cho thân yêu cầu tới 4 MB. Mô hình khác không đọc được ảnh thì công cụ báo lỗi rõ.
+- **Tìm web + đọc trang** (`web_search`, `fetch_page`, từ gói `packs/tim-kiem-web`) cần dịch vụ ở `deploy/220/tools/`: SearXNG tự dựng (Docker, ảnh ghim mã băm, chỉ nghe 127.0.0.1:8899, không cần khoá API) + `tools.py` (127.0.0.1:4192; giới hạn theo người dùng, **chặn truy cập mạng nội bộ** bằng cả mã lẫn `IPAddressDeny` của systemd, không ghi nội dung truy vấn). Nginx mở `/agent/tools/search` và `/agent/tools/fetch` (phải đăng nhập, chỉ GET).
+  ```bash
+  scp -r deploy/220 220:~/neu-agent-220
+  ssh -t 220 'cd ~/neu-agent-220 && sudo ./tools/install-tools.sh'   # TRƯỚC: cài dịch vụ (kiểm thử, sao lưu, tự khôi phục)
+  ssh -t 220 'cd ~/neu-agent-220 && sudo ./install.sh'               # SAU: nginx mở /agent/tools/
+  ```
+  Chưa cài dịch vụ thì nginx trả 503 JSON và agent nói rõ là không tra cứu được. Giới hạn mặc định: 40 lượt tìm và 60 lượt tải trang mỗi người trong 10 phút (đổi bằng biến `NEU_TOOLS_*` trong unit). Kiểm tra: `curl -s localhost:4192/healthz` (chỉ số đếm). Cập nhật SearXNG: kéo ảnh mới, thay mã băm trong `neu-agent-search.service`, chạy lại `install-tools.sh`.
+  Lưu ý: Google/Brave/DuckDuckGo có thể tạm chặn IP máy chủ; SearXNG tự dùng nguồn còn lại. Nếu chất lượng giảm, thay bằng API trả phí (Brave/Serper) chỉ cần sửa `tools.py` ở hàm `search`.
+
 ### Tài khoản tên + mật khẩu (ngoài Microsoft 365)
 
 Dành cho khách mời / tài khoản thử. **Chỉ quản trị viên tạo**, người dùng không tự đăng ký. Hai cách quản lý:
