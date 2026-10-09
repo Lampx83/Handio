@@ -297,7 +297,8 @@
           "download_open",
           "slash_command",
           "mention_file",
-          "stop_click"
+          "stop_click",
+          "point_edit"
         ],
         "req": true
       }

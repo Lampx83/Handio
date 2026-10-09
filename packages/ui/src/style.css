@@ -511,3 +511,11 @@ dialog.wt-dlg input { flex: 1; min-width: 0; }
 .fb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; font-size: 12.5px; color: var(--muted); }
 .fb-btn { border: 1px solid var(--border); background: transparent; border-radius: 8px; padding: 1px 9px; cursor: pointer; font-size: 15px; opacity: .75; }
 .fb-btn:hover { opacity: 1; background: var(--panel2); }
+.pv-tools .btn.on { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.pv-pick { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel); font-size: 13px; }
+.pv-pick[hidden] { display: none; }
+.pv-pick .pk-hint { color: var(--muted); margin-right: 8px; }
+.pv-pick .pk-sel { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pv-pick .pk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pv-pick .pk-row { display: flex; gap: 6px; }
+.pv-pick .pk-row input { flex: 1; min-width: 0; border: 1px solid var(--border); background: var(--bg); color: inherit; border-radius: 8px; padding: 6px 10px; font: inherit; }

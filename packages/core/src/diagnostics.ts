@@ -29,7 +29,7 @@ export const DIAG_SIGNALS = ["loop", "step_limit", "repeat_tool_fail", "slow_fir
 /** Lý do công cụ thất bại (chỉ mã): xem ToolErrorKind trong tools.ts. "program" = chương trình/test của người dùng chạy hỏng (kết quả bình thường, không phải lỗi công cụ); "denied" = bị từ chối quyền. */
 export const DIAG_TOOL_ERRORS = ["not_found", "outside_project", "read_first", "stale", "binary", "bad_args", "no_match", "ambiguous", "wrong_type", "sandbox", "program", "timeout", "unsupported", "denied", "hook", "unknown_tool", "bad_json", "internal", "other"];
 /** Việc người dùng làm trong giao diện (chỉ MÃ, không có nội dung): để biết tính năng nào được dùng/bỏ qua. */
-export const DIAG_UI_ACTS = ["tab_switch", "suggestion", "template", "attach", "learn_open", "settings_open", "new_chat", "open_chat", "mode_change", "model_change", "run_click", "changes_open", "login_prompt", "update_banner", "update_download", "download_open", "slash_command", "mention_file", "stop_click"];
+export const DIAG_UI_ACTS = ["tab_switch", "suggestion", "template", "attach", "learn_open", "settings_open", "new_chat", "open_chat", "mode_change", "model_change", "run_click", "changes_open", "login_prompt", "update_banner", "update_download", "download_open", "slash_command", "mention_file", "stop_click", "point_edit"];
 export const DIAG_FEEDBACK_REASONS = ["wrong", "slow", "incomplete", "confusing", "other"];
 export const DIAG_PLATFORMS = ["web", "mac", "win", "linux", "other"];
 export const DIAG_PROFILES = ["work", "code", "design"];

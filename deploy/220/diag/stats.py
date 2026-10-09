@@ -37,7 +37,7 @@ ERR_VI = {"not_found": "Không có file/thư mục", "outside_project": "Đườ
           "timeout": "Quá thời gian", "unsupported": "Không hỗ trợ", "denied": "Bị từ chối quyền", "hook": "Bị hook chặn", "unknown_tool": "Công cụ không tồn tại", "bad_json": "Tham số không phải JSON", "internal": "Lỗi nội bộ", "other": "Khác", "unknown": "Chưa rõ (bản cũ)"}
 UI_VI = {"tab_switch": "Chuyển tab", "suggestion": "Bấm gợi ý trên màn hình chào", "template": "Dùng 'Mẫu prompt'", "attach": "Đính kèm tệp", "learn_open": "Mở bài học", "settings_open": "Mở Cài đặt", "new_chat": "Cuộc trò chuyện mới",
          "open_chat": "Mở lại cuộc trò chuyện cũ", "mode_change": "Đổi chế độ chạy", "model_change": "Mở danh sách mô hình", "run_click": "Bấm Chạy", "changes_open": "Xem thay đổi", "login_prompt": "Bấm Đăng nhập lại", "update_banner": "Thấy thông báo cập nhật",
-         "update_download": "Tải bản cập nhật", "download_open": "Mở hộp Tải ứng dụng", "slash_command": "Dùng lệnh /", "mention_file": "Nhắc tệp bằng @", "stop_click": "Bấm Dừng"}
+         "update_download": "Tải bản cập nhật", "download_open": "Mở hộp Tải ứng dụng", "slash_command": "Dùng lệnh /", "point_edit": "Chỉ vào để sửa (Design)", "mention_file": "Nhắc tệp bằng @", "stop_click": "Bấm Dừng"}
 FB_VI = {"wrong": "Sai/không đúng ý", "incomplete": "Chưa làm xong", "slow": "Chậm", "confusing": "Khó hiểu", "other": "Khác", "none": "Không chọn lý do"}
 NOT_TOOL_FAULT = ("program", "denied")  # kết quả bình thường/ý người dùng, không tính là công cụ lỗi
 

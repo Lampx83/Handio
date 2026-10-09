@@ -218,7 +218,7 @@ class App {
         h("div", { class: "meter", title: this.ctxTip }, h("div", { class: "bar" }, this.meterBar), this.meterTxt),
         this.codeTools.modelEl, this.sendBtn)));
     const main = h("main", { class: "main" }, this.bannerHost, this.feed, composer);
-    this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path));
+    this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path), (text) => void this.submit(text));
     this.pvHost.append(this.pv.el);
     this.shell.append(...(head ? [head] : []), h("div", { class: "neu-body" }, side, main, this.codeTools.panel, this.pvHost, this.docPane.el));
     if (this.sideStore.get() === "0") this.side(false);
