@@ -10,7 +10,7 @@
 | Sự kiện | Workflow | Việc làm |
 |---|---|---|
 | Mở/cập nhật pull request, hoặc vào `main` | `ci.yml` | `typecheck` + 413 bài vitest + dựng web; 81 bài Python (chẩn đoán, quản lý tài khoản); `bash -n` + shellcheck mọi script; e2e Docker: nginx + SSO thật, script cài 220/222, khoá SSH triển khai. **Không dùng bí mật nào** (PR từ fork cũng chạy được an toàn). |
-| Vào `main` | `deploy.yml` | Chạy lại CI → dựng web → đóng gói → gửi qua SSH tới 220 → `install.sh` (và `install-diag.sh` nếu phần chẩn đoán/tài khoản đổi) → kiểm tra `healthz`, `/agent/` (302), API chưa đăng nhập (401), trang đăng nhập (200). Hai lần triển khai không bao giờ chạy cùng lúc. |
+| Vào `main` | `deploy.yml` | Chạy lại CI → dựng web → đóng gói → gửi qua SSH tới 220 → `install.sh` (và `install-diag.sh` nếu phần chẩn đoán/tài khoản đổi, `tools/install-tools.sh` nếu dịch vụ công cụ web đổi — lỗi của dịch vụ tuỳ chọn này chỉ cảnh báo, không làm hỏng lần triển khai) → kiểm tra `healthz`, `/agent/` (302), API chưa đăng nhập (401), trang đăng nhập (200). Hai lần triển khai không bao giờ chạy cùng lúc. |
 | Chạy tay (Actions → Deploy check) | `deploy-check.yml` | Chỉ thử kết nối GitHub → máy 220, không triển khai gì. |
 | Chạy tay (Actions → Deploy → Run workflow) | `deploy.yml` | Chọn `deploy` (triển khai lại `main`) hoặc `rollback` (quay lại bản trước). |
 | Vào `main` mà phiên bản trong `package.json` **chưa có tag** | `deploy.yml` → `release.yml` | **Tự dựng lại bản Desktop** (macOS chip Apple + Intel, Windows), tạo `latest.json` (ghi chú lấy từ `CHANGELOG.md`) + mã băm, **đưa lên máy chủ**, tạo trang phát hành GitHub kèm nhật ký và gắn tag `vX.Y.Z`. Người dùng Desktop thấy "Có bản mới" trong vòng 6 giờ và tải được từ trang tải. |

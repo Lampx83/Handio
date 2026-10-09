@@ -32,7 +32,7 @@ http.server.HTTPServer(('127.0.0.1',4180),H).serve_forever()`;
 // ---- gói thử trên máy này: deploy/220 (không có downloads/, tệp nặng, diag/ — diag cần systemd thật) + web.tar.gz nhỏ
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "neu-dep-"));
 const stage = path.join(tmp, "stage");
-fs.cpSync(path.join(deploy, "220"), stage, { recursive: true, filter: (s) => !/\/(downloads|diag|ci)(\/|$)|\.tar\.gz$/.test(s) });
+fs.cpSync(path.join(deploy, "220"), stage, { recursive: true, filter: (s) => !/\/(downloads|diag|ci|tools)(\/|$)|\.tar\.gz$/.test(s) });
 const webDir = path.join(tmp, "web");
 fs.mkdirSync(webDir);
 const mkWeb = (dir, body) => { fs.writeFileSync(path.join(dir, "index.html"), body); sh("tar", ["--no-xattrs", "-czf", path.join(stage, "web.tar.gz"), "-C", dir, "."], { env: { ...process.env, COPYFILE_DISABLE: "1" } }); };

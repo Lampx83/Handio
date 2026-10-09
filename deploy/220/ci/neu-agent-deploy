@@ -87,6 +87,16 @@ apply() { # $1 = thư mục bản (root-owned); $2 = thư mục bản đang ch�
   else
     echo "== chẩn đoán + quản lý tài khoản: không đổi, bỏ qua"
   fi
+  # công cụ web (tìm kiếm + tải trang): cài/cập nhật khi thư mục tools/ đổi. Dịch vụ này là TUỲ CHỌN: lỗi ở đây KHÔNG làm hỏng cả lần triển khai
+  # (install-tools.sh tự khôi phục; nginx trả 503 JSON và agent nói rõ là không tra cứu được), nhưng được báo to để người vận hành biết.
+  local nt ot
+  nt=$(group_hash "$d" tools); ot=none; [ -n "$old" ] && ot=$(group_hash "$old" tools)
+  if [ "$nt" != "$ot" ] && [ -f "$d/tools/install-tools.sh" ] && command -v docker >/dev/null 2>&1; then
+    echo "== công cụ web: tools/install-tools.sh (có thay đổi)"
+    (cd "$d" && bash ./tools/install-tools.sh) || echo "!! CẢNH BÁO: cài công cụ web THẤT BẠI (đã tự khôi phục). Web và nginx vẫn chạy; tìm web tạm không dùng được. Xem nhật ký ở trên."
+  else
+    echo "== công cụ web: không đổi (hoặc máy chưa có Docker), bỏ qua"
+  fi
   local hz; hz=$(curl -s --max-time 10 -H "Host: ai.neu.edu.vn" http://127.0.0.1/agent/healthz || true)
   echo "== kiểm tra cuối: /agent/healthz=$hz"
   case "$hz" in '{"ok":true}'*) ;; *) echo "healthz không báo ok"; return 1;; esac
