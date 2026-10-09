@@ -30,6 +30,8 @@ npm run version:bump -- minor         # patch | minor | major | X.Y.Z[-beta.1]; 
    ```bash
    git add -A && git commit -m "Phát hành X.Y.Z" && git tag vX.Y.Z && git push --follow-tags
    ```
+> **Từ khi có CI/CD (`docs/CICD.md`), bước 4–6 dưới đây chạy TỰ ĐỘNG** khi phiên bản mới (chưa có tag) được gộp vào `main`: dựng, tạo `latest.json`/mã băm, đưa lên máy chủ 220, tạo GitHub Release và tag. Các lệnh tay bên dưới là phương án dự phòng khi CI/CD hỏng.
+
 4. **Dựng, ký, tạo mã băm**: đẩy tag `vX.Y.Z` để GitHub Actions *Release* chạy (hoặc `npm run dist:signed -w @neu/agent-desktop` trên máy Mac). Kết quả ở `apps/desktop/release/`: `.dmg` (Apple silicon + Intel), `.exe`, `SHA256SUMS.txt`, `SBOM.cdx.json`, `latest.json` (đã có ghi chú lấy từ CHANGELOG).
 5. **Đặt phiên bản tối thiểu (tuỳ chọn)**: nếu bản cũ có lỗi nghiêm trọng/bảo mật cần buộc cập nhật, đặt `NEU_MIN_VERSION=X.Y.Z` khi dựng (hoặc `-m X.Y.Z` ở bước 6). Người dùng đang dùng bản thấp hơn sẽ thấy hộp thoại **bắt buộc** cập nhật, không bấm bỏ qua được. Dùng rất hạn chế.
 6. **Đưa lên máy 220** (theo [DEPLOY.md](DEPLOY.md)):

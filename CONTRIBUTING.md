@@ -14,7 +14,7 @@ npm run desktop        # bản Desktop (Electron)
 ## Làm một thay đổi
 
 1. Tạo nhánh từ `main`: `git switch -c ten-viec-ban-lam`.
-2. Sửa mã **kèm kiểm thử** cho phần bạn đổi (xem thư mục `test/` của từng gói).
+2. Sửa mã **kèm kiểm thử** cho phần bạn đổi (xem thư mục `test/` của từng gói), và **ghi vào `CHANGELOG.md`** (mục *Chưa phát hành*: Thêm / Thay đổi / Sửa, viết cho người dùng, tiếng Việt). CI chặn PR đổi `packages/` hoặc `apps/` mà chưa ghi (gắn nhãn `khong-changelog` nếu người dùng không thấy khác biệt).
 3. Chạy trước khi đẩy lên (CI chạy đúng những lệnh này):
 
    | Việc kiểm tra | Lệnh |
@@ -28,9 +28,9 @@ npm run desktop        # bản Desktop (Electron)
 
 ## Khi PR được gộp vào `main`
 
-GitHub Actions (`deploy.yml`) tự chạy lại CI, dựng web, rồi triển khai lên máy chủ 220 và kiểm tra site thật (xem `docs/CICD.md`). Thay đổi chạm vào `deploy/` hoặc `.github/` cần chủ dự án duyệt (CODEOWNERS) vì chúng chạy với quyền cao trên máy chủ.
+GitHub Actions (`deploy.yml`) tự chạy lại CI, dựng web, rồi triển khai lên máy chủ 220 và kiểm tra site thật (xem `docs/CICD.md`). Nếu PR **nâng phiên bản** (`npm run version:bump`), hệ thống còn tự **dựng lại bản Desktop** và đưa lên trang tải để người dùng nhận được "Có bản mới". Thay đổi chạm vào `deploy/` hoặc `.github/` cần chủ dự án duyệt (CODEOWNERS) vì chúng chạy với quyền cao trên máy chủ.
 
-Không tự triển khai: dịch vụ đăng nhập (`deploy/220/auth/`), máy 222, bản Desktop (đóng gói khi gắn tag `v*`, xem `docs/RELEASE-SIGNING.md`).
+Không tự triển khai: dịch vụ đăng nhập (`deploy/220/auth/`) và máy 222 (làm tay).
 
 ## Quy tắc quan trọng
 

@@ -169,6 +169,51 @@ try {
   }
   check("giữ 5 bản mới nhất (+ current/previous được ghim, không bị xoá dù cũ)", Number(ex("ls /opt/neu-agent-deploy/releases | wc -l").out) <= 7 && ex("test -d $(readlink /opt/neu-agent-deploy/current) && test -d $(readlink /opt/neu-agent-deploy/previous)").ok, ex("ls /opt/neu-agent-deploy/releases | wc -l").out);
 
+  // ================================================================ phát hành bản cài Desktop (publish-desktop)
+  const crypto = await import("node:crypto");
+  const mkDesktop = (version, o = {}) => {
+    const dir = fs.mkdtempSync(path.join(tmp, `desk-${version}-`));
+    const names = [`NEU-Agent-${version}-mac-arm64.dmg`, `NEU-Agent-${version}-mac-x64.dmg`, `NEU-Agent-${version}-win-x64.exe`];
+    const files = {};
+    for (const n of names) { const b = crypto.randomBytes(40_000); fs.writeFileSync(path.join(dir, n), b); files[n] = { sha256: crypto.createHash("sha256").update(b).digest("hex"), size: b.length }; }
+    fs.writeFileSync(path.join(dir, "SHA256SUMS.txt"), names.map((n) => `${files[n].sha256}  ${n}`).join("\n") + "\n");
+    fs.writeFileSync(path.join(dir, "latest.json"), JSON.stringify({ version: o.jsonVersion ?? version, released: "2026-10-09", notes: "Thêm\n• thử nghiệm", files: o.files ?? files, signed: { mac: false, win: false } }));
+    fs.writeFileSync(path.join(dir, "HUONG-DAN-CAI-DAT.md"), "# hướng dẫn");
+    fs.writeFileSync(path.join(dir, "BAO-MAT.md"), "# bảo mật");
+    fs.writeFileSync(path.join(dir, "MANIFEST"), "commit=0123456789abcdef0123\nrun=4242\nactor=ci-bot\n");
+    o.mutate?.(dir, files);
+    return dir;
+  };
+  const pubCmd = (dir, h) => { const f = bundle(path.basename(dir) + ".tgz", dir); put(f, "/tmp/d.tgz"); return ex(`/usr/local/sbin/neu-agent-deploy 'publish-desktop ${h ?? sha(f)}' < /tmp/d.tgz`); };
+  const dl = (cmd) => ex(`cd /var/www/neu-agent-dl && ${cmd}`).out;
+  const dlVersion = () => dl("python3 -c \"import json;print(json.load(open('latest.json'))['version'])\"");
+
+  const p1 = pubCmd(mkDesktop("9.1.0"));
+  check("publish-desktop 9.1.0: PUBLISHED, tệp + latest.json + SHA256SUMS có mặt, quyền 644", p1.ok && /PUBLISHED_DESKTOP 9\.1\.0/.test(p1.out) && dlVersion() === "9.1.0" && dl("ls NEU-Agent-9.1.0-* | wc -l") === "3" && dl("stat -c %a latest.json SHA256SUMS.txt NEU-Agent-9.1.0-win-x64.exe | tr '\\n' ' '") === "644 644 644" && dl("sha256sum -c SHA256SUMS.txt >/dev/null && echo OK") === "OK", p1.out.split("\n").slice(-2).join(" | "));
+  const p2 = pubCmd(mkDesktop("9.2.0"));
+  check("publish-desktop 9.2.0: giữ cả 9.1.0 (để quay lui); SHA256SUMS liệt kê cả hai bản", p2.ok && dlVersion() === "9.2.0" && dl("ls NEU-Agent-* | wc -l") === "6" && dl("grep -c 'NEU-Agent-' SHA256SUMS.txt") === "6");
+  const p3 = pubCmd(mkDesktop("9.3.0"));
+  check("publish-desktop 9.3.0: chỉ giữ 2 bản mới nhất (9.1.0 bị dọn)", p3.ok && dlVersion() === "9.3.0" && dl("ls NEU-Agent-* | wc -l") === "6" && dl("ls NEU-Agent-9.1.0-* 2>/dev/null | wc -l") === "0" && dl("sha256sum -c SHA256SUMS.txt >/dev/null && echo OK") === "OK");
+  const keepSums = dl("sha256sum latest.json SHA256SUMS.txt NEU-Agent-9.3.0-mac-arm64.dmg");
+  const rejectDesk = (name, dir, re) => { const r = pubCmd(dir); check(name, !r.ok && re.test(r.out) && dl("sha256sum latest.json SHA256SUMS.txt NEU-Agent-9.3.0-mac-arm64.dmg") === keepSums && dl("ls .tmp.* 2>/dev/null | wc -l") === "0", r.out.split("\n").slice(-2).join(" | ")); };
+  rejectDesk("hạ phiên bản (9.0.0 < 9.3.0) bị từ chối, trang tải không đổi", mkDesktop("9.0.0"), /Không hạ phiên bản/);
+  rejectDesk("tệp cài bị sửa so với mã băm khai trong latest.json bị từ chối", mkDesktop("9.4.0", { mutate: (d) => fs.appendFileSync(path.join(d, "NEU-Agent-9.4.0-win-x64.exe"), "x") }), /không hợp lệ.*(sai kích thước|sai SHA)|SHA256SUMS|sai/);
+  rejectDesk("latest.json khai sai SHA-256 bị từ chối", mkDesktop("9.4.0", { mutate: (d, f) => { const j = JSON.parse(fs.readFileSync(path.join(d, "latest.json"))); Object.values(j.files)[0].sha256 = "0".repeat(64); fs.writeFileSync(path.join(d, "latest.json"), JSON.stringify(j)); } }), /sai SHA-256/);
+  rejectDesk("SHA256SUMS.txt không khớp tệp bị từ chối", mkDesktop("9.4.0", { mutate: (d) => fs.writeFileSync(path.join(d, "SHA256SUMS.txt"), `${"1".repeat(64)}  NEU-Agent-9.4.0-mac-arm64.dmg\n`) }), /SHA256SUMS\.txt không khớp/);
+  rejectDesk("tên tệp ngoài danh sách (evil.sh) bị từ chối", mkDesktop("9.4.0", { mutate: (d) => fs.writeFileSync(path.join(d, "evil.sh"), "id") }), /Tên tệp không được phép: evil\.sh/);
+  rejectDesk("tệp cài của phiên bản KHÁC với latest.json bị từ chối", mkDesktop("9.4.0", { jsonVersion: "9.5.0" }), /tên tệp sai phiên bản/);
+  rejectDesk("gói thiếu latest.json bị từ chối", mkDesktop("9.4.0", { mutate: (d) => fs.rmSync(path.join(d, "latest.json")) }), /Thiếu latest\.json/);
+  rejectDesk("gói có thư mục con bị từ chối", mkDesktop("9.4.0", { mutate: (d) => { fs.mkdirSync(path.join(d, "sub")); fs.writeFileSync(path.join(d, "sub", "x.dmg"), "x"); } }), /chỉ được chứa tệp ở cấp trên cùng/);
+  const dsha = sha(bundle("dd.tgz", mkDesktop("9.4.0")));
+  put(path.join(tmp, "dd.tgz"), "/tmp/d.tgz");
+  check("publish-desktop: mã băm sai bị từ chối; tham số thừa/sai dạng bị từ chối", !ex(`/usr/local/sbin/neu-agent-deploy 'publish-desktop ${"0".repeat(64)}' < /tmp/d.tgz`).ok && /Thừa tham số/.test(ex(`/usr/local/sbin/neu-agent-deploy 'publish-desktop ${dsha} thừa' < /tmp/d.tgz`).out) && /Thừa tham số|Cách dùng/.test(ex(`/usr/local/sbin/neu-agent-deploy 'publish-desktop abc; id' < /tmp/d.tgz`).out) && !/uid=0/.test(ex(`/usr/local/sbin/neu-agent-deploy 'publish-desktop abc; id' < /tmp/d.tgz`).out) && dlVersion() === "9.3.0");
+  check("bản cài Desktop quá lớn bị từ chối (giới hạn đặt nhỏ để thử)", /quá lớn/.test(ex(`NEU_DEPLOY_MAX_DESKTOP_BYTES=1000 /usr/local/sbin/neu-agent-deploy 'publish-desktop ${dsha}' < /tmp/d.tgz`).out) && dlVersion() === "9.3.0");
+  const dep10 = deployCmd(bundle("b10.tgz"));
+  check("triển khai web KHÔNG đụng tới trang tải Desktop (vẫn 9.3.0, mã băm không đổi)", dep10.ok && dl("sha256sum latest.json SHA256SUMS.txt NEU-Agent-9.3.0-mac-arm64.dmg") === keepSums);
+  const stt = ex("/usr/local/sbin/neu-agent-deploy status").out;
+  check("status in phiên bản Desktop đang phát hành và lịch sử có đủ: ai, commit, kết quả (kể cả bị từ chối)", /Desktop đang phát hành: 9\.3\.0/.test(stt) && /\| publish-desktop \| ok +\| Desktop 9\.3\.0 \| commit 0123456789ab \| ci-bot \| run 4242/.test(ex("cat /opt/neu-agent-deploy/history.log").out) && /lịch sử gần nhất/.test(stt) && /REJECT|FAIL/.test(ex("cat /opt/neu-agent-deploy/history.log").out), stt.split("\n").slice(-4).join(" | "));
+  check("lịch sử chỉ root đọc được (quyền 640 root)", ex("stat -c '%a %U' /opt/neu-agent-deploy/history.log").out === "640 root");
+
   // ================================================================ gỡ
   const un = ex("bash /srv/220/ci/setup-ci.sh --uninstall");
   check("setup-ci --uninstall: gỡ người dùng, sudoers, script; giữ các bản đã triển khai", un.ok && !ex("id neu-deploy").ok && !ex("test -e /etc/sudoers.d/neu-agent-ci || test -e /usr/local/sbin/neu-agent-deploy").ok && ex("test -d /opt/neu-agent-deploy/releases").ok);

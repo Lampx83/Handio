@@ -41,28 +41,13 @@ jobs:
       SITE: ${{ vars.DEPLOY_SITE_URL || 'https://ai.neu.edu.vn' }}
     steps:
       - uses: actions/checkout@v4
-      - name: Cấu hình SSH (khoá host được GHIM sẵn, không tin lần đầu)
-        env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_PORT" ] && [ -n "$KEY" ] && [ -n "$KNOWN" ] || { echo "::error::Thiếu cấu hình triển khai (biến DEPLOY_HOST, DEPLOY_PORT; bí mật DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS). Xem docs/CICD.md."; exit 1; }
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/deploy_key; chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; chmod 644 ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<EOF
-          Host neu220
-            HostName $DEPLOY_HOST
-            Port $DEPLOY_PORT
-            User $DEPLOY_USER
-            IdentityFile ~/.ssh/deploy_key
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-            UserKnownHostsFile ~/.ssh/known_hosts
-            ServerAliveInterval 20
-            ConnectTimeout 20
-          EOF
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          host: ${{ vars.DEPLOY_HOST }}
+          port: ${{ vars.DEPLOY_PORT }}
+          user: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
 
       - name: Quay lại bản trước (chỉ khi chọn rollback)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.action == 'rollback' }}
@@ -101,12 +86,59 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/"); echo "/agent/ → $code"; [ "$code" = 302 ] || { echo "::error::/agent/ phải chuyển tới đăng nhập (302), nhận $code"; exit 1; }
           api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/vllm/v1/models"); echo "API chưa đăng nhập → $api"; [ "$api" = 401 ] || { echo "::error::API chưa đăng nhập phải trả 401, nhận $api"; exit 1; }
           sig=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/oauth2/sign_in"); echo "trang đăng nhập → $sig"; [ "$sig" = 200 ] || { echo "::error::trang đăng nhập không phục vụ được"; exit 1; }
+      - name: Lịch sử triển khai trên máy chủ (ai, lúc nào, commit nào, kết quả)
+        if: always()
+        run: ssh neu220 status < /dev/null | tee status.log || true
       - name: Tóm tắt
         if: always()
         run: |
           {
             echo "### Triển khai ${{ github.sha }}"
+            echo "**Phiên bản:** $(node -p "require('./package.json').version" 2>/dev/null || echo '?') — người thực hiện: ${{ github.actor }}"
+            echo
+            echo '#### Nhật ký máy chủ'
             echo '```'
             tail -n 25 deploy.log 2>/dev/null || echo "(không có nhật ký)"
             echo '```'
+            echo '#### Lịch sử gần nhất trên máy chủ'
+            echo '```'
+            tail -n 14 status.log 2>/dev/null || echo "(không lấy được)"
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Phiên bản trong package.json CHƯA được phát hành (chưa có tag vX.Y.Z) → dựng lại bản Desktop và đưa lên trang tải.
+  # (Bản Desktop chứa sẵn giao diện, nên thay đổi ở lõi/giao diện chỉ đến tay người dùng Desktop khi có phiên bản mới.)
+  release-check:
+    name: Có phiên bản Desktop mới cần phát hành?
+    needs: deploy
+    if: ${{ needs.deploy.result == 'success' && !(github.event_name == 'workflow_dispatch' && inputs.action == 'rollback') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      needed: ${{ steps.chk.outputs.needed }}
+      version: ${{ steps.chk.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: chk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$v" >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"; echo "Phiên bản $v đã có tag v$v: không dựng Desktop mới."
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"; echo "Phiên bản $v chưa phát hành: sẽ dựng và phát hành bản Desktop."
+          fi
+
+  desktop:
+    name: Dựng và phát hành bản Desktop
+    needs: release-check
+    if: ${{ needs.release-check.outputs.needed == 'true' }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release.yml
+    secrets: inherit

@@ -1,0 +1,49 @@
+name: Thiết lập SSH tới máy 220
+description: Ghi khoá riêng của CI và khoá host ĐƯỢC GHIM (không tin lần đầu), tạo bí danh `neu220`. Khoá chỉ chạy được lệnh neu-agent-deploy (xem docs/CICD.md).
+inputs:
+  key:
+    description: Khoá riêng (secret DEPLOY_SSH_KEY)
+    required: true
+  known_hosts:
+    description: Khoá host đã tin cậy (secret DEPLOY_KNOWN_HOSTS)
+    required: true
+  host:
+    description: Địa chỉ máy chủ (biến DEPLOY_HOST)
+    required: true
+  port:
+    description: Cổng SSH (biến DEPLOY_PORT)
+    required: true
+  user:
+    description: Người dùng triển khai
+    default: neu-deploy
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        KEY: ${{ inputs.key }}
+        KNOWN: ${{ inputs.known_hosts }}
+        HOST: ${{ inputs.host }}
+        PORT: ${{ inputs.port }}
+        USER_NAME: ${{ inputs.user }}
+      run: |
+        set -euo pipefail
+        if [ -z "$HOST" ] || [ -z "$PORT" ] || [ -z "$KEY" ] || [ -z "$KNOWN" ]; then
+          echo "::error::Thiếu cấu hình triển khai (biến DEPLOY_HOST, DEPLOY_PORT; bí mật DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS). Xem docs/CICD.md."; exit 1
+        fi
+        case "$HOST$PORT$USER_NAME" in *[!A-Za-z0-9._:-]*) echo "::error::Địa chỉ/cổng/người dùng có ký tự lạ"; exit 1;; esac
+        install -d -m 700 ~/.ssh
+        printf '%s\n' "$KEY" > ~/.ssh/deploy_key; chmod 600 ~/.ssh/deploy_key
+        printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; chmod 644 ~/.ssh/known_hosts
+        {
+          echo "Host neu220"
+          echo "  HostName $HOST"
+          echo "  Port $PORT"
+          echo "  User $USER_NAME"
+          echo "  IdentityFile ~/.ssh/deploy_key"
+          echo "  IdentitiesOnly yes"
+          echo "  StrictHostKeyChecking yes"
+          echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+          echo "  ServerAliveInterval 20"
+          echo "  ConnectTimeout 20"
+        } > ~/.ssh/config

@@ -16,29 +16,19 @@ jobs:
       DEPLOY_USER: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
       SITE: ${{ vars.DEPLOY_SITE_URL || 'https://ai.neu.edu.vn' }}
     steps:
-      - name: Cấu hình SSH (khoá host được ghim)
-        env:
-          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_PORT" ] && [ -n "$KEY" ] && [ -n "$KNOWN" ] || { echo "::error::Thiếu cấu hình triển khai (xem docs/CICD.md)."; exit 1; }
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/deploy_key; chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts; chmod 644 ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<EOC
-          Host neu220
-            HostName $DEPLOY_HOST
-            Port $DEPLOY_PORT
-            User $DEPLOY_USER
-            IdentityFile ~/.ssh/deploy_key
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-            UserKnownHostsFile ~/.ssh/known_hosts
-            ConnectTimeout 20
-          EOC
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          host: ${{ vars.DEPLOY_HOST }}
+          port: ${{ vars.DEPLOY_PORT }}
+          user: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
       - name: Hỏi máy chủ đang chạy bản nào
-        run: ssh neu220 status < /dev/null
+        run: |
+          ssh neu220 status < /dev/null | tee status.log
+          # script triển khai trên máy chủ phải đủ mới để nhận bản cài Desktop; cũ thì chạy lại ci/setup-ci.sh (sudo, một lần)
+          grep -q "Desktop đang phát hành" status.log || { echo "::error::Script neu-agent-deploy trên máy chủ đã cũ (thiếu publish-desktop). Chạy lại: sudo ./ci/setup-ci.sh --pubkey <khoá> (xem docs/CICD.md)."; exit 1; }
       - name: Kiểm tra site thật
         run: |
           hz=$(curl -s --max-time 15 "$SITE/agent/healthz" || true); echo "healthz: $hz"

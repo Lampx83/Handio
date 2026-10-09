@@ -13,9 +13,26 @@
 | Vào `main` | `deploy.yml` | Chạy lại CI → dựng web → đóng gói → gửi qua SSH tới 220 → `install.sh` (và `install-diag.sh` nếu phần chẩn đoán/tài khoản đổi) → kiểm tra `healthz`, `/agent/` (302), API chưa đăng nhập (401), trang đăng nhập (200). Hai lần triển khai không bao giờ chạy cùng lúc. |
 | Chạy tay (Actions → Deploy check) | `deploy-check.yml` | Chỉ thử kết nối GitHub → máy 220, không triển khai gì. |
 | Chạy tay (Actions → Deploy → Run workflow) | `deploy.yml` | Chọn `deploy` (triển khai lại `main`) hoặc `rollback` (quay lại bản trước). |
-| Gắn tag `v*` | `release.yml` | Dựng + ký bản Desktop (xem `docs/RELEASE-SIGNING.md`). |
+| Vào `main` mà phiên bản trong `package.json` **chưa có tag** | `deploy.yml` → `release.yml` | **Tự dựng lại bản Desktop** (macOS chip Apple + Intel, Windows), tạo `latest.json` (ghi chú lấy từ `CHANGELOG.md`) + mã băm, **đưa lên máy chủ**, tạo trang phát hành GitHub kèm nhật ký và gắn tag `vX.Y.Z`. Người dùng Desktop thấy "Có bản mới" trong vòng 6 giờ và tải được từ trang tải. |
+| Gắn tag `v*` bằng tay | `release.yml` | Giống trên (quy trình phát hành tay, `docs/RELEASE.md`). Chạy tay (Actions → Release) với `publish_to_server` bỏ chọn = chỉ dựng thử. |
+| Pull request đổi `packages/` hoặc `apps/` | `ci.yml` (job *Nhật ký thay đổi*) | **Bắt buộc** `CHANGELOG.md` có thay đổi; không bắt buộc thì gắn nhãn `khong-changelog`. |
 
-**Không tự triển khai** (làm tay, hiếm khi đổi): dịch vụ đăng nhập (`deploy/220/auth/install-auth.sh`, cần mã bí mật Entra), máy 222 (`deploy/222`), bản Desktop.
+**Không tự triển khai** (làm tay, hiếm khi đổi): dịch vụ đăng nhập (`deploy/220/auth/install-auth.sh`, cần mã bí mật Entra), máy 222 (`deploy/222`).
+
+### Cách cho người dùng Desktop có bản mới nhất
+
+Bản Desktop **chứa sẵn giao diện và lõi**, nên một thay đổi chỉ đến tay họ khi có **phiên bản mới**. Quy trình:
+1. Làm xong, ghi vào mục **[Chưa phát hành]** của `CHANGELOG.md` (CI bắt buộc với PR).
+2. Khi muốn phát hành: `npm run version:bump -- <patch|minor|major>` (chuyển mục trên thành mục phiên bản mới), commit, gộp vào `main`.
+3. Tự động: web lên máy chủ → `release-check` thấy `vX.Y.Z` chưa có tag → dựng Desktop trên GitHub (≈ 15–25 phút) → `publish-desktop` trên máy chủ kiểm mã băm từng tệp, **không cho hạ phiên bản**, chép tệp cài trước và `latest.json` sau cùng → GitHub Release + tag.
+4. Ứng dụng đang chạy kiểm tra `latest.json` mỗi 6 giờ, hiện "Có bản mới X.Y.Z" kèm ghi chú; người dùng bấm **Tải về** (kiểm SHA-256) rồi mở tệp để cài đè. **Không cập nhật ngầm** (bản chưa ký số không thể làm an toàn, xem `docs/RELEASE.md`). Muốn buộc người dùng cập nhật: `NEU_MIN_VERSION`.
+5. Phiên bản không đổi thì **không** dựng lại Desktop (tiết kiệm phút chạy), dù web vẫn tự lên máy chủ.
+
+Bản chưa có chứng chỉ ký sẽ được macOS/Windows cảnh báo lần đầu mở (trang tải nói rõ). Có chứng chỉ rồi: đặt biến repo `RELEASE_REQUIRE_SIGNED=true` để bản không ký bị chặn (`docs/RELEASE-SIGNING.md`).
+
+### Nhật ký (mọi đợt nâng cấp đều có dấu vết)
+- **Nhật ký thay đổi cho người dùng:** `CHANGELOG.md` → hiện trong ứng dụng và trang công khai, vào `latest.json` (hộp "Có bản mới") và trang phát hành GitHub.
+- **Nhật ký triển khai trên máy chủ:** `/opt/neu-agent-deploy/history.log` (root, 0640): mỗi dòng *lúc nào | việc | kết quả | bản | commit | người đẩy | số lần chạy*, kể cả lần bị từ chối hoặc thất bại. Xem 10 dòng gần nhất: `sudo /usr/local/sbin/neu-agent-deploy status`; mục *Tóm tắt* của mỗi lần chạy Deploy trên GitHub cũng in nhật ký máy chủ và lịch sử.
 
 ## 2. Bảo mật: đọc kỹ trước khi bật
 
@@ -55,6 +72,8 @@ shred -u ./deploy_key 2>/dev/null || rm -P ./deploy_key             # xoá khoá
 1. Kiểm tra kết nối trước, không triển khai gì: Actions → **Deploy check** → Run workflow (SSH tới máy chủ, in bản đang chạy, thử `healthz`). Báo lỗi ở bước nào thì lỗi ở đó (tường lửa chặn IP GitHub, sai khoá, sai khoá host).
 2. `gh variable set DEPLOY_ENABLED --body true` → từ đó mỗi lần vào `main` đều tự triển khai.
 3. Làm các bước bảo vệ nhánh ở mục 2.
+
+> **Khi `deploy/220/ci/neu-agent-deploy` đổi** (hiếm), chạy lại `setup-ci.sh` trên máy chủ (cần sudo, làm tay): CD **cố ý không tự cập nhật** chính script đang gác cổng. Workflow *Deploy check* báo rõ nếu script trên máy chủ đã cũ.
 
 ## 4. Vận hành
 

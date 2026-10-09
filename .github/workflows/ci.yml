@@ -28,6 +28,29 @@ jobs:
       - name: Dựng bản web (bản phát hành)
         run: NODE_ENV=production npm run build -w @neu/agent-web
 
+  changelog:
+    name: Nhật ký thay đổi (PR đổi mã người dùng thấy phải ghi CHANGELOG.md)
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Kiểm tra
+        env:
+          BASE: origin/${{ github.base_ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          echo "$changed"
+          # mã mà người dùng thấy (giao diện, lõi, ứng dụng), không tính thư mục kiểm thử
+          if echo "$changed" | grep -E '^(packages|apps)/' | grep -vE '/(test|tests)/|\.test\.' | grep -q .; then
+            if echo ",$LABELS," | grep -q ',khong-changelog,'; then echo "Có nhãn khong-changelog: bỏ qua."; exit 0; fi
+            echo "$changed" | grep -qx 'CHANGELOG.md' || { echo "::error::PR đổi mã trong packages/ hoặc apps/ nhưng CHANGELOG.md chưa ghi gì. Ghi vào mục [Chưa phát hành] (Thêm/Thay đổi/Sửa), hoặc gắn nhãn khong-changelog nếu người dùng không thấy khác biệt."; exit 1; }
+          fi
+          echo "Đạt."
+
   python:
     name: "Máy chủ (Python — chẩn đoán, quản lý tài khoản)"
     runs-on: ubuntu-24.04

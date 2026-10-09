@@ -1,15 +1,25 @@
-# Phát hành NEU Agent Desktop: dựng, KÝ SỐ, notarize, kiểm tra chữ ký, tạo mã băm + bằng chứng nguồn gốc (provenance).
-# Kích hoạt: tạo tag `v*` hoặc chạy tay (Actions → Release → Run workflow).
-# Bí mật (Settings → Secrets and variables → Actions): xem docs/RELEASE-SIGNING.md. Thiếu bí mật thì bản dựng KHÔNG ký (và `require_signed` sẽ làm job thất bại).
-# CHƯA được chạy thử trên GitHub: lần chạy đầu cần theo dõi và chỉnh theo thông báo lỗi.
+# Phát hành NEU Agent Desktop: dựng (mac arm64/x64, Windows), KÝ SỐ nếu có chứng chỉ, kiểm tra chữ ký, tạo mã băm + latest.json
+# (ghi chú lấy từ CHANGELOG.md), ĐƯA LÊN MÁY CHỦ để người dùng thấy "Có bản mới" và tải được, và tạo trang phát hành trên GitHub.
+#
+# Kích hoạt:
+#   - TỰ ĐỘNG: deploy.yml gọi workflow này sau khi triển khai web thành công mà phiên bản trong package.json CHƯA có tag (workflow_call);
+#   - đẩy tag `v*` (quy trình phát hành tay: docs/RELEASE.md);
+#   - chạy tay (Actions → Release → Run workflow; bỏ chọn "publish_to_server" để chỉ dựng thử).
+# Chưa có chứng chỉ Apple Developer ID / Windows: bản dựng KHÔNG ký (người dùng thấy cảnh báo lần đầu mở; trang tải nói rõ). Khi đã có chứng chỉ,
+# đặt biến repo RELEASE_REQUIRE_SIGNED=true để bản không ký bị CHẶN (xem docs/RELEASE-SIGNING.md).
 name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_call:
   workflow_dispatch:
     inputs:
       require_signed:
-        description: "Thất bại nếu không ký được (nên bật khi phát hành thật)"
+        description: "Thất bại nếu không ký được (bật khi đã có chứng chỉ)"
+        type: boolean
+        default: false
+      publish_to_server:
+        description: "Đưa lên máy chủ 220 (bỏ chọn = chỉ dựng thử, tạo tệp tải về từ Actions)"
         type: boolean
         default: true
 permissions:
@@ -20,7 +30,7 @@ env:
   NEU_DEFAULT_BASE_URL: https://ai.neu.edu.vn/agent/vllm/v1
   NEU_AUTH_TENANT: ${{ vars.NEU_AUTH_TENANT }}
   NEU_AUTH_CLIENT_ID: ${{ vars.NEU_AUTH_CLIENT_ID }}
-  NEU_REQUIRE_SIGNED: ${{ (github.event_name == 'push' || inputs.require_signed) && '1' || '0' }}
+  NEU_REQUIRE_SIGNED: ${{ (vars.RELEASE_REQUIRE_SIGNED == 'true' || inputs.require_signed == true) && '1' || '0' }}
 
 jobs:
   test:
@@ -79,16 +89,98 @@ jobs:
         with: { name: win, path: "apps/desktop/release/*.exe\napps/desktop/release/*.zip\napps/desktop/release/signing.json" }
 
   publish:
+    name: Gom, phát hành lên máy chủ và GitHub
     needs: [mac, win]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: desktop-publish        # khác nhóm với deploy-production (nhóm của workflow gọi) để không tự chặn nhau
+      cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
       - uses: actions/download-artifact@v4
         with: { path: dist }
-      - name: Mã băm
+      - name: Gom bản cài + latest.json (ghi chú từ CHANGELOG.md)
+        id: pack
         run: |
-          mkdir out && find dist -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' \) -exec cp {} out/ \;
-          cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+          set -euo pipefail
+          VER=$(node -p "require('./package.json').version")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          mkdir -p apps/desktop/release out pub
+          cp dist/mac/*.dmg dist/mac/*.zip dist/win/*.exe dist/win/*.zip apps/desktop/release/
+          # signing.json của hai máy dựng gộp thành một (trang tải dựa vào đây để nói đúng: đã ký hay chưa)
+          node -e 'const fs=require("fs");const m={};for(const f of ["dist/mac/signing.json","dist/win/signing.json"]){try{Object.assign(m,JSON.parse(fs.readFileSync(f,"utf8")))}catch{}}fs.writeFileSync("apps/desktop/release/signing.json",JSON.stringify(m,null,2))'
+          (cd apps/desktop && node scripts/release-info.mjs)
+          cd apps/desktop/release
+          cp NEU-Agent-"$VER"-*.dmg NEU-Agent-"$VER"-*.exe latest.json HUONG-DAN-CAI-DAT.md BAO-MAT.md ../../../pub/
+          cp NEU-Agent-"$VER"-*.dmg NEU-Agent-"$VER"-*.exe NEU-Agent-"$VER"-*.zip SBOM.cdx.json ../../../out/ 2>/dev/null || true
+          cd ../../../pub
+          # trang tải chỉ cần .dmg/.exe: latest.json chỉ khai đúng các tệp đó
+          python3 - <<'PY'
+          import json
+          j = json.load(open("latest.json", encoding="utf-8"))
+          j["files"] = {k: v for k, v in j["files"].items() if k.endswith((".dmg", ".exe"))}
+          json.dump(j, open("latest.json", "w", encoding="utf-8"), indent=2, ensure_ascii=False)
+          PY
+          sha256sum NEU-Agent-* > SHA256SUMS.txt
+          printf 'commit=%s\nrun=%s\nactor=%s\nversion=%s\ntime=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_ACTOR" "$VER" "$(date -u +%FT%TZ)" > MANIFEST
+          cat SHA256SUMS.txt; echo; python3 -c 'import json;j=json.load(open("latest.json"));print("signed:",j.get("signed"),"| ghi chú:",len(j.get("notes","")),"ký tự")'
+          # nhật ký thay đổi của phiên bản này, dạng Markdown, cho trang phát hành GitHub
+          cd ../
+          node -e 'import("./scripts/version.mjs").then(m=>{const fs=require("fs");const r=m.parseChangelog(fs.readFileSync("CHANGELOG.md","utf8")).releases.find(x=>x.version===process.argv[1]);fs.writeFileSync("release-notes.md",(r?r.body:"(chưa ghi nhật ký)")+"\n\n---\nTải về và cách kiểm tra mã băm: https://ai.neu.edu.vn/agent/ (nút Tải ứng dụng). Bản chưa ký số: macOS/Windows cảnh báo lần đầu mở, xem docs/RELEASE-SIGNING.md.")})' "$VER"
+          sed -n 1,12p release-notes.md
       - uses: actions/attest-build-provenance@v2
-        with: { subject-path: "out/*" }                        # bằng chứng: tệp này do workflow này dựng từ commit này
-      - uses: softprops/action-gh-release@v2
-        with: { files: "out/*", draft: true }
+        continue-on-error: true                        # chỉ có khi repo công khai hoặc gói trả phí; thiếu thì bỏ qua
+        with: { subject-path: "pub/NEU-Agent-*" }      # bằng chứng: tệp này do workflow này dựng từ commit này
+      - name: Tệp dựng (tải từ Actions nếu chỉ dựng thử)
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ steps.pack.outputs.version }}
+          path: pub/
+          retention-days: 30
+
+      - name: Thiết lập SSH
+        if: ${{ inputs.publish_to_server != false && vars.DEPLOY_ENABLED == 'true' }}
+        uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          host: ${{ vars.DEPLOY_HOST }}
+          port: ${{ vars.DEPLOY_PORT }}
+          user: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
+      - name: Đưa lên máy chủ 220 (người dùng thấy "Có bản mới" và tải được)
+        id: server
+        if: ${{ inputs.publish_to_server != false && vars.DEPLOY_ENABLED == 'true' }}
+        run: |
+          set -euo pipefail
+          tar -C pub --owner=0 --group=0 --numeric-owner -czf desktop.tgz .
+          SHA=$(sha256sum desktop.tgz | cut -d' ' -f1)
+          echo "Gói bản cài: $(du -h desktop.tgz | cut -f1), SHA-256 $SHA"
+          # shellcheck disable=SC2029  # cố ý: $SHA mở rộng phía máy khách, máy chủ nhận đúng "publish-desktop <sha>"
+          ssh neu220 "publish-desktop $SHA" < desktop.tgz | tee publish.log
+          grep -q "^PUBLISHED_DESKTOP " publish.log
+      - name: Trang phát hành GitHub (kèm nhật ký thay đổi)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.pack.outputs.version }}
+        run: |
+          set -euo pipefail
+          # chỉ tạo khi máy chủ đã nhận (hoặc chạy thử không đưa lên máy chủ thì tạo bản nháp)
+          draft=""; [ "${{ steps.server.outcome }}" = "success" ] || draft="--draft"
+          if gh release view "v$VER" >/dev/null 2>&1; then
+            gh release upload "v$VER" out/* --clobber
+            gh release edit "v$VER" --notes-file release-notes.md
+          else
+            gh release create "v$VER" out/* --target "$GITHUB_SHA" --title "NEU Agent $VER" --notes-file release-notes.md $draft
+          fi
+      - name: Tóm tắt
+        if: always()
+        run: |
+          {
+            echo "### Phát hành Desktop ${{ steps.pack.outputs.version }}"
+            echo "Đưa lên máy chủ: **${{ steps.server.outcome || 'bỏ qua' }}**"
+            echo '```'; cat pub/SHA256SUMS.txt 2>/dev/null; echo '```'
+            echo '```'; tail -n 5 publish.log 2>/dev/null || true; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
