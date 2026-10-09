@@ -152,6 +152,8 @@ class Store:
         cols = {r[1] for r in self.db.execute("PRAGMA table_info(usage)")}
         if "cached" not in cols:  # nâng cấp CSDL cũ (chưa có cột token bộ nhớ đệm)
             self.db.execute("ALTER TABLE usage ADD COLUMN cached INTEGER NOT NULL DEFAULT 0")
+        if "extra" not in cols:  # phần token quản trị viên cấp thêm đã nằm trong `lim` ở lần ghi gần nhất (để trang quản trị tính lại hạn mức)
+            self.db.execute("ALTER TABLE usage ADD COLUMN extra INTEGER NOT NULL DEFAULT 0")
         self.lock = threading.Lock()
         self.last_prune = 0
 
@@ -160,19 +162,19 @@ class Store:
             r = self.db.execute("SELECT tokens FROM usage WHERE day=? AND uid=?", (day, uid)).fetchone()
         return r[0] if r else 0
 
-    def add(self, day, uid, tier, lim, prompt, completion, estimated=False, cached=0):
+    def add(self, day, uid, tier, lim, prompt, completion, estimated=False, cached=0, extra=0):
         with self.lock:
             self.db.execute(
-                "INSERT INTO usage(day,uid,tier,lim,tokens,prompt,completion,requests,estimated,cached) VALUES(?,?,?,?,?,?,?,1,?,?) "
+                "INSERT INTO usage(day,uid,tier,lim,tokens,prompt,completion,requests,estimated,cached,extra) VALUES(?,?,?,?,?,?,?,1,?,?,?) "
                 "ON CONFLICT(day,uid) DO UPDATE SET tier=excluded.tier, lim=excluded.lim, tokens=tokens+excluded.tokens, prompt=prompt+excluded.prompt, "
-                "completion=completion+excluded.completion, requests=requests+1, estimated=estimated+excluded.estimated, cached=cached+excluded.cached",
-                (day, uid, tier, -1 if lim is None else lim, prompt + completion, prompt, completion, 1 if estimated else 0, cached))
+                "completion=completion+excluded.completion, requests=requests+1, estimated=estimated+excluded.estimated, cached=cached+excluded.cached, extra=excluded.extra",
+                (day, uid, tier, -1 if lim is None else lim, prompt + completion, prompt, completion, 1 if estimated else 0, cached, extra))
 
-    def block(self, day, uid, tier, lim):
+    def block(self, day, uid, tier, lim, extra=0):
         with self.lock:
             self.db.execute(
-                "INSERT INTO usage(day,uid,tier,lim,blocked) VALUES(?,?,?,?,1) ON CONFLICT(day,uid) DO UPDATE SET blocked=blocked+1, tier=excluded.tier, lim=excluded.lim",
-                (day, uid, tier, -1 if lim is None else lim))
+                "INSERT INTO usage(day,uid,tier,lim,blocked,extra) VALUES(?,?,?,?,1,?) ON CONFLICT(day,uid) DO UPDATE SET blocked=blocked+1, tier=excluded.tier, lim=excluded.lim, extra=excluded.extra",
+                (day, uid, tier, -1 if lim is None else lim, extra))
 
     def close(self):
         with self.lock:
@@ -187,9 +189,50 @@ class Store:
             self.db.execute("DELETE FROM usage WHERE day < ?", (cutoff,))
 
 
+class Grants:
+    """Token CẤP THÊM CHO HÔM NAY (quản trị viên bấm ở trang quản trị `/admin/quota`).
+
+    Tệp JSON do trang quản trị (collector) ghi nguyên tử, cổng chỉ ĐỌC: {"days": {"YYYY-MM-DD": {"<uid 16 hex>": số token}}, "audit": [...]}.
+    Phần cấp thêm chỉ có hiệu lực đúng ngày ghi (làm mới 00:00 giờ VN cùng hạn mức); tệp hỏng/thiếu = không có cấp thêm (an toàn)."""
+
+    MAX_EXTRA = 1_000_000_000
+    UID_RE = re.compile(r"^[0-9a-f]{16}$")
+
+    def __init__(self, path):
+        self.path = path
+        self._m = None
+        self._days = {}
+
+    def _load(self):
+        try:
+            m = os.path.getmtime(self.path)
+        except OSError:
+            self._m, self._days = None, {}
+            return
+        if m == self._m:
+            return
+        days = {}
+        try:
+            with open(self.path, encoding="utf-8") as f:
+                d = json.load(f)
+            for day, users in (d.get("days") or {}).items():
+                if isinstance(day, str) and isinstance(users, dict):
+                    days[day] = {u: int(v) for u, v in users.items() if self.UID_RE.match(str(u)) and isinstance(v, int) and not isinstance(v, bool) and 0 < v <= self.MAX_EXTRA}
+        except (OSError, ValueError, AttributeError):
+            days = {}
+        self._m, self._days = m, days
+
+    def extra(self, day, uid):
+        if not self.path:
+            return 0
+        self._load()
+        return self._days.get(day, {}).get(uid, 0)
+
+
 class Config:
-    def __init__(self, secret, store, config_path, admins_path, upstream, now=time.time):
+    def __init__(self, secret, store, config_path, admins_path, upstream, now=time.time, grants_path=""):
         self.secret, self.store, self.config_path, self.admins_path, self.upstream, self.now = secret, store, config_path, admins_path, upstream, now
+        self.grants = Grants(grants_path)
         self._cfg = (None, None)
         self.active = {}          # uid -> số yêu cầu đang chạy
         self.active_lock = threading.Lock()
@@ -212,6 +255,10 @@ def quota_info(c, ident, own_key=False):
     cfg, now = c.cfg(), int(c.now())
     uid = pseudonym(c.secret, ident)
     limit, tier = limit_for(cfg, ident, c.admins())
+    extra = 0
+    if limit is not None:
+        extra = c.grants.extra(vn_day(now), uid)   # token quản trị viên cấp thêm cho hôm nay
+        limit += extra
     if own_key:
         limit = None
     used = c.store.used(vn_day(now), uid)
@@ -219,7 +266,7 @@ def quota_info(c, ident, own_key=False):
     return {
         "uid": uid, "tier": tier, "mode": cfg["mode"], "limit": 0 if limit is None else limit, "unlimited": limit is None, "used": used,
         "remaining": None if limit is None else max(limit - used, 0), "pct": None if limit is None else round(100.0 * used / limit, 1) if limit else 100.0,
-        "state": state, "grace_pct": cfg["grace_pct"], "warn_pct": cfg["warn_pct"], "reset_at": next_reset(now), "own_key": own_key,
+        "state": state, "extra": extra, "grace_pct": cfg["grace_pct"], "warn_pct": cfg["warn_pct"], "reset_at": next_reset(now), "own_key": own_key,
     }
 
 
@@ -377,7 +424,7 @@ class Handler(BaseHTTPRequestHandler):
             c.active[uid] = cur + 1
         try:
             if q["state"] == "exceeded" and cfg["mode"] == "enforce":
-                c.store.block(day, uid, q["tier"], limit)
+                c.store.block(day, uid, q["tier"], limit, q["extra"])
                 return self._json(402, {
                     "error": "quota_exceeded",
                     "message": "Bạn đã dùng hết hạn mức token hôm nay (%s token). Hạn mức sẽ làm mới lúc 00:00 ngày mai." % format(q["limit"], ",").replace(",", "."),
@@ -448,7 +495,7 @@ class Handler(BaseHTTPRequestHandler):
         est = False
         if t is None:  # không có usage (ngắt giữa chừng hoặc mô hình không trả): ước lượng từ kích thước, đánh dấu
             t, est = (len(raw) // 3, sniff.out_chars // 3), True
-        c.store.add(day, uid, q["tier"], limit, t[0], t[1], est, 0 if est else cached_of(sniff.usage))
+        c.store.add(day, uid, q["tier"], limit, t[0], t[1], est, 0 if est else cached_of(sniff.usage), q["extra"])
 
 
 def make_server(ctx, host="127.0.0.1", port=4191):
@@ -480,6 +527,7 @@ def main():
         config_path=os.environ.get("NEU_QUOTA_CONFIG") or os.path.join(cred, "quota-config"),
         admins_path=os.environ.get("NEU_QUOTA_ADMINS") or os.path.join(cred, "admins"),
         upstream=(up[0], int(up[1])),
+        grants_path=os.environ.get("NEU_QUOTA_GRANTS", "/var/lib/neu-agent/quota/grants.json"),
     )
     srv = make_server(ctx, os.environ.get("NEU_QUOTA_BIND", "127.0.0.1"), int(os.environ.get("NEU_QUOTA_PORT", "4191")))
     cfg = ctx.cfg()

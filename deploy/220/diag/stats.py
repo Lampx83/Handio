@@ -470,7 +470,7 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
     o = ['<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị NEU Agent</title><style>%s</style></head><body><main>' % CSS]
     o.append('<h1>Quản trị NEU Agent</h1><p class="sub">Cập nhật %s (giờ Việt Nam), tự làm mới mỗi 10 phút. Người dùng chỉ hiện dưới <b>mã giả danh</b>; không có email hay nội dung hội thoại.</p>' % _e(S["generated"]))
     o.append('<nav class="top"><b>NEU Agent</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a><a href="#he-thong">Hệ thống</a>'
-             '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="accounts">Tài khoản</a><a href="data.html">Dữ liệu &amp; CSV</a><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a></nav>' % hs)
+             '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="accounts">Tài khoản</a><a href="quota">Hạn mức</a><a href="data.html">Dữ liệu &amp; CSV</a><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a></nav>' % hs)
 
     # ---- tổng quan
     o.append('<h2 id="tong-quan">Tổng quan</h2>')
@@ -583,6 +583,7 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
         o.append("<h3>Người dùng đang dùng nhiều hạn mức hôm nay <small>(từ 50% trở lên; mã giả danh)</small></h3>")
         o.append(table(["Mã", "Bậc", "Token", "Hạn mức", "Đã dùng", "Yêu cầu", "Bị chặn"], [[u["id"], u["tier"], format(u["tokens"], ",").replace(",", "."), "không giới hạn" if u["limit"] is None else format(u["limit"], ",").replace(",", "."),
                                                                                               "—" if u["pct"] is None else "%s%%" % u["pct"], u["requests"], u["blocked"]] for u in hot] or [["—", "", "", "", "", "", ""]]))
+        o.append('<p class="note"><a href="quota">Xem ai đã hết hạn mức và cấp thêm cho hôm nay →</a></p>')
         o.append('<p class="note">Đổi hạn mức trên máy 220: <code>sudo ~/neu-agent-220/quota/quota.sh show | mode | tier | set</code>. Mặc định sinh viên 5 triệu, giảng viên 10 triệu token/ngày; vượt thêm 10%% để hoàn tất việc đang làm. Tra mã ứng với ai: <code>quota.sh uid &lt;email&gt;</code>.</p>')
 
     # ---- người dùng

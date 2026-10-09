@@ -20,7 +20,7 @@ RestartSec=3
 # cô lập như dịch vụ đăng nhập: không quyền ghi ngoài thư mục dữ liệu, không quyền đặc biệt, chỉ nói chuyện qua loopback
 NoNewPrivileges=yes
 ProtectSystem=strict
-ReadWritePaths=/var/lib/neu-agent/diag
+ReadWritePaths=/var/lib/neu-agent/diag -/var/lib/neu-agent/quota
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

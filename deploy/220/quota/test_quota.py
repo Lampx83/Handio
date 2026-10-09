@@ -87,7 +87,8 @@ class GatewayCase(unittest.TestCase):
         self.now = [T0]
         self.store = Q.Store(self.db_path)
         self.addCleanup(self.store.close)
-        self.ctx = Q.Config(SECRET, self.store, self.cfg_path, self.admins_path, ("127.0.0.1", self.up.port), now=lambda: self.now[0])
+        self.grants_path = os.path.join(d, "grants.json")
+        self.ctx = Q.Config(SECRET, self.store, self.cfg_path, self.admins_path, ("127.0.0.1", self.up.port), now=lambda: self.now[0], grants_path=self.grants_path)
         self.srv = Q.make_server(self.ctx, "127.0.0.1", 0)
         self.port = self.srv.server_address[1]
         threading.Thread(target=lambda: self.srv.serve_forever(poll_interval=0.02), daemon=True).start()
@@ -239,6 +240,47 @@ class FlowTests(GatewayCase):
         self.assertEqual(h["x-user-email"], SV)
         self.assertNotIn("cookie", h)
         self.assertNotIn("authorization", h)
+
+    def write_grants(self, days):
+        with open(self.grants_path, "w") as f:
+            json.dump({"days": days, "audit": []}, f)
+        self._gm = getattr(self, "_gm", 1_700_000_000) + 10   # mtime tăng dần để cổng nạp lại tệp
+        os.utime(self.grants_path, (self._gm, self._gm))
+
+    def test_admin_grant_unblocks_today_and_raises_limit(self):
+        uid, day = self.uid(SV), Q.vn_day(T0)
+        self.store.add(day, uid, "student", 1_000_000, 1_100_000, 0)                       # đã bị chặn
+        self.assertEqual(self.post()[0], 402)
+        self.write_grants({day: {uid: 500_000}})                                            # quản trị viên cấp thêm 500k
+        st, _, h = self.post()
+        self.assertEqual(st, 200)
+        self.assertEqual((h["x-quota-limit"], h["x-quota-state"]), ("1500000", "ok"))        # 1,1 triệu / 1,5 triệu
+        self.assertEqual(self.row("select lim, extra from usage")[0:2], (1_500_000, 500_000))  # ghi lại để trang quản trị tính lại hạn mức
+        self.write_grants({day: {uid: 1_500_000}})                                          # cấp thêm tiếp: cộng dồn do trang quản trị làm, cổng chỉ đọc tổng
+        self.assertEqual(self.get("/quota")[0], 200)
+
+    def test_grants_are_per_day_per_person_and_ignore_garbage(self):
+        uid, other, day = self.uid(SV), self.uid(GV), Q.vn_day(T0)
+        yesterday = Q.vn_day(T0 - 86400)
+        self.write_grants({yesterday: {uid: 9_000_000}, day: {other: 9_000_000, "khong-phai-uid": 5, uid + "x": 5}})
+        self.assertEqual(self.post()[2]["x-quota-limit"], "1000000")                        # hôm qua / người khác / uid sai: không có tác dụng
+        with open(self.grants_path, "w") as f:
+            f.write("{hỏng")
+        os.utime(self.grants_path, (self._gm + 10, self._gm + 10))
+        self.assertEqual(self.post()[2]["x-quota-limit"], "1000000")                        # tệp hỏng = không cấp thêm
+        self.write_grants({day: {uid: -5, other: True}})
+        self.assertEqual(self.post()[2]["x-quota-limit"], "1000000")                        # số âm / không phải số nguyên bị bỏ
+        self.write_grants({day: {uid: 250_000}})
+        os.utime(self.grants_path, (self._gm + 1, self._gm + 1))
+        self.assertEqual(self.post()[2]["x-quota-limit"], "1250000")
+        self.now[0] = T0 + 86400                                                            # sang ngày sau: tự hết hiệu lực
+        self.assertEqual(self.post()[2]["x-quota-limit"], "1000000")
+
+    def test_grants_do_not_change_unlimited_or_admin(self):
+        day = Q.vn_day(T0)
+        self.write_grants({day: {self.uid("admin@neu.edu.vn"): 5_000_000}})
+        st, _, h = self.post(ident="admin@neu.edu.vn")
+        self.assertEqual((st, h.get("x-quota-state")), (200, "unlimited"))
 
     def test_grace_then_block_with_friendly_message(self):
         uid = self.uid(SV)

@@ -39,6 +39,12 @@ sudo ~/neu-agent-220/quota/quota.sh uid sv.b@st.neu.edu.vn      # mã giả danh
 ```
 Cấu hình ở `/etc/neu-agent/quota.json` (xem `deploy/220/quota/quota.default.json`: bậc, tên miền → bậc, `grace_pct`, `warn_pct`, `max_concurrent`, `overrides`). Mỗi lệnh đổi cấu hình tự kiểm tra rồi khởi động lại dịch vụ.
 
+**Cấp thêm nhanh cho từng người:** trang `https://ai.neu.edu.vn/agent/admin/quota` (quản trị viên; có link ở mục *Hạn mức token* của trang quản trị) liệt kê **ai đã hết hoặc gần hết hạn mức hôm nay** (tên/email lấy từ sổ "ai đã dùng"; người chưa có trong sổ hiện bằng mã giả danh), kèm nút **+1 / +5 / +10 triệu token**. Phần cấp thêm:
+- chỉ có hiệu lực **trong ngày hôm nay** (hết lúc 00:00 giờ VN), cộng dồn nếu bấm nhiều lần (tối đa 100 triệu mỗi lần, 1 tỷ mỗi người mỗi ngày), có nút **Bỏ** để thu hồi;
+- áp dụng ngay cho yêu cầu kế tiếp (cổng đọc `/var/lib/neu-agent/quota/grants.json`, do trang quản trị ghi; không đụng `quota.json`);
+- ghi vào nhật ký (ai cấp, cho ai, bao nhiêu) hiển thị ngay dưới bảng. Muốn đổi hạn mức mặc định hoặc đặt ngoại lệ **lâu dài** vẫn dùng `quota.sh`.
+Cần cài lại: `sudo ./quota/install-quota.sh` (cổng đọc tệp cấp thêm, thêm cột `extra`) rồi `sudo ./diag/install-diag.sh` (trang quản trị + quyền ghi `grants.json`).
+
 Trang quản trị `https://ai.neu.edu.vn/agent/admin/` có mục **Hạn mức token**: token mỗi ngày, số người gần/hết hạn mức, số yêu cầu bị chặn, bảng người dùng đang dùng nhiều hạn mức.
 
 ## Cài đặt / cập nhật

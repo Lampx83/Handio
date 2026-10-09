@@ -11,6 +11,9 @@ kiểm tra chặt theo lược đồ (schema.json, dùng chung với mã TypeScr
   GET  /admin/accounts           trang QUẢN LÝ TÀI KHOẢN tên + mật khẩu (accounts.html + accounts.js), cũng chỉ quản trị viên
   GET/POST /admin/api/accounts   danh sách + nhật ký thao tác / tạo, đổi mật khẩu, xoá, huỷ mọi phiên. Gọi dịch vụ phụ root `accounts.py` qua socket Unix
                                  (collector KHÔNG tự ghi tệp mật khẩu). POST cần tiêu đề X-Neu-Admin: 1, Origin cùng nguồn, Content-Type JSON (chống CSRF).
+  GET  /admin/quota              trang HẠN MỨC TOKEN (quota.html + quota.js): ai đã hết/gần hết hôm nay, cấp thêm nhanh
+  GET/POST /admin/api/quota      danh sách (tên lấy từ sổ "ai đã dùng") / {"op":"grant","uid","amount"}: cộng token cho HÔM NAY vào grants.json (cổng hạn mức đọc).
+                                 Cùng cơ chế chống CSRF; người cấp (actor) do máy chủ gắn và ghi vào nhật ký trong grants.json. Xem quota_admin.py.
 
 Định danh: uid = HMAC-SHA256(bí mật máy chủ, email viết thường)[:16 hex]. Trong các tệp chẩn đoán JSONL email KHÔNG được lưu, KHÔNG được ghi nhật ký.
 Ngoại lệ có chủ đích: sổ "ai đã dùng" users-seen.json (Registry) giữ email/tên đăng nhập thật + nền tảng để quản trị viên xem; chỉ qua /admin/api/accounts.
@@ -29,6 +32,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import quota_admin as QA
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.environ.get("NEU_DIAG_SCHEMA", os.path.join(HERE, "schema.json"))
 
@@ -42,6 +47,8 @@ CTRL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 ADMIN_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(html|md|json|csv)$")
 DAY_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.jsonl$")
 MAX_ADMIN_BODY = 1024
+ADMIN_PAGES = {"accounts": ("accounts.html", "text/html; charset=utf-8"), "accounts.js": ("accounts.js", "text/javascript; charset=utf-8"),
+               "quota": ("quota.html", "text/html; charset=utf-8"), "quota.js": ("quota.js", "text/javascript; charset=utf-8")}
 ADMIN_POSTS_PER_MIN = 30
 
 
@@ -337,6 +344,8 @@ class Config:
         self.web_dir = kw.get("web_dir", HERE)                    # nơi có accounts.html / accounts.js
         self.public_host = kw.get("public_host", "ai.neu.edu.vn")  # để kiểm tra Origin của POST quản trị
         self.registry = kw.get("registry")                        # sổ "ai đã dùng" (None = tắt)
+        self.quota_db = kw.get("quota_db", "")                    # CSDL đếm token của cổng hạn mức (rỗng = tắt trang quản lý hạn mức)
+        self.grants_file = kw.get("grants_file", "")              # tệp "cấp thêm hôm nay" mà cổng hạn mức đọc
         self.admin_hits = {}                                      # email quản trị -> thời điểm các POST gần đây (giới hạn tốc độ)
         self.admin_lock = threading.Lock()
 
@@ -421,6 +430,8 @@ class Handler(BaseHTTPRequestHandler):
         c = self.cfg
         if self.path.split("?", 1)[0] == "/admin/api/accounts" and self._local():
             return self._admin_accounts_post()
+        if self.path.split("?", 1)[0] == "/admin/api/quota" and self._local():
+            return self._admin_quota_post()
         if self.path != "/diag" or not self._local():
             return self._send(404, {"ok": False})
         email = self._ident()
@@ -502,7 +513,9 @@ class Handler(BaseHTTPRequestHandler):
         name = p[len("/admin/"):] if p.startswith("/admin/") else ""
         if name == "api/accounts":
             return self._admin_accounts_get()
-        if name in ("accounts", "accounts.js"):
+        if name == "api/quota":
+            return self._admin_quota_get()
+        if name in ADMIN_PAGES:
             return self._admin_static(name)
         if name in ("", "latest"):
             name = "index.html" if name == "" and os.path.isfile(os.path.join(c.reports_dir, "index.html")) else "latest.html"
@@ -530,7 +543,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _admin_static(self, name):
         c = self.cfg
-        fname, ctype = ("accounts.html", "text/html; charset=utf-8") if name == "accounts" else ("accounts.js", "text/javascript; charset=utf-8")
+        fname, ctype = ADMIN_PAGES[name]
         try:
             with open(os.path.join(c.web_dir, fname), "rb") as f:
                 body = f.read(1024 * 1024)
@@ -556,37 +569,52 @@ class Handler(BaseHTTPRequestHandler):
             out["seen"] = c.registry.snapshot()
         return self._send(200, out)
 
-    def _admin_accounts_post(self):
+    def _admin_post_json(self):
+        """Phần chung của mọi POST quản trị: quản trị viên, chống CSRF, giới hạn tốc độ, đọc JSON. Trả (email, dict) hoặc None (đã trả lời lỗi)."""
         c = self.cfg
         email = self._admin_email()
         if not email:
-            return
+            return None
         # chống CSRF: tiêu đề tuỳ biến (buộc trình duyệt kiểm tra trước), cùng nguồn, đúng kiểu nội dung
         origin = self.headers.get("Origin")
         site = self.headers.get("Sec-Fetch-Site")
         ct = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
         if self.headers.get("X-Neu-Admin") != "1" or (origin is not None and origin != "https://" + c.public_host) or (site is not None and site != "same-origin") or ct != "application/json":
-            return self._send(403, {"ok": False, "error": "csrf"})
+            self._send(403, {"ok": False, "error": "csrf"})
+            return None
         if self.headers.get("Transfer-Encoding"):
-            return self._send(411, {"ok": False, "error": "length_required"})
+            self._send(411, {"ok": False, "error": "length_required"})
+            return None
         try:
             n = int(self.headers.get("Content-Length", ""))
         except ValueError:
-            return self._send(411, {"ok": False, "error": "length_required"})
+            self._send(411, {"ok": False, "error": "length_required"})
+            return None
         if n > MAX_ADMIN_BODY or n < 2:
-            return self._send(413, {"ok": False, "error": "size"})
+            self._send(413, {"ok": False, "error": "size"})
+            return None
         now = c.now()
         with c.admin_lock:
             hits = [t for t in c.admin_hits.get(email, []) if now - t < 60]
             if len(hits) >= ADMIN_POSTS_PER_MIN:
                 c.admin_hits[email] = hits
-                return self._send(429, {"ok": False, "error": "rate", "message": "Thao tác quá nhanh, hãy đợi một phút."}, extra={"Retry-After": "30"})
+                self._send(429, {"ok": False, "error": "rate", "message": "Thao tác quá nhanh, hãy đợi một phút."}, extra={"Retry-After": "30"})
+                return None
             hits.append(now)
             c.admin_hits[email] = hits
         try:
             raw = json.loads(self.rfile.read(n).decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
-            return self._send(400, {"ok": False, "error": "json"})
+            self._send(400, {"ok": False, "error": "json"})
+            return None
+        return email, raw
+
+    def _admin_accounts_post(self):
+        c = self.cfg
+        got = self._admin_post_json()
+        if got is None:
+            return
+        email, raw = got
         if not isinstance(raw, dict) or raw.get("op") not in ("add", "remove", "kick"):
             return self._send(400, {"ok": False, "error": "bad_request", "message": "Yêu cầu không hợp lệ."})
         # chỉ chuyển đúng các trường cần thiết; người thao tác (actor) do MÁY CHỦ gắn, không nhận từ trình duyệt
@@ -600,6 +628,53 @@ class Handler(BaseHTTPRequestHandler):
             return self._unavailable()
         code = 200 if res.get("ok") else (404 if res.get("error") == "not_found" else 400 if res.get("error") != "failed" else 500)
         return self._send(code, {k: v for k, v in res.items() if k in ("ok", "error", "message", "created")})
+
+    # -- hạn mức token: xem ai đã hết/gần hết hôm nay và cấp thêm (chỉ quản trị viên; ghi grants.json, cổng hạn mức đọc)
+    def _quota_names(self):
+        """{uid: tên hiển thị} từ sổ "ai đã dùng" (chỉ quản trị viên được xem)."""
+        reg = self.cfg.registry
+        if reg is None:
+            return {}
+        with reg.lock:
+            idents = list(reg.users)
+        return {pseudonym(self.cfg.secret, i): i for i in idents}
+
+    def _quota_unavailable(self):
+        return self._send(503, {"ok": False, "error": "unavailable", "message": "Chưa có dữ liệu hạn mức: cổng hạn mức chưa cài hoặc chưa có yêu cầu nào đi qua (cài: sudo ./quota/install-quota.sh)."})
+
+    def _admin_quota_get(self):
+        c = self.cfg
+        email = self._admin_email()
+        if not email:
+            return
+        if not c.quota_db:
+            return self._quota_unavailable()
+        res = QA.list_users(c.quota_db, c.grants_file, c.now(), self._quota_names())
+        if res is None:
+            return self._quota_unavailable()
+        res.update({"ok": True, "me": email, "audit": QA.read_state(c.grants_file)["audit"][::-1], "max_step": QA.MAX_STEP})
+        return self._send(200, res)
+
+    def _admin_quota_post(self):
+        c = self.cfg
+        got = self._admin_post_json()
+        if got is None:
+            return
+        email, raw = got
+        if not isinstance(raw, dict) or raw.get("op") != "grant":
+            return self._send(400, {"ok": False, "error": "bad_request", "message": "Yêu cầu không hợp lệ."})
+        if not c.quota_db or not c.grants_file:
+            return self._quota_unavailable()
+        uid, amount = raw.get("uid"), raw.get("amount")
+        names = self._quota_names()
+        cur = QA.list_users(c.quota_db, c.grants_file, c.now(), names)
+        if cur is None:
+            return self._quota_unavailable()
+        # chỉ cấp cho người đang có số liệu hôm nay (không cấp cho mã tuỳ ý)
+        if not isinstance(uid, str) or uid not in {u["uid"] for u in cur["users"]}:
+            return self._send(404, {"ok": False, "error": "not_found", "message": "Không thấy người dùng này trong số liệu hôm nay."})
+        res = QA.grant(c.grants_file, c.now(), uid, amount, email, names.get(uid, ""))
+        return self._send(200 if res.get("ok") else 400 if res.get("error") != "failed" else 500, res)
 
     def _nope(self):
         self._send(405, {"ok": False}, extra={"Allow": "GET, HEAD, POST"})
@@ -638,6 +713,8 @@ def main():
         secret=_read_secret(),
         accounts_sock=os.environ.get("NEU_ACCOUNTS_SOCK", "/run/neu-agent-accounts/accounts.sock"),
         public_host=os.environ.get("NEU_PUBLIC_HOST", "ai.neu.edu.vn"),
+        quota_db=os.environ.get("NEU_QUOTA_DB", "/var/lib/neu-agent/quota/usage.db"),
+        grants_file=os.environ.get("NEU_QUOTA_GRANTS", "/var/lib/neu-agent/quota/grants.json"),
     )
     if os.environ.get("NEU_DIAG_KEEP_IDENTITIES", "1") != "0":
         cfg.registry = Registry(os.path.join(cfg.diag_dir, "users-seen.json"))

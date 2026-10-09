@@ -7,6 +7,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ### Thêm
 - **Trang “Hướng dẫn sử dụng”** công khai (`/agent/guide/help.html`, xem được cả khi chưa đăng nhập): bắt đầu, ba chế độ Work/Code/Design, cách viết yêu cầu, các chế độ chạy, lệnh `/` và phím tắt, cài bản máy tính, hạn mức và riêng tư, xử lý sự cố, hỏi đáp. Có liên kết từ trang giới thiệu.
+- **Trang quản trị: xem ai đã hết hạn mức token và cấp thêm nhanh** (`/agent/admin/quota`, chỉ quản trị viên): danh sách người đã hết hoặc gần hết hạn mức hôm nay (kèm tên/email nếu có), nút **+1 / +5 / +10 triệu token** có hiệu lực ngay đến hết ngày, nút **Bỏ** để thu hồi, và nhật ký ai đã cấp cho ai. Cần chạy lại `install-quota.sh` rồi `install-diag.sh` trên máy 220.
 
 ### Thay đổi
 - **Hạn mức token mặc định của sinh viên tăng từ 1 triệu lên 5 triệu mỗi ngày** (giảng viên vẫn 10 triệu). Hướng dẫn trong ứng dụng, trang công khai và trang quản trị đã cập nhật số mới.
