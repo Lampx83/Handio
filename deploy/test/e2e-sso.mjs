@@ -119,6 +119,16 @@ try {
   const page = await req("/agent/", { headers: { Cookie: cookie } });
   check("đã đăng nhập: vào được giao diện", page.status === 200 && /NEU-AGENT-APP/.test(page.body));
   check("đã đăng nhập: tải về được SHA256SUMS", (await req("/agent/download/SHA256SUMS.txt", { headers: { Cookie: cookie } })).status === 200);
+  // trang quản trị / quản lý tài khoản (collector không chạy trong bài thử này: chỉ kiểm tra lớp nginx + đăng nhập)
+  const jsonH = { "Content-Type": "application/json", "X-Neu-Admin": "1" };
+  const adm0 = await req("/agent/admin/accounts");
+  const admP0 = await req("/agent/admin/api/accounts", { method: "POST", headers: jsonH, body: "{}" });
+  check("chưa đăng nhập: trang quản lý tài khoản và API (kể cả POST) đều chuyển tới đăng nhập", adm0.status === 302 && admP0.status === 302 && /sign_in/.test(adm0.headers.location) && /sign_in/.test(admP0.headers.location), `${adm0.status}/${admP0.status}`);
+  const admD = await req("/agent/admin/api/accounts", { method: "DELETE", headers: { Cookie: cookie } });
+  const admPut = await req("/agent/admin/api/accounts", { method: "PUT", headers: { ...jsonH, Cookie: cookie }, body: "{}" });
+  check("đã đăng nhập: DELETE/PUT lên API quản trị bị nginx chặn (chỉ GET/HEAD/POST)", admD.status === 403 && admPut.status === 403, `${admD.status}/${admPut.status}`);
+  const admBig = await req("/agent/admin/api/accounts", { method: "POST", headers: { ...jsonH, Cookie: cookie }, body: JSON.stringify({ op: "add", name: "x".repeat(4000) }) });
+  check("thân POST quá lớn (>2 KB) bị nginx từ chối 413 trước khi tới collector", admBig.status === 413, String(admBig.status));
   const api1 = await req("/agent/vllm/v1/models", { headers: { Cookie: cookie } });
   const j1 = JSON.parse(api1.body || "{}");
   check("đã đăng nhập: API tới gateway; key do MÁY CHỦ gắn, Authorization bị gỡ, gửi kèm email người dùng", api1.status === 200 && j1.key === "testkey" && j1.auth === "" && j1.user === "lan@neu.edu.vn" && j1.uri === "/vllm/v1/models", JSON.stringify(j1));

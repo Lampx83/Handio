@@ -43,6 +43,17 @@ Mỗi script tự sao lưu, chạy `nginx -t`, **tự khôi phục nếu lỗi h
 
 Dọn OJ Judge cũ trên 220: `sudo ./remove-oj-judge.sh` (mặc định chỉ liệt kê), thêm `--yes` để xoá, `--purge-data` để xoá cả dữ liệu.
 
+### Tài khoản tên + mật khẩu (ngoài Microsoft 365)
+
+Dành cho khách mời / tài khoản thử. **Chỉ quản trị viên tạo**, người dùng không tự đăng ký. Hai cách quản lý:
+
+1. **Trang quản trị:** `https://ai.neu.edu.vn/agent/admin/accounts` (mục "Tài khoản" ở thanh trên của trang báo cáo): tạo tài khoản, đổi mật khẩu (có nút tạo mật khẩu ngẫu nhiên), xoá, "Huỷ mọi phiên đăng nhập", xem nhật ký thao tác (ai làm gì, lúc nào; không bao giờ có mật khẩu). Chỉ email Microsoft nằm trong `/etc/neu-agent/admins.txt` mới vào được; tài khoản tên + mật khẩu không bao giờ là quản trị viên.
+2. **Dòng lệnh trên máy 220:** `sudo ./users.sh add|remove|list|kick` (xem đầu tệp `users.sh`).
+
+Cách hoạt động (tách quyền): trang quản trị chạy bằng tài khoản thường `neu-diag`, **không** được ghi tệp mật khẩu. Nó gọi dịch vụ phụ `neu-agent-accounts` (root, chỉ nghe socket Unix `/run/neu-agent-accounts/accounts.sock` quyền 0660 nhóm `neu-diag`, kiểm tra thêm uid người gọi). Dịch vụ này chỉ nhận 5 việc (list, add, remove, kick, audit), kiểm tra chặt tên/mật khẩu, rồi gọi lại `users.sh` đã kiểm thử. POST có chống CSRF (tiêu đề `X-Neu-Admin`, `Origin` cùng nguồn, JSON), giới hạn 30 thao tác/phút/quản trị viên, thân ≤ 1 KB. Nhật ký: `/var/lib/neu-agent-accounts/audit.jsonl` (root, 0600) và `journalctl -u neu-agent-accounts`.
+
+Cài/cập nhật: `sudo ./install.sh <key>` (nginx cho phép POST vào `/agent/admin/`) rồi `sudo ./diag/install-diag.sh --admin <email quản trị>` (cài dịch vụ phụ, tự thử tạo + xoá một tài khoản `zz-kiem-tra-cai`, tự khôi phục nếu lỗi).
+
 ### Đã kiểm thử thế nào
 `node deploy/test/e2e-sso.mjs` (nginx 222 → nginx 220 thật → `oauth2-proxy` thật → máy chủ OIDC giả; 27 kiểm tra: chưa đăng nhập bị chặn ở mọi đường, đăng nhập giảng viên/sinh viên, miền lạ bị từ chối, Bearer của Desktop đúng/sai audience/hết hạn/bị sửa, key do máy chủ gắn và token không chuyển sang gateway) và `node deploy/test/e2e-install.mjs` (chạy hai script cài trong Ubuntu 24.04 có nginx thật cùng site "khác", kể cả ép lỗi để thử tự khôi phục). Chưa thử với Microsoft thật: lần đầu cần một người đăng nhập thử.
 

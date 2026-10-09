@@ -1,0 +1,44 @@
+[Unit]
+Description=NEU Agent - dich vu phu quan ly tai khoan ten + mat khau (root, chi nghe socket Unix cho collector)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/lib/neu-agent-diag/accounts.py
+Environment=NEU_USERS_SCRIPT=/usr/local/lib/neu-agent-diag/users.sh
+Environment=NEU_ACCOUNTS_SOCK=/run/neu-agent-accounts/accounts.sock
+Environment=NEU_ACCOUNTS_AUDIT=/var/lib/neu-agent-accounts/audit.jsonl
+Restart=always
+RestartSec=3
+# thư mục socket /run/neu-agent-accounts (accounts.py đặt nhóm neu-diag, 0750) và nhật ký thao tác /var/lib/neu-agent-accounts (chỉ root)
+RuntimeDirectory=neu-agent-accounts
+RuntimeDirectoryMode=0750
+StateDirectory=neu-agent-accounts
+StateDirectoryMode=0700
+# Cần root để ghi /etc/neu-agent/users.htpasswd và khởi động lại dịch vụ đăng nhập; mọi thứ khác bị cô lập:
+# chỉ ghi được /etc/neu-agent, không mạng (chỉ socket Unix), không leo thang, không đụng nhân/thiết bị.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/etc/neu-agent
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+PrivateNetwork=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+UMask=0077
+MemoryMax=128M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

@@ -9,6 +9,10 @@ Mục tiêu: hệ thống **tự phát hiện vấn đề** (lỗi mô hình/c�
 3. **Mặc định bật khi ứng dụng được cấu hình điểm nhận** (hệ thống nội bộ, sau SSO). Tắt bằng `Settings.diagnostics=false` (công tắc trong Cài đặt) hoặc quản trị viên ép tắt bằng `policy.json` → `"diagnostics": false`. **Chưa cấu hình `diagnostics` ở controller = không ghi, không gửi gì.**
 4. **Không bao giờ làm chậm/hỏng agent:** ghi đồng bộ O(1), gửi nền theo lô, lùi dần khi lỗi (30 s … 30 phút), bộ đệm vòng 500 sự kiện, mọi lỗi gửi đều im lặng, không theo chuyển hướng.
 
+### Ngoại lệ có chủ đích: sổ "ai đã dùng" (chỉ quản trị viên)
+
+Để quản trị viên biết **ai đang dùng, ở web hay Desktop**, bộ thu còn giữ một sổ riêng `/var/lib/neu-agent/diag/users-seen.json` (quyền 0600): với mỗi tài khoản có email Microsoft hoặc tên đăng nhập thật, ghi *lần đầu, gần nhất, số lượt làm việc, nền tảng (web/mac/win), phiên bản*. **Không có nội dung hội thoại, tên tệp hay IP.** Chỉ hiện ở `https://ai.neu.edu.vn/agent/admin/accounts` (quản trị viên), không nằm trong các tệp JSONL/báo cáo (vẫn chỉ có mã giả danh). Sổ giữ tới khi quản trị viên xoá tệp; tối đa 5000 tài khoản. Tắt hẳn bằng `Environment=NEU_DIAG_KEEP_IDENTITIES=0` trong `neu-agent-diag.service`. Chỉ tính người đã làm việc ít nhất một lượt (ứng dụng gửi số liệu khi có hoạt động); người chỉ đăng nhập rồi thoát chưa chắc có trong sổ.
+
 ## 2. Thu thập gì
 
 | Sự kiện | Trường (tất cả là mã/số/boolean) |

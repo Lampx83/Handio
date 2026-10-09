@@ -11,6 +11,9 @@ LoadCredential=admins:/etc/neu-agent/admins.txt
 Environment=NEU_DIAG_DIR=/var/lib/neu-agent/diag
 Environment=NEU_DIAG_REPORTS=/var/lib/neu-agent/reports
 Environment=NEU_DIAG_HEALTH=/var/lib/neu-agent/health.json
+# quản lý tài khoản (trang /agent/admin/accounts): chỉ GỌI dịch vụ phụ qua socket này; collector không tự ghi tệp mật khẩu
+Environment=NEU_ACCOUNTS_SOCK=/run/neu-agent-accounts/accounts.sock
+Environment=NEU_PUBLIC_HOST=ai.neu.edu.vn
 ExecStart=/usr/bin/python3 /usr/local/lib/neu-agent-diag/collector.py
 Restart=always
 RestartSec=3

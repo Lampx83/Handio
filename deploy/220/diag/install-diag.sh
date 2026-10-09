@@ -31,10 +31,10 @@ USER_NAME=neu-diag
 SNIP=/etc/nginx/snippets/neu-agent-locations.conf
 TS=$(date +%Y%m%d%H%M%S)
 BAK=/var/backups/neu-agent-diag/$TS
-SERVICES="neu-agent-diag.service"
+SERVICES="neu-agent-diag.service neu-agent-accounts.service"
 TIMERS="neu-agent-diag-report.timer neu-agent-healthz.timer neu-agent-diag-stats.timer"
-UNITS="neu-agent-diag.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer"
-CODE="collector.py report.py stats.py charts.py pages.py healthz.py schema.json"
+UNITS="neu-agent-diag.service neu-agent-accounts.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer"
+CODE="collector.py report.py stats.py charts.py pages.py healthz.py schema.json accounts.py accounts.html accounts.js"
 
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
 command -v python3 >/dev/null && command -v systemctl >/dev/null || { echo "Thiếu python3 hoặc systemctl."; exit 1; }
@@ -62,7 +62,8 @@ for a in "${ADMIN_LIST[@]:-}"; do
   [[ "$a" =~ ^[A-Za-z0-9._%+\'-]{1,64}@[A-Za-z0-9.-]{1,190}$ ]] || { echo "Email quản trị không hợp lệ: $a"; exit 1; }
 done
 
-for f in $CODE neu-agent-diag.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer neu-agent-diag.logrotate; do
+[ -f "$HERE/../users.sh" ] || { echo "Thiếu $HERE/../users.sh (quản lý tài khoản dùng nó)."; exit 1; }
+for f in $CODE neu-agent-diag.service neu-agent-accounts.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer neu-agent-diag.logrotate; do
   [ -f "$HERE/$f" ] || { echo "Thiếu $HERE/$f"; exit 1; }
 done
 
@@ -77,16 +78,18 @@ fi
 MANAGED=()
 for c in $CODE; do MANAGED+=("$LIB/$c"); done
 for u in $UNITS; do MANAGED+=("$UNITDIR/$u"); done
-MANAGED+=("$LROT" "$DROPIN_DIR/llm.conf")
+MANAGED+=("$LROT" "$DROPIN_DIR/llm.conf" "$LIB/users.sh")
 mkdir -p "$BAK"
 declare -A EXISTED
 for f in "${MANAGED[@]}"; do
   if [ -e "$f" ]; then EXISTED["$f"]=1; mkdir -p "$BAK$(dirname "$f")"; cp -a "$f" "$BAK$f"; else EXISTED["$f"]=0; fi
 done
 HAD_SERVICE=0; systemctl cat neu-agent-diag.service >/dev/null 2>&1 && HAD_SERVICE=1
+HAD_ACCOUNTS=0; systemctl cat neu-agent-accounts.service >/dev/null 2>&1 && HAD_ACCOUNTS=1
 
 rollback() {
   echo "!! Có lỗi, đang khôi phục…"
+  [ "$HAD_ACCOUNTS" = 1 ] || systemctl disable --now neu-agent-accounts.service 2>/dev/null || true   # dịch vụ phụ mới cài: dừng TRƯỚC khi xoá tệp đơn vị (nếu không tiến trình mồ côi vẫn chạy)
   for f in "${MANAGED[@]}"; do
     if [ "${EXISTED[$f]}" = 1 ]; then mkdir -p "$(dirname "$f")"; cp -a "$BAK$f" "$f"; else rm -f "$f"; fi
   done
@@ -123,6 +126,7 @@ grep -qE '^[^#[:space:]]' "$ADMINS" || echo "Lưu ý: chưa có quản trị vi�
 # ---- 2) mã, dịch vụ, logrotate
 install -d -m 0755 "$LIB"
 for c in $CODE; do install -m 0644 -o root -g root "$HERE/$c" "$LIB/$c"; done
+install -m 0755 -o root -g root "$HERE/../users.sh" "$LIB/users.sh"   # dịch vụ phụ (root) gọi đúng bản này để ghi tệp mật khẩu
 for u in $UNITS; do install -m 0644 -o root -g root "$HERE/$u" "$UNITDIR/$u"; done
 install -m 0644 -o root -g root "$HERE/neu-agent-diag.logrotate" "$LROT"
 if [ -s "$LLMKEY" ]; then
@@ -145,10 +149,12 @@ if command -v systemd-analyze >/dev/null; then
   for u in $UNITS; do systemd-analyze verify "$UNITDIR/$u" 2>&1 | grep -v '^$' | sed "s/^/  [systemd-analyze] /" || true; done   # chỉ cảnh báo; khởi động dịch vụ bên dưới mới là phép thử thật
 fi
 systemctl daemon-reload
-systemctl enable neu-agent-diag.service $TIMERS >/dev/null 2>&1
+systemctl enable $SERVICES $TIMERS >/dev/null 2>&1
+systemctl restart neu-agent-accounts.service
 systemctl restart neu-agent-diag.service
 sleep 1
 systemctl is-active --quiet neu-agent-diag.service || { journalctl -u neu-agent-diag -n 20 --no-pager 2>/dev/null || true; echo "Bộ thu không chạy."; exit 1; }
+systemctl is-active --quiet neu-agent-accounts.service || { journalctl -u neu-agent-accounts -n 20 --no-pager 2>/dev/null || true; echo "Dịch vụ quản lý tài khoản không chạy."; exit 1; }
 systemctl start $TIMERS
 
 # ---- 3) kiểm tra sau cài
@@ -162,6 +168,28 @@ rep_ok=1; systemctl start neu-agent-diag-report.service || rep_ok=0 # báo cáo 
 [ -s "$VAR/reports/latest.html" ] || rep_ok=0
 systemctl start neu-agent-diag-stats.service || rep_ok=0            # trang tổng quan quản trị (index.html)
 [ -s "$VAR/reports/index.html" ] || rep_ok=0
+# quản lý tài khoản: qua socket (chính root được phép) — danh sách, rồi tạo + xoá một tài khoản thử để chắc việc ghi tệp và khởi động lại dịch vụ đăng nhập chạy được trong sandbox
+acc_rpc() { python3 - "$1" <<'PY'
+import json, socket, sys
+s = socket.socket(socket.AF_UNIX); s.settimeout(60); s.connect("/run/neu-agent-accounts/accounts.sock")
+s.sendall(sys.argv[1].encode() + b"\n"); b = b""
+while not b.endswith(b"\n"):
+    c = s.recv(4096)
+    if not c: break
+    b += c
+print(json.loads(b).get("ok"))
+PY
+}
+a_list=$(acc_rpc '{"op":"list"}' 2>/dev/null || echo err)
+a_add=$(acc_rpc '{"op":"add","name":"zz-kiem-tra-cai","password":"Kiem-tra-cai-dat-9X!","actor":"install@local"}' 2>/dev/null || echo err)
+a_del=$(acc_rpc '{"op":"remove","name":"zz-kiem-tra-cai","actor":"install@local"}' 2>/dev/null || echo err)
+first_admin=$(grep -m1 -E '^[^#[:space:]]' "$ADMINS" 2>/dev/null || true)
+c_api=skip; [ -n "$first_admin" ] && c_api=$(code -H "X-User-Email: $first_admin" http://127.0.0.1:4190/admin/api/accounts || true)   # quản trị viên qua collector: 200
+c_apinon=$(code http://127.0.0.1:4190/admin/api/accounts || true)                                                                         # không phải quản trị viên: 403
+# thử tạo/xoá ở trên khởi động lại dịch vụ đăng nhập: đợi nó chạy lại hẳn rồi mới kiểm tra qua nginx (nếu không sẽ thấy 500 giả)
+for _i in $(seq 1 90); do curl -fs -o /dev/null http://127.0.0.1:4180/ping && break; sleep 1; done
+echo "Tài khoản: dịch vụ phụ list=$a_list add=$a_add remove=$a_del | API quản trị=$c_api(200) | API khi không phải quản trị=$c_apinon(403)"
+[ "$a_list" = True ] && [ "$a_add" = True ] && [ "$a_del" = True ] && [ "$c_apinon" = 403 ] && { [ "$c_api" = skip ] || [ "$c_api" = 200 ]; } || { echo "Kiểm tra quản lý tài khoản THẤT BẠI (xem: journalctl -u neu-agent-accounts)"; exit 1; }
 echo "Kiểm tra: bộ thu=$c_health | POST sai lược đồ=$c_bad(400) | thiếu danh tính=$c_noid(401) | admin khi chưa đăng nhập=$c_admin(403) | báo cáo=$([ $rep_ok = 1 ] && echo ok || echo LỖI)"
 [ "$c_health" = '{"ok":true}' ] && [ "$c_bad" = 400 ] && [ "$c_noid" = 401 ] && [ "$c_admin" = 403 ] && [ $rep_ok = 1 ] || { echo "Kiểm tra sau cài THẤT BẠI"; exit 1; }
 
@@ -178,5 +206,5 @@ else
 fi
 
 trap - EXIT
-echo "OK: chẩn đoán đã chạy. Báo cáo: https://ai.neu.edu.vn/agent/admin/ (quản trị viên) hoặc $VAR/reports/latest.html trên máy. Nhật ký sức khoẻ: /var/log/neu-agent/health.log"
+echo "OK: chẩn đoán đã chạy. Báo cáo: https://ai.neu.edu.vn/agent/admin/ (quản trị viên); quản lý tài khoản: https://ai.neu.edu.vn/agent/admin/accounts hoặc $VAR/reports/latest.html trên máy. Nhật ký sức khoẻ: /var/log/neu-agent/health.log"
 echo "Xem lịch: systemctl list-timers 'neu-agent-*' | Chạy báo cáo ngay: sudo systemctl start neu-agent-diag-report.service"

@@ -91,3 +91,5 @@ Bản đóng gói đi kèm `SHA256SUMS.txt` và `SBOM.cdx.json` (danh sách thư
 ## 5. Báo lỗi bảo mật
 
 Gửi mô tả và cách tái hiện **riêng** cho người quản trị dự án (không đăng công khai trước khi có bản vá). Ưu tiên: thoát khỏi thư mục làm việc, chạy lệnh không qua xin phép, lộ khoá, vượt sandbox, thực thi mã từ tệp/trang web.
+
+**Quản lý tài khoản mật khẩu từ trang quản trị**: việc ghi tệp mật khẩu chỉ do dịch vụ phụ `neu-agent-accounts` (root, sandbox systemd: chỉ ghi `/etc/neu-agent`, không mạng) thực hiện qua socket Unix chỉ nhóm `neu-diag` mở được; trang quản trị (không phải root) chỉ gửi 5 loại yêu cầu đã kiểm tra chặt. Chỉ email Microsoft trong `admins.txt` dùng được (tài khoản mật khẩu không thể là quản trị viên); POST chống CSRF; mọi thao tác ghi nhật ký (người làm do máy chủ gắn, không do trình duyệt khai), không ghi mật khẩu.

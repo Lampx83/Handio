@@ -8,8 +8,12 @@ kiểm tra chặt theo lược đồ (schema.json, dùng chung với mã TypeScr
   GET  /healthz         {"ok":true} (bộ thu còn sống; chỉ cục bộ)
   GET  /public-healthz  200 {"ok":true} | 503 {"ok":false}  — dựa vào health.json do healthz.py ghi (cũ >15 phút = false)
   GET  /admin/[tệp]     trang tổng quan (index.html) + báo cáo chất lượng (tĩnh) cho quản trị viên: chỉ khi X-User-Email nằm trong admins.txt
+  GET  /admin/accounts           trang QUẢN LÝ TÀI KHOẢN tên + mật khẩu (accounts.html + accounts.js), cũng chỉ quản trị viên
+  GET/POST /admin/api/accounts   danh sách + nhật ký thao tác / tạo, đổi mật khẩu, xoá, huỷ mọi phiên. Gọi dịch vụ phụ root `accounts.py` qua socket Unix
+                                 (collector KHÔNG tự ghi tệp mật khẩu). POST cần tiêu đề X-Neu-Admin: 1, Origin cùng nguồn, Content-Type JSON (chống CSRF).
 
-Định danh: uid = HMAC-SHA256(bí mật máy chủ, email viết thường)[:16 hex]. Email KHÔNG được lưu, KHÔNG được ghi nhật ký.
+Định danh: uid = HMAC-SHA256(bí mật máy chủ, email viết thường)[:16 hex]. Trong các tệp chẩn đoán JSONL email KHÔNG được lưu, KHÔNG được ghi nhật ký.
+Ngoại lệ có chủ đích: sổ "ai đã dùng" users-seen.json (Registry) giữ email/tên đăng nhập thật + nền tảng để quản trị viên xem; chỉ qua /admin/api/accounts.
 Dữ liệu: mỗi sự kiện một dòng {"ts_srv","uid","a":{app},"e":{event}} vào <DIAG_DIR>/YYYY-MM-DD.jsonl (UTC, quyền 0600); xoá sau 90 ngày.
 """
 import datetime
@@ -19,6 +23,7 @@ import json
 import math
 import os
 import re
+import socket
 import sys
 import threading
 import time
@@ -36,6 +41,8 @@ EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9.-]{1,190}$")
 CTRL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 ADMIN_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(html|md|json|csv)$")
 DAY_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.jsonl$")
+MAX_ADMIN_BODY = 1024
+ADMIN_POSTS_PER_MIN = 30
 
 
 def load_schema(path=SCHEMA_PATH):
@@ -206,6 +213,113 @@ class Store:
 
 
 # ---------------------------------------------------------------- cấu hình + máy chủ
+# ---------------------------------------------------------------- sổ "ai đã dùng" (chỉ quản trị viên xem)
+IDENT_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,31}$")  # tên tài khoản tên + mật khẩu (không có @)
+PLATFORMS = ("web", "mac", "win", "linux")
+MAX_SEEN = 5000
+
+
+def ident_kind(ident):
+    """Phân loại tài khoản theo tên miền email; tên không có @ là tài khoản tên + mật khẩu."""
+    if "@" not in ident:
+        return "mk"
+    if ident.endswith("@st.neu.edu.vn"):
+        return "sv"
+    if ident.endswith("@neu.edu.vn"):
+        return "gv"
+    return "khac"
+
+
+class Registry:
+    """Ghi nhớ MỖI TÀI KHOẢN đã dùng NEU Agent: lần đầu, gần nhất, số lượt làm việc, nền tảng (web/mac/win).
+
+    KHÁC các tệp chẩn đoán (chỉ có mã giả danh): sổ này giữ email/tên đăng nhập THẬT để quản trị viên biết ai đang dùng và dùng ở đâu.
+    Chỉ đọc được qua /admin/api/accounts (quản trị viên). Không chứa nội dung hội thoại. Tắt bằng NEU_DIAG_KEEP_IDENTITIES=0.
+    """
+
+    def __init__(self, path, now=time.time, flush_every=30):
+        self.path = path
+        self.now = now
+        self.flush_every = flush_every
+        self.lock = threading.Lock()
+        self.users = {}
+        self.dirty = False
+        self.last_flush = 0.0
+        try:
+            with open(path, encoding="utf-8") as f:
+                d = json.load(f)
+            u = d.get("users") if isinstance(d, dict) else None
+            if isinstance(u, dict):
+                self.users = {k: v for k, v in u.items() if isinstance(k, str) and isinstance(v, dict)}
+        except (OSError, ValueError):
+            pass
+
+    def touch(self, ident, app, events, ts):
+        plat = app.get("platform") if app.get("platform") in PLATFORMS else "khac"
+        turns = sum(1 for e in events if isinstance(e, dict) and e.get("t") == "turn")
+        with self.lock:
+            u = self.users.get(ident)
+            if u is None:
+                if len(self.users) >= MAX_SEEN:
+                    return
+                u = self.users[ident] = {"first": ts, "last": ts, "turns": 0, "plat": {}, "profile": {}}
+            u["last"] = ts
+            u["turns"] = int(u.get("turns", 0)) + turns
+            p = u["plat"].setdefault(plat, {"first": ts, "last": ts, "turns": 0})
+            p["last"] = ts
+            p["turns"] = int(p.get("turns", 0)) + turns
+            prof = app.get("profile")
+            if isinstance(prof, str):
+                u["profile"][prof[:12]] = ts
+            if isinstance(app.get("version"), str):
+                u["ver"] = app["version"][:20]
+            self.dirty = True
+        if ts - self.last_flush >= self.flush_every:
+            self.flush()
+
+    def flush(self):
+        with self.lock:
+            if not self.dirty:
+                return
+            data = json.dumps({"users": self.users}, separators=(",", ":"), ensure_ascii=False)
+            self.dirty = False
+            self.last_flush = self.now()
+        tmp = self.path + ".tmp"
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(data)
+            os.replace(tmp, self.path)
+        except OSError:
+            with self.lock:
+                self.dirty = True
+
+    def snapshot(self):
+        """Danh sách (mới dùng gần nhất trước) và số liệu theo cửa sổ 24 giờ / 7 / 30 ngày, tách web và Desktop."""
+        now = self.now()
+        with self.lock:
+            rows = [dict(email=k, kind=ident_kind(k), first=v.get("first", 0), last=v.get("last", 0), turns=v.get("turns", 0), ver=v.get("ver", ""),
+                         plat={pk: {"last": pv.get("last", 0), "turns": pv.get("turns", 0)} for pk, pv in (v.get("plat") or {}).items()}) for k, v in self.users.items()]
+        rows.sort(key=lambda r: -r["last"])
+        summ = {}
+        for label, secs in (("d1", 86400), ("d7", 7 * 86400), ("d30", 30 * 86400)):
+            lim = now - secs
+            def has(r, plats):
+                return any(r["plat"].get(p, {}).get("last", 0) >= lim for p in plats)
+            summ[label] = {
+                "all": sum(1 for r in rows if r["last"] >= lim),
+                "web": sum(1 for r in rows if has(r, ("web",))),
+                "desktop": sum(1 for r in rows if has(r, ("mac", "win", "linux"))),
+                "mac": sum(1 for r in rows if has(r, ("mac",))),
+                "win": sum(1 for r in rows if has(r, ("win",))),
+                "both": sum(1 for r in rows if has(r, ("web",)) and has(r, ("mac", "win", "linux"))),
+            }
+        kinds = {}
+        for r in rows:
+            kinds[r["kind"]] = kinds.get(r["kind"], 0) + 1
+        return {"users": rows[:2000], "total": len(rows), "summary": summ, "kinds": kinds}
+
+
 class Config:
     def __init__(self, **kw):
         self.diag_dir = kw["diag_dir"]
@@ -219,6 +333,34 @@ class Config:
         self.store = kw.get("store") or Store(self.diag_dir, self.retention_days)
         self.now = kw.get("now", time.time)
         self.health_max_age = kw.get("health_max_age", 900)
+        self.accounts_sock = kw.get("accounts_sock", "")          # socket của dịch vụ phụ accounts.py (rỗng = tắt quản lý tài khoản)
+        self.web_dir = kw.get("web_dir", HERE)                    # nơi có accounts.html / accounts.js
+        self.public_host = kw.get("public_host", "ai.neu.edu.vn")  # để kiểm tra Origin của POST quản trị
+        self.registry = kw.get("registry")                        # sổ "ai đã dùng" (None = tắt)
+        self.admin_hits = {}                                      # email quản trị -> thời điểm các POST gần đây (giới hạn tốc độ)
+        self.admin_lock = threading.Lock()
+
+
+def accounts_rpc(path, req, timeout=40):
+    """Gọi dịch vụ phụ quản lý tài khoản. Trả về dict phản hồi, hoặc None nếu dịch vụ không chạy / lỗi giao tiếp."""
+    if not path:
+        return None
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect(path)
+        s.sendall(json.dumps(req, ensure_ascii=False, separators=(",", ":")).encode("utf-8") + b"\n")
+        buf = b""
+        while b"\n" not in buf and len(buf) < 65536:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+        s.close()
+        res = json.loads(buf.split(b"\n", 1)[0].decode("utf-8"))
+        return res if isinstance(res, dict) else None
+    except (OSError, ValueError, UnicodeDecodeError):
+        return None
 
 
 def pseudonym(secret, email):
@@ -267,12 +409,21 @@ class Handler(BaseHTTPRequestHandler):
         e = (self.headers.get("X-User-Email") or "").strip()
         return e if EMAIL_RE.match(e) else ""
 
+    def _ident(self):
+        """Danh tính do nginx gắn: email (Microsoft) HOẶC tên đăng nhập (tài khoản tên + mật khẩu). Rỗng nếu không hợp lệ."""
+        e = (self.headers.get("X-User-Email") or "").strip()
+        if EMAIL_RE.match(e):
+            return e
+        return e if IDENT_RE.match(e) else ""
+
     # -- POST /diag
     def do_POST(self):
         c = self.cfg
+        if self.path.split("?", 1)[0] == "/admin/api/accounts" and self._local():
+            return self._admin_accounts_post()
         if self.path != "/diag" or not self._local():
             return self._send(404, {"ok": False})
-        email = self._email()
+        email = self._ident()
         if not email:
             return self._send(401, {"ok": False, "error": "no_identity"})
         if self.headers.get("Transfer-Encoding"):
@@ -297,6 +448,8 @@ class Handler(BaseHTTPRequestHandler):
         if not ok:
             return self._send(429, {"ok": False, "error": "rate"}, extra={"Retry-After": str(retry)})
         now = int(c.now())
+        if c.registry is not None:
+            c.registry.touch(email.lower(), app, events, now)
         extra_drop = raw.get("dropped") if isinstance(raw.get("dropped"), int) and not isinstance(raw.get("dropped"), bool) else 0
         lines = []
         for i, e in enumerate(events):
@@ -347,6 +500,10 @@ class Handler(BaseHTTPRequestHandler):
         if not email or email not in read_admins(c.admins_file):
             return self._send(403, {"ok": False, "error": "forbidden"})
         name = p[len("/admin/"):] if p.startswith("/admin/") else ""
+        if name == "api/accounts":
+            return self._admin_accounts_get()
+        if name in ("accounts", "accounts.js"):
+            return self._admin_static(name)
         if name in ("", "latest"):
             name = "index.html" if name == "" and os.path.isfile(os.path.join(c.reports_dir, "index.html")) else "latest.html"
         if not ADMIN_FILE_RE.match(name):
@@ -361,6 +518,88 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(404, b"Chua co bao cao.", "text/plain; charset=utf-8")
         extra = {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:", "Referrer-Policy": "no-referrer"}
         return self._send(200, body, CT[name.rsplit(".", 1)[1]], extra)
+
+    # -- quản lý tài khoản (chỉ quản trị viên; việc ghi do dịch vụ phụ root làm)
+    def _admin_email(self):
+        """Email quản trị viên hợp lệ, hoặc "" (đã trả lời 403)."""
+        email = self._email().lower()
+        if not email or email not in read_admins(self.cfg.admins_file):
+            self._send(403, {"ok": False, "error": "forbidden"})
+            return ""
+        return email
+
+    def _admin_static(self, name):
+        c = self.cfg
+        fname, ctype = ("accounts.html", "text/html; charset=utf-8") if name == "accounts" else ("accounts.js", "text/javascript; charset=utf-8")
+        try:
+            with open(os.path.join(c.web_dir, fname), "rb") as f:
+                body = f.read(1024 * 1024)
+        except OSError:
+            return self._send(404, {"ok": False})
+        csp = "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        return self._send(200, body, ctype, {"Content-Security-Policy": csp, "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY"})
+
+    def _unavailable(self):
+        return self._send(503, {"ok": False, "error": "unavailable", "message": "Dịch vụ quản lý tài khoản chưa chạy trên máy chủ (cần cài: sudo ./diag/install-diag.sh)."})
+
+    def _admin_accounts_get(self):
+        c = self.cfg
+        email = self._admin_email()
+        if not email:
+            return
+        lst = accounts_rpc(c.accounts_sock, {"op": "list"})
+        if not lst or not lst.get("ok"):
+            return self._unavailable()
+        aud = accounts_rpc(c.accounts_sock, {"op": "audit"}) or {}
+        out = {"ok": True, "users": lst.get("users", []), "max": lst.get("max"), "audit": aud.get("entries", []), "me": email}
+        if c.registry is not None:
+            out["seen"] = c.registry.snapshot()
+        return self._send(200, out)
+
+    def _admin_accounts_post(self):
+        c = self.cfg
+        email = self._admin_email()
+        if not email:
+            return
+        # chống CSRF: tiêu đề tuỳ biến (buộc trình duyệt kiểm tra trước), cùng nguồn, đúng kiểu nội dung
+        origin = self.headers.get("Origin")
+        site = self.headers.get("Sec-Fetch-Site")
+        ct = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if self.headers.get("X-Neu-Admin") != "1" or (origin is not None and origin != "https://" + c.public_host) or (site is not None and site != "same-origin") or ct != "application/json":
+            return self._send(403, {"ok": False, "error": "csrf"})
+        if self.headers.get("Transfer-Encoding"):
+            return self._send(411, {"ok": False, "error": "length_required"})
+        try:
+            n = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            return self._send(411, {"ok": False, "error": "length_required"})
+        if n > MAX_ADMIN_BODY or n < 2:
+            return self._send(413, {"ok": False, "error": "size"})
+        now = c.now()
+        with c.admin_lock:
+            hits = [t for t in c.admin_hits.get(email, []) if now - t < 60]
+            if len(hits) >= ADMIN_POSTS_PER_MIN:
+                c.admin_hits[email] = hits
+                return self._send(429, {"ok": False, "error": "rate", "message": "Thao tác quá nhanh, hãy đợi một phút."}, extra={"Retry-After": "30"})
+            hits.append(now)
+            c.admin_hits[email] = hits
+        try:
+            raw = json.loads(self.rfile.read(n).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return self._send(400, {"ok": False, "error": "json"})
+        if not isinstance(raw, dict) or raw.get("op") not in ("add", "remove", "kick"):
+            return self._send(400, {"ok": False, "error": "bad_request", "message": "Yêu cầu không hợp lệ."})
+        # chỉ chuyển đúng các trường cần thiết; người thao tác (actor) do MÁY CHỦ gắn, không nhận từ trình duyệt
+        req = {"op": raw["op"], "actor": email}
+        if raw["op"] in ("add", "remove"):
+            req["name"] = raw.get("name")
+        if raw["op"] == "add":
+            req["password"] = raw.get("password")
+        res = accounts_rpc(c.accounts_sock, req)
+        if res is None:
+            return self._unavailable()
+        code = 200 if res.get("ok") else (404 if res.get("error") == "not_found" else 400 if res.get("error") != "failed" else 500)
+        return self._send(code, {k: v for k, v in res.items() if k in ("ok", "error", "message", "created")})
 
     def _nope(self):
         self._send(405, {"ok": False}, extra={"Allow": "GET, HEAD, POST"})
@@ -397,7 +636,11 @@ def main():
         admins_file=os.environ.get("NEU_DIAG_ADMINS_FILE") or os.path.join(cred, "admins"),
         retention_days=int(os.environ.get("NEU_DIAG_RETENTION_DAYS", "90")),
         secret=_read_secret(),
+        accounts_sock=os.environ.get("NEU_ACCOUNTS_SOCK", "/run/neu-agent-accounts/accounts.sock"),
+        public_host=os.environ.get("NEU_PUBLIC_HOST", "ai.neu.edu.vn"),
     )
+    if os.environ.get("NEU_DIAG_KEEP_IDENTITIES", "1") != "0":
+        cfg.registry = Registry(os.path.join(cfg.diag_dir, "users-seen.json"))
     cfg.store.prune()
     srv = make_server(cfg, os.environ.get("NEU_DIAG_BIND", "127.0.0.1"), int(os.environ.get("NEU_DIAG_PORT", "4190")))
 
@@ -409,7 +652,22 @@ def main():
             except OSError:
                 pass
 
+    def flusher():
+        while True:
+            time.sleep(60)
+            if cfg.registry is not None:
+                cfg.registry.flush()
+
     threading.Thread(target=janitor, daemon=True).start()
+    threading.Thread(target=flusher, daemon=True).start()
+
+    def on_term(*_):  # systemd dừng dịch vụ: ghi nốt sổ rồi thoát
+        if cfg.registry is not None:
+            cfg.registry.flush()
+        os._exit(0)
+
+    import signal
+    signal.signal(signal.SIGTERM, on_term)
     print("neu-diag listening on %s:%s" % srv.server_address[:2], flush=True)
     try:
         srv.serve_forever()

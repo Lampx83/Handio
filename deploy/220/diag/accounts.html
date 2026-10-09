@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tài khoản · NEU Agent</title>
+<style>
+:root{--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--line:#dedcd3;--accent:#0b4a9e;--accent-fg:#fff;--soft:#e4edfa;--err:#c0302b;--ok:#1a7f4b;--warn-bg:#fff7e0}
+@media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--line:#34363b;--accent:#5b9bff;--accent-fg:#0b1220;--soft:#1b2a45;--err:#ff7b72;--ok:#4cc38a;--warn-bg:#33290f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+a{color:var(--accent)}
+h1{font-size:22px;margin:6px 0 4px}
+h2{font-size:15px;margin:0 0 10px;letter-spacing:.2px}
+.muted{color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label{display:block;font-size:13px;color:var(--muted);margin:0 0 4px}
+input{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);min-width:0}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.field{flex:1 1 220px}
+.field input{width:100%}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+button.danger{color:var(--err);border-color:var(--err)}
+button.sm{padding:4px 10px;font-size:13px}
+button[disabled]{opacity:.55;cursor:default}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+th{font-weight:600;color:var(--muted);font-size:12.5px}
+td.act{text-align:right;white-space:nowrap}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.msg{padding:10px 12px;border-radius:8px;margin:10px 0;border:1px solid var(--line);background:var(--soft)}
+.msg.err{border-color:var(--err);color:var(--err);background:transparent}
+.msg.warn{background:var(--warn-bg)}
+.pw{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.pw code{font-size:16px;padding:6px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--line);user-select:all}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;background:var(--soft)}
+.tag.bad{color:var(--err);background:transparent;border:1px solid var(--err)}
+.empty{padding:14px 6px;color:var(--muted)}
+nav{font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0 14px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg)}
+.tile b{display:block;font-size:26px;line-height:1.1}
+.tile span{display:block;color:var(--muted);font-size:12.5px}
+.tile .sub{margin-top:4px;font-size:13px;color:var(--text)}
+.plats{display:inline-flex;gap:4px;flex-wrap:wrap}
+.tag.web{background:var(--soft)}
+.tag.desk{background:transparent;border:1px solid var(--line)}
+#filter{width:100%;margin:6px 0 8px}
+.scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<main>
+  <nav><a href="./">← Báo cáo chất lượng</a></nav>
+  <h1>Tài khoản và người dùng</h1>
+  <p class="muted">Phần đầu thống kê <b>ai đang dùng NEU Agent</b> (cả Microsoft 365 lẫn tên + mật khẩu; web và Desktop). Bên dưới là nơi <b>tạo và quản lý tài khoản tên + mật khẩu</b> cho người không dùng được Microsoft 365 (khách mời, tài khoản thử). Tài khoản <code>@neu.edu.vn</code> / <code>@st.neu.edu.vn</code> do nhà trường cấp nên chỉ xem được, không quản lý ở đây.</p>
+
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <section class="card" id="seen-card" aria-labelledby="h-seen" hidden>
+    <div class="row" style="justify-content:space-between"><h2 id="h-seen" style="margin:0">Người đã dùng NEU Agent <span class="muted" id="seen-count"></span></h2><button id="csv" class="sm" type="button">Tải CSV</button></div>
+    <p class="muted" style="margin:6px 0 0">Gồm cả tài khoản Microsoft (@neu.edu.vn, @st.neu.edu.vn) và tài khoản tên + mật khẩu, tính theo số liệu ứng dụng gửi về (bản web và bản Desktop). Chỉ hiện người đã làm việc ít nhất một lượt. Không có nội dung hội thoại.</p>
+    <div id="stats" class="stats"></div>
+    <label for="filter" class="muted" style="margin-top:6px">Lọc theo tên hoặc email</label>
+    <input id="filter" type="search" placeholder="vd: sv, @st.neu.edu.vn, khach01" autocomplete="off" spellcheck="false">
+    <div class="scroll"><table><thead><tr><th>Tài khoản</th><th>Loại</th><th>Dùng trên</th><th>Lần đầu</th><th>Gần nhất</th><th>Lượt</th></tr></thead><tbody id="seen"></tbody></table></div>
+    <div id="noseen" class="empty" hidden>Chưa có ai (hoặc không khớp bộ lọc).</div>
+  </section>
+
+  <section class="card" aria-labelledby="h-add">
+    <h2 id="h-add">Tạo tài khoản hoặc đổi mật khẩu</h2>
+    <form id="form" autocomplete="off">
+      <div class="row">
+        <div class="field"><label for="name">Tên đăng nhập</label><input id="name" required minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9._-]{2,31}" placeholder="vd: khach01" autocapitalize="none" spellcheck="false"></div>
+        <div class="field"><label for="pw">Mật khẩu (từ 6 ký tự)</label><input id="pw" type="text" required minlength="6" maxlength="200" autocomplete="new-password" spellcheck="false"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button type="button" id="gen">Tạo mật khẩu ngẫu nhiên</button>
+        <button type="submit" id="save" class="primary">Lưu tài khoản</button>
+        <span class="muted" id="hint">Tên: chữ thường, số, dấu . _ - (3–32 ký tự). Nếu tên đã có, mật khẩu sẽ được <b>đổi</b>.</span>
+      </div>
+    </form>
+    <div id="shown" hidden></div>
+  </section>
+
+  <section class="card" aria-labelledby="h-list">
+    <div class="row" style="justify-content:space-between"><h2 id="h-list" style="margin:0">Tài khoản hiện có <span class="muted" id="count"></span></h2><button id="reload" class="sm">Tải lại</button></div>
+    <table id="tbl" aria-describedby="h-list"><thead><tr><th>Tên</th><th></th></tr></thead><tbody id="users"></tbody></table>
+    <div id="none" class="empty" hidden>Chưa có tài khoản nào.</div>
+  </section>
+
+  <section class="card" aria-labelledby="h-kick">
+    <h2 id="h-kick">Bắt mọi người đăng nhập lại</h2>
+    <p class="muted" style="margin:0 0 10px">Huỷ ngay mọi phiên đang đăng nhập trên trình duyệt (cả Microsoft lẫn tên + mật khẩu). Dùng khi nghi lộ mật khẩu. Mọi người sẽ phải đăng nhập lại, kể cả bạn.</p>
+    <button id="kick" class="danger">Huỷ mọi phiên đăng nhập</button>
+  </section>
+
+  <section class="card" aria-labelledby="h-audit">
+    <h2 id="h-audit">Nhật ký thao tác gần đây</h2>
+    <table><thead><tr><th>Lúc</th><th>Ai</th><th>Việc</th><th>Tài khoản</th><th>Kết quả</th></tr></thead><tbody id="audit"></tbody></table>
+    <div id="noaudit" class="empty" hidden>Chưa có thao tác nào.</div>
+  </section>
+</main>
+<script src="accounts.js"></script>
+</body>
+</html>
