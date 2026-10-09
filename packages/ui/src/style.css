@@ -519,3 +519,15 @@ dialog.wt-dlg input { flex: 1; min-width: 0; }
 .pv-pick .pk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .pv-pick .pk-row { display: flex; gap: 6px; }
 .pv-pick .pk-row input { flex: 1; min-width: 0; border: 1px solid var(--border); background: var(--bg); color: inherit; border-radius: 8px; padding: 6px 10px; font: inherit; }
+.ver-link { margin: 6px 10px 10px; padding: 2px 6px; border: 0; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; text-align: left; border-radius: 6px; }
+.ver-link:hover { background: var(--panel2); color: inherit; }
+dialog.chlog { width: min(640px, 96vw); max-height: 86vh; padding: 0; display: flex; flex-direction: column; }
+dialog.chlog[open] { display: flex; }
+dialog.chlog .cl-body { overflow: auto; padding: 4px 18px 18px; }
+.cl-ver { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 12px; }
+.cl-ver:first-of-type { border-top: 0; margin-top: 0; }
+.cl-ver h3 { margin: 0 0 4px; font-size: 16px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cl-ver h3 small { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+.cl-cur { font-size: 11.5px; padding: 0 8px; border-radius: 99px; border: 1px solid var(--accent); color: var(--accent); }
+.cl-st { color: var(--muted); font-size: 12.5px; font-weight: 600; margin: 8px 0 2px; text-transform: uppercase; letter-spacing: .3px; }
+.cl-sec ul { margin: 0; padding-left: 20px; } .cl-sec li { margin: 3px 0; font-size: 13.5px; }

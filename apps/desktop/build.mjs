@@ -1,3 +1,4 @@
+import { changelogData } from "../../scripts/version.mjs";
 import { build } from "esbuild";
 import fs from "node:fs";
 
@@ -26,6 +27,8 @@ await build({
   minify: release,
   define: { "process.env.NODE_ENV": '"production"', __SMOKE__: String(smoke), __DEV__: String(dev), __DEFAULT_BASE_URL__: JSON.stringify(baseUrl), __BUILTIN_KEY__: JSON.stringify(builtinKey), __AUTH__: JSON.stringify(auth) },
 });
-await build({ ...common, entryPoints: { renderer: "renderer/main.ts" }, outdir: "dist/renderer", platform: "browser", format: "iife", loader: { ".css": "css" }, minify: release });
+const pkgVersion = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+const changelog = changelogData(fs.readFileSync("../../CHANGELOG.md", "utf8")); // nhật ký thay đổi nhúng sẵn: xem được cả khi ngoại tuyến
+await build({ ...common, entryPoints: { renderer: "renderer/main.ts" }, outdir: "dist/renderer", platform: "browser", format: "iife", loader: { ".css": "css" }, minify: release, define: { __CHANGELOG__: JSON.stringify(changelog), __APP_VERSION__: JSON.stringify(pkgVersion) } });
 fs.copyFileSync("renderer/index.html", "dist/renderer/index.html");
 console.log(`build: ${release ? "RELEASE" : process.env.SMOKE_PACK === "1" ? "SMOKE_PACK" : "DEV"}; endpoint mặc định ${baseUrl}; key nhúng: ${builtinKey ? "CÓ" : "không"}; đăng nhập SSO: ${auth ? "BẬT" : "tắt"}`);

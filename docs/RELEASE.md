@@ -8,7 +8,7 @@ Tài liệu này trả lời ba câu hỏi: **phiên bản được đánh số 
 |---|---|
 | Đánh số | [Semantic Versioning](https://semver.org/lang/vi/) `MAJOR.MINOR.PATCH`. **PATCH**: sửa lỗi. **MINOR**: thêm tính năng, vẫn tương thích. **MAJOR**: đổi không tương thích (ví dụ định dạng dự án/cài đặt). Bản thử: hậu tố `-beta.1` (thấp hơn bản chính cùng số). |
 | Nguồn sự thật | `version` trong `package.json` ở gốc. Mọi gói (`packages/*`, `apps/*`) và `package-lock.json` luôn cùng số: dùng `npm run version:bump`, **không sửa tay**. |
-| Nhật ký thay đổi | [CHANGELOG.md](../CHANGELOG.md), viết cho **người dùng**. Ghi dần vào mục “Chưa phát hành” khi làm xong từng việc; lúc phát hành nó thành mục của phiên bản và là nội dung “Có gì mới” trong ứng dụng. |
+| Nhật ký thay đổi | [CHANGELOG.md](../CHANGELOG.md), viết cho **người dùng**. **Bắt buộc: mỗi phiên bản phải ghi đủ đã sửa/thêm/thay đổi gì** (`npm run version:check` và CI từ chối mục rỗng). Người dùng xem được ở: nút **“vX.Y.Z · Nhật ký thay đổi”** cuối thanh bên (nhúng sẵn lúc dựng, xem được cả khi ngoại tuyến), thanh thông báo cập nhật (“Có gì mới”) và trang công khai `/agent/guide/changelog.html` (tạo lúc `prepare.sh`). Ghi dần vào mục “Chưa phát hành” khi làm xong từng việc; lúc phát hành nó thành mục của phiên bản và là nội dung “Có gì mới” trong ứng dụng. |
 | Tag | `vX.Y.Z` trên đúng commit phát hành. CI từ chối tag không khớp phiên bản trong `package.json`. |
 | Web và Desktop | **Bản web luôn là bản mới nhất** (người dùng mở trang là được bản đang chạy trên máy chủ). **Desktop** là bản cài trên máy người dùng nên cần cơ chế cập nhật (mục 4). |
 | Không cập nhật ngầm | Ứng dụng chỉ **báo** có bản mới; chỉ tải khi người dùng bấm; kiểm tra SHA-256; không tự cài, không tự chạy. Lý do: xem [RELEASE-SIGNING.md](RELEASE-SIGNING.md) (giảm nghi ngờ phần mềm lạ) và [SECURITY.md](SECURITY.md). |
@@ -24,7 +24,7 @@ npm run version:bump -- minor         # patch | minor | major | X.Y.Z[-beta.1]; 
 
 ## 2. Quy trình phát hành (checklist)
 
-1. **Ghi CHANGELOG** cho mọi thay đổi người dùng thấy (mục “Chưa phát hành”: Thêm / Thay đổi / Sửa / Bảo mật).
+1. **Ghi CHANGELOG** cho MỌI thay đổi người dùng thấy (làm xong việc nào ghi ngay việc đó, đừng để đến lúc phát hành) (mục “Chưa phát hành”: Thêm / Thay đổi / Sửa / Bảo mật).
 2. **Kiểm tra**: `npm run typecheck && npm test && npm run smoke`. Xem trang quản trị (mục “Chất lượng”) xem bản hiện tại có đang gặp lỗi mà bản mới phải sửa không.
 3. **Nâng phiên bản**: `npm run version:bump -- <patch|minor|major>`. Lệnh sửa mọi `package.json`, `package-lock.json` và chuyển “Chưa phát hành” thành mục phiên bản mới. Rồi:
    ```bash

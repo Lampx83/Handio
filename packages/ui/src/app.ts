@@ -4,6 +4,7 @@ import { escapeHtml, renderMarkdown } from "./markdown";
 import { treeIcon } from "./icons";
 import { openSettings as openSettingsDialog, type AccountInfo } from "./settings-ui";
 import { accountChip } from "./account-ui";
+import { versionLink } from "./changelog-ui";
 import { DesignPreview } from "./preview";
 import { ago, openInstructions, openNewProject, toggleProjectMenu } from "./projects-ui";
 import { openLearn } from "./learn";
@@ -206,6 +207,7 @@ class App {
       this.todosHead,
       this.todosEl,
       this.opts.account ? accountChip(this.opts.account, () => this.openSettings()) : null,
+      versionLink(),
     );
     const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.input,
       // dưới ô nhập (giống Claude): trái = chế độ chạy + mẫu prompt; phải = mức ngữ cảnh, mô hình, Gửi

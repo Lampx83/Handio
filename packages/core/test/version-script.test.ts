@@ -65,3 +65,31 @@ describe("version.mjs", () => {
     expect(V.checkAll(path.resolve(__dirname, "../../..")).problems).toEqual([]);
   });
 });
+
+describe("nhật ký thay đổi cho người dùng", () => {
+  it("changelogData: phiên bản mới nhất trước, nhóm theo ### và từng mục -; bỏ 'Chưa phát hành'", () => {
+    const text = "# Nhật ký\n\n## [Chưa phát hành]\n\n### Thêm\n- Đang làm\n\n## [0.2.0] - 2026-10-08\n\n### Thêm\n- Một **đậm**\n  nối dòng\n- Hai `mã`\n\n### Sửa\n- Ba\n\n## [0.1.0] - 2026-10-01\n\n- Bản đầu\n";
+    const d = V.changelogData(text);
+    expect(d.map((x: { version: string }) => x.version)).toEqual(["0.2.0", "0.1.0"]);
+    expect(d[0].sections).toEqual([{ title: "Thêm", items: ["Một **đậm** nối dòng", "Hai `mã`"] }, { title: "Sửa", items: ["Ba"] }]);
+    expect(d[1].sections).toEqual([{ title: "Thay đổi", items: ["Bản đầu"] }]);
+  });
+
+  it("changelogHtml: trang tĩnh, escape HTML, không script", () => {
+    const html = V.changelogHtml([{ version: "1.0.0", date: "2026-01-01", sections: [{ title: "Sửa", items: ["<script>alert(1)</script> **đậm** `x<y`"] }] }]);
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("<b>đậm</b>");
+    expect(html).toContain("<code>x&lt;y</code>");
+    expect(html).toContain("Phiên bản 1.0.0");
+  });
+
+  it("version:check từ chối phiên bản có mục CHANGELOG rỗng (mỗi phiên bản phải ghi đủ thay đổi)", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ver-"));
+    fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ name: "r", version: "0.2.0" }));
+    fs.writeFileSync(path.join(dir, "CHANGELOG.md"), "# N\n\n## [Chưa phát hành]\n\n## [0.2.0] - 2026-10-08\n\n(chưa ghi gì)\n");
+    expect(V.checkAll(dir).problems.some((p: string) => /chưa ghi thay đổi nào/.test(p))).toBe(true);
+    fs.writeFileSync(path.join(dir, "CHANGELOG.md"), "# N\n\n## [0.2.0] - 2026-10-08\n\n### Sửa\n- Đã sửa lỗi\n");
+    expect(V.checkAll(dir).problems).toEqual([]);
+  });
+});

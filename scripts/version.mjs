@@ -4,6 +4,7 @@
 //   node scripts/version.mjs check                        kiểm tra mọi nơi cùng một phiên bản và CHANGELOG có mục cho phiên bản đó (thoát 1 nếu lệch)
 //   node scripts/version.mjs bump <patch|minor|major|X.Y.Z[-hậu-tố]> [--allow-empty] [--date YYYY-MM-DD]
 //        nâng phiên bản ở mọi gói + package-lock, chuyển mục "Chưa phát hành" của CHANGELOG thành mục phiên bản mới
+//   node scripts/version.mjs changelog-json | changelog-html <tệp>   xuất nhật ký thay đổi (dữ liệu cho ứng dụng / trang công khai)
 //   node scripts/version.mjs notes [phiên-bản]            in ghi chú phát hành (từ CHANGELOG) của phiên bản, dạng văn bản thường (dùng cho latest.json)
 // Không tự commit/tag/đẩy: in ra các lệnh tiếp theo để người phát hành chạy (xem docs/RELEASE.md).
 import fs from "node:fs";
@@ -58,6 +59,39 @@ export function notesFor(text, version) {
     .slice(0, 2000);
 }
 
+/**
+ * Nhật ký thay đổi dạng dữ liệu cho ứng dụng và trang công khai: [{version, date, sections:[{title, items:[chuỗi]}]}], mới nhất trước (không gồm "Chưa phát hành").
+ * Mỗi mục "- ..." là một dòng; tiêu đề nhóm lấy từ "### ...".
+ */
+export function changelogData(text) {
+  return parseChangelog(text).releases.map((r) => {
+    const sections = [];
+    let cur = null;
+    for (const line of r.body.split("\n")) {
+      const h = /^###\s+(.+)$/.exec(line);
+      if (h) {
+        cur = { title: h[1].trim(), items: [] };
+        sections.push(cur);
+      } else if (/^\s*[-*]\s+/.test(line)) {
+        if (!cur) sections.push((cur = { title: "Thay đổi", items: [] }));
+        cur.items.push(line.replace(/^\s*[-*]\s+/, "").trim());
+      } else if (line.trim() && cur && cur.items.length) cur.items[cur.items.length - 1] += " " + line.trim(); // dòng nối tiếp
+    }
+    return { version: r.version, date: r.date, sections };
+  });
+}
+
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
+
+/** Trang HTML tĩnh (không script, không tài nguyên ngoài) của nhật ký thay đổi, để phục vụ công khai cạnh trang hướng dẫn. */
+export function changelogHtml(data, { title = "Nhật ký thay đổi NEU Agent", back = "./" } = {}) {
+  const body = data
+    .map((r) => `<section><h2>Phiên bản ${esc(r.version)}${r.date ? ` <small>${esc(r.date)}</small>` : ""}</h2>${r.sections.map((s) => `<h3>${esc(s.title)}</h3><ul>${s.items.map((i) => `<li>${inline(i)}</li>`).join("")}</ul>`).join("")}</section>`)
+    .join("\n");
+  return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>:root{color-scheme:light dark;--bg:#fff;--fg:#1f2328;--mut:#6b7078;--line:#dedcd3;--acc:#0b4a9e}@media (prefers-color-scheme:dark){:root{--bg:#17181a;--fg:#e8e6e1;--mut:#9a9ea6;--line:#34363b;--acc:#5b9bff}}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}main{max-width:760px;margin:0 auto;padding:24px 18px 60px}a{color:var(--acc)}h1{font-size:26px}h2{border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:34px}h2 small{color:var(--mut);font-weight:400;font-size:14px;margin-left:8px}h3{font-size:15px;color:var(--mut);margin:16px 0 4px}li{margin:4px 0}code{background:rgba(127,127,127,.15);border-radius:4px;padding:0 4px}</style></head><body><main><p><a href="${esc(back)}">← Hướng dẫn</a></p><h1>${esc(title)}</h1><p style="color:var(--mut)">Mỗi phiên bản sửa gì, thêm gì đều được ghi ở đây.</p>${body}</main></body></html>`;
+}
+
 function repoRoot() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
@@ -87,7 +121,11 @@ export function checkAll(root) {
   if (!VERSION_RE.test(main)) problems.push(`Phiên bản không hợp lệ: ${main}`);
   const clPath = path.join(root, "CHANGELOG.md");
   if (!fs.existsSync(clPath)) problems.push("Thiếu CHANGELOG.md");
-  else if (!parseChangelog(fs.readFileSync(clPath, "utf8")).releases.some((r) => r.version === main)) problems.push(`CHANGELOG.md chưa có mục cho ${main} (chạy: node scripts/version.mjs bump ...)`);
+  else {
+    const rel = parseChangelog(fs.readFileSync(clPath, "utf8")).releases.find((r) => r.version === main);
+    if (!rel) problems.push(`CHANGELOG.md chưa có mục cho ${main} (chạy: node scripts/version.mjs bump ...)`);
+    else if (!/^\s*[-*]\s+\S/m.test(rel.body)) problems.push(`Mục ${main} trong CHANGELOG.md chưa ghi thay đổi nào: mỗi phiên bản phải ghi đủ đã sửa/thêm gì (người dùng xem được)`);
+  }
   return { version: main, problems };
 }
 
@@ -123,6 +161,18 @@ function main(argv) {
       return 1;
     }
     console.log(`✓ Phiên bản ${r.version} nhất quán ở mọi gói và có trong CHANGELOG.md`);
+    return 0;
+  }
+  if (cmd === "changelog-json") {
+    process.stdout.write(JSON.stringify(changelogData(fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8"))) + "\n");
+    return 0;
+  }
+  if (cmd === "changelog-html") {
+    const out = rest[0];
+    if (!out) throw new Error("Thiếu đường dẫn tệp đầu ra");
+    fs.mkdirSync(path.dirname(path.resolve(out)), { recursive: true });
+    fs.writeFileSync(out, changelogHtml(changelogData(fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8"))));
+    console.log("Đã ghi " + out);
     return 0;
   }
   if (cmd === "notes") {

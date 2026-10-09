@@ -344,7 +344,9 @@ describe("cổng tự kiểm tra: vừa tạo/sửa mà chưa kiểm chứng th�
     expect(isInternalUser("[Hệ thống] Bạn vừa tạo hoặc sửa tệp nhưng CHƯA chạy thử.")).toBe(true);
     const { c } = await makeController([{ calls: [{ name: "write_file", args: { path: "a.js", content: "x" } }] }, { text: "Xong." }, { text: "Ok." }], { env: withExec() });
     await c.send("làm app");
-    const state = await c.getState();
-    expect(state.chatTitle ?? "làm app").toContain("làm app");
+    const { chatTitle, countTurns } = await import("../src/projects");
+    const msgs = (c.currentSession.main as any).messages;
+    expect(chatTitle(msgs)).toBe("làm app");     // tiêu đề là câu của người dùng, không phải tin nhắc nội bộ
+    expect(countTurns(msgs)).toBe(1);
   });
 });
