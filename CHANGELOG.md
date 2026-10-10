@@ -5,6 +5,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.6.3] - 2026-10-10
 
 ### Thay đổi
 - **Ảnh dán (Ctrl+V) không còn bị lưu vào thư mục dự án**: ảnh chụp màn hình dán vào ô nhập được lưu tạm ngoài dự án (không lẫn vào mã nguồn, `git status`, không lỡ commit) và vẫn đọc được bằng `@dan/…`. Chỉ giữ 30 ảnh dán gần nhất. Các tệp `anh-dan-…png` đã lỡ lưu trong dự án từ bản trước thì bạn xoá tay được.
