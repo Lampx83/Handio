@@ -25,7 +25,7 @@ export const DIAG_TOOLS: string[] = [
   "check_package", "web_fetch", "read_image", "web_search", "fetch_page", "xlsx_pivot", "merge_check", "merge_documents", "scan_pii", "redact_pii", "read_document", "find_in_documents", "create_docx", "docx_replace", "create_xlsx", "xlsx_edit", "create_pptx",
   "convert_to_pdf", "skill", "task", "exit_plan_mode", "mcp", "other",
 ];
-export const DIAG_SIGNALS = ["loop", "step_limit", "repeat_tool_fail", "slow_first_token", "slow_turn", "ctx_high", "early_interrupt", "perm_denied", "empty_output", "invalid_tool_args", "unknown_tool", "truncated", "context_overflow"];
+export const DIAG_SIGNALS = ["loop", "step_limit", "repeat_tool_fail", "slow_first_token", "slow_turn", "ctx_high", "early_interrupt", "perm_denied", "empty_output", "invalid_tool_args", "unknown_tool", "truncated", "context_overflow", "args_truncated", "text_repeat"];
 /** Lý do công cụ thất bại (chỉ mã): xem ToolErrorKind trong tools.ts. "program" = chương trình/test của người dùng chạy hỏng (kết quả bình thường, không phải lỗi công cụ); "denied" = bị từ chối quyền. */
 export const DIAG_TOOL_ERRORS = ["not_found", "outside_project", "read_first", "stale", "binary", "bad_args", "no_match", "ambiguous", "wrong_type", "sandbox", "program", "timeout", "unsupported", "denied", "hook", "unknown_tool", "bad_json", "internal", "other"];
 /** Việc người dùng làm trong giao diện (chỉ MÃ, không có nội dung): để biết tính năng nào được dùng/bỏ qua. */
@@ -510,7 +510,9 @@ export class DiagnosticsRecorder {
     if (/giới hạn \d+ bước/.test(text)) {
       if (t) t.stepLimit = true;
       this.signal("step_limit", undefined, t?.steps);
-    } else if (/lặp lại cùng một thao tác/.test(text)) {
+    } else if (/^Lời gọi công cụ bị cắt/.test(text)) this.signal("args_truncated");
+    else if (/^Agent bắt đầu lặp lại một đoạn văn/.test(text)) this.signal("text_repeat");
+    else if (/lặp lại cùng một thao tác/.test(text)) {
       if (t) t.loopStop = true;
       if (!t || ![...t.signals].some((k) => k.startsWith("loop"))) this.signal("loop", undefined, t?.repN);
     } else if (/^Ngữ cảnh đầy, đang rút gọn/.test(text)) this.signal("context_overflow");

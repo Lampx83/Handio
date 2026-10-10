@@ -5,6 +5,10 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+
+### Thay đổi
+- Khi agent bị cắt giữa chừng lúc tạo tệp dài hoặc rơi vào vòng lặp văn bản, ứng dụng ghi nhận **mã** của sự cố (không kèm nội dung) vào số liệu chẩn đoán để nhóm phát triển thấy và cải tiến; bạn có thể tắt chẩn đoán ở Cài đặt.
+
 ## [0.6.2] - 2026-10-10
 
 ### Sửa

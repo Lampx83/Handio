@@ -135,3 +135,14 @@ Chẩn đoán KHÔNG chứa nội dung. **Góp ý** thì ngược lại: là ch�
 | Lưu bao lâu | cho tới khi quản trị viên xoá (không tự xoá); sao lưu theo `/var/lib/neu-agent` |
 
 Mã: `deploy/220/diag/feedback.py` (kho + kiểm tra), route trong `collector.py`, trang `feedback.html`/`feedback.js`, kiểm thử `test_feedback.py`; phía ứng dụng `packages/core/src/feedback.ts`, `LocalController.sendFeedback`, `packages/ui/src/feedback-ui.ts`.
+
+## Tín hiệu lỗi sinh nội dung (0.6.2)
+
+Ngoài `invalid_tool_args`, `truncated`, `loop`…, bộ chẩn đoán ghi thêm hai tín hiệu (chỉ mã, không nội dung) để biết mô hình có sinh nội dung hỏng không:
+
+| Tín hiệu | Khi nào | Báo cáo |
+|---|---|---|
+| `args_truncated` | lời gọi công cụ bị cắt giữa chừng vì hết độ dài đầu ra (JSON dở dang) | quy tắc `generation_faults` ở trang báo cáo chất lượng |
+| `text_repeat` | mô hình cứ lặp một đoạn văn; bị ngắt giữa chừng | như trên |
+
+Khi cả hai cùng tăng: kiểm tra `maxOutputTokens`, mô tả công cụ và lời nhắc chia nhỏ nội dung dài.

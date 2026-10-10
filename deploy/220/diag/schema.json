@@ -270,7 +270,9 @@
           "invalid_tool_args",
           "unknown_tool",
           "truncated",
-          "context_overflow"
+          "context_overflow",
+          "args_truncated",
+          "text_repeat"
         ],
         "req": true
       },

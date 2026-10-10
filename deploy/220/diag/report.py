@@ -29,7 +29,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 THRESHOLDS = {
     "min_turns": 20,  # ít hơn: không kết luận về tỷ lệ
     "turn_error_rate": 0.05, "turn_error_rate_high": 0.15,
-    "step_limit_rate": 0.03, "loop_rate": 0.02,
+    "step_limit_rate": 0.03, "loop_rate": 0.02, "gen_fault_rate": 0.02,
     "tool_fail_rate": 0.25, "tool_min_calls": 10,
     "bad_tool_rate": 0.02,
     "ctx_high_rate": 0.10,
@@ -267,6 +267,13 @@ def rule_loop(S, T, B=None):
                        "Công cụ trả lỗi/kết quả khó hiểu khiến mô hình thử lại y hệt. Làm rõ thông điệp lỗi của công cụ đó, thêm gợi ý hướng khác vào kết quả, hoặc hạ ngưỡng dừng.")
 
 
+def rule_generation_faults(S, T, B=None):
+    cut, rep = S["signals"].get("args_truncated", 0), S["signals"].get("text_repeat", 0)
+    if _enough(S, T) and ratio(cut + rep, S["turns"]) >= T["gen_fault_rate"] and cut + rep >= 2:
+        return finding("generation_faults", "trung bình", "Mô hình sinh nội dung bị cắt hoặc lặp", "lời gọi công cụ bị cắt vì quá dài: %d; lặp một đoạn văn: %d (trên %d lượt)" % (cut, rep, S["turns"]),
+                       "Tạo tệp dài trong một lần gọi bị cắt ở giới hạn đầu ra, hoặc mô hình rơi vào vòng lặp văn bản. Kiểm tra maxOutputTokens/ngân sách đầu ra, nhắc agent chia nhỏ nội dung, hạ temperature; xem công cụ nào hay bị cắt (write_file/create_xlsx).")
+
+
 def rule_tool_fail(S, T, B=None):
     out = []
     for name, t in sorted(S["tools"].items()):
@@ -346,7 +353,7 @@ def rule_intake(S, T, B=None):
         return finding("intake", "thấp", "Đường thu thập chẩn đoán có vấn đề", "; ".join(ev), "Xem log collector (journalctl -u neu-agent-diag); 429 = giới hạn tốc độ, 401 = phiên SSO hết hạn, 400 = lược đồ lệch giữa máy khách và schema.json.")
 
 
-RULES = [rule_no_data, rule_turn_errors, rule_unexpected, rule_gateway_5xx, rule_rate_limit, rule_auth, rule_context, rule_step_limit, rule_loop, rule_tool_fail, rule_bad_tool_calls, rule_latency, rule_early_interrupt, rule_perm_denied, rule_empty, rule_retry, rule_old_versions, rule_intake]
+RULES = [rule_no_data, rule_turn_errors, rule_unexpected, rule_gateway_5xx, rule_rate_limit, rule_auth, rule_context, rule_step_limit, rule_loop, rule_generation_faults, rule_tool_fail, rule_bad_tool_calls, rule_latency, rule_early_interrupt, rule_perm_denied, rule_empty, rule_retry, rule_old_versions, rule_intake]
 
 
 def anomalies(W, B, T):

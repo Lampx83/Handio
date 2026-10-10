@@ -1085,6 +1085,7 @@ export class Agent {
       args = parsed;
     } catch (e) {
       s.emit({ type: "tool_start", id: tc.id, name, summary: "tham số không hợp lệ", args: {}, depth: this.depth });
+      if (this.lastFinish === "length") s.emit({ type: "notice", level: "warn", text: "Lời gọi công cụ bị cắt vì nội dung quá dài so với độ dài đầu ra tối đa; agent sẽ được nhắc chia nhỏ." });
       const out = this.lastFinish === "length"
         ? `Lỗi: lời gọi ${name} bị CẮT GIỮA CHỪNG vì nội dung quá dài so với độ dài đầu ra tối đa của một lần trả lời (${(e as Error).message}). Gọi lại y hệt sẽ lại bị cắt. Hãy CHIA NHỎ: tạo trước tệp khung ngắn (tiêu đề/CSS/dòng đầu), rồi thêm từng phần bằng edit_file (hoặc xlsx_edit thêm mỗi lần tối đa ~40 dòng); với dữ liệu giả hàng loạt hãy dùng công thức (=ROW(), =RANDBETWEEN…) thay vì viết từng ô. Mỗi lần gọi chỉ nên dưới ~5.000 ký tự nội dung.`
         : `Lỗi: tham số không phải JSON hợp lệ (${(e as Error).message}). Hãy gọi lại với JSON đúng.`;

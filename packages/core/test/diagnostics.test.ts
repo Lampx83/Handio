@@ -614,3 +614,14 @@ describe("checkForUpdate / compareVersions", () => {
     expect(init.headers).toMatchObject({ Authorization: "Bearer t" });
   });
 });
+
+describe("tín hiệu: lời gọi công cụ bị cắt và vòng lặp văn bản", () => {
+  it("ghi nhận args_truncated và text_repeat chỉ bằng mã, không kèm nội dung", async () => {
+    const { r, net, clock } = mkRecorder();
+    turn(r, clock, [{ type: "notice", level: "warn", text: "Lời gọi công cụ bị cắt vì nội dung quá dài so với độ dài đầu ra tối đa; agent sẽ được nhắc chia nhỏ." }, msgEnd("a")]);
+    turn(r, clock, [{ type: "notice", level: "warn", text: "Agent bắt đầu lặp lại một đoạn văn nên đã bị dừng sinh chữ và được nhắc đổi cách làm." }, msgEnd("a")]);
+    const ev = allEvents(await payloads(r, net));
+    expect(sigCodes([{ events: ev }])).toEqual(expect.arrayContaining(["args_truncated", "text_repeat"]));
+    expect(JSON.stringify(ev)).not.toMatch(/nội dung quá dài|đoạn văn/);
+  });
+});

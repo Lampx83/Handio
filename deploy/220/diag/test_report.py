@@ -272,3 +272,18 @@ class CliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GenerationFaultRule(unittest.TestCase):
+    def test_flags_truncated_and_repeating_generation(self):
+        S = {"turns": 100, "signals": {"args_truncated": 3, "text_repeat": 2}}
+        T = dict(R.THRESHOLDS)
+        f = R.rule_generation_faults(S, T)
+        self.assertEqual(f["id"], "generation_faults")
+        self.assertIn("3", f["evidence"])
+        self.assertIn("write_file", f["suggestion"])
+
+    def test_quiet_when_rare(self):
+        T = dict(R.THRESHOLDS)
+        self.assertIsNone(R.rule_generation_faults({"turns": 100, "signals": {"args_truncated": 1}}, T))
+        self.assertIsNone(R.rule_generation_faults({"turns": 1000, "signals": {"text_repeat": 5}}, T))
