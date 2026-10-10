@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.6.0] - 2026-10-10
+
 ### Thêm
 - **Góp ý / báo lỗi cho nhóm phát triển**: nút 💬 trên thanh trên mở hộp góp ý (Báo lỗi, Đề xuất, Khen, Khác). Bạn tự viết và tự bấm gửi; góp ý được lưu ở máy chủ của trường kèm tên đăng nhập để nhóm liên hệ lại, và có thể gửi kèm thông tin kỹ thuật (phiên bản, hệ điều hành, tab, mô hình — không có nội dung hội thoại hay tệp). Quản trị viên xem, lọc, ghi chú và đặt trạng thái ở trang quản trị mục *Góp ý*.
 - **Trang “Hướng dẫn sử dụng”** công khai (`/agent/guide/help.html`, xem được cả khi chưa đăng nhập): bắt đầu, ba chế độ Work/Code/Design, cách viết yêu cầu, các chế độ chạy, lệnh `/` và phím tắt, cài bản máy tính, hạn mức và riêng tư, xử lý sự cố, hỏi đáp. Có liên kết từ trang giới thiệu.
