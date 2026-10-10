@@ -350,3 +350,38 @@ describe("cổng tự kiểm tra: vừa tạo/sửa mà chưa kiểm chứng th�
     expect(countTurns(msgs)).toBe(1);
   });
 });
+
+describe("đầu ra dài bị cắt giữa chừng (lời gọi công cụ thành JSON hỏng)", () => {
+  it("yêu cầu mô hình ngân sách đầu ra lớn hơn 4096 dù cài đặt cũ đã lưu 4096, và không vượt phần còn lại của ngữ cảnh", async () => {
+    const { c, llm } = await makeController([{ text: "xong" }], { settings: { maxOutputTokens: 4096, contextTokens: 32768 } });
+    await c.send("xin chào");
+    const mt = llm.calls[0].opts.maxTokens as number;
+    expect(mt).toBeGreaterThan(8000);
+    expect(mt).toBeLessThanOrEqual(16384);
+    const small = await makeController([{ text: "xong" }], { settings: { maxOutputTokens: 4096, contextTokens: 8192 } });
+    await small.c.send("xin chào");
+    expect(small.llm.calls[0].opts.maxTokens as number).toBeLessThan(8192);
+    const user = await makeController([{ text: "xong" }], { settings: { maxOutputTokens: 2000 } });
+    await user.c.send("xin chào");
+    expect(user.llm.calls[0].opts.maxTokens).toBe(2000);
+  });
+
+  it("khi lời gọi bị cắt (finish=length, JSON dở dang) thì báo rõ phải chia nhỏ, không bảo 'gọi lại JSON đúng'", async () => {
+    const { c, llm } = await makeController(
+      [{ calls: [{ name: "write_file", args: { path: "a.html", content: "x" } }], finish: "length" }, { text: "ok" }],
+      { settings: { mode: "acceptEdits" } },
+    );
+    // mô hình giả trả tham số JSON hỏng như khi bị cắt
+    const orig = llm.chat.bind(llm);
+    let n = 0;
+    llm.chat = async (...a: Parameters<typeof orig>) => {
+      const r = await orig(...a);
+      if (n++ === 0) r.toolCalls = [{ id: "c1", name: "write_file", arguments: '{"path":"a.html","content":"<html><body><p>Xin chào' }];
+      return r;
+    };
+    await c.send("làm tờ rơi");
+    const toolMsg = JSON.stringify(llm.calls[1].messages.at(-1));
+    expect(toolMsg).toMatch(/CẮT GIỮA CHỪNG/);
+    expect(toolMsg).toMatch(/CHIA NHỎ/);
+  });
+});

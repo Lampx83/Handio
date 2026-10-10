@@ -846,6 +846,7 @@ export class Agent {
         if (maxSteps >= 10 && maxSteps - step === Math.max(3, Math.floor(maxSteps * 0.15))) this.messages.push({ role: "user", content: `[Hệ thống] Chỉ còn ${maxSteps - step} bước trong lượt này. Hãy ưu tiên hoàn thành phần quan trọng nhất, rồi tóm tắt: đã làm gì và còn thiếu gì.` });
         await this.manageContext();
         const resp = await this.callModel(signal);
+        this.lastFinish = resp.finish;
         const msg: ChatMessage = { role: "assistant", content: resp.content || null };
         if (resp.toolCalls.length) msg.tool_calls = resp.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.arguments } }));
         this.messages.push(msg);
@@ -967,6 +968,23 @@ export class Agent {
     }
   }
 
+  /** Lý do dừng của lần gọi mô hình gần nhất ("length" = hết độ dài đầu ra, lời gọi công cụ có thể bị cắt giữa chừng). */
+  private lastFinish: string | null = null;
+
+  /**
+   * Số token đầu ra tối đa cho lần gọi này: phần còn lại của cửa sổ ngữ cảnh, tối đa 16.384. Giá trị 4096 (mặc định cũ, đã được lưu vào
+   * cài đặt của mọi người) coi như "tự động": 4096 token chỉ đủ ~10.000 ký tự tiếng Việt nên một tệp HTML/bảng dài bị cắt giữa chừng
+   * và lời gọi công cụ thành JSON hỏng. Người dùng tự đặt giá trị khác thì tôn trọng (nhưng không vượt phần còn lại của ngữ cảnh).
+   */
+  private outputBudget(system: string, tools: ToolSchema[]): number {
+    const st = this.s.o.getSettings();
+    const ctx = st.contextTokens || 32768;
+    const used = Math.ceil((system.length + JSON.stringify(this.messages).length + JSON.stringify(tools).length) / Math.max(1.8, this.s.charsPerToken));
+    const room = ctx - used - 800;
+    const want = st.maxOutputTokens && st.maxOutputTokens !== 4096 ? st.maxOutputTokens : 12288;
+    return Math.max(1024, Math.min(want, room, 16384));
+  }
+
   private async callModel(signal?: AbortSignal, noTools = false): Promise<ChatResult> {
     const s = this.s;
     const tools: ToolSchema[] = noTools ? [] : s.toolsFor(this.def, this.depth).map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
@@ -981,6 +999,7 @@ export class Agent {
           tools,
           signal,
           thinking: think,
+          maxTokens: this.outputBudget(system, tools),
           notify,
           onContent: this.depth === 0 ? (t) => s.emit({ type: "text", depth: 0, delta: t }) : undefined,
           onReasoning: this.depth === 0 && think ? (t) => s.emit({ type: "reasoning", depth: 0, delta: t }) : undefined,
@@ -1022,7 +1041,9 @@ export class Agent {
       args = parsed;
     } catch (e) {
       s.emit({ type: "tool_start", id: tc.id, name, summary: "tham số không hợp lệ", args: {}, depth: this.depth });
-      const out = `Lỗi: tham số không phải JSON hợp lệ (${(e as Error).message}). Hãy gọi lại với JSON đúng.`;
+      const out = this.lastFinish === "length"
+        ? `Lỗi: lời gọi ${name} bị CẮT GIỮA CHỪNG vì nội dung quá dài so với độ dài đầu ra tối đa của một lần trả lời (${(e as Error).message}). Gọi lại y hệt sẽ lại bị cắt. Hãy CHIA NHỎ: tạo trước tệp khung ngắn (tiêu đề/CSS/dòng đầu), rồi thêm từng phần bằng edit_file (hoặc xlsx_edit thêm mỗi lần tối đa ~40 dòng); với dữ liệu giả hàng loạt hãy dùng công thức (=ROW(), =RANDBETWEEN…) thay vì viết từng ô. Mỗi lần gọi chỉ nên dưới ~5.000 ký tự nội dung.`
+        : `Lỗi: tham số không phải JSON hợp lệ (${(e as Error).message}). Hãy gọi lại với JSON đúng.`;
       this.done(tc, name, false, out, "bad_json");
       return out;
     }

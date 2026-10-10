@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Sửa
+- **Sửa lỗi “tham số không phải JSON hợp lệ” khi tạo tệp dài** (tờ rơi/trang HTML ở tab Design, Excel nhiều dòng, tài liệu dài): agent trước đây bị cắt giữa chừng sau khoảng 10.000 ký tự. Nay giới hạn đầu ra theo phần còn lại của cửa sổ ngữ cảnh (tới 16 nghìn token); nếu vẫn bị cắt, agent được báo rõ và tự chia nhỏ (tệp khung rồi thêm từng phần, dữ liệu hàng loạt bằng công thức).
 - Góp ý/báo lỗi (nút 💬) và trang quản trị *Góp ý* chạy được trên máy chủ: bản 0.6.0 triển khai lần đầu thiếu một tệp nên máy chủ tự quay về bản trước; nay đã bổ sung và có kiểm tra chống tái diễn.
 
 ## [0.6.0] - 2026-10-10
