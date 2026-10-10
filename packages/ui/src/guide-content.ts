@@ -69,7 +69,7 @@ const COMMON_AFTER: GuideSection[] = [
       { t: "“Phiên đăng nhập đã hết hạn”", d: "Bấm nút Đăng nhập lại ngay trong thông báo. Cuộc trò chuyện và tệp của bạn vẫn còn." },
       { t: "“Đã dùng hết hạn mức hôm nay”", d: "Hạn mức token làm mới lúc 00:00 giờ Việt Nam. Dưới ô nhập có nhãn nhắc khi bạn đã dùng từ 80%. Hết hạn mức, bạn vẫn xem và sửa tệp thủ công." },
       { t: "Phản hồi chậm", d: "Vài chục giây là bình thường với việc nhiều bước. Nếu quá lâu, thử Dừng và gửi lại; báo lỗi ở Cài đặt nếu lặp lại." },
-      { t: "Báo lỗi cho nhóm phát triển", d: "Cài đặt → Báo lỗi: xem trước đúng dữ liệu sẽ gửi (chỉ số liệu, không có nội dung) rồi gửi." },
+      { t: "Góp ý hoặc báo lỗi cho nhóm phát triển", d: "Bấm nút 💬 trên thanh trên, chọn loại (Báo lỗi, Đề xuất, Khen, Khác), viết vài dòng rồi Gửi. Nhóm phát triển đọc được góp ý kèm tên đăng nhập của bạn để liên hệ lại. Muốn gửi số liệu kỹ thuật ẩn danh thì dùng Cài đặt → Báo lỗi (xem trước đúng dữ liệu sẽ gửi, không có nội dung)." },
     ],
   },
   {

@@ -126,6 +126,7 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   listModels: (a) => a.length === 0,
   track: (a) => a.length === 1 && typeof a[0] === "string" && /^[a-z_]{1,32}$/.test(a[0]),
   feedback: (a) => (a.length === 1 || a.length === 2) && (a[0] === "up" || a[0] === "down") && (a.length === 1 || (typeof a[1] === "string" && /^[a-z_]{1,32}$/.test(a[1]))),
+  sendFeedback: (a) => a.length === 1 && isObj(a[0]) && typeof a[0].kind === "string" && ["bug", "idea", "praise", "other"].includes(a[0].kind) && str(a[0].text, 3000) && typeof a[0].tech === "boolean" && Object.keys(a[0]).length === 3,
   diagnosticsStatus: (a) => a.length === 0,
   diagnosticsPreview: (a) => a.length === 1 && str(a[0], 500),
   diagnosticsSend: (a) => a.length === 0,

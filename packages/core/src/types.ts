@@ -223,6 +223,8 @@ export interface AgentController {
   track?(act: string): void;
   /** Phản hồi 👍/👎 (kèm lý do chọn sẵn) cho câu trả lời vừa rồi. */
   feedback?(v: "up" | "down", reason?: string): void;
+  /** Gửi góp ý/báo lỗi do người dùng viết tới nhóm phát triển (lưu ở máy chủ cho quản trị viên). Không bao giờ ném lỗi. */
+  sendFeedback?(f: import("./feedback").FeedbackInput): Promise<import("./feedback").FeedbackResult>;
   diagnosticsStatus?(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }>;
   diagnosticsPreview?(note: string): Promise<string | null>;
   diagnosticsSend?(): Promise<{ ok: boolean }>;

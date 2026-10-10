@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Góp ý / báo lỗi cho nhóm phát triển**: nút 💬 trên thanh trên mở hộp góp ý (Báo lỗi, Đề xuất, Khen, Khác). Bạn tự viết và tự bấm gửi; góp ý được lưu ở máy chủ của trường kèm tên đăng nhập để nhóm liên hệ lại, và có thể gửi kèm thông tin kỹ thuật (phiên bản, hệ điều hành, tab, mô hình — không có nội dung hội thoại hay tệp). Quản trị viên xem, lọc, ghi chú và đặt trạng thái ở trang quản trị mục *Góp ý*.
 - **Trang “Hướng dẫn sử dụng”** công khai (`/agent/guide/help.html`, xem được cả khi chưa đăng nhập): bắt đầu, ba chế độ Work/Code/Design, cách viết yêu cầu, các chế độ chạy, lệnh `/` và phím tắt, cài bản máy tính, hạn mức và riêng tư, xử lý sự cố, hỏi đáp. Có liên kết từ trang giới thiệu.
 - **Trang quản trị: xem ai đã hết hạn mức token và cấp thêm nhanh** (`/agent/admin/quota`, chỉ quản trị viên): danh sách người đã hết hoặc gần hết hạn mức hôm nay (kèm tên/email nếu có), nút **+1 / +5 / +10 triệu token** có hiệu lực ngay đến hết ngày, nút **Bỏ** để thu hồi, và nhật ký ai đã cấp cho ai. Cần chạy lại `install-quota.sh` rồi `install-diag.sh` trên máy 220.
 
@@ -16,6 +17,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Kế hoạch ở chế độ plan** luôn nêu mục tiêu, tệp sẽ sửa và tệp **không** đụng tới, các bước theo thứ tự kiểm chứng được, cách kiểm tra từng bước và câu hỏi cần bạn xác nhận.
 - `/context` liệt kê riêng từng tệp hướng dẫn đang nạp (AGENTS.md, CLAUDE.md, quy tắc…) để biết tệp nào đã vào ngữ cảnh.
 - **Bản cài Desktop nhẹ hơn, tải nhanh hơn**: bỏ các gói ngôn ngữ thừa (chỉ giữ tiếng Việt và tiếng Anh, nhẹ hơn ~8 MB) và nén lại bản macOS bằng LZMA (nhẹ hơn ~17%, khoảng 120 → 98 MB). Chức năng không đổi.
+- **Bỏ dự án mẫu**: người dùng mới bắt đầu với dự án trống tên “Dự án của tôi” (Design: “Thiết kế của tôi”), không còn tệp mẫu tự nạp sẵn. Bản Desktop đã cài trước đây tự đổi tên dự án đầu tiên và chỉ xoá các tệp mẫu còn nguyên bản (tệp bạn đã sửa hay tự tạo được giữ nguyên). Bài học và dự án mẫu trong nút 📚 Học vẫn dùng được khi bạn cần.
 
 ## [0.5.0] - 2026-10-09
 

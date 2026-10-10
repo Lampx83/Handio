@@ -550,3 +550,17 @@ dialog.guide .dh { gap: 10px; }
 .gd-try { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
 .gd-try code { flex: 1; min-width: 0; white-space: normal; background: var(--panel2); border-radius: 6px; padding: 4px 8px; font-size: 12.5px; }
 @media (max-width: 700px) { .gd-main { flex-direction: column; } .gd-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); } .gd-nb { white-space: nowrap; } }
+
+/* hộp góp ý / báo lỗi */
+dialog.fbk { width: min(560px, 96vw); padding: 0; }
+.fbk-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; }
+.fbk-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.fbk-kinds .chip.on { border-color: var(--accent); color: var(--accent); font-weight: 600; background: var(--panel2); }
+.fbk-text { width: 100%; box-sizing: border-box; resize: vertical; font: inherit; min-height: 120px; }
+.fbk-row { display: flex; justify-content: flex-end; font-size: 12px; margin-top: -6px; }
+.fbk-chk { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.4; }
+.fbk-priv { font-size: 12.5px; margin: 0; }
+.fbk-status { min-height: 20px; font-size: 13.5px; }
+.fbk-status.ok { color: var(--ok, #1a7f4b); }
+.fbk-status.err { color: var(--err); }
+.fbk-actions { display: flex; justify-content: flex-end; }

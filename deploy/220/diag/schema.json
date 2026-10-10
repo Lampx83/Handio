@@ -307,6 +307,7 @@
           "mention_file",
           "stop_click",
           "point_edit",
+          "feedback_send",
           "guide_open"
         ],
         "req": true

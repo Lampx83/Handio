@@ -16,6 +16,7 @@ import type { DocView } from "./office/locate";
 import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import type { HttpToolRuntime } from "./http-tools";
+import { feedbackProblem, type FeedbackInput, type FeedbackResult } from "./feedback";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
 import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk } from "./tools";
 import type { AgentController, PermissionRequest, PermissionResponse, QuotaInfo, RewindPoint, SessionEvent, Settings, UiState } from "./types";
@@ -905,6 +906,37 @@ export class LocalController implements AgentController {
       this.diag?.noteFeedback(String(v), reason === undefined ? undefined : String(reason));
     } catch {
       /* như trên */
+    }
+  }
+  /** Góp ý/báo lỗi do người dùng tự viết và chủ động gửi. Địa chỉ suy ra từ địa chỉ chẩn đoán của ứng dụng (…/diag → …/feedback). */
+  async sendFeedback(f: FeedbackInput): Promise<FeedbackResult> {
+    const d = this.o.diagnostics;
+    const bad = feedbackProblem(f?.kind, f?.text);
+    if (bad) return { ok: false, message: bad };
+    if (!d || !/\/diag\/?$/.test(d.endpoint)) return { ok: false, message: "Bản này chưa nối được máy chủ để gửi góp ý." };
+    const body = {
+      kind: f.kind,
+      text: f.text.trim(),
+      ctx: f.tech ? { version: d.version, platform: d.platform, tab: this.o.profile ?? "code", model: this.settings.model } : {},
+    };
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 20_000);
+    try {
+      const r = await (d.fetch ?? this.o.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a)))(d.endpoint.replace(/\/diag\/?$/, "/feedback"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(d.headers?.() ?? {}) },
+        body: JSON.stringify(body),
+        signal: ac.signal,
+        redirect: "error",
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; message?: string };
+      if (r.ok && j.ok) return { ok: true, message: "Đã gửi. Cảm ơn bạn đã góp ý!" };
+      if (r.status === 401) return { ok: false, message: "Bạn chưa đăng nhập hoặc phiên đã hết hạn. Hãy đăng nhập lại rồi gửi." };
+      return { ok: false, message: j.message || `Chưa gửi được góp ý (mã ${r.status}). Hãy thử lại sau.` };
+    } catch (e) {
+      return { ok: false, message: ac.signal.aborted ? "Máy chủ không trả lời kịp. Hãy thử lại sau." : "Không kết nối được máy chủ để gửi góp ý." };
+    } finally {
+      clearTimeout(timer);
     }
   }
   async diagnosticsStatus(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }> {

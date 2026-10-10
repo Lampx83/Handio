@@ -108,6 +108,7 @@ id -u "$USER_NAME" >/dev/null 2>&1 || useradd --system --no-create-home --home-d
 install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$VAR"
 install -d -m 0700 -o "$USER_NAME" -g "$USER_NAME" "$VAR/diag"
 install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$VAR/reports"
+install -d -m 0700 -o "$USER_NAME" -g "$USER_NAME" "$VAR/feedback"   # góp ý của người dùng (SQLite)
 install -d -m 0750 -o root -g root "$ETC"
 if [ ! -s "$SECRET" ]; then
   # KHÔNG ghi đè nếu đã có: đổi bí mật làm mã người dùng giả danh cũ không còn khớp

@@ -32,6 +32,7 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import feedback as FB
 import quota_admin as QA
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +49,10 @@ ADMIN_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(html|md|json|csv
 DAY_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.jsonl$")
 MAX_ADMIN_BODY = 1024
 ADMIN_PAGES = {"accounts": ("accounts.html", "text/html; charset=utf-8"), "accounts.js": ("accounts.js", "text/javascript; charset=utf-8"),
-               "quota": ("quota.html", "text/html; charset=utf-8"), "quota.js": ("quota.js", "text/javascript; charset=utf-8")}
+               "quota": ("quota.html", "text/html; charset=utf-8"), "quota.js": ("quota.js", "text/javascript; charset=utf-8"),
+               "feedback": ("feedback.html", "text/html; charset=utf-8"), "feedback.js": ("feedback.js", "text/javascript; charset=utf-8")}
+MAX_FEEDBACK_BODY = 8 * 1024        # góp ý của người dùng (chữ ≤ 3000 ký tự, có dấu tiếng Việt → tối đa ~9 KB UTF-8, cắt ở 8 KB)
+MAX_ADMIN_FEEDBACK_BODY = 4096
 ADMIN_POSTS_PER_MIN = 30
 
 
@@ -344,6 +348,8 @@ class Config:
         self.web_dir = kw.get("web_dir", HERE)                    # nơi có accounts.html / accounts.js
         self.public_host = kw.get("public_host", "ai.neu.edu.vn")  # để kiểm tra Origin của POST quản trị
         self.registry = kw.get("registry")                        # sổ "ai đã dùng" (None = tắt)
+        self.feedback = kw.get("feedback")                        # FeedbackDB (None = tắt góp ý)
+        self.feedback_hits = kw.get("feedback_hits") or {}
         self.quota_db = kw.get("quota_db", "")                    # CSDL đếm token của cổng hạn mức (rỗng = tắt trang quản lý hạn mức)
         self.grants_file = kw.get("grants_file", "")              # tệp "cấp thêm hôm nay" mà cổng hạn mức đọc
         self.admin_hits = {}                                      # email quản trị -> thời điểm các POST gần đây (giới hạn tốc độ)
@@ -432,6 +438,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._admin_accounts_post()
         if self.path.split("?", 1)[0] == "/admin/api/quota" and self._local():
             return self._admin_quota_post()
+        if self.path.split("?", 1)[0] == "/admin/api/feedback" and self._local():
+            return self._admin_feedback_post()
+        if self.path == "/feedback" and self._local():
+            return self._feedback_submit()
         if self.path != "/diag" or not self._local():
             return self._send(404, {"ok": False})
         email = self._ident()
@@ -515,6 +525,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._admin_accounts_get()
         if name == "api/quota":
             return self._admin_quota_get()
+        if name == "api/feedback":
+            return self._admin_feedback_get()
         if name in ADMIN_PAGES:
             return self._admin_static(name)
         if name in ("", "latest"):
@@ -569,7 +581,7 @@ class Handler(BaseHTTPRequestHandler):
             out["seen"] = c.registry.snapshot()
         return self._send(200, out)
 
-    def _admin_post_json(self):
+    def _admin_post_json(self, max_body=MAX_ADMIN_BODY):
         """Phần chung của mọi POST quản trị: quản trị viên, chống CSRF, giới hạn tốc độ, đọc JSON. Trả (email, dict) hoặc None (đã trả lời lỗi)."""
         c = self.cfg
         email = self._admin_email()
@@ -590,7 +602,7 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._send(411, {"ok": False, "error": "length_required"})
             return None
-        if n > MAX_ADMIN_BODY or n < 2:
+        if n > max_body or n < 2:
             self._send(413, {"ok": False, "error": "size"})
             return None
         now = c.now()
@@ -676,6 +688,79 @@ class Handler(BaseHTTPRequestHandler):
         res = QA.grant(c.grants_file, c.now(), uid, amount, email, names.get(uid, ""))
         return self._send(200 if res.get("ok") else 400 if res.get("error") != "failed" else 500, res)
 
+    # -- góp ý / báo lỗi của người dùng
+    def _feedback_submit(self):
+        """POST /feedback: người dùng đã đăng nhập (nginx gắn X-User-Email) gửi góp ý. Nội dung do CHÍNH họ viết và chủ động gửi."""
+        c = self.cfg
+        ident = self._ident()
+        if not ident:
+            return self._send(401, {"ok": False, "error": "no_identity"})
+        if c.feedback is None:
+            return self._send(503, {"ok": False, "error": "unavailable", "message": "Chưa bật tính năng góp ý trên máy chủ."})
+        if self.headers.get("Transfer-Encoding"):
+            return self._send(411, {"ok": False, "error": "length_required"})
+        try:
+            n = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            return self._send(411, {"ok": False, "error": "length_required"})
+        if n > MAX_FEEDBACK_BODY:
+            return self._send(413, {"ok": False, "error": "size", "message": "Góp ý quá dài (tối đa 3000 ký tự)."})
+        if n < 2:
+            return self._send(400, {"ok": False, "error": "size"})
+        try:
+            raw = json.loads(self.rfile.read(n).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            return self._send(400, {"ok": False, "error": "json"})
+        sub, err = FB.clean_submission(raw)
+        if sub is None:
+            msg = {"too_short": "Hãy viết rõ hơn một chút (ít nhất vài chữ).", "bad_kind": "Loại góp ý không hợp lệ."}.get(err, "Góp ý không hợp lệ.")
+            return self._send(400, {"ok": False, "error": err, "message": msg})
+        res = c.feedback.add(ident, sub)
+        if not res.get("ok"):
+            wait = res.get("retry", 60)
+            msg = "Bạn đã gửi khá nhiều góp ý. Thử lại sau khoảng %d phút." % max(1, wait // 60) if res["error"] == "rate" else "Hệ thống đang nhận nhiều góp ý, thử lại sau ít phút."
+            return self._send(429, {"ok": False, "error": res["error"], "message": msg}, extra={"Retry-After": str(wait)})
+        return self._send(200, {"ok": True, "id": res["id"]})
+
+    def _admin_feedback_get(self):
+        c = self.cfg
+        email = self._admin_email()
+        if not email:
+            return
+        if c.feedback is None:
+            return self._send(503, {"ok": False, "error": "unavailable", "message": "Kho góp ý chưa chạy (cài: sudo ./diag/install-diag.sh)."})
+        qs = dict(p.split("=", 1) for p in (self.path.split("?", 1)[1] if "?" in self.path else "").split("&") if "=" in p)
+        from urllib.parse import unquote_plus
+
+        def arg(k):
+            return unquote_plus(qs.get(k, ""))[:100]
+        try:
+            limit, offset = int(arg("limit") or 100), int(arg("offset") or 0)
+        except ValueError:
+            limit, offset = 100, 0
+        res = c.feedback.list(arg("status"), arg("kind"), arg("q"), limit, offset)
+        res.update({"ok": True, "me": email, "statuses": list(FB.STATUSES), "kinds": list(FB.KINDS)})
+        return self._send(200, res)
+
+    def _admin_feedback_post(self):
+        c = self.cfg
+        got = self._admin_post_json(MAX_ADMIN_FEEDBACK_BODY)
+        if got is None:
+            return
+        email, raw = got
+        if c.feedback is None:
+            return self._send(503, {"ok": False, "error": "unavailable", "message": "Kho góp ý chưa chạy."})
+        if not isinstance(raw, dict):
+            return self._send(400, {"ok": False, "error": "bad_request", "message": "Yêu cầu không hợp lệ."})
+        op = raw.get("op")
+        if op == "set":
+            res = c.feedback.update(raw.get("id"), raw.get("status"), raw.get("note", ""), email)
+        elif op == "delete":
+            res = c.feedback.delete(raw.get("id"))
+        else:
+            return self._send(400, {"ok": False, "error": "bad_request", "message": "Yêu cầu không hợp lệ."})
+        return self._send(200 if res.get("ok") else 404 if res.get("error") == "not_found" else 400, res)
+
     def _nope(self):
         self._send(405, {"ok": False}, extra={"Allow": "GET, HEAD, POST"})
 
@@ -716,6 +801,12 @@ def main():
         quota_db=os.environ.get("NEU_QUOTA_DB", "/var/lib/neu-agent/quota/usage.db"),
         grants_file=os.environ.get("NEU_QUOTA_GRANTS", "/var/lib/neu-agent/quota/grants.json"),
     )
+    fb_path = os.environ.get("NEU_FEEDBACK_DB", "/var/lib/neu-agent/feedback/feedback.db")
+    try:
+        if fb_path:
+            cfg.feedback = FB.FeedbackDB(fb_path)
+    except Exception as e:  # noqa: BLE001 (kho góp ý hỏng không được làm chết bộ thu chẩn đoán)
+        print("Không mở được kho góp ý (%s): %s" % (fb_path, e), file=sys.stderr, flush=True)
     if os.environ.get("NEU_DIAG_KEEP_IDENTITIES", "1") != "0":
         cfg.registry = Registry(os.path.join(cfg.diag_dir, "users-seen.json"))
     cfg.store.prune()

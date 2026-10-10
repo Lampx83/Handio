@@ -37,7 +37,7 @@ ERR_VI = {"not_found": "Không có file/thư mục", "outside_project": "Đườ
           "timeout": "Quá thời gian", "unsupported": "Không hỗ trợ", "denied": "Bị từ chối quyền", "hook": "Bị hook chặn", "unknown_tool": "Công cụ không tồn tại", "bad_json": "Tham số không phải JSON", "internal": "Lỗi nội bộ", "other": "Khác", "unknown": "Chưa rõ (bản cũ)"}
 UI_VI = {"tab_switch": "Chuyển tab", "suggestion": "Bấm gợi ý trên màn hình chào", "template": "Dùng 'Mẫu prompt'", "attach": "Đính kèm tệp", "learn_open": "Mở bài học", "settings_open": "Mở Cài đặt", "new_chat": "Cuộc trò chuyện mới",
          "open_chat": "Mở lại cuộc trò chuyện cũ", "mode_change": "Đổi chế độ chạy", "model_change": "Mở danh sách mô hình", "run_click": "Bấm Chạy", "changes_open": "Xem thay đổi", "login_prompt": "Bấm Đăng nhập lại", "update_banner": "Thấy thông báo cập nhật",
-         "update_download": "Tải bản cập nhật", "download_open": "Mở hộp Tải ứng dụng", "slash_command": "Dùng lệnh /", "point_edit": "Chỉ vào để sửa (Design)", "guide_open": "Mở Hướng dẫn", "mention_file": "Nhắc tệp bằng @", "stop_click": "Bấm Dừng"}
+         "update_download": "Tải bản cập nhật", "download_open": "Mở hộp Tải ứng dụng", "slash_command": "Dùng lệnh /", "point_edit": "Chỉ vào để sửa (Design)", "feedback_send": "Gửi góp ý / báo lỗi", "guide_open": "Mở Hướng dẫn", "mention_file": "Nhắc tệp bằng @", "stop_click": "Bấm Dừng"}
 FB_VI = {"wrong": "Sai/không đúng ý", "incomplete": "Chưa làm xong", "slow": "Chậm", "confusing": "Khó hiểu", "other": "Khác", "none": "Không chọn lý do"}
 NOT_TOOL_FAULT = ("program", "denied")  # kết quả bình thường/ý người dùng, không tính là công cụ lỗi
 
@@ -470,7 +470,7 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
     o = ['<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị NEU Agent</title><style>%s</style></head><body><main>' % CSS]
     o.append('<h1>Quản trị NEU Agent</h1><p class="sub">Cập nhật %s (giờ Việt Nam), tự làm mới mỗi 10 phút. Người dùng chỉ hiện dưới <b>mã giả danh</b>; không có email hay nội dung hội thoại.</p>' % _e(S["generated"]))
     o.append('<nav class="top"><b>NEU Agent</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a><a href="#he-thong">Hệ thống</a>'
-             '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="accounts">Tài khoản</a><a href="quota">Hạn mức</a><a href="data.html">Dữ liệu &amp; CSV</a><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a></nav>' % hs)
+             '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="accounts">Tài khoản</a><a href="quota">Hạn mức</a><a href="feedback">Góp ý</a><a href="data.html">Dữ liệu &amp; CSV</a><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a></nav>' % hs)
 
     # ---- tổng quan
     o.append('<h2 id="tong-quan">Tổng quan</h2>')

@@ -5,6 +5,7 @@ import path from "node:path";
 import { buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
 import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, readPackDirs, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
+import { dropPristineSamples } from "./samples";
 import { Updater, UPDATE_METHODS } from "./updater";
 import { APP_ORIGIN, AUTH_METHODS, authArgsOk, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
 
@@ -17,7 +18,9 @@ declare const __AUTH__: AuthConfig | null;
 
 const PROFILES_LIST: Profile[] = PROFILE_ORDER;
 const DEFAULT_DIR: Record<Profile, string> = { work: "NEU Work", code: "NEU Code", design: "NEU Design" };
-const DEFAULT_NAME: Record<Profile, string> = { work: "Dự án mẫu", code: "Dự án mẫu", design: "Mẫu thiết kế" };
+// Dự án đầu tiên luôn TRỐNG (không nạp dữ liệu mẫu). Tên cũ "Dự án mẫu"/"Mẫu thiết kế" chỉ còn để nhận ra và dọn ở bản đã cài trước đây.
+const DEFAULT_NAME: Record<Profile, string> = { work: "Dự án của tôi", code: "Dự án của tôi", design: "Thiết kế của tôi" };
+const LEGACY_NAME: Record<Profile, string> = { work: "Dự án mẫu", code: "Dự án mẫu", design: "Mẫu thiết kế" };
 const LAN_GATEWAY = "http://192.0.2.11:8037/vllm/v1";
 const SMOKE = __SMOKE__ ? process.env.NEU_SMOKE_DIR || "" : "";
 // Đăng nhập SSO bắt buộc ở bản phát hành. Riêng chế độ kiểm thử đầu-cuối (SMOKE, không có trong bản phát hành) bỏ qua.
@@ -130,7 +133,7 @@ async function folderFor(profile: Profile): Promise<string> {
     await fs.mkdir(dir, { recursive: true });
     fresh = true;
   }
-  if (fresh) await seed(profile, dir); // lần đầu: nạp dữ liệu mẫu để có cái mà thử
+  if (fresh && SMOKE) await seed(profile, dir); // chỉ bài kiểm thử đầu-cuối cần dữ liệu mẫu có sẵn; người dùng thật bắt đầu với thư mục trống
   await saveFolder(profile, dir);
   return dir;
 }
@@ -177,7 +180,18 @@ function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<st
     try {
       const r = JSON.parse(await fs.readFile(file, "utf8")) as Registry;
       const projects = (Array.isArray(r.projects) ? r.projects : []).filter((p) => p && ID_RE.test(String(p.id)) && typeof p.name === "string" && typeof p.path === "string" && path.isAbsolute(p.path));
-      if (projects.length) return { active: projects.some((p) => p.id === r.active) ? r.active : projects[0].id, projects };
+      if (projects.length) {
+        // dự án đầu tiên còn mang tên "mẫu" của bản cũ: đổi tên và dọn tệp mẫu chưa ai đụng tới (một lần)
+        const d = projects.find((p) => p.id === "default" && p.name === LEGACY_NAME[profile]);
+        if (d) {
+          d.name = DEFAULT_NAME[profile];
+          if (!SMOKE && d.path) await dropPristineSamples(profile === "code" ? SAMPLE_PROJECT : profile === "design" ? SAMPLE_DESIGN : await buildWorkSamples(), d.path).catch(() => undefined);
+          const out: Registry = { active: projects.some((p) => p.id === r.active) ? r.active : projects[0].id, projects };
+          await write(out);
+          return out;
+        }
+        return { active: projects.some((p) => p.id === r.active) ? r.active : projects[0].id, projects };
+      }
     } catch {
       /* chưa có: tạo dự án mặc định */
     }
@@ -533,9 +547,9 @@ function buildMenu(): void {
       { label: "Mở thư mục Code…", accelerator: "CmdOrCtrl+O", click: () => void pickFolder("code") },
       { label: "Mở thư mục Design…", click: () => void pickFolder("design") },
       { type: "separator" },
-      { label: "Nạp dữ liệu mẫu vào dự án mẫu Work", click: async () => { await seed("work", await folderFor("work")); send("work", { type: "files_changed", paths: [] }); } },
-      { label: "Nạp dự án mẫu vào dự án mẫu Code", click: async () => { await seed("code", await folderFor("code")); send("code", { type: "files_changed", paths: [] }); } },
-      { label: "Nạp thiết kế mẫu vào dự án mẫu Design", click: async () => { await seed("design", await folderFor("design")); send("design", { type: "files_changed", paths: [] }); } },
+      { label: "Nạp dữ liệu mẫu cho Work (tuỳ chọn)", click: async () => { await seed("work", await folderFor("work")); send("work", { type: "files_changed", paths: [] }); } },
+      { label: "Nạp dự án mẫu cho Code (tuỳ chọn)", click: async () => { await seed("code", await folderFor("code")); send("code", { type: "files_changed", paths: [] }); } },
+      { label: "Nạp thiết kế mẫu cho Design (tuỳ chọn)", click: async () => { await seed("design", await folderFor("design")); send("design", { type: "files_changed", paths: [] }); } },
       { type: "separator" },
       { label: "Mở thư mục cài đặt", click: () => void shell.openPath(userData()) },
       { label: "Kiểm tra bản cập nhật…", click: () => void manualUpdateCheck() },

@@ -120,3 +120,18 @@ Phát hiện phía ứng dụng (`DIAG_THRESHOLDS`): lặp ≥3 lần cùng côn
 - Nhận diện một số tín hiệu dựa vào câu chữ thông báo tiếng Việt của agent (có test bảo vệ).
 - `uid` giả danh: ai có bí mật HMAC và danh sách email vẫn đối chiếu được; hạn chế truy cập `/etc/neu-agent/` và quản trị viên.
 - Không có dữ liệu thì không có báo cáo tỷ lệ: bản Desktop chưa cấu hình điểm nhận sẽ không xuất hiện trong số liệu (chỉ thấy qua nhật ký nginx của lệnh gọi mô hình).
+
+## Góp ý / báo lỗi do người dùng viết (khác chẩn đoán)
+
+Chẩn đoán KHÔNG chứa nội dung. **Góp ý** thì ngược lại: là chữ do chính người dùng viết và chủ động gửi qua nút 💬 để nhóm phát triển đọc, nên có nội dung và **kèm tên đăng nhập** (hộp góp ý nói rõ điều này). Không có gì được gửi tự động.
+
+| Điều | Cách làm |
+|---|---|
+| Đường đi | ứng dụng → `POST /agent/feedback` (nginx xác thực SSO, gắn `X-User-Email`, thân ≤ 16 KB) → bộ thu `collector.py` → SQLite `/var/lib/neu-agent/feedback/feedback.db` (quyền 0700, thuộc `neu-diag`) |
+| Gồm | loại (bug/idea/praise/other), nội dung ≤ 3000 ký tự, tên đăng nhập; nếu người dùng đồng ý: phiên bản, nền tảng, tab, mô hình (đều là mã ngắn kiểm theo danh sách) |
+| Không gồm | nội dung hội thoại, tệp, đường dẫn, lệnh, địa chỉ IP |
+| Giới hạn | 6 góp ý/giờ và 20/ngày mỗi người, 400/giờ toàn hệ thống; nội dung trùng trong 24 giờ không lưu lại |
+| Ai xem | chỉ quản trị viên (`admins.txt`) ở `/agent/admin/feedback`: lọc theo trạng thái/loại, tìm chữ, ghi chú, đặt trạng thái (Mới/Đã xem/Sẽ làm/Đã xong/Không làm), xoá, tải CSV |
+| Lưu bao lâu | cho tới khi quản trị viên xoá (không tự xoá); sao lưu theo `/var/lib/neu-agent` |
+
+Mã: `deploy/220/diag/feedback.py` (kho + kiểm tra), route trong `collector.py`, trang `feedback.html`/`feedback.js`, kiểm thử `test_feedback.py`; phía ứng dụng `packages/core/src/feedback.ts`, `LocalController.sendFeedback`, `packages/ui/src/feedback-ui.ts`.

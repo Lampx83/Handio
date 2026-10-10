@@ -6,6 +6,7 @@ import { openSettings as openSettingsDialog, type AccountInfo } from "./settings
 import { accountChip } from "./account-ui";
 import { versionLink } from "./changelog-ui";
 import { openGuide } from "./guide-ui";
+import { openFeedback } from "./feedback-ui";
 import { TIPS, type GuideTab } from "./guide-content";
 import { DesignPreview } from "./preview";
 import { ago, openInstructions, openNewProject, toggleProjectMenu } from "./projects-ui";
@@ -190,6 +191,7 @@ class App {
       ...this.workTools.buttons,
       this.learnBtn,
       this.newBtn,
+      ...(this.ctl.sendFeedback ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Góp ý", title: "Góp ý / báo lỗi cho nhóm phát triển", onclick: () => openFeedback(this.ctl, { track: (a) => this.t(a) }) }, "💬")] : []),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Hướng dẫn", title: "Hướng dẫn: mẹo, thủ thuật, tình huống mẫu", onclick: () => this.openGuideDlg() }, "💡"),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Cài đặt", title: "Cài đặt", onclick: () => this.openSettings() }, "⚙"),
     ];

@@ -154,6 +154,15 @@ try {
   const tl2 = await req("/agent/tools/fetch?url=https%3A%2F%2Fa.vn%2F%3Fx%3D1%26y%3D2", { headers: { Cookie: cookie } });
   check("công cụ web: địa chỉ trang trong tham số url đi nguyên vẹn", JSON.parse(tl2.body || "{}").uri === "/tools/fetch?url=https%3A%2F%2Fa.vn%2F%3Fx%3D1%26y%3D2", tl2.body);
   check("công cụ web: POST/DELETE bị chặn (403), đường dẫn lạ 404", (await req("/agent/tools/search?q=a", { method: "POST", headers: { Cookie: cookie }, body: "x" })).status === 403 && (await req("/agent/tools/other", { headers: { Cookie: cookie } })).status === 404);
+  // góp ý của người dùng: phải đăng nhập, chỉ POST, thân nhỏ; bộ thu thật nghe 4190 (ở đây không chạy → 503 JSON thân thiện)
+  await new Promise((r) => setTimeout(r, 1500));   // để hết đợt yêu cầu dồn (giới hạn tốc độ theo IP) trước khi thử
+  const fb0 = await req("/agent/feedback", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "bug", text: "thử góp ý" }) });
+  check("góp ý: chưa đăng nhập → 401 JSON login_required", fb0.status === 401 && /login_required/.test(fb0.body), String(fb0.status));
+  const fbGet = await req("/agent/feedback", { headers: { Cookie: cookie } });
+  const fbBig = await req("/agent/feedback", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: "x".repeat(20000) });
+  check("góp ý: GET bị chặn (403), thân > 16 KB bị từ chối (413)", fbGet.status === 403 && fbBig.status === 413, `${fbGet.status}/${fbBig.status}`);
+  const fbDown = await req("/agent/feedback", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ kind: "bug", text: "thử góp ý" }) });
+  check("góp ý: bộ thu chưa chạy thì trả 503 JSON có lời nhắn, không phải trang lỗi nginx", fbDown.status === 503 && /Chưa gửi được góp ý/.test(fbDown.body) && /json/.test(fbDown.headers["content-type"]), `${fbDown.status} ${fbDown.body.slice(0, 80)}`);
   check("đường dẫn lạ / embeddings bị chặn", (await req("/agent/vllm/v1/embeddings", { headers: { Cookie: cookie } })).status !== 200 && (await req("/agent/vllm/v1/models", { headers: { Cookie: cookie }, method: "DELETE" })).status !== 200);
 
   const ui = await req("/agent/oauth2/userinfo", { headers: { Cookie: cookie } });

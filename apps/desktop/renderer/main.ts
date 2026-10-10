@@ -53,6 +53,7 @@ class IpcController implements AgentController {
   listModels = () => this.call<string[]>("listModels");
   track = (act: string) => void this.call("track", act).catch(() => undefined);
   feedback = (v: "up" | "down", reason?: string) => void this.call("feedback", ...(reason ? [v, reason] : [v])).catch(() => undefined);
+  sendFeedback = (f: { kind: string; text: string; tech: boolean }) => this.call<any>("sendFeedback", f).catch(() => ({ ok: false, message: "Không gửi được góp ý." }));
   diagnosticsStatus = () => this.call<any>("diagnosticsStatus");
   diagnosticsPreview = (n: string) => this.call<string | null>("diagnosticsPreview", n);
   diagnosticsSend = () => this.call<any>("diagnosticsSend");

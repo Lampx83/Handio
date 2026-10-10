@@ -62,6 +62,12 @@ describe("kiểm tra yêu cầu IPC", () => {
     expect(ok("respondPermission", "id1", { allow: true, mode: "auto", plan: "1. làm A" })).toBe(true);
     expect(ok("respondPermission", "id1", { allow: true, plan: 5 })).toBe(false);
     expect(ok("respondPermission", "id1", { allow: true, plan: "x".repeat(20001) })).toBe(false);
+    expect(ok("sendFeedback", { kind: "bug", text: "Nút gửi không bấm được", tech: true })).toBe(true);
+    expect(ok("sendFeedback", { kind: "hack", text: "xin chào các bạn", tech: true })).toBe(false);
+    expect(ok("sendFeedback", { kind: "bug", text: "x".repeat(3001), tech: false })).toBe(false);
+    expect(ok("sendFeedback", { kind: "bug", text: "ok ok ok", tech: "yes" })).toBe(false);
+    expect(ok("sendFeedback", { kind: "bug", text: "ok ok ok", tech: true, endpoint: "https://evil.test" })).toBe(false);
+    expect(ok("sendFeedback", "text")).toBe(false);
     expect(ok("listDir", "src")).toBe(true);
     expect(ok("listDir", { path: "x" })).toBe(false);
   });
