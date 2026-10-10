@@ -34,7 +34,7 @@ BAK=/var/backups/neu-agent-diag/$TS
 SERVICES="neu-agent-diag.service neu-agent-accounts.service"
 TIMERS="neu-agent-diag-report.timer neu-agent-healthz.timer neu-agent-diag-stats.timer"
 UNITS="neu-agent-diag.service neu-agent-accounts.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer"
-CODE="collector.py report.py stats.py charts.py pages.py healthz.py schema.json accounts.py accounts.html accounts.js quota_admin.py quota.html quota.js"
+CODE="collector.py report.py stats.py charts.py pages.py healthz.py schema.json accounts.py accounts.html accounts.js quota_admin.py quota.html quota.js feedback.py feedback.html feedback.js"
 
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
 command -v python3 >/dev/null && command -v systemctl >/dev/null || { echo "Thiếu python3 hoặc systemctl."; exit 1; }

@@ -77,7 +77,10 @@ jobs:
           echo "Gói: $(du -h bundle.tgz | cut -f1), SHA-256 $SHA"
       - name: Gửi và áp dụng trên máy 220
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.action == 'rollback') }}
-        run: ssh neu220 "${{ steps.pack.outputs.sha }}" < bundle.tgz | tee deploy.log
+        run: |
+          # pipefail: nếu ssh (neu-agent-deploy) thất bại thì bước này PHẢI đỏ (trước đây `| tee` nuốt mã lỗi nên lần 0.6.0 báo xanh dù máy chủ báo THẤT BẠI)
+          set -o pipefail
+          ssh neu220 "${{ steps.pack.outputs.sha }}" < bundle.tgz | tee deploy.log
       - name: Kiểm tra site thật
         run: |
           set -euo pipefail

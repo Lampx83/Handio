@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- Góp ý/báo lỗi (nút 💬) và trang quản trị *Góp ý* chạy được trên máy chủ: bản 0.6.0 triển khai lần đầu thiếu một tệp nên máy chủ tự quay về bản trước; nay đã bổ sung và có kiểm tra chống tái diễn.
+
 ## [0.6.0] - 2026-10-10
 
 ### Thêm
