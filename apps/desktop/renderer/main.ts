@@ -44,6 +44,7 @@ class IpcController implements AgentController {
   listDir = (p: string) => this.call<DirEntry[]>("listDir", p);
   readFile = (p: string) => this.call<any>("readFile", p);
   uploadFiles = (f: { name: string; data: Uint8Array }[]) => this.call<any>("uploadFiles", f);
+  pasteImages = (f: { name: string; data: Uint8Array }[]) => this.call<any>("pasteImages", f);
   downloadFile = (p: string) => this.call<any>("downloadFile", p);
   exportZip = () => this.call<any>("exportZip");
   openExternally = (p: string) => this.call<void>("openExternally", p);

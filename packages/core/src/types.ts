@@ -156,6 +156,8 @@ export interface AgentController {
   readFile(path: string): Promise<{ text: string; truncated: boolean; kind: "text" | "document" } | { error: string }>;
   /** Thêm tệp từ máy người dùng vào thư mục làm việc (tự đổi tên nếu trùng). Trả về đường dẫn đã lưu. */
   uploadFiles(files: { name: string; data: Uint8Array }[]): Promise<{ saved: string[]; errors: string[] }>;
+  /** Ảnh dán (Ctrl+V): lưu TẠM ngoài thư mục dự án; trả về tham chiếu `dan/<tên>` để nhắc bằng @. */
+  pasteImages?(files: { name: string; data: Uint8Array }[]): Promise<{ refs: string[]; errors: string[] }>;
   downloadFile(path: string): Promise<{ name: string; data: Uint8Array } | { error: string }>;
   /** Nén cả thư mục làm việc thành một file zip. */
   exportZip(): Promise<{ name: string; data: Uint8Array }>;

@@ -4,6 +4,7 @@ import path from "node:path";
 import dns from "node:dns/promises";
 import fs from "node:fs/promises";
 import net from "node:net";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import type { DirEntry, Env, ExecResult, StatInfo } from "@neu/agent-core";
 
@@ -12,6 +13,8 @@ const MAX_OUTPUT = 1_000_000;
 export class NodeEnv implements Env {
   readonly root: string;
   readonly home = os.homedir();
+  /** Ảnh dán và tệp đính kèm tạm nằm ở thư mục tạm của hệ điều hành (theo từng dự án), không nằm trong thư mục dự án. */
+  readonly scratchDir: string;
   readonly platform: string;
 
   /** `allowExec=false`: không cấp công cụ chạy lệnh (tab Work cho người dùng văn phòng). */
@@ -21,6 +24,7 @@ export class NodeEnv implements Env {
 
   constructor(root: string, opts: { allowExec?: boolean; sandbox?: { network?: boolean; home?: string } | false } = {}) {
     this.root = root;
+    this.scratchDir = path.join(os.tmpdir(), "neu-agent-scratch", createHash("sha1").update(root).digest("hex").slice(0, 12));
     if (opts.sandbox !== false && opts.sandbox && process.platform === "darwin" && existsSync(SANDBOX_EXEC)) {
       const network = opts.sandbox.network !== false;
       this.sandbox = { kind: "seatbelt", network };

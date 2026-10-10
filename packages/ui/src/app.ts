@@ -1126,28 +1126,43 @@ class App {
     void this.loadTree(r.saved);
   }
 
-  /** Ctrl+V với ảnh (vd. ảnh chụp màn hình): lưu vào thư mục làm việc và chèn `@tên` vào prompt để agent đọc bằng read_image. */
+  /**
+   * Ctrl+V với ảnh (vd. ảnh chụp màn hình): lưu TẠM ngoài thư mục dự án (không làm lẫn tệp rác vào mã nguồn) và chèn `@dan/<tên>`
+   * vào prompt để agent đọc bằng read_image. Bản cũ chưa có pasteImages thì quay về lưu vào thư mục làm việc.
+   */
   private async pasteImages(imgs: File[]): Promise<void> {
     const d = new Date();
     const p2 = (n: number) => String(n).padStart(2, "0");
     const stamp = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
     const files = await Promise.all(imgs.slice(0, 5).map(async (f, i) => ({ name: `anh-dan-${stamp}${imgs.length > 1 ? "-" + (i + 1) : ""}.${f.type === "image/jpeg" ? "jpg" : (f.type.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "")}`, data: new Uint8Array(await f.arrayBuffer()) })));
-    const r = await this.ctl.uploadFiles(files);
+    let refs: string[] = [];
+    let errors: string[] = [];
+    let inProject = false;
+    if (this.ctl.pasteImages) {
+      const r = await this.ctl.pasteImages(files);
+      refs = r.refs;
+      errors = r.errors;
+    } else {
+      const r = await this.ctl.uploadFiles(files);
+      refs = r.saved.filter((n) => !/\s/.test(n));
+      errors = r.errors;
+      inProject = true;
+      void this.loadTree(r.saved);
+    }
     this.dropWelcome();
-    for (const e of r.errors) this.append(h("div", { class: "notice warn" }, e));
-    const refs = r.saved.filter((n) => !/\s/.test(n)).map((n) => "@" + n);
-    if (refs.length) {
+    for (const e of errors) this.append(h("div", { class: "notice warn" }, e));
+    const mentions = refs.map((n) => "@" + n);
+    if (mentions.length) {
       const el = this.input;
       const before = el.value.slice(0, el.selectionStart ?? el.value.length);
       const after = el.value.slice(el.selectionEnd ?? el.value.length);
-      const ins = (before && !/\s$/.test(before) ? " " : "") + refs.join(" ") + " ";
+      const ins = (before && !/\s$/.test(before) ? " " : "") + mentions.join(" ") + " ";
       el.value = before + ins + after;
       el.selectionStart = el.selectionEnd = before.length + ins.length;
       this.autoGrow();
       el.focus();
+      this.append(h("div", { class: "notice" }, inProject ? "Đã lưu ảnh dán vào thư mục làm việc: " + refs.join(", ") : "Đã đính kèm ảnh dán (lưu tạm, không nằm trong dự án): " + refs.map((r) => r.replace(/^dan\//, "")).join(", ")));
     }
-    if (r.saved.length) this.append(h("div", { class: "notice" }, "Đã lưu ảnh dán vào thư mục làm việc: " + r.saved.join(", ")));
-    void this.loadTree(r.saved);
   }
 
   private async download(path: string): Promise<void> {

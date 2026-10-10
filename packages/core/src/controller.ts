@@ -8,6 +8,7 @@ import { detectRun, type RunSuggestion } from "./run-detect";
 import { mergeHooks } from "./hooks";
 import { extOf, formatSections, isOfficeFile, readDocumentSections } from "./office/readdoc";
 import { basename, join, relative } from "./path";
+import { sniffImage } from "./vision";
 import type { Mode } from "./permissions";
 import { chatTitle, cleanProjectName, countTurns, ID_RE, messagesToHistory, newId, trimForSave, type ChatMeta, type ChatStore, type HistoryItem, type ProjectHost, type ProjectsState } from "./projects";
 import { Session } from "./session";
@@ -803,6 +804,41 @@ export class LocalController implements AgentController {
     }
     if (saved.length) this.fire({ type: "files_changed", paths: saved });
     return { saved, errors };
+  }
+
+  /**
+   * Ảnh dán (Ctrl+V, ảnh chụp màn hình…): lưu TẠM ngoài thư mục dự án để không làm lẫn tệp rác vào mã nguồn người dùng
+   * (bị `git status` thấy, có thể lỡ commit). Tham chiếu trả về dạng `dan/<tên>`; agent đọc bằng read_image. Giữ tối đa 30 ảnh gần nhất.
+   */
+  async pasteImages(files: { name: string; data: Uint8Array }[]): Promise<{ refs: string[]; errors: string[] }> {
+    const refs: string[] = [];
+    const errors: string[] = [];
+    const dir = this.o.env.scratchDir;
+    if (!dir) return { refs, errors: ["Môi trường này chưa có thư mục tạm cho ảnh dán."] };
+    await this.o.env.mkdirp(dir);
+    for (const f of files.slice(0, 5)) {
+      const clean = safeFileName(f.name);
+      if (!clean || !/\.(png|jpe?g|webp|gif)$/i.test(clean) || !sniffImage(f.data)) {
+        errors.push(`Không phải ảnh png/jpg/webp/gif: ${f.name}`);
+        continue;
+      }
+      if (f.data.length > 20 * 1024 * 1024) {
+        errors.push(`${clean}: ảnh quá lớn (${Math.round(f.data.length / 1048576)} MB, tối đa 20 MB).`);
+        continue;
+      }
+      let name = clean;
+      for (let n = 2; await this.o.env.stat(join(dir, name)); n++) name = clean.replace(/(\.[^./]+)?$/, ` (${n})$1`);
+      await this.o.env.writeBytes(join(dir, name), f.data);
+      refs.push("dan/" + name);
+    }
+    // dọn: chỉ giữ 30 ảnh mới nhất
+    try {
+      const all = await Promise.all((await this.o.env.readdir(dir)).filter((e) => !e.isDir).map(async (e) => ({ n: e.name, m: (await this.o.env.stat(join(dir, e.name)))?.mtimeMs ?? 0 })));
+      for (const old of all.sort((a, b) => b.m - a.m).slice(30)) await this.o.env.remove(join(dir, old.n)).catch(() => undefined);
+    } catch {
+      /* dọn không được thì thôi */
+    }
+    return { refs, errors };
   }
 
   async downloadFile(path: string): Promise<{ name: string; data: Uint8Array } | { error: string }> {

@@ -7,7 +7,7 @@ import { builtinTools, IGNORE_DIRS, readText, relPath, resolveSafe, ToolError, w
 import { dangerousReason, isReadonlySegment, parseCommand } from "./shell";
 import { listChanges, revertChanges, trackExec, type RevertResult } from "./changes";
 import { isInternalUser } from "./projects";
-import { dirname } from "./path";
+import { dirname, join } from "./path";
 import { isSensitivePath } from "./sensitive";
 import { officeTools } from "./office/tools";
 import { workTools } from "./office/work-tools";
@@ -103,7 +103,7 @@ export class Session {
   readonly main: Agent;
 
   private constructor(readonly o: SessionOptions, root: string) {
-    this.ctx = { env: o.env, root, extraDirs: [], readFiles: new Map(), undoStack: [], todos: [], onTodos: (t) => o.emit({ type: "todos", todos: t }) };
+    this.ctx = { env: o.env, root, extraDirs: o.env.scratchDir ? [o.env.scratchDir] : [], readFiles: new Map(), undoStack: [], todos: [], onTodos: (t) => o.emit({ type: "todos", todos: t }) };
     if (o.env.spawn) this.ctx.procs = new ProcessManager(o.env, (e) => o.emit({ type: "proc", ...e }));
     const s = o.getSettings();
     const proj = o.project ?? { deny: [], allow: [] };
@@ -470,14 +470,17 @@ export class Session {
     for (const t of found.slice(0, 8)) {
       let abs: string;
       try {
-        abs = await resolveSafe(this.ctx, t);
+        // "dan/<tên>" = ảnh dán tạm (lưu ngoài thư mục dự án, xem LocalController.pasteImages)
+        const scratch = this.o.env.scratchDir;
+        abs = await resolveSafe(this.ctx, scratch && t.startsWith("dan/") ? join(scratch, t.slice(4)) : t);
       } catch {
         continue;
       }
       const st = await this.o.env.stat(abs);
       if (!st) continue;
-      const rel = relPath(this.ctx, abs);
-      if (isSensitivePath(rel)) {
+      const outside = !!this.o.env.scratchDir && abs.startsWith(this.o.env.scratchDir + "/");
+      const rel = outside ? abs : relPath(this.ctx, abs);
+      if (!outside && isSensitivePath(rel)) {
         this.emit({ type: "notice", level: "warn", text: `Không đính kèm @${t}: tệp có thể chứa bí mật (khoá/mật khẩu).` });
         continue;
       }

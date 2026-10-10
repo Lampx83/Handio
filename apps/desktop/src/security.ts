@@ -107,6 +107,7 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
     }
     return total <= MAX_UPLOAD_TOTAL;
   },
+  pasteImages: (a) => a.length === 1 && Array.isArray(a[0]) && a[0].length <= 5 && a[0].every((f) => isObj(f) && str(f.name, 300) && f.data instanceof Uint8Array && f.data.length <= 20 * 1024 * 1024),
   downloadFile: (a) => a.length === 1 && str(a[0], 1000),
   exportZip: (a) => a.length === 0,
   openExternally: (a) => a.length === 1 && str(a[0], 1000),

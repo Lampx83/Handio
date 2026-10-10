@@ -68,6 +68,10 @@ describe("kiểm tra yêu cầu IPC", () => {
     expect(ok("sendFeedback", { kind: "bug", text: "ok ok ok", tech: "yes" })).toBe(false);
     expect(ok("sendFeedback", { kind: "bug", text: "ok ok ok", tech: true, endpoint: "https://evil.test" })).toBe(false);
     expect(ok("sendFeedback", "text")).toBe(false);
+    expect(ok("pasteImages", [{ name: "anh-dan-1.png", data: new Uint8Array([1, 2, 3]) }])).toBe(true);
+    expect(ok("pasteImages", Array.from({ length: 6 }, () => ({ name: "a.png", data: new Uint8Array([1]) })))).toBe(false);
+    expect(ok("pasteImages", [{ name: "a.png", data: "not-bytes" }])).toBe(false);
+    expect(ok("pasteImages", [{ name: "a.png", data: new Uint8Array(21 * 1024 * 1024) }])).toBe(false);
     expect(ok("listDir", "src")).toBe(true);
     expect(ok("listDir", { path: "x" })).toBe(false);
   });

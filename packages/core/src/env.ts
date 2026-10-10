@@ -29,6 +29,8 @@ export interface RunJsResult {
 export interface Env {
   readonly root: string;
   readonly home?: string;
+  /** Thư mục tạm NGOÀI dự án để đặt tệp đính kèm tạm (ảnh dán Ctrl+V…): không làm lẫn vào mã nguồn/thư mục làm việc của người dùng. */
+  readonly scratchDir?: string;
   /** Mô tả hệ điều hành/nơi chạy, đưa vào system prompt. */
   readonly platform: string;
   readBytes(path: string): Promise<Uint8Array>;
@@ -61,6 +63,7 @@ export class EnvError extends Error {}
 export class MemoryEnv implements Env {
   readonly root: string;
   readonly home = "/home/user";
+  readonly scratchDir = "/.neu-scratch";
   readonly platform = "virtual in-memory workspace (no shell, no network)";
   private files = new Map<string, { data: Uint8Array; mtimeMs: number }>();
   private dirs = new Set<string>(["/"]);

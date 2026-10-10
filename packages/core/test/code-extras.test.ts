@@ -122,3 +122,43 @@ describe("tab Code: /plan, /memory, /usage, /effort, ultrathink, dán ảnh, s�
     expect(n).toMatch(/CLAUDE\.md\s+\S+/);
   });
 });
+
+describe("ảnh dán Ctrl+V lưu tạm ngoài dự án", () => {
+  const PNG = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
+  const text = new TextEncoder().encode("không phải ảnh");
+
+  it("không ghi vào thư mục dự án; trả tham chiếu dan/…; chỉ nhận ảnh thật", async () => {
+    const { c, env } = await makeController([{ text: "ok" }], { seed: { "README.md": "# demo\n" } });
+    const r = await c.pasteImages!([{ name: "anh-dan-1.png", data: PNG }, { name: "gia.png", data: text }, { name: "tai-lieu.txt", data: PNG }]);
+    expect(r.refs).toEqual(["dan/anh-dan-1.png"]);
+    expect(r.errors.length).toBe(2);
+    const inProject = (await env.readdir(env.root)).map((e) => e.name);
+    expect(inProject).toEqual(["README.md"]);
+    expect(await env.stat(`${env.scratchDir}/anh-dan-1.png`)).not.toBeNull();
+  });
+
+  it("@dan/<tên> được đính kèm như ảnh (agent dùng read_image), không bị coi là tệp ngoài dự án", async () => {
+    const { c, env } = await makeController([{ text: "ok" }], {});
+    await c.pasteImages!([{ name: "loi.png", data: PNG }]);
+    const out = await c.currentSession.handleInput("@dan/loi.png vỡ css à");
+    expect(out.run).toContain(`<image path="${env.scratchDir}/loi.png">`);
+    expect(out.run).toContain("read_image");
+  });
+
+  it("trùng tên thì thêm số; chỉ giữ 30 ảnh mới nhất", async () => {
+    const { c, env } = await makeController([{ text: "ok" }], {});
+    const a = await c.pasteImages!([{ name: "x.png", data: PNG }]);
+    const b = await c.pasteImages!([{ name: "x.png", data: PNG }]);
+    expect(a.refs).toEqual(["dan/x.png"]);
+    expect(b.refs).toEqual(["dan/x (2).png"]);
+    for (let i = 0; i < 35; i++) await c.pasteImages!([{ name: `n${i}.png`, data: PNG }]);
+    expect((await env.readdir(env.scratchDir!)).length).toBeLessThanOrEqual(30);
+  });
+
+  it("đường dẫn lạ trong dan/ không thoát ra ngoài thư mục tạm", async () => {
+    const { c } = await makeController([{ text: "ok" }], {});
+    const out = await c.currentSession.handleInput("xem @dan/../../etc/passwd và @dan/../../../../../etc/hosts");
+    expect(out.run).not.toContain("<file");
+    expect(out.run).not.toContain("<image");
+  });
+});
