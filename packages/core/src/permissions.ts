@@ -114,12 +114,13 @@ export class Permissions {
     if (tool.kind === "edit" && target.rel !== undefined && this.mode !== "bypass" && PROTECTED.some((p) => matchGlob(p, target.rel!)))
       return { decision: "ask", reason: "File cấu hình/lịch sử của dự án: luôn cần bạn duyệt." };
 
+    // Chế độ "Toàn quyền" (bypass) là lựa chọn rõ ràng của người dùng: không hỏi gì nữa (chỉ lệnh nguy hiểm và quy tắc deny ở trên vẫn chặn).
     // tệp có thể chứa bí mật: luôn hỏi (kể cả chế độ tự động), dù chỉ đọc
-    if (target.rel !== undefined && isSensitivePath(target.rel) && name !== "exit_plan_mode")
+    if (this.mode !== "bypass" && target.rel !== undefined && isSensitivePath(target.rel) && name !== "exit_plan_mode")
       return { decision: "ask", reason: "Tệp này có thể chứa khoá/mật khẩu. Chỉ cho phép nếu bạn thật sự muốn agent đọc/ghi nó." };
 
     // đã đọc nội dung từ web: không tự động duyệt bất cứ thao tác có tác dụng phụ nào
-    if (this.tainted && !tool.readonly && name !== "exit_plan_mode")
+    if (this.mode !== "bypass" && this.tainted && !tool.readonly && name !== "exit_plan_mode")
       return { decision: "ask", reason: "Vừa đọc nội dung từ web (không tin cậy). Hãy kiểm tra kỹ thao tác này." };
 
     if (this.mode === "bypass") return { decision: "allow", reason: "chế độ bypass" };

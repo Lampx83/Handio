@@ -18,6 +18,7 @@ import { HookRunner, mergeHooks, countHooks } from "./hooks";
 import { McpManager, type McpServerSpec } from "./mcp";
 import { mergePackParts, packsFor, type LoadedPack } from "./packs";
 import { buildHttpTools, type HttpToolRuntime } from "./http-tools";
+import { findRepetition } from "./repeat";
 import { visionTool } from "./vision";
 import type { PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
 
@@ -839,6 +840,7 @@ export class Agent {
     this.failRun = { tool: "", sig: "", n: 0 };
     this.stopWhy = "";
     this.nudges = 0;
+    this.repeats = 0;
     try {
       for (let step = 0; step < maxSteps; step++) {
         if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
@@ -847,6 +849,15 @@ export class Agent {
         await this.manageContext();
         const resp = await this.callModel(signal);
         this.lastFinish = resp.finish;
+        if (resp.finish === "repeat") {
+          this.repeats++;
+          s.emit({ type: "notice", level: "warn", text: "Agent bắt đầu lặp lại một đoạn văn nên đã bị dừng sinh chữ và được nhắc đổi cách làm." });
+          this.messages.push({ role: "assistant", content: resp.content || "(đã dừng vì lặp lại một đoạn văn)" });
+          s.emit({ type: "message_end", depth: this.depth, text: resp.content });
+          if (this.repeats >= 3) return final || resp.content || "Agent liên tục lặp lại một đoạn văn nên đã dừng. Hãy nói lại yêu cầu ngắn gọn hơn hoặc chia thành các bước nhỏ.";
+          this.messages.push({ role: "user", content: "[Hệ thống] Bạn vừa lặp lại cùng một đoạn văn nhiều lần mà không làm gì. Đừng giải thích hay lên kế hoạch nữa: hãy GỌI CÔNG CỤ ngay để làm bước tiếp theo (nếu việc quá dài thì chia nhỏ từng phần, mỗi lần dưới ~5.000 ký tự), hoặc nói ngắn gọn bạn đang vướng ở đâu." });
+          continue;
+        }
         const msg: ChatMessage = { role: "assistant", content: resp.content || null };
         if (resp.toolCalls.length) msg.tool_calls = resp.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: c.arguments } }));
         this.messages.push(msg);
@@ -968,6 +979,8 @@ export class Agent {
     }
   }
 
+  /** Số lần mô hình bị ngắt vì lặp một đoạn văn trong lượt này. */
+  private repeats = 0;
   /** Lý do dừng của lần gọi mô hình gần nhất ("length" = hết độ dài đầu ra, lời gọi công cụ có thể bị cắt giữa chừng). */
   private lastFinish: string | null = null;
 
@@ -993,18 +1006,45 @@ export class Agent {
     const notify = (text: string) => s.emit({ type: "notice", level: "warn", text });
     const think = !!settings.thinking || (this.depth === 0 && s.ultrathink);
     let resp: ChatResult | null = null;
+    // ngắt sớm khi mô hình cứ lặp lại một đoạn văn (vòng lặp sinh chữ tiêu hết token mà không tiến triển)
+    const guard = new AbortController();
+    const onAbort = () => guard.abort();
+    signal?.addEventListener("abort", onAbort);
+    let streamed = "";
+    let checkedAt = 0;
+    let repeatCut = -1;
+    const watchText = (t: string) => {
+      if (repeatCut >= 0) return;
+      streamed += t;
+      if (streamed.length - checkedAt < 400) return;
+      checkedAt = streamed.length;
+      const r = findRepetition(streamed);
+      if (r) {
+        repeatCut = r.cut;
+        guard.abort();
+      }
+    };
+    try {
     for (let attempt = 0; attempt < 2 && !resp; attempt++) {
       try {
         resp = await s.o.llm.chat([{ role: "system", content: system }, ...this.messages], {
           tools,
-          signal,
+          signal: guard.signal,
           thinking: think,
           maxTokens: this.outputBudget(system, tools),
           notify,
-          onContent: this.depth === 0 ? (t) => s.emit({ type: "text", depth: 0, delta: t }) : undefined,
+          onContent: (t) => {
+            watchText(t);
+            if (this.depth === 0 && repeatCut < 0) s.emit({ type: "text", depth: 0, delta: t });
+          },
           onReasoning: this.depth === 0 && think ? (t) => s.emit({ type: "reasoning", depth: 0, delta: t }) : undefined,
         });
       } catch (e) {
+        if (repeatCut >= 0 && !signal?.aborted) {
+          // bị ngắt vì lặp: giữ lại phần chữ trước lần lặp
+          resp = { content: streamed.slice(0, repeatCut).trim(), reasoning: "", toolCalls: [], usage: {}, finish: "repeat" } as ChatResult;
+          break;
+        }
         if (e instanceof LlmError && e.kind === "context" && attempt === 0) {
           s.emit({ type: "notice", level: "warn", text: "Ngữ cảnh đầy, đang rút gọn rồi thử lại…" });
           this.pruneToolResults(1);
@@ -1014,7 +1054,11 @@ export class Agent {
         throw e;
       }
     }
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
+    }
     if (!resp) throw new LlmError("Không gọi được mô hình.");
+    if (repeatCut >= 0 && resp.finish !== "repeat" && !signal?.aborted) resp = { ...resp, content: streamed.slice(0, repeatCut).trim(), toolCalls: [], finish: "repeat" };
     s.track(resp.usage, system.length + JSON.stringify(this.messages).length);
     if (this.depth === 0) s.emitUsage(); // sau MỖI lần gọi mô hình: thước ngữ cảnh cập nhật ngay và chẩn đoán biết đỉnh token của từng lượt
     s.emitUsage();
@@ -1123,7 +1167,7 @@ export class Agent {
     s.noteTool(name, ok && !(name === "bash" && /\[(mã thoát [1-9]\d*|Hết thời gian)/.test(result.slice(-80))), s.ctx.undoStack.length > undoBefore);
     if (ok && (tool.kind === "net" || tool.kind === "mcp") && !s.perms.tainted) {
       s.perms.tainted = true;
-      s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${tool.kind === "mcp" ? "công cụ ngoài (MCP)" : "web/dịch vụ ngoài"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });
+      if (s.perms.mode !== "bypass") s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${tool.kind === "mcp" ? "công cụ ngoài (MCP)" : "web/dịch vụ ngoài"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });
     }
     if (ok && (tool.kind === "edit" || tool.kind === "exec")) s.emit({ type: "files_changed", paths: target.rel ? [target.rel] : [] });
     if (ok && target.rel && ["read_file", "edit_file", "write_file", "list_dir"].includes(name)) await s.noteTouched(target.rel, name === "list_dir");

@@ -5,6 +5,11 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+
+### Sửa
+- **Chế độ Toàn quyền không hỏi nữa**: trước đây sau khi agent tìm/đọc web, mọi thao tác ghi/chạy lệnh/tải trang vẫn hiện hộp xin phép dù đang ở Toàn quyền. Nay Toàn quyền là không hỏi (lệnh phá hoại và quy tắc chặn vẫn có hiệu lực).
+- **Agent lặp đi lặp lại một đoạn văn** (có khi cả vài phút, tốn token mà không làm gì): nay tự phát hiện, dừng sinh chữ ngay và nhắc agent gọi công cụ hoặc chia nhỏ việc; lặp ba lần thì dừng hẳn và báo rõ.
+
 ## [0.6.1] - 2026-10-10
 
 ### Sửa

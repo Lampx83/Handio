@@ -134,21 +134,28 @@ describe("tệp nhạy cảm và nội dung web không tin cậy", () => {
     for (const f of [".env", ".env.local", "app/.env.production", "key.pem", "id_rsa", "a/b/server.key", ".npmrc", ".aws/credentials", "x/.ssh/config", "secrets.json", "credentials", "client_secret_123.json", ".git-credentials"]) expect(isSensitivePath(f), f).toBe(true);
     for (const f of [".env.example", ".env.sample", "README.md", "src/keyboard.ts", "monkey.js", "tokenizer.py", "config.json", "public.pem.example"]) expect(isSensitivePath(f), f).toBe(false);
   });
-  it("đọc/ghi tệp nhạy cảm luôn hỏi, kể cả bypass và acceptEdits", () => {
+  it("đọc/ghi tệp nhạy cảm luôn hỏi, kể cả acceptEdits; chế độ Toàn quyền (bypass) do người dùng chọn thì không hỏi", () => {
     const tgt = { rel: ".env", abs: ROOT + "/.env" };
-    for (const mode of ["default", "acceptEdits", "bypass"] as const) {
+    for (const mode of ["default", "acceptEdits", "auto"] as const) {
       const p = new Permissions({ allow: ["read_file", "write_file"], deny: [] }, mode, ROOT);
       expect(p.decide(read, {}, tgt).decision, "read " + mode).toBe("ask");
       expect(p.decide(edit, {}, tgt).decision, "edit " + mode).toBe("ask");
     }
+    const b = new Permissions({ allow: [], deny: [] }, "bypass", ROOT);
+    expect(b.decide(read, {}, tgt).decision).toBe("allow");
+    expect(b.decide(edit, {}, tgt).decision).toBe("allow");
     expect(new Permissions({ allow: [], deny: [] }, "default", ROOT).decide(read, {}, { rel: "README.md", abs: "" }).decision).toBe("allow");
   });
   it("lệnh đọc tệp nhạy cảm không còn được tự duyệt", () => {
     for (const c of ["cat .env", "head -n1 id_rsa", "grep KEY .env.local", "cat server.pem"]) expect(readonlyCmd(c), c).toBe(false);
     expect(readonlyCmd("cat .env.example")).toBe(true);
   });
-  it("sau khi đọc web (tainted): mọi thao tác ghi/chạy đều hỏi, kể cả bypass/acceptEdits/quy tắc allow; đọc vẫn được", () => {
-    for (const mode of ["default", "acceptEdits", "bypass"] as const) {
+  it("sau khi đọc web (tainted): mọi thao tác ghi/chạy đều hỏi, kể cả acceptEdits/quy tắc allow; đọc vẫn được. Toàn quyền thì không hỏi", () => {
+    const full = new Permissions({ allow: [], deny: [] }, "bypass", ROOT);
+    full.tainted = true;
+    expect(full.decide(bash, { command: "npm test" }).decision).toBe("allow");
+    expect(full.decide(edit, {}, { rel: "a.txt", abs: "" }).decision).toBe("allow");
+    for (const mode of ["default", "acceptEdits"] as const) {
       const p = new Permissions({ allow: ["bash(npm *)", "write_file"], deny: [] }, mode, ROOT);
       p.tainted = true;
       expect(p.decide(bash, { command: "npm test" }).decision, "bash " + mode).toBe("ask");
