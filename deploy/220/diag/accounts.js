@@ -126,6 +126,14 @@
       tr.appendChild(el("td", when(r.first)));
       tr.appendChild(el("td", when(r.last)));
       tr.appendChild(el("td", String(r.turns)));
+      var act = el("td");
+      if (/^[0-9a-f]{8}$/.test(r.uid8 || "")) {
+        var link = el("a", "Xem");
+        link.href = "u-" + r.uid8 + ".html";
+        link.title = "Trang hoạt động của tài khoản này (mã giả danh " + r.uid8 + "); chỉ có khi đã dùng trong 30 ngày";
+        act.appendChild(link);
+      }
+      tr.appendChild(act);
       tb.appendChild(tr);
     });
   }

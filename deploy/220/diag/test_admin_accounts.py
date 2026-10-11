@@ -126,6 +126,12 @@ class AdminAccounts(unittest.TestCase):
         self.assertEqual(len(self.seen()[0]), n, "gói bị từ chối không được vào sổ")
         self.assertNotIn("rac.schema@neu.edu.vn", self.seen()[0])
 
+    def test_so_ai_da_dung_kem_ma_gia_danh_de_mo_trang_hoat_dong(self):
+        self.diag("lien.ket@neu.edu.vn", "web")
+        rows, _ = self.seen()
+        self.assertEqual(rows["lien.ket@neu.edu.vn"]["uid8"], C.pseudonym(SECRET, "lien.ket@neu.edu.vn")[:8])
+        self.assertRegex(rows["lien.ket@neu.edu.vn"]["uid8"], r"^[0-9a-f]{8}$")
+
     def test_so_luu_xuong_dia_quyen_600_va_nap_lai(self):
         self.diag("luu.dia@neu.edu.vn", "win")
         self.cfg.registry.flush()

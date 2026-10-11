@@ -1,0 +1,114 @@
+"""Kiểm thử cảnh báo chủ động:  python3 -m unittest discover -s deploy/220/diag -p 'test_*.py'"""
+import json
+import os
+import tempfile
+import unittest
+
+import alerts as A
+
+NOW = 1_800_000_000.0
+
+
+def stats(**kw):
+    s = {"kpi": {"turns_24h": 100, "errors_24h": 5, "error_rate_24h": 0.05, "turns_7d": 700}, "recent": {"chat_24h": 400, "chat_5xx_24h": 2}, "quota": {"blocked_users": 0, "blocked_requests": 0},
+         "system": {"newest_event_age_s": 60}}
+    for k, v in kw.items():
+        s[k].update(v) if isinstance(v, dict) else s.__setitem__(k, v)
+    return s
+
+
+class Evaluate(unittest.TestCase):
+    def keys(self, st, health=None, **kw):
+        return {a["key"] for a in A.evaluate(st, health or {"ok": True, "failed": []}, NOW, **kw)}
+
+    def test_healthy_has_no_alerts(self):
+        self.assertEqual(self.keys(stats()), set())
+
+    def test_thresholds(self):
+        self.assertEqual(self.keys(stats(kpi={"error_rate_24h": 0.30, "errors_24h": 30})), {"turn_errors"})
+        self.assertEqual(self.keys(stats(kpi={"turns_24h": 10, "error_rate_24h": 0.9})), set(), "ít lượt: không kết luận")
+        self.assertEqual(self.keys(stats(recent={"chat_5xx_24h": 40})), {"gateway_5xx"})
+        self.assertEqual(self.keys(stats(recent={"chat_24h": 10, "chat_5xx_24h": 10})), set(), "ít lệnh: không kết luận")
+        self.assertEqual(self.keys(stats(quota={"blocked_users": 6, "blocked_requests": 20})), {"quota_blocked"})
+        self.assertEqual(self.keys(stats(system={"newest_event_age_s": 8 * 3600})), {"data_stale"})
+        self.assertEqual(self.keys(stats(), {"ok": False, "failed": ["disk", "gateway"]}), {"health"})
+        self.assertEqual(self.keys(stats(), health_age=3600), {"health_stale"})
+        self.assertEqual(self.keys(stats(), stats_age=7200), {"stats_stale"})
+        self.assertEqual({a["key"] for a in A.evaluate(None, None, NOW)}, {"stats_missing"})
+
+    def test_text_has_only_aggregates(self):
+        st = stats(kpi={"error_rate_24h": 0.30, "errors_24h": 30})
+        st["users"] = [{"id": "deadbeef"}]
+        txt = A.message(*A.decide(A.evaluate(st, {"ok": False, "failed": ["disk"]}, NOW), {}, NOW)[:2])
+        self.assertIn("30%", txt)
+        self.assertNotIn("deadbeef", txt)
+        self.assertNotIn("@", txt)
+
+
+class Decide(unittest.TestCase):
+    def test_first_repeat_after_cooldown_and_resolve(self):
+        a = [{"key": "turn_errors", "sev": "cao", "text": "x"}]
+        fire, done, st = A.decide(a, {}, NOW)
+        self.assertEqual((len(fire), len(done)), (1, 0))
+        fire, done, st2 = A.decide(a, st, NOW + 600)
+        self.assertEqual((len(fire), len(done)), (0, 0), "chưa hết thời gian chờ: không nhắc lại")
+        self.assertEqual(st2["firing"]["turn_errors"]["since"], NOW)
+        fire, done, st3 = A.decide(a, st2, NOW + A.COOLDOWN_S + 1)
+        self.assertEqual(len(fire), 1)
+        fire, done, st4 = A.decide([], st3, NOW + A.COOLDOWN_S + 700)
+        self.assertEqual([d["key"] for d in done], ["turn_errors"])
+        self.assertEqual(st4, {"firing": {}})
+        self.assertEqual(A.decide([], st4, NOW + 99999)[:2], ([], []), "đã báo hết một lần thì thôi")
+
+
+class Webhook(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.old = os.environ.pop("CREDENTIALS_DIRECTORY", None)
+        self.addCleanup(lambda: os.environ.__setitem__("CREDENTIALS_DIRECTORY", self.old) if self.old is not None else None)
+
+    def write(self, name, content):
+        p = os.path.join(self.tmp.name, name)
+        with open(p, "w", encoding="utf-8") as f:
+            f.write(content)
+        return p
+
+    def test_only_https_without_whitespace(self):
+        self.assertEqual(A.read_webhook(self.write("a", "https://hooks.example.vn/x?y=1\n")), "https://hooks.example.vn/x?y=1")
+        for bad in ("http://hooks.example.vn/x", "ftp://x", "https://a b", "", "https://x\nhttps://y", "javascript:alert(1)"):
+            self.assertIsNone(A.read_webhook(self.write("b", bad)), repr(bad))
+        self.assertIsNone(A.read_webhook(os.path.join(self.tmp.name, "khong-co")))
+
+    def test_run_sends_once_and_keeps_state_when_send_fails(self):
+        st, hl, state = self.write("stats.json", json.dumps(stats(kpi={"error_rate_24h": 0.5, "errors_24h": 50}))), self.write("health.json", '{"ok": true}'), os.path.join(self.tmp.name, "al", "state.json")
+        os.utime(st, (NOW, NOW))
+        os.utime(hl, (NOW, NOW))
+        sent = []
+        r = A.run(st, hl, state, "https://hooks.example.vn/x", NOW, sender=lambda u, t: sent.append((u, t)) or True)
+        self.assertEqual((r["sent"], len(sent)), (True, 1))
+        self.assertIn("turn_errors", json.load(open(state))["firing"])
+        r = A.run(st, hl, state, "https://hooks.example.vn/x", NOW + 60, sender=lambda u, t: sent.append((u, t)) or True)
+        self.assertEqual(len(sent), 1, "không gửi lặp trong thời gian chờ")
+        # gửi lỗi: trạng thái không đổi nên lần sau thử lại
+        os.remove(state)
+        def boom(u, t):
+            raise OSError("mạng")
+        r = A.run(st, hl, state, "https://hooks.example.vn/x", NOW, sender=boom)
+        self.assertEqual(r["sent"], False)
+        self.assertFalse(os.path.exists(state))
+        # chưa cấu hình webhook: không gửi, vẫn ghi trạng thái, không lỗi
+        r = A.run(st, hl, state, None, NOW, sender=boom)
+        self.assertIsNone(r["sent"])
+        self.assertTrue(os.path.exists(state))
+
+    def test_dry_run_writes_nothing(self):
+        st = self.write("stats.json", json.dumps(stats(kpi={"error_rate_24h": 0.5, "errors_24h": 50})))
+        state = os.path.join(self.tmp.name, "state.json")
+        r = A.run(st, os.path.join(self.tmp.name, "none.json"), state, "https://hooks.example.vn/x", NOW, dry_run=True, sender=lambda u, t: 1 / 0)
+        self.assertTrue(r["alerts"])
+        self.assertFalse(os.path.exists(state))
+
+
+if __name__ == "__main__":
+    unittest.main()

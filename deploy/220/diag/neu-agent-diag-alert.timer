@@ -1,0 +1,11 @@
+[Unit]
+Description=NEU Agent - kiem tra canh bao (10 phut/lan)
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=10min
+Persistent=true
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target
