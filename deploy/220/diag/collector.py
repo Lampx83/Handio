@@ -52,7 +52,8 @@ MAX_ADMIN_BODY = 1024
 ADMIN_PAGES = {"accounts": ("accounts.html", "text/html; charset=utf-8"), "accounts.js": ("accounts.js", "text/javascript; charset=utf-8"),
                "quota": ("quota.html", "text/html; charset=utf-8"), "quota.js": ("quota.js", "text/javascript; charset=utf-8"),
                "feedback": ("feedback.html", "text/html; charset=utf-8"), "feedback.js": ("feedback.js", "text/javascript; charset=utf-8"),
-               "shares": ("shares.html", "text/html; charset=utf-8"), "shares.js": ("shares.js", "text/javascript; charset=utf-8")}
+               "shares": ("shares.html", "text/html; charset=utf-8"), "shares.js": ("shares.js", "text/javascript; charset=utf-8"),
+               "admin.js": ("admin.js", "text/javascript; charset=utf-8")}      # trợ giúp cho các trang báo cáo tĩnh (sắp xếp/lọc bảng, tự tải lại)
 MAX_SHARE_BODY = 400 * 1024         # bản chụp cuộc trò chuyện (≤ 300 KB chữ + JSON)
 MAX_FEEDBACK_BODY = 8 * 1024        # góp ý của người dùng (chữ ≤ 3000 ký tự, có dấu tiếng Việt → tối đa ~9 KB UTF-8, cắt ở 8 KB)
 MAX_ADMIN_FEEDBACK_BODY = 4096
@@ -555,7 +556,9 @@ class Handler(BaseHTTPRequestHandler):
                 body = f.read(8 * 1024 * 1024)
         except OSError:
             return self._send(404, b"Chua co bao cao.", "text/plain; charset=utf-8")
-        extra = {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:", "Referrer-Policy": "no-referrer"}
+        # trang báo cáo tĩnh: chỉ được chạy script cùng nguồn (admin.js), không nhúng, không ra mạng, không bị đặt trong khung
+        extra = {"Content-Security-Policy": "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+                 "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY"}
         return self._send(200, body, CT[name.rsplit(".", 1)[1]], extra)
 
     # -- quản lý tài khoản (chỉ quản trị viên; việc ghi do dịch vụ phụ root làm)
@@ -593,6 +596,8 @@ class Handler(BaseHTTPRequestHandler):
         out = {"ok": True, "users": lst.get("users", []), "max": lst.get("max"), "audit": aud.get("entries", []), "me": email}
         if c.registry is not None:
             out["seen"] = c.registry.snapshot()
+            for r in out["seen"]["users"]:      # mã giả danh 8 ký tự: để quản trị viên bấm sang trang hoạt động (u-<mã>.html) của đúng tài khoản
+                r["uid8"] = pseudonym(c.secret, r["email"])[:8]
         return self._send(200, out)
 
     def _admin_post_json(self, max_body=MAX_ADMIN_BODY):

@@ -5,6 +5,14 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Trang quản trị nâng cấp**: chất lượng theo **phiên bản/tab/mô hình/nền tảng** (thấy ngay bản mới có tệ hơn không), so sánh với kỳ trước ngay trên biểu đồ, vạch đánh dấu ngày ra phiên bản mới, cột bất thường, công cụ × lý do lỗi, công cụ chạy chậm, ngữ cảnh gần đầy, hỏi quyền, mức tập trung token. Bảng bấm tiêu đề để sắp xếp và có ô lọc; tải CSV theo khoảng đang xem; số trên trục dễ đọc (5.3 s, 15.7 triệu); cột *Hoạt động* ở trang Tài khoản dẫn tới trang của từng người.
+- **Cảnh báo chủ động tuỳ chọn**: đặt URL webhook (Teams/Slack…) để nhận tin khi lỗi tăng, cổng mô hình 5xx, hết hạn mức hàng loạt hoặc hệ thống không khoẻ. Chỉ gửi số liệu tổng hợp.
+- **Trang quản trị chọn được khoảng thời gian**: 1 ngày, 3 ngày (chia theo giờ), 7, 30 (mặc định) và 90 ngày. Nút chọn nằm ở thanh trên cùng; mỗi khoảng là một trang tạo sẵn (`index-1d.html`, `index-3d.html`, `index-7d.html`, `index-90d.html`) nên mở nhanh như trang cũ.
+
+### Sửa
+- **Tỷ lệ lỗi công cụ không còn bị thổi phồng** bởi các bản ứng dụng cũ chưa phân loại lỗi (trước đây hiện như "chưa rõ" chiếm gần hết biểu đồ); phần đó nay ghi riêng.
+
 ## [0.8.3] - 2026-10-11
 
 ### Thêm

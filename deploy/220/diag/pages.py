@@ -155,7 +155,7 @@ def read_quota_users(db_path, days=30):
 # ---------------------------------------------------------------- tiện ích hiển thị
 def shell(title, body, back="index.html", back_label="← Tổng quan", extra_nav=""):
     return ('<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title><style>%s</style></head><body><main>'
-            '<nav class="top"><b>NEU Agent</b><a href="%s">%s</a>%s<span style="flex:1"></span><a href="data.html">Dữ liệu &amp; CSV</a></nav>%s</main></body></html>' % (_e(title), C.CSS, _e(back), _e(back_label), extra_nav, body))
+            '<nav class="top"><b>NEU Agent</b><a href="%s">%s</a>%s<span style="flex:1"></span><a href="data.html">Dữ liệu &amp; CSV</a></nav>%s</main><script src="admin.js" defer></script></body></html>' % (_e(title), C.CSS, _e(back), _e(back_label), extra_nav, body))
 
 
 def tool_rows(tools):
@@ -265,14 +265,14 @@ def users_csv(S, U, pids, quota):
     return _csv(["ma", "bac", "lan_dau", "gan_nhat_vn", "so_ngay_dung", "luot", "luot_loi", "tab_chinh", "nen_tang", "phien_ban", "mo_hinh", "token_30_ngay", "han_muc_ngay", "bi_chan"], rows)
 
 
-def daily_csv(S):
+def daily_csv(S, label="ngay"):
     rows = [[x["day"], x["users"], x["new"], x["installs"], x["turns"], x["errors"], "" if x["error_rate"] is None else round(x["error_rate"], 4), x["dur_p50"] or "", x["dur_p95"] or "", x["ttft_p50"] or "", x["ttft_p95"] or "", x["ptok"], x["ctok"],
              x["tool_calls"], x["tool_fails"], x["signals"], x["llm_errors"], x["chat"], x["chat_5xx"], x["pkg"], x["update_check"]] for x in S["series"]]
-    return _csv(["ngay", "nguoi_dung", "nguoi_dung_moi", "may", "luot", "luot_loi", "ty_le_loi", "thoi_gian_p50_s", "thoi_gian_p95_s", "token_dau_p50_ms", "token_dau_p95_ms", "token_prompt", "token_tra_loi", "goi_cong_cu", "cong_cu_loi", "tin_hieu", "loi_mo_hinh", "goi_mo_hinh_nginx", "5xx", "tai_ban_cai", "kiem_tra_cap_nhat"], rows)
+    return _csv([label, "nguoi_dung", "nguoi_dung_moi", "may", "luot", "luot_loi", "ty_le_loi", "thoi_gian_p50_s", "thoi_gian_p95_s", "token_dau_p50_ms", "token_dau_p95_ms", "token_prompt", "token_tra_loi", "goi_cong_cu", "cong_cu_loi", "tin_hieu", "loi_mo_hinh", "goi_mo_hinh_nginx", "5xx", "tai_ban_cai", "kiem_tra_cap_nhat"], rows)
 
 
 def tools_csv(S):
-    return _csv(["cong_cu", "goi", "loi_that", "chuong_trinh_loi"], [[x["name"], x["calls"], x["fails"], x.get("prog", 0)] for x in S["tools"]])
+    return _csv(["cong_cu", "goi", "goi_da_phan_loai", "loi_that", "chuong_trinh_loi", "chua_phan_loai"], [[x["name"], x["calls"], x.get("rated", x["calls"]), x["fails"], x.get("prog", 0), x.get("unk", 0)] for x in S["tools"]])
 
 
 # ---------------------------------------------------------------- trang dữ liệu đầy đủ
@@ -283,7 +283,8 @@ def data_page(S, U, pids, quota):
     body = ['<h1>Dữ liệu đầy đủ</h1><p class="sub">Bảng chi tiết để đối chiếu; tải CSV (mở được bằng Excel) ở cuối trang.</p>']
     body.append("<h2>Theo ngày (30 ngày)</h2>" + table(["Ngày", "Người dùng", "Mới", "Lượt", "Lỗi", "Tỷ lệ lỗi", "Thời gian p50/p95 (s)", "Token vào", "Token ra", "Gọi công cụ", "Công cụ lỗi", "Gọi mô hình (nginx)", "5xx", "Tải bản cài", "Kiểm tra cập nhật"],
                                                        [[('<a href="d-%s.html">%s</a>' % (r[0], r[0]))] + r[1:] for r in rows], raw=(0,)))
-    body.append("<h2>Công cụ (30 ngày)</h2>" + table(["Công cụ", "Gọi", "Lỗi thật", "Tỷ lệ lỗi", "Chương trình lỗi (bình thường)"], [[x["name"], x["calls"], x["fails"], _p(R.ratio(x["fails"], x["calls"])), x.get("prog", 0)] for x in S["tools"]] or [["—", 0, 0, "—", 0]]))
+    body.append("<h2>Công cụ (30 ngày)</h2>" + table(["Công cụ", "Gọi", "Lỗi thật", "Tỷ lệ lỗi", "Chương trình lỗi (bình thường)", "Chưa phân loại (bản cũ)"],
+                                                    [[x["name"], x["calls"], x["fails"], _p(R.ratio(x["fails"], x.get("rated", x["calls"]))) if x.get("rated", x["calls"]) else "—", x.get("prog", 0), x.get("unk", 0)] for x in S["tools"]] or [["—", 0, 0, "—", 0, 0]], "u sortable"))
     body.append("<h2>Phiên bản, nền tảng, tab, mô hình (30 ngày)</h2>")
     for key, nm in (("version", "Phiên bản"), ("platform", "Nền tảng"), ("profile", "Tab"), ("model", "Mô hình")):
         body.append(table([nm, "Người dùng", "Máy", "Lượt"], [[x["value"], x["users"], x["installs"], x["turns"]] for x in S["dist"][key]] or [["—", 0, 0, 0]]))

@@ -26,15 +26,17 @@ SECRET=$ETC/diag-secret
 ADMINS=$ETC/admins.txt
 LLMKEY=$ETC/llm-key
 DROPIN_DIR=$UNITDIR/neu-agent-diag-report.service.d
+ALERT_DROPIN=$UNITDIR/neu-agent-diag-alert.service.d
+WEBHOOK=$ETC/alert-webhook
 VAR=/var/lib/neu-agent
 USER_NAME=neu-diag
 SNIP=/etc/nginx/snippets/neu-agent-locations.conf
 TS=$(date +%Y%m%d%H%M%S)
 BAK=/var/backups/neu-agent-diag/$TS
 SERVICES="neu-agent-diag.service neu-agent-accounts.service"
-TIMERS="neu-agent-diag-report.timer neu-agent-healthz.timer neu-agent-diag-stats.timer"
-UNITS="neu-agent-diag.service neu-agent-accounts.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer"
-CODE="collector.py report.py stats.py charts.py pages.py healthz.py schema.json accounts.py accounts.html accounts.js quota_admin.py quota.html quota.js feedback.py feedback.html feedback.js shares.py shares.html shares.js"
+TIMERS="neu-agent-diag-report.timer neu-agent-healthz.timer neu-agent-diag-stats.timer neu-agent-diag-alert.timer"
+UNITS="neu-agent-diag.service neu-agent-accounts.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer neu-agent-diag-alert.service neu-agent-diag-alert.timer"
+CODE="collector.py report.py stats.py charts.py pages.py healthz.py schema.json accounts.py accounts.html accounts.js quota_admin.py quota.html quota.js feedback.py feedback.html feedback.js shares.py shares.html shares.js admin.js alerts.py"
 
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
 command -v python3 >/dev/null && command -v systemctl >/dev/null || { echo "Thiếu python3 hoặc systemctl."; exit 1; }
@@ -43,7 +45,7 @@ if [ "${1:-}" = "--uninstall" ]; then
   for t in $TIMERS; do systemctl disable --now "$t" 2>/dev/null || true; done
   for s in $SERVICES; do systemctl disable --now "$s" 2>/dev/null || true; done
   for u in $UNITS; do rm -f "$UNITDIR/$u"; done
-  rm -rf "$DROPIN_DIR" "$LIB" "$LROT"; systemctl daemon-reload
+  rm -rf "$DROPIN_DIR" "$ALERT_DROPIN" "$LIB" "$LROT"; systemctl daemon-reload
   echo "Đã gỡ dịch vụ chẩn đoán. Còn lại (xoá tay nếu muốn): $VAR, $ETC/diag-secret, $ETC/admins.txt, người dùng $USER_NAME."
   exit 0
 fi
@@ -63,7 +65,7 @@ for a in "${ADMIN_LIST[@]:-}"; do
 done
 
 [ -f "$HERE/../users.sh" ] || { echo "Thiếu $HERE/../users.sh (quản lý tài khoản dùng nó)."; exit 1; }
-for f in $CODE neu-agent-diag.service neu-agent-accounts.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer neu-agent-diag.logrotate; do
+for f in $CODE neu-agent-diag.service neu-agent-accounts.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer neu-agent-diag-alert.service neu-agent-diag-alert.timer neu-agent-diag.logrotate; do
   [ -f "$HERE/$f" ] || { echo "Thiếu $HERE/$f"; exit 1; }
 done
 
@@ -78,7 +80,7 @@ fi
 MANAGED=()
 for c in $CODE; do MANAGED+=("$LIB/$c"); done
 for u in $UNITS; do MANAGED+=("$UNITDIR/$u"); done
-MANAGED+=("$LROT" "$DROPIN_DIR/llm.conf" "$LIB/users.sh")
+MANAGED+=("$LROT" "$DROPIN_DIR/llm.conf" "$ALERT_DROPIN/net.conf" "$LIB/users.sh")
 mkdir -p "$BAK"
 declare -A EXISTED
 for f in "${MANAGED[@]}"; do
@@ -108,6 +110,7 @@ id -u "$USER_NAME" >/dev/null 2>&1 || useradd --system --no-create-home --home-d
 install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$VAR"
 install -d -m 0700 -o "$USER_NAME" -g "$USER_NAME" "$VAR/diag"
 install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$VAR/reports"
+install -d -m 0750 -o "$USER_NAME" -g "$USER_NAME" "$VAR/alerts"
 install -d -m 0700 -o "$USER_NAME" -g "$USER_NAME" "$VAR/feedback"   # góp ý của người dùng (SQLite)
 install -d -m 0750 -o root -g root "$ETC"
 if [ ! -s "$SECRET" ]; then
@@ -145,6 +148,18 @@ ExecStart=/usr/bin/python3 $LIB/report.py --llm
 EOT
 else
   rm -f "$DROPIN_DIR/llm.conf"; rmdir "$DROPIN_DIR" 2>/dev/null || true
+fi
+if [ -s "$WEBHOOK" ]; then
+  chmod 600 "$WEBHOOK"
+  mkdir -p "$ALERT_DROPIN"
+  cat > "$ALERT_DROPIN/net.conf" <<EOT
+# Tạo bởi install-diag.sh vì có $WEBHOOK: cảnh báo chủ động gửi tin ngắn (chỉ số liệu tổng hợp) tới webhook đó.
+[Service]
+LoadCredential=alert-webhook:$WEBHOOK
+PrivateNetwork=no
+EOT
+else
+  rm -f "$ALERT_DROPIN/net.conf"; rmdir "$ALERT_DROPIN" 2>/dev/null || true
 fi
 if command -v systemd-analyze >/dev/null; then
   for u in $UNITS; do systemd-analyze verify "$UNITDIR/$u" 2>&1 | grep -v '^$' | sed "s/^/  [systemd-analyze] /" || true; done   # chỉ cảnh báo; khởi động dịch vụ bên dưới mới là phép thử thật

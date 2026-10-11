@@ -37,6 +37,12 @@ class StatsTest(unittest.TestCase):
         self.log = os.path.join(self.tmp.name, "n.json.log")
         self.addCleanup(self.tmp.cleanup)
 
+    def only_admin_js(self, page):
+        """Không có script nhúng; thẻ script duy nhất là tệp admin.js cùng nguồn (CSP script-src 'self')."""
+        import re
+        tags = re.findall(r"<script[^>]*>.*?</script>", page.lower(), flags=re.S)
+        self.assertTrue(all(t == '<script src="admin.js" defer></script>' for t in tags), tags)
+
     def write_log(self, rows):
         with open(self.log, "w") as f:
             for r in rows:
@@ -67,7 +73,7 @@ class StatsTest(unittest.TestCase):
         write_diag(self.diag, [rec(day_ts(0), turn_ev(), uid="a" * 16)])
         S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
         h = slurp(os.path.join(self.out, "index.html"))
-        self.assertNotIn("<script", h.lower())
+        self.only_admin_js(h)
         self.assertNotIn("http://", h)
         self.assertNotIn("https://", h)
         self.assertIn("aaaaaaaa", h)
@@ -89,6 +95,126 @@ class StatsTest(unittest.TestCase):
         j = jload(os.path.join(self.out, "stats.json"))
         self.assertEqual(j["downloads_total"], 3)
         self.assertEqual(j["series"][-1]["chat"], 2)
+
+    def test_range_pages_split_by_hour_and_by_day(self):
+        recs = [rec(T_NOW - 1800, turn_ev(), uid="a" * 16), rec(T_NOW - 5 * 3600 - 600, turn_ev(), uid="a" * 16),      # trong 1 ngày
+                rec(T_NOW - 30 * 3600, turn_ev(), uid="b" * 16),                                                       # trong 3 ngày, ngoài 1 ngày
+                rec(day_ts(5), turn_ev(), uid="c" * 16),                                                               # trong 7 ngày, ngoài 3 ngày
+                rec(day_ts(40), turn_ev(), uid="d" * 16)]                                                              # chỉ trong 90 ngày
+        write_diag(self.diag, recs)
+        self.write_log([nginx_row(T_NOW - 1800), nginx_row(T_NOW - 1900, 502), nginx_row(T_NOW - 30 * 3600)])
+        S.run(self.diag, self.log, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
+        for name in ("index.html", "index-1d.html", "index-3d.html", "index-7d.html", "index-90d.html"):
+            self.assertTrue(os.path.isfile(os.path.join(self.out, name)), name)
+        h1, h30 = slurp(os.path.join(self.out, "index-1d.html")), slurp(os.path.join(self.out, "index.html"))
+        self.assertIn("24 giờ gần nhất, theo giờ", h1)
+        self.assertIn("Người dùng hoạt động mỗi giờ", h1)
+        self.assertIn('class="on" aria-current="page">1 ngày</a>', h1)
+        self.assertIn("30 ngày gần nhất", h30)
+        self.assertIn("Người dùng hoạt động mỗi ngày", h30)
+        self.assertIn('href="index-3d.html"', h30)                       # nút chọn khoảng có ở mọi trang
+        # số liệu: tính trực tiếp từ dữ liệu đã ghi
+        got = S.compute_all(R.load_diag(self.diag, T_NOW - 90 * 86400, T_NOW + 1), {}, NOW,
+                            hourly=S.nginx_daily(R.load_nginx(self.log, T_NOW - 15 * 86400, T_NOW + 1), S.vn_hour))
+        self.assertEqual({k: len(v["series"]) for k, v in got.items()}, {"1d": 24, "3d": 72, "7d": 7, "30d": 30, "90d": 90})
+        self.assertEqual({k: v["range"]["turns"] for k, v in got.items()}, {"1d": 2, "3d": 3, "7d": 4, "30d": 4, "90d": 5})
+        self.assertEqual({k: v["range"]["users"] for k, v in got.items()}, {"1d": 1, "3d": 2, "7d": 3, "30d": 3, "90d": 4})
+        d1 = got["1d"]["series"]
+        self.assertEqual((d1[-1]["day"], d1[0]["day"]), (S.vn_hour(T_NOW), S.vn_hour(T_NOW - 23 * 3600)))   # giờ VN, cũ → mới
+        by_hour = {x["day"]: x for x in d1}
+        self.assertEqual(by_hour[S.vn_hour(T_NOW - 1800)]["turns"], 1)
+        self.assertEqual(by_hour[S.vn_hour(T_NOW - 5 * 3600 - 600)]["turns"], 1)
+        self.assertEqual((by_hour[S.vn_hour(T_NOW - 1800)]["chat"], by_hour[S.vn_hour(T_NOW - 1800)]["chat_5xx"]), (2, 1))   # nginx theo giờ
+        self.assertEqual(sum(x["chat"] for x in got["3d"]["series"]), 3)
+        self.assertEqual(sum(x["chat"] for x in d1), 2)
+        a = {u["id"]: u["turns30"] for u in got["1d"]["users"]}                                  # lượt tính theo khoảng đang xem
+        self.assertEqual((a["a" * 8], a["b" * 8]), (2, 0))
+        self.assertEqual({u["id"]: u["turns30"] for u in got["3d"]["users"]}["b" * 8], 1)
+        self.assertEqual(sum(map(sum, got["1d"]["heat"])), 2)
+
+    def test_quality_by_version_prev_period_and_marks(self):
+        v1, v2 = dict(APP, version="0.1.0"), dict(APP, version="0.2.0")
+        recs = []
+        for i in range(30):                                                       # kỳ trước (7 ngày: 7–14 ngày trước), bản 0.1.0: 10% lỗi
+            recs.append(rec(day_ts(8 + i % 5, 2 + i % 3), turn_ev("error" if i % 10 == 0 else "ok", dur_s=10), uid="a%015d" % (i % 4), app=v1))
+        for i in range(40):                                                       # khoảng hiện tại, bản 0.2.0 xuất hiện ở ngày thứ 3: 50% lỗi
+            recs.append(rec(day_ts(i % 3, 2 + i % 3), turn_ev("error" if i % 2 == 0 else "ok", dur_s=90), uid="b%015d" % (i % 4), app=v2))
+        recs += [rec(day_ts(3, 4), turn_ev(), uid="a%015d" % (i % 4), app=v1) for i in range(12)]
+        write_diag(self.diag, recs)
+        got = S.compute_all(R.load_diag(self.diag, T_NOW - 90 * 86400, T_NOW + 1), {}, NOW, keys=("7d",))["7d"]
+        q = {r["value"]: r for r in got["quality"]["version"]}
+        self.assertEqual(q["0.2.0"]["turns"], 40)
+        self.assertAlmostEqual(q["0.2.0"]["error_rate"], 0.5)
+        self.assertEqual(q["0.2.0"]["dur_p95"], 90)
+        self.assertEqual(q["0.1.0"]["turns"], 12)                                  # chỉ các lượt trong khoảng, không lẫn kỳ trước
+        self.assertIsNotNone(got["prev_series"])
+        self.assertEqual(sum(x["turns"] for x in got["prev_series"]), 30)
+        self.assertEqual(got["range"]["prev"]["turns"], 30)
+        self.assertEqual(len(got["prev_series"]), len(got["series"]))
+        self.assertEqual(got["version_first"]["0.2.0"], S.vn_day(min(r["ts_srv"] for r in recs if r["a"]["version"] == "0.2.0")))
+        self.assertEqual(got["version_first"]["0.1.0"], S.vn_day(min(r["ts_srv"] for r in recs if r["a"]["version"] == "0.1.0")))
+        out = S.compute_all(R.load_diag(self.diag, T_NOW - 90 * 86400, T_NOW + 1), {}, NOW, keys=("90d",))["90d"]
+        self.assertIsNone(out["prev_series"], "kỳ trước vượt thời hạn giữ dữ liệu: không có")
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
+        h = slurp(os.path.join(self.out, "index-7d.html"))
+        self.assertIn("Chất lượng theo phiên bản", h)
+        self.assertIn("so với kỳ trước", h)
+        self.assertIn('class="pv"', h)                                             # đường kỳ trước vẽ ra
+
+    def test_tool_error_rate_ignores_versions_without_error_codes(self):
+        old, new = dict(APP, version="0.1.0"), dict(APP, version="0.9.0")
+        tool = lambda ok, err=None: {"t": "tool", "name": "bash", "ok": ok, "dur": "lt1s", **({"err": err} if err else {})}
+        recs = [rec(day_ts(0), tool(True), app=old) for _ in range(5)] + [rec(day_ts(0), tool(False), app=old) for _ in range(5)]          # bản cũ: lỗi không có mã
+        recs += [rec(day_ts(0), tool(True), app=new) for _ in range(8)] + [rec(day_ts(0), tool(False, "not_found"), app=new), rec(day_ts(0), tool(False, "program"), app=new)]
+        write_diag(self.diag, recs)
+        j = S.compute(R.load_diag(self.diag, T_NOW - 90 * 86400, T_NOW + 1), {}, NOW)
+        b = {x["name"]: x for x in j["tools"]}["bash"]
+        self.assertEqual((b["calls"], b["rated"], b["fails"], b["prog"], b["unk"]), (20, 10, 1, 1, 5))
+        self.assertEqual(j["tool_errors"], {"not_found": 1, "program": 1})        # không có "chưa rõ" của bản cũ
+        self.assertEqual((j["tool_unknown"], j["tool_unknown_versions"]), (5, ["0.1.0"]))
+        self.assertEqual(j["tool_reasons"], {"bash": {"not_found": 1, "program": 1}})
+
+    def test_new_signals_ctx_perm_slow_tools_and_concentration(self):
+        ev = lambda **kw: turn_ev(**dict({"steps": 4, "ctx_pct": 50, "compactions": 0, "perm_allow": 2, "perm_deny": 0, "prompt_tok": 100, "completion_tok": 10}, **kw))
+        recs = [rec(day_ts(0, 2), ev(ctx_pct=90, compactions=1, perm_deny=1), uid="a" * 16), rec(day_ts(0, 3), ev(), uid="a" * 16),
+                rec(day_ts(0, 3), ev(prompt_tok=5000), uid="b" * 16)] + [rec(day_ts(0), ev(prompt_tok=10), uid="%016d" % i) for i in range(10)]
+        recs += [rec(day_ts(0), {"t": "tool", "name": "web_fetch", "ok": True, "dur": "lt30s"}) for _ in range(8)] + [rec(day_ts(0), {"t": "tool", "name": "web_fetch", "ok": True, "dur": "lt1s"}) for _ in range(4)]
+        recs += [rec(day_ts(0), {"t": "signal", "code": "repeat_tool_fail", "tool": "bash", "n": 3}), rec(day_ts(0), {"t": "llm_error", "kind": "rate", "status": 429})]
+        write_diag(self.diag, recs)
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
+        today = j["series"][-1]
+        self.assertEqual((today["perm_allow"], today["perm_deny"], today["compactions"], today["ctx_n"], today["steps_p50"]), (26, 1, 1, 13, 4))
+        self.assertAlmostEqual(today["ctx_hi_ratio"], 1 / 13)
+        self.assertEqual(j["tool_slow"][0]["name"], "web_fetch")
+        self.assertAlmostEqual(j["tool_slow"][0]["ratio"], 8 / 12)
+        self.assertEqual(j["signals_by_tool"], [{"code": "repeat_tool_fail", "tool": "bash", "n": 1}])
+        self.assertEqual(j["llm_status"], [{"kind": "rate", "status": 429, "n": 1}])
+        c = j["concentration"]
+        self.assertEqual((c["users"], c["top_n"]), (12, 2))
+        self.assertGreater(c["top_share"], 0.9)
+        h = slurp(os.path.join(self.out, "index.html"))
+        for frag in ("Công cụ chạy chậm", "Hỏi quyền", "Tín hiệu theo công cụ", "Lỗi gọi mô hình theo mã HTTP", "Mức tập trung", "Ngữ cảnh gần đầy"):
+            self.assertIn(frag, h)
+
+    def test_anomalies_group_baseline_and_flag_outliers(self):
+        row = lambda d, turns, err, chat=0, c5=0: {"day": d, "turns": turns, "errors": err, "error_rate": err / turns if turns else None, "dur_p95": 20.0, "chat": chat, "chat_5xx": c5}
+        calm = [row("2026-10-%02d" % i, 40, 2) for i in range(1, 21)]
+        calm[10] = row("2026-10-11", 40, 20)                                       # một ngày lỗi vọt 50%
+        got = S.find_anomalies(calm, False)
+        self.assertEqual([(a["idx"], a["kind"]) for a in got], [(10, "error")])
+        base = [row("2026-10-%02d" % i, 40, 2, chat=100, c5=8) for i in range(1, 21)]  # 5xx 8% mọi ngày: mức nền, gộp một dòng
+        got = S.find_anomalies(base, False)
+        self.assertEqual([a["kind"] for a in got], ["5xx_base"])
+        self.assertIsNone(got[0]["idx"])
+        self.assertEqual(S.find_anomalies([row("2026-10-01", 5, 5)], False), [], "ít lượt: không kết luận")
+
+    def test_default_page_matches_compute(self):
+        write_diag(self.diag, [rec(day_ts(0), turn_ev(), uid="a" * 16), rec(day_ts(2), turn_ev("error"), uid="b" * 16)])
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
+        self.assertEqual(j["range"]["key"], "30d")
+        self.assertEqual(len(j["series"]), 30)
+        again = S.compute(R.load_diag(self.diag, T_NOW - 90 * 86400, T_NOW + 1), {}, NOW)
+        self.assertEqual((again["kpi"], again["series"][-1]["turns"]), (j["kpi"], j["series"][-1]["turns"]))
 
     def test_funnel_segments_histograms_and_heatmap(self):
         recs = []
@@ -237,7 +363,7 @@ class StatsTest(unittest.TestCase):
             self.assertIn(frag, dp)
         self.assertIn('href="d-%s.html"' % S.vn_day(T_NOW - 86400), dp)                           # chuyển sang ngày trước
         for page in (idx, up, dp, slurp(os.path.join(self.out, "data.html"))):
-            self.assertNotIn("<script", page.lower())
+            self.only_admin_js(page)
         users_csv = slurp(os.path.join(self.out, "users.csv"))
         self.assertTrue(users_csv.startswith("\ufeffma,bac,"))
         self.assertIn("aaaaaaaa", users_csv)

@@ -11,14 +11,20 @@ CSS = R.CSS + """
 html{scroll-behavior:smooth}main{max-width:1100px}a{color:var(--lo)}
 nav.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);margin:0 -16px 14px;padding:8px 16px;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
 nav.top b{margin-right:6px}nav.top a{text-decoration:none;font-size:14px}nav.top a:hover{text-decoration:underline}
-h2{scroll-margin-top:52px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:34px}h2 small{font-weight:400;color:var(--mut);font-size:13px;margin-left:8px}
+h2{scroll-margin-top:84px;border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:34px}h2 small{font-weight:400;color:var(--mut);font-size:13px;margin-left:8px}
+nav.top .rng{flex:0 0 100%;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;color:var(--mut);font-size:13px}
+nav.top .rng a{border:1px solid var(--line);border-radius:99px;padding:0 11px;font-size:13px}nav.top .rng a.on{background:var(--c1);border-color:var(--c1);color:#fff;pointer-events:none}
+.ch line.mk{stroke:var(--c5);stroke-dasharray:2 2}.ch path.pv{fill:none;stroke:var(--mut);stroke-width:1.2;stroke-dasharray:3 2;opacity:.8}.ch circle.fl{fill:none;stroke:var(--bad);stroke-width:1.6}
+[hidden]{display:none!important}.tsearch{margin:6px 0;padding:4px 10px;border:1px solid var(--line);border-radius:99px;background:var(--card);color:var(--fg);font:inherit;font-size:13px;min-width:240px}
+table.sortable th[data-s]{cursor:pointer}table.sortable th[data-s]:hover{text-decoration:underline}th[data-dir=asc]::after{content:" ▲";font-size:10px}th[data-dir=desc]::after{content:" ▼";font-size:10px}
+td.hc{padding:0}td.hc span{display:block;padding:5px 8px;text-align:right}
 .pill{display:inline-block;padding:1px 9px;border-radius:99px;font-size:12px;background:var(--card);border:1px solid var(--line)}.pill.good{color:var(--ok)}.pill.bad{color:var(--bad)}.pill.warn{color:var(--c3)}
 .hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:12px 0}
 .hero .k{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;position:relative}
 .hero .k span{color:var(--mut);font-size:12.5px;display:block}.hero .k b{font-size:28px;line-height:1.15;display:block}.hero .k i{font-style:normal;font-size:12px;color:var(--mut)}
 .hero .k svg{position:absolute;right:10px;bottom:10px;width:84px;height:26px}
 .up{color:var(--ok)}.dn{color:var(--bad)}.up.inv{color:var(--bad)}.dn.inv{color:var(--ok)}
-.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}.mini div{border:1px solid var(--line);border-radius:8px;padding:6px 10px}.mini b{display:block;font-size:17px}.mini span{font-size:12px;color:var(--mut)}
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:8px 0}.mini div{border:1px solid var(--line);border-radius:8px;padding:6px 10px}.mini b{display:block;font-size:17px}.mini span{font-size:12px;color:var(--mut)}.mini i{display:block;font-style:normal;font-size:12px;color:var(--mut)}
 .ins{list-style:none;margin:8px 0;padding:0}.ins li{padding:5px 10px;margin:4px 0;border-left:4px solid var(--lo);background:var(--card);border-radius:0 6px 6px 0}
 .ins li.good{border-left-color:var(--ok)}.ins li.warn{border-left-color:var(--c3)}.ins li.bad{border-left-color:var(--bad)}
 .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
@@ -33,7 +39,7 @@ h2{scroll-margin-top:52px;border-bottom:1px solid var(--line);padding-bottom:4px
 details.sec{margin:10px 0}details.sec>summary{cursor:pointer;font-weight:600;padding:4px 0}
 .ch a{cursor:pointer}.ch a:hover rect,.ch a:hover circle{opacity:.7}
 .lg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12px;color:var(--mut);margin:4px 0 0}.lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-.s1b{background:var(--c1)}.s2b{background:var(--c2)}.s3b{background:var(--c3)}.s4b{background:var(--c4)}.s5b{background:var(--c5)}.s6b{background:var(--c6)}
+.pvb{background:none;border:1px dashed var(--mut)}.s1b{background:var(--c1)}.s2b{background:var(--c2)}.s3b{background:var(--c3)}.s4b{background:var(--c4)}.s5b{background:var(--c5)}.s6b{background:var(--c6)}
 .hb{display:grid;grid-template-columns:minmax(70px,32%) 1fr auto;gap:4px 8px;align-items:center;font-size:13.5px;margin-bottom:6px}.hb .t{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.hb .t i{display:block;height:100%;background:var(--c1);border-radius:5px}
 .hb .n{color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap}.hb .l{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hb.bad .t i{background:var(--c4)}.hb.g .t i{background:var(--c2)}
 .seg{display:flex;height:16px;border-radius:8px;overflow:hidden;margin:6px 0;background:var(--line)}.seg i{display:block;height:100%}
@@ -63,17 +69,44 @@ def strip(vals):
     return '<svg viewBox="0 0 70 18" class="ch" aria-hidden="true">' + "".join('<rect class="s1" x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="1"><title>%d lượt</title></rect>' % (i * bw + .5, 17 - 16 * v / mx, bw - 1, 16 * v / mx + .5, v) for i, v in enumerate(vals) if v) + "</svg>"
 
 
+def fmt(v, unit=""):
+    """Số gọn để đọc: 5340 ms -> '5.3 s', 15700000 -> '15.7 triệu', 2190 -> '2.2 nghìn' (không dùng dạng khoa học 1e+07)."""
+    u = unit.strip()
+    if u == "ms" and v >= 1000:
+        v, u = v / 1000.0, "s"
+    if abs(v) >= 1e6:
+        s = ("%.1f" % (v / 1e6)).rstrip("0").rstrip(".") + " triệu"
+    elif abs(v) >= 1e3:
+        s = ("%.1f" % (v / 1e3)).rstrip("0").rstrip(".") + " nghìn"
+    else:
+        s = "%.3g" % v
+        if "e" in s:
+            s = "%.0f" % v
+    return s + ("" if u == "%" else " ") + u if u else s
+
+
 def _frame(w, h, mx, labels, trim, unit=""):
-    return '<text x="0" y="%d">%s</text><text x="%d" y="%d" text-anchor="end">%s</text><text x="%d" y="9" text-anchor="end">max %.3g%s</text>' % (h + 12, _e(labels[0][trim:]), w, h + 12, _e(labels[-1][trim:]), w, mx, unit)
+    return '<text x="0" y="%d">%s</text><text x="%d" y="%d" text-anchor="end">%s</text><text x="%d" y="9" text-anchor="end">max %s</text>' % (h + 12, _e(labels[0][trim:]), w, h + 12, _e(labels[-1][trim:]), w, _e(fmt(mx, unit)))
 
 
-def stack(series, labels, h=70, trim=5, unit="", links=None):
-    """Cột chồng: series = [(tên, giá trị[], lớp màu)]."""
+def _marks(marks, n, w, h):
+    """Vạch đứng đánh dấu mốc (vd ngày một phiên bản mới xuất hiện): marks = {chỉ số cột: chú thích}."""
+    return "".join('<line class="mk" x1="%.1f" y1="0" x2="%.1f" y2="%d"><title>%s</title></line>' % (i * w / n, i * w / n, h, _e(t)) for i, t in sorted((marks or {}).items()) if 0 < i < n)
+
+
+def _prev_path(prev, n, w, h, mx):
+    """Đường đứt nét của kỳ trước (cùng số cột, đặt cùng thang với kỳ hiện tại)."""
+    pts = [((i + .5) * w / n, h - (h - 10) * v / mx) for i, v in enumerate(prev or []) if v is not None]
+    return '<path class="pv" d="M%s"><title>Kỳ trước</title></path>' % " L".join("%.1f,%.1f" % p for p in pts) if len(pts) > 1 else ""
+
+
+def stack(series, labels, h=70, trim=5, unit="", links=None, marks=None, prev=None):
+    """Cột chồng: series = [(tên, giá trị[], lớp màu)]. marks: vạch mốc; prev: tổng của kỳ trước (đường đứt nét)."""
     n, w = len(labels), 300
     tot = [sum(s[1][i] or 0 for s in series) for i in range(n)]
-    mx = max(tot) or 1
+    mx = max(tot + [v for v in (prev or []) if v is not None]) or 1
     bw = w / n
-    o = ['<svg class="ch" viewBox="0 0 %d %d" role="img" aria-label="Biểu đồ cột %d cột, lớn nhất %g">' % (w, h + 16, n, mx)]
+    o = ['<svg class="ch" viewBox="0 0 %d %d" role="img" aria-label="Biểu đồ cột %d cột, lớn nhất %s">' % (w, h + 16, n, _e(fmt(mx, unit)))]
     for i in range(n):
         y = h
         for name, vals, cls in series:
@@ -83,28 +116,37 @@ def stack(series, labels, h=70, trim=5, unit="", links=None):
                 y -= bh
                 r = '<rect class="%s" x="%.1f" y="%.1f" width="%.1f" height="%.1f"><title>%s · %s: %g</title></rect>' % (cls, i * bw + 1, y, max(bw - 2, 1), max(bh, .6), _e(labels[i]), _e(name), v)
                 o.append('<a href="%s">%s</a>' % (_e(links[i]), r) if links and links[i] else r)
+    o.append(_prev_path(prev, n, w, h, mx) + _marks(marks, n, w, h))
     o.append(_frame(w, h, mx, labels, trim, unit) + "</svg>")
     return "".join(o)
 
 
-def bars(vals, labels, errs=None, h=70, trim=5, links=None):
+def bars(vals, labels, errs=None, h=70, trim=5, links=None, marks=None, prev=None):
     if errs:
-        return stack([("Không lỗi", [max(v - x, 0) for v, x in zip(vals, errs)], "s1"), ("Lỗi", errs, "s4")], labels, h, trim, links=links)
-    return stack([("Giá trị", vals, "s1")], labels, h, trim, links=links)
+        return stack([("Không lỗi", [max(v - x, 0) for v, x in zip(vals, errs)], "s1"), ("Lỗi", errs, "s4")], labels, h, trim, links=links, marks=marks, prev=prev)
+    return stack([("Giá trị", vals, "s1")], labels, h, trim, links=links, marks=marks, prev=prev)
 
 
-def lines(series, labels, h=70, trim=5, unit="", links=None):
-    """Đường: series = [(tên, giá trị[] (None = trống), lớp màu)]. Nối các điểm có dữ liệu."""
+def lines(series, labels, h=70, trim=5, unit="", links=None, marks=None, prev=None, flags=None):
+    """Đường: series = [(tên, giá trị[] (None = trống), lớp màu)]. Nối các điểm có dữ liệu.
+    prev: giá trị kỳ trước (đường đứt nét); flags: tập chỉ số điểm bất thường (vòng đỏ); marks: vạch mốc."""
     n, w = len(labels), 300
-    mx = max([v for _, vs, _ in series for v in vs if v is not None] or [1]) or 1
-    o = ['<svg class="ch" viewBox="0 0 %d %d" role="img" aria-label="Biểu đồ đường %d ngày, lớn nhất %g%s"><line x1="0" y1="%d" x2="%d" y2="%d"/>' % (w, h + 16, n, mx, unit, h, w, h)]
+    mx = max([v for _, vs, _ in series for v in vs if v is not None] + [v for v in (prev or []) if v is not None] or [1]) or 1
+    o = ['<svg class="ch" viewBox="0 0 %d %d" role="img" aria-label="Biểu đồ đường %d điểm, lớn nhất %s"><line x1="0" y1="%d" x2="%d" y2="%d"/>' % (w, h + 16, n, _e(fmt(mx, unit)), h, w, h)]
+    if prev:
+        pp = [(i * w / max(n - 1, 1), h - (h - 12) * v / mx - 1) for i, v in enumerate(prev) if v is not None]
+        if len(pp) > 1:
+            o.append('<path class="pv" d="M%s"><title>Kỳ trước</title></path>' % " L".join("%.1f,%.1f" % p for p in pp))
     for name, vals, cls in series:
-        pts = [(i * w / max(n - 1, 1), h - (h - 12) * v / mx - 1, v, labels[i]) for i, v in enumerate(vals) if v is not None]
+        pts = [(i * w / max(n - 1, 1), h - (h - 12) * v / mx - 1, v, labels[i], i) for i, v in enumerate(vals) if v is not None]
         if len(pts) > 1:
             o.append('<path class="ln %s" d="M%s"/>' % (cls, " L".join("%.1f,%.1f" % p[:2] for p in pts)))
-        for x, y, v, lab in pts:
-            c = '<circle class="%s" cx="%.1f" cy="%.1f" r="%s"><title>%s · %s: %.3g%s</title></circle>' % (cls, x, y, "2.2" if len(pts) < 20 else "1.4", _e(lab), _e(name), v, unit)
-            o.append('<a href="%s">%s</a>' % (_e(links[labels.index(lab)]), c) if links and links[labels.index(lab)] else c)
+        for x, y, v, lab, i in pts:
+            c = '<circle class="%s" cx="%.1f" cy="%.1f" r="%s"><title>%s · %s: %s</title></circle>' % (cls, x, y, "2.2" if len(pts) < 20 else "1.4", _e(lab), _e(name), _e(fmt(v, unit)))
+            o.append('<a href="%s">%s</a>' % (_e(links[i]), c) if links and links[i] else c)
+            if flags and i in flags:
+                o.append('<circle class="fl" cx="%.1f" cy="%.1f" r="4"><title>Bất thường: %s</title></circle>' % (x, y, _e(lab)))
+    o.append(_marks(marks, n, w, h))
     o.append(_frame(w, h, mx, labels, trim, unit) + "</svg>")
     return "".join(o)
 

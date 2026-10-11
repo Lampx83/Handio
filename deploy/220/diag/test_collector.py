@@ -264,8 +264,19 @@ class ServerTests(unittest.TestCase):
         st, body, h = self.req("GET", "/admin/", email="admin@neu.edu.vn")
         self.assertEqual(st, 200)
         self.assertIn("báo cáo".encode(), body)
-        self.assertIn("default-src 'none'", h["Content-Security-Policy"])
+        csp = h["Content-Security-Policy"]
+        self.assertIn("default-src 'none'", csp)
+        self.assertIn("script-src 'self';", csp)                      # chỉ admin.js cùng nguồn; không nhúng, không eval
+        self.assertNotIn("unsafe-eval", csp)
+        self.assertNotIn("connect-src", csp.replace("default-src 'none'", ""))   # không ra mạng
+        self.assertIn("frame-ancestors 'none'", csp)
         self.assertEqual(h["Cache-Control"], "no-store")
+        self.assertEqual(self.req("GET", "/admin/admin.js")[0], 403)
+        self.assertEqual(self.req("GET", "/admin/admin.js", email="user@neu.edu.vn")[0], 403)
+        st, js, jh = self.req("GET", "/admin/admin.js", email="admin@neu.edu.vn")
+        self.assertEqual(st, 200)
+        self.assertIn("text/javascript", jh["Content-Type"])
+        self.assertNotRegex(js.decode(), r"innerHTML|outerHTML|eval\(|new Function|document\.write|fetch\(|XMLHttpRequest|localStorage")
         self.assertEqual(self.req("GET", "/admin/2026-10-07.md", email="ADMIN@neu.edu.vn")[0], 200)
         self.assertEqual(self.req("GET", "/admin/missing.html", email="admin@neu.edu.vn")[0], 404)
         for bad in ("/admin/../secret-outside.html", "/admin/%2e%2e/secret-outside.html", "/admin/..%2fsecret-outside.html", "/admin/.hidden.html", "/admin/a/b.html", "/admin/x.py"):
