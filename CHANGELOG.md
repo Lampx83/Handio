@@ -5,11 +5,20 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
-## [0.8.7] - 2026-10-11
+## [0.8.8] - 2026-10-11
 
 ### Sửa
 - **Dán ảnh (Ctrl+V) trên macOS đọc được thật sự**: bản trước vẫn báo "nằm ngoài thư mục dự án" vì thư mục tạm của macOS (`/var/…`) là liên kết tới `/private/var/…` nên ảnh vừa dán bị coi là tệp ngoài dự án. Nay `@dan/<tên>` đọc được bình thường.
 - **Agent không còn gọi công cụ kiểm tra trình duyệt khi máy không có** (bản web): lời nhắc chỉ nhắc `check_page` khi công cụ thực sự có.
+
+### Thay đổi
+- **Tab Code tự kiểm tra trang web trước khi báo xong** (Desktop): nếu agent vừa sửa mã/giao diện web mà chưa tự kiểm tra, ứng dụng tự mở thử trang trong trình duyệt ẩn; thấy lỗi console hoặc trang trắng thì agent phải sửa tiếp rồi mới được báo xong. Trước đây agent hay quên kiểm tra và bạn phải chép lỗi từ trình duyệt dán vào chat.
+- **Khởi động máy chủ dev không còn được tính là "đã kiểm tra"**: máy chủ dev không báo lỗi thiếu import hay CSS hỏng cho đến khi trang được tải, nên agent phải build/lint hoặc kiểm tra trang trước khi báo xong.
+- **Công thức cho các bộ khung hay trục trặc** trong lời nhắc tab Code (Tailwind v4 dùng `@import "tailwindcss"` và plugin Vite thay vì `tailwind.config.js`/`@tailwind`, Chakra UI v2, React Router v6, Svelte 5, Next.js…), để ứng dụng dựng xong không bị mất CSS hay trang trắng.
+
+## [0.8.7] - 2026-10-11
+
+### Sửa
 - **Dán ảnh (Ctrl+V) ở tab Code agent đọc được ngay**: trước đây agent ghép nhầm đường dẫn `dan/…` vào thư mục dự án nên báo "Không có tệp ảnh" rồi nhờ bạn tải ảnh lên. Nay `@dan/<tên>` luôn trỏ đúng ảnh vừa dán; thông báo cho biết ảnh được lưu tạm ở đâu (ngoài dự án, giữ 30 ảnh gần nhất). Bản web không có thư mục tạm thì lưu vào `.neuagent/pasted/` của dự án.
 - **Chế độ mặc định là "Tự động"** cho cả người đã dùng bản cũ: trước đây cài đặt cũ trên máy lưu sẵn "Hỏi trước" và đè lên mặc định nên ứng dụng cứ mở ở chế độ Hỏi trước. Từ nay chế độ chọn ở thanh dưới ô nhập chỉ áp dụng cho phiên đang mở; mở lại ứng dụng là "Tự động".
 - **Xoá/chép/di chuyển tệp xong không còn bị ép "đọc lại tài liệu"** (một bước thừa agent phải làm sau mỗi lần dọn thư mục).
@@ -18,9 +27,6 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Tab Code tự thấy lỗi của trang web đang làm** (công cụ `check_page`, bản Desktop): sau khi chạy máy chủ dev hoặc ghi tệp HTML, agent mở thử trang trong một trình duyệt ẩn, cách ly (chỉ localhost và tệp trong dự án; chặn mọi yêu cầu ra ngoài) rồi đọc lỗi console, yêu cầu hỏng, màn hình trắng. Không còn cảnh bạn phải chép lỗi từ trình duyệt dán vào chat.
 
 ### Thay đổi
-- **Tab Code tự kiểm tra trang web trước khi báo xong** (Desktop): nếu agent vừa sửa mã/giao diện web mà chưa tự kiểm tra, ứng dụng tự mở thử trang trong trình duyệt ẩn; thấy lỗi console hoặc trang trắng thì agent phải sửa tiếp rồi mới được báo xong. Trước đây agent hay quên kiểm tra và bạn phải chép lỗi từ trình duyệt dán vào chat.
-- **Khởi động máy chủ dev không còn được tính là "đã kiểm tra"**: máy chủ dev không báo lỗi thiếu import hay CSS hỏng cho đến khi trang được tải, nên agent phải build/lint hoặc kiểm tra trang trước khi báo xong.
-- **Công thức cho các bộ khung hay trục trặc** trong lời nhắc tab Code (Tailwind v4 dùng `@import "tailwindcss"` và plugin Vite thay vì `tailwind.config.js`/`@tailwind`, Chakra UI v2, React Router v6, Svelte 5, Next.js…), để ứng dụng dựng xong không bị mất CSS hay trang trắng.
 - **Agent thận trọng hơn với phiên bản thư viện** (tab Code): đọc phiên bản đã cài trước khi viết mã; nếu bản chính mới hơn API mình biết thì ghim bản quen thuộc hoặc đọc tài liệu trước (tránh tình trạng cài Chakra UI v3 nhưng viết mã v2). Khi bạn đổi hướng (HTML sang React…) agent dọn tệp bỏ dở, không để lại `.bak` hay bản ứng dụng song song.
 - **Một dự án chỉ một máy chủ dev chạy nền**: chạy lại lệnh cũ (hoặc máy chủ dev khác trong cùng thư mục) thì máy chủ cũ được dừng, không còn nhiều máy chủ chiếm các cổng 5173–5176 và trình duyệt mở nhầm bản cũ.
 - **Ngữ cảnh gọn hơn khi làm việc lâu**: nội dung tệp lớn vừa ghi không còn nằm mãi trong lịch sử (trước đây một tệp CSS dài chiếm ~5.000 token), nên ít phải tóm tắt ngữ cảnh giữa chừng.
