@@ -32,7 +32,7 @@ Application (client) ID và tenant ID của ứng dụng nằm ở cấu hình r
 
 ### Cài đặt (theo thứ tự)
 ```bash
-# từ máy của bạn (SSH cổng <cổng-ssh> đã khai trong ~/.ssh/config: Host 220 / 222)
+# từ máy của bạn (SSH: địa chỉ và cổng đã khai trong ~/.ssh/config: Host 220 / 222)
 scp -r deploy/220 220:~/neu-agent-220                  # gồm web.tar.gz, cấu hình nginx, auth/, downloads/
 ssh -t 220 'cd ~/neu-agent-220 && sudo ./auth/install-auth.sh'                   # 1) đăng nhập SSO (hỏi mã bí mật, gõ không hiện)
 ssh -t 220 'cd ~/neu-agent-220 && sudo ./install.sh <key mô hình>'               # 2) web + proxy + tải về

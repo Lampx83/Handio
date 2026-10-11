@@ -50,7 +50,7 @@ Bản chưa có chứng chỉ ký sẽ được macOS/Windows cảnh báo lần 
 
 ```bash
 # từ máy bạn, sau khi đã sinh khoá (xem 3.2) — chép thư mục ci/ lên rồi cài
-scp -P <cổng-ssh> -r deploy/220/ci <quản-trị>@<máy 220>:~/neu-agent-220/
+scp -P <cổng-ssh> -r deploy/220/ci <tài-khoản-quản-trị>@<máy 220>:~/neu-agent-220/
 ssh -t 220 'cd ~/neu-agent-220 && sudo ./ci/setup-ci.sh --pubkey "ssh-ed25519 AAAA… github-deploy"'
 ```
 
