@@ -3,6 +3,7 @@ export * from "./docx-write";
 export * from "./docx-read";
 export * from "./xlsx";
 export * from "./pptx";
+export * from "./pptx-edit";
 export * from "./readdoc";
 export * from "./tools";
 export * from "./locate";

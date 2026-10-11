@@ -8,6 +8,7 @@ import { docxSuggest } from "./track";
 import { documentUnits } from "./locate";
 import { countsLine, isNotable, scanDocumentPii } from "./pii";
 import { createPptx, describePptx, pptxImageRefs, PPTX_THEMES } from "./pptx";
+import { editPptx, type PptxEditOptions } from "./pptx-edit";
 import { filesTools } from "./tools-files";
 import { pdfTools } from "./tools-pdf";
 import { utilTools } from "./tools-utils";
@@ -345,6 +346,68 @@ export function officeTools(env: Env): Tool[] {
         if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, extOf(src)));
         await commit(ctx, abs, res.bytes, existed);
         return reportOf(`Đã lưu ${relPath(ctx, abs)}. Đã sửa: ${res.changed.slice(0, 20).join(", ")}${res.changed.length > 20 ? ` … (+${res.changed.length - 20})` : ""}.`, res.report);
+      },
+    },
+    {
+      name: "pptx_edit", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || a.path,
+      description: "Edit an EXISTING PowerPoint (.pptx) while keeping its design. (1) replacements [{find, replace, slide?}]: change text (slides and notes; works even when the text is split across formatting runs). (2) transform {case: upper|lower|capitalize, target: titles (default)|all, slides?}: change letter case, e.g. 'make every title UPPERCASE'. (3) style [{target: titles (default)|all|match, match?, slides?, color, size, bold, italic, underline, font, align, fill}]: text color/size/font/alignment and the fill color of the shape that holds the text. (4) background {color, slides?}: slide background color. (5) delete_slides [n], duplicate_slides [n] (the copy sits right after the original; to change its text call again with the new slide number), move_slide {slide, to}. Slide numbers always refer to the file as it was BEFORE this call. Read the file with read_document first. Use save_as to keep the original (recommended). Colors: #RRGGBB or common names (đỏ, xanh dương, xanh lá, cam, vàng, tím, đen, trắng, xám). Not supported: adding new shapes, pictures or animations; to add brand-new slides either duplicate_slides then edit the copy, or rebuild the deck with create_pptx.",
+      parameters: { type: "object", properties: {
+        path: S, save_as: { type: "string", description: "new .pptx path; the original stays unchanged" },
+        replacements: { type: "array", items: { type: "object", properties: { find: S, replace: S, slide: { type: "integer" } }, required: ["find", "replace"] } },
+        transform: { type: "object", properties: { case: { type: "string", enum: ["upper", "lower", "capitalize"] }, target: { type: "string", enum: ["titles", "all"] }, slides: { type: "array", items: { type: "integer" } } }, required: ["case"] },
+        style: { type: "array", items: { type: "object", properties: { target: { type: "string", enum: ["titles", "all", "match"] }, match: S, slides: { type: "array", items: { type: "integer" } }, color: S, size: { type: "number" }, bold: { type: "boolean" }, italic: { type: "boolean" }, underline: { type: "boolean" }, font: S, align: { type: "string", enum: ["left", "center", "right", "justify"] }, fill: S } } },
+        background: { type: "object", properties: { color: S, slides: { type: "array", items: { type: "integer" } } }, required: ["color"] },
+        delete_slides: { type: "array", items: { type: "integer" } }, duplicate_slides: { type: "array", items: { type: "integer" } },
+        move_slide: { type: "object", properties: { slide: { type: "integer" }, to: { type: "integer" } }, required: ["slide", "to"] },
+      }, required: ["path"] },
+      summarize: (a) => `${a.path ?? ""}${a.save_as ? " → " + a.save_as : ""}`,
+      async preview(ctx, a) {
+        const bits: string[] = [];
+        if (a.replacements) bits.push("thay chữ");
+        if (a.transform) bits.push("đổi hoa/thường");
+        if (a.style) bits.push("định dạng");
+        if (a.background) bits.push("màu nền");
+        if (a.delete_slides) bits.push("xoá slide");
+        if (a.duplicate_slides) bits.push("nhân đôi slide");
+        if (a.move_slide) bits.push("chuyển slide");
+        return outlinePreview(ctx, a.save_as || a.path, `Sửa PowerPoint ${a.path}: ${bits.join(", ") || "(chưa rõ)"}${a.save_as ? ` (lưu thành ${a.save_as})` : " (ghi đè bản gốc)"}`);
+      },
+      async run(ctx, a) {
+        const opts: PptxEditOptions = {
+          replacements: jsonArg<PptxEditOptions["replacements"]>(a.replacements, "replacements"),
+          transform: jsonArg<PptxEditOptions["transform"]>(a.transform, "transform"),
+          style: jsonArg<PptxEditOptions["style"]>(a.style, "style"),
+          background: jsonArg<PptxEditOptions["background"]>(a.background, "background"),
+          delete_slides: jsonArg<number[]>(a.delete_slides, "delete_slides"),
+          duplicate_slides: jsonArg<number[]>(a.duplicate_slides, "duplicate_slides"),
+          move_slide: jsonArg<PptxEditOptions["move_slide"]>(a.move_slide, "move_slide"),
+        };
+        if (opts.replacements && (!Array.isArray(opts.replacements) || opts.replacements.some((r) => !r || typeof r.find !== "string" || typeof r.replace !== "string"))) throw new ToolError("replacements phải là danh sách {find, replace}.", "bad_args");
+        if (opts.style && !Array.isArray(opts.style)) throw new ToolError("style phải là danh sách.", "bad_args");
+        if (!opts.replacements?.length && !opts.transform && !opts.style?.length && !opts.background && !opts.delete_slides?.length && !opts.duplicate_slides?.length && !opts.move_slide)
+          throw new ToolError("Chưa nói cần sửa gì: dùng replacements, transform, style, background, delete_slides, duplicate_slides hoặc move_slide.", "bad_args");
+        const src = await resolveSafe(ctx, a.path);
+        if (!ctx.readFiles.has(src)) throw new ToolError(`Hãy đọc ${a.path} bằng read_document trước khi sửa.`, "read_first");
+        await checkFresh(ctx, src, a.path);
+        const { bytes } = await loadBinary(ctx, a.path, [".pptx"]);
+        let res;
+        try {
+          res = await editPptx(bytes, opts);
+        } catch (e) {
+          throw new ToolError((e as Error).message);
+        }
+        const miss = (opts.replacements ?? []).filter((_r, i) => res.counts[i] === 0);
+        const structural = !!(opts.delete_slides?.length || opts.duplicate_slides?.length || opts.move_slide);
+        if (!res.changes.length && !structural) throw new ToolError(`Không có gì thay đổi trong ${a.path}.` + (miss.length ? " Không tìm thấy: " + miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ") + ". Kiểm tra đúng từng ký tự (hoa/thường, dấu cách) bằng read_document." : " Kiểm tra số slide và điều kiện (target/match)."), "no_match");
+        let abs = src;
+        let existed = true;
+        if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, ".pptx"));
+        await commit(ctx, abs, res.bytes, existed);
+        return `Đã lưu ${relPath(ctx, abs)} (${res.slides} slide).\n` + res.changes.slice(0, 25).join("\n") +
+          (opts.replacements?.length ? "\nSố chỗ đã thay: " + opts.replacements.map((r, i) => `“${r.find.slice(0, 30)}” ×${res.counts[i]}`).join(", ") : "") +
+          (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` : "") +
+          (structural ? `\nThứ tự slide mới: ${res.layout.join(", ")} (số = slide gốc).` : "") +
+          "\nHãy dùng read_document để kiểm tra lại.";
       },
     },
     {

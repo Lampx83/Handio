@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { brandName } from "../brand";
 import { loadZip, decodeXml } from "./docx-read";
+import { slideOrder } from "./pptx-edit";
 import { parseChart, type ChartSpec } from "./chart";
 import { parseBlocks, runsText, type Block, type Run } from "./mdblocks";
 
@@ -488,7 +489,7 @@ function chartText(xml: string): string {
 
 export async function readPptx(bytes: Uint8Array): Promise<{ label: string; text: string }[]> {
   const zip = await loadZip(bytes);
-  const slideNames = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => +/(\d+)\.xml$/.exec(a)![1] - +/(\d+)\.xml$/.exec(b)![1]);
+  const slideNames = await slideOrder(zip); // đúng thứ tự trình chiếu (presentation.xml), không phải thứ tự tên tệp
   const out: { label: string; text: string }[] = [];
   for (const [i, name] of slideNames.entries()) {
     const xml = await zip.file(name)!.async("string");
