@@ -8,6 +8,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [0.8.7] - 2026-10-11
 
 ### Sửa
+- **Dán ảnh (Ctrl+V) trên macOS đọc được thật sự**: bản trước vẫn báo "nằm ngoài thư mục dự án" vì thư mục tạm của macOS (`/var/…`) là liên kết tới `/private/var/…` nên ảnh vừa dán bị coi là tệp ngoài dự án. Nay `@dan/<tên>` đọc được bình thường.
+- **Agent không còn gọi công cụ kiểm tra trình duyệt khi máy không có** (bản web): lời nhắc chỉ nhắc `check_page` khi công cụ thực sự có.
 - **Dán ảnh (Ctrl+V) ở tab Code agent đọc được ngay**: trước đây agent ghép nhầm đường dẫn `dan/…` vào thư mục dự án nên báo "Không có tệp ảnh" rồi nhờ bạn tải ảnh lên. Nay `@dan/<tên>` luôn trỏ đúng ảnh vừa dán; thông báo cho biết ảnh được lưu tạm ở đâu (ngoài dự án, giữ 30 ảnh gần nhất). Bản web không có thư mục tạm thì lưu vào `.neuagent/pasted/` của dự án.
 - **Chế độ mặc định là "Tự động"** cho cả người đã dùng bản cũ: trước đây cài đặt cũ trên máy lưu sẵn "Hỏi trước" và đè lên mặc định nên ứng dụng cứ mở ở chế độ Hỏi trước. Từ nay chế độ chọn ở thanh dưới ô nhập chỉ áp dụng cho phiên đang mở; mở lại ứng dụng là "Tự động".
 - **Xoá/chép/di chuyển tệp xong không còn bị ép "đọc lại tài liệu"** (một bước thừa agent phải làm sau mỗi lần dọn thư mục).

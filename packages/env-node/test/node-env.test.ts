@@ -324,3 +324,28 @@ describe("giáo trình: bắt đầu → chấm → làm đúng → chấm (lệ
     }
   });
 });
+
+describe("ảnh dán trong thư mục tạm là symlink (macOS: /var → /private/var)", () => {
+  it("resolveSafe nhận tệp trong scratchDir dù thư mục tạm là symlink", async () => {
+    if (process.platform === "win32") return;
+    const real = fs.mkdtempSync(path.join(tmp, "real-"));
+    const link = path.join(tmp, "tmplink-" + path.basename(real));
+    fs.symlinkSync(real, link);
+    const old = process.env.TMPDIR;
+    process.env.TMPDIR = link; // os.tmpdir() đọc biến này: thư mục tạm "nằm sau" một symlink như /var → /private/var
+    try {
+      const proj = fs.realpathSync(fs.mkdtempSync(path.join(tmp, "proj-")));
+      const e = new NodeEnv(proj, { sandbox: false });
+      fs.mkdirSync(e.scratchDir, { recursive: true });
+      fs.writeFileSync(path.join(e.scratchDir, "anh-dan-20261011-234141.png"), "png");
+      const ctx: ToolContext = { env: e, root: proj, extraDirs: [e.scratchDir], readFiles: new Map(), undoStack: [], todos: [] };
+      for (const ref of ["dan/anh-dan-20261011-234141.png", "anh-dan-20261011-234141.png", path.join(proj, "dan", "anh-dan-20261011-234141.png")]) {
+        const abs = await resolveSafe(ctx, ref);
+        expect(fs.readFileSync(abs, "utf8")).toBe("png");
+      }
+    } finally {
+      if (old === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = old;
+    }
+  });
+});

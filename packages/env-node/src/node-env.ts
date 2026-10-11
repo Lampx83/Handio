@@ -24,7 +24,9 @@ export class NodeEnv implements Env {
 
   constructor(root: string, opts: { allowExec?: boolean; sandbox?: { network?: boolean; home?: string } | false } = {}) {
     this.root = root;
-    this.scratchDir = path.join(os.tmpdir(), "neu-agent-scratch", createHash("sha1").update(root).digest("hex").slice(0, 12));
+    // dạng THẬT của thư mục tạm (macOS: /var/folders là symlink tới /private/var/folders), để so đường dẫn sau realpath với thư mục dự án đúng
+    const tmpReal = (() => { try { return realpathSync(os.tmpdir()); } catch { return os.tmpdir(); } })();
+    this.scratchDir = path.join(tmpReal, "neu-agent-scratch", createHash("sha1").update(root).digest("hex").slice(0, 12));
     if (opts.sandbox !== false && opts.sandbox && process.platform === "darwin" && existsSync(SANDBOX_EXEC)) {
       const network = opts.sandbox.network !== false;
       this.sandbox = { kind: "seatbelt", network };

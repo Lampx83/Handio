@@ -127,7 +127,16 @@ export async function resolveSafe(ctx: ToolContext, p: unknown): Promise<string>
       cur = up;
     }
   }
-  if ([ctx.root, ...ctx.extraDirs].some((b) => isInside(b, real))) return real;
+  const bases = [ctx.root, ...ctx.extraDirs];
+  if (bases.some((b) => isInside(b, real))) return real;
+  // `real` đã qua realpath: thư mục cấp phép cũng phải so ở dạng thật (macOS: thư mục tạm /var/folders là symlink tới /private/var/folders)
+  for (const b of bases) {
+    try {
+      if (isInside(await ctx.env.realpath(b), real)) return real;
+    } catch {
+      /* thư mục chưa có */
+    }
+  }
   throw new ToolError(`Đường dẫn ${p} nằm ngoài thư mục dự án (${ctx.root}). Chỉ làm việc trong thư mục dự án: dùng đường dẫn tương đối so với thư mục đó (vd src/app.js).`, "outside_project");
 }
 

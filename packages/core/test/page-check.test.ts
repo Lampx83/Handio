@@ -37,6 +37,9 @@ describe("check_page: công cụ", () => {
     expect(code.c.currentSession.tools.has("check_page")).toBe(true);
     const work = await makeController([{ text: "ok" }], { profile: "work", env: withCheck(async () => base({})) });
     expect(work.c.currentSession.tools.has("check_page")).toBe(false);
+    // lời nhắc chỉ nhắc check_page khi công cụ có thật (bài thử thật: mô hình gọi check_page không tồn tại rồi lỡ bước)
+    expect(none.c.currentSession.systemPrompt(null, 0)).not.toContain("check_page");
+    expect(code.c.currentSession.systemPrompt(null, 0)).toContain("check_page");
   });
 
   it("mở localhost và tệp trong dự án; từ chối địa chỉ ngoài máy", async () => {

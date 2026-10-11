@@ -386,7 +386,10 @@ export class Session {
 
   systemPrompt(def: AgentDef | null, depth: number): string {
     const caps = [this.tools.has("bash") ? "bash (real shell)" : "no shell", this.tools.has("run_javascript") ? "run_javascript (sandbox)" : "", this.tools.has("web_fetch") ? "web_fetch" : ""].filter(Boolean).join(", ");
-    const parts = [brandText(PROFILES[this.profile].systemBase)];
+    let base = brandText(PROFILES[this.profile].systemBase);
+    // check_page chỉ có ở Desktop: không nhắc công cụ không tồn tại (mô hình sẽ gọi nó và lỡ một bước)
+    if (!this.tools.has("check_page")) base = base.replace(/but check_page can \(when available\):[\s\S]*?(?=Also run the build)/, "after starting the dev server (bash background=true) read its output with bash_output for compile errors and check the page responds with curl. ").replace(/\bcheck_page\b/g, "a browser check");
+    const parts = [base];
     if (def) parts.push(`\nYou are the subagent '${def.name}'. ${def.prompt}\nYou cannot see the main conversation; work only from the task you are given and finish with a compact report.`);
     parts.push(`\nEnvironment:\n- Working directory: ${this.ctx.root} (give file paths RELATIVE to it, e.g. report.docx or notes/a.md; never type the full path)\n- Platform: ${this.o.env.platform}\n- Date: ${new Date().toISOString().slice(0, 10)}\n- Capabilities: ${caps}${this.o.env.sandbox ? `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${this.o.env.sandbox.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.` : ""}`);
     if (this.perms.mode === "plan" && depth === 0)
