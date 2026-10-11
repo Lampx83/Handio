@@ -23,7 +23,11 @@ export type FieldSpec =
 export const DIAG_TOOLS: string[] = [
   "read_file", "list_dir", "glob", "grep", "edit_file", "write_file", "todo_write", "bash", "bash_output", "kill_process", "run_javascript",
   "check_package", "web_fetch", "read_image", "web_search", "fetch_page", "xlsx_pivot", "merge_check", "merge_documents", "scan_pii", "redact_pii", "read_document", "find_in_documents", "create_docx", "docx_replace", "create_xlsx", "xlsx_edit", "create_pptx",
-  "convert_to_pdf", "skill", "task", "exit_plan_mode", "mcp", "other",
+  "convert_to_pdf", "pptx_edit", "docx_edit", "ask_user",
+  "copy_file", "move_file", "delete_file", "make_dir", "zip_files", "unzip_file", "file_info",
+  "pdf_info", "pdf_text", "pdf_split", "pdf_merge", "pdf_rotate", "images_to_pdf",
+  "vn_number_words", "date_calc", "lunar_convert", "vn_text", "calc", "create_eml", "create_ics", "csv_convert", "text_diff", "doc_stats",
+  "skill", "task", "exit_plan_mode", "mcp", "other",
 ];
 export const DIAG_SIGNALS = ["loop", "step_limit", "repeat_tool_fail", "slow_first_token", "slow_turn", "ctx_high", "early_interrupt", "perm_denied", "empty_output", "invalid_tool_args", "unknown_tool", "truncated", "context_overflow", "args_truncated", "text_repeat"];
 /** Lý do công cụ thất bại (chỉ mã): xem ToolErrorKind trong tools.ts. "program" = chương trình/test của người dùng chạy hỏng (kết quả bình thường, không phải lỗi công cụ); "denied" = bị từ chối quyền. */

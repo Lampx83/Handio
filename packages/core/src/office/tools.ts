@@ -8,6 +8,9 @@ import { docxSuggest } from "./track";
 import { documentUnits } from "./locate";
 import { countsLine, isNotable, scanDocumentPii } from "./pii";
 import { createPptx, describePptx, pptxImageRefs, PPTX_THEMES } from "./pptx";
+import { filesTools } from "./tools-files";
+import { pdfTools } from "./tools-pdf";
+import { utilTools } from "./tools-utils";
 import { citeToken } from "./locate";
 import { extOf, fold, formatSections, isReadableDocument, readDocumentSections } from "./readdoc";
 import { createXlsx, describeXlsx, editXlsx, sheetRowCount, type SheetSpec } from "./xlsx";
@@ -416,6 +419,7 @@ export function officeTools(env: Env): Tool[] {
       },
     });
   }
+  tools.push(...filesTools(env), ...pdfTools(env), ...utilTools(env)); // nhóm công cụ mở rộng, mỗi nhóm một tệp
   return tools;
 }
 
