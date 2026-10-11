@@ -483,7 +483,7 @@ describe("diagnostics: tích hợp LocalController (phiên thật, mô hình gi�
     const a = await makeDiag(() => ({ calls: [{ name: "list_dir", args: { n: Math.random() } }] }), { settings: { maxSteps: 3 } });
     await a.c.send("lặp");
     const ea = allEvents(await a.flush());
-    expect(ea.find((e) => e.t === "turn")).toMatchObject({ end: "step_limit", steps: 3 });
+    expect(ea.find((e) => e.t === "turn")).toMatchObject({ end: "step_limit", steps: 9 }); // chặn an toàn = 3 × maxSteps
     expect(ea.some((e) => e.code === "step_limit")).toBe(true);
 
     const b = await makeDiag(() => ({ calls: [{ name: "list_dir", args: {} }] }));
