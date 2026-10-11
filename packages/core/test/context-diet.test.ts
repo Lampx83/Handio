@@ -100,3 +100,15 @@ describe("hết bước không bắt người dùng gõ 'tiếp tục'", () => {
     expect(notices.some((t) => /tiếp tục/.test(t))).toBe(false);
   });
 });
+
+describe("cổng 'đọc lại' không thêm bước thừa sau công cụ Office có cấu trúc", () => {
+  it("create_docx xong rồi báo cáo: không bị nhắc read_document; còn write_file thì vẫn bị nhắc", async () => {
+    const a = await makeController([{ calls: [{ name: "create_docx", args: { path: "bao-cao.docx", content: "# Báo cáo\n\nNội dung." } }] }, { text: "Đã tạo bao-cao.docx." }], { profile: "work" });
+    await a.c.send("tạo báo cáo ngắn");
+    expect(a.llm.calls.some((x) => x.messages.some((m) => String(m.content).includes("ĐỌC LẠI")))).toBe(false);
+
+    const b = await makeController([{ calls: [{ name: "write_file", args: { path: "ghi-chu.txt", content: "abc" } }] }, { text: "Đã ghi." }, { text: "Xong." }], { profile: "work" });
+    await b.c.send("ghi một ghi chú");
+    expect(b.llm.calls.some((x) => x.messages.some((m) => String(m.content).includes("ĐỌC LẠI")))).toBe(true);
+  });
+});
