@@ -138,7 +138,8 @@ describe("công cụ HTTP của gói (tools.json)", () => {
     const calls: string[] = [];
     const { c, events } = await makeController([{ calls: [{ name: "web_search", args: { query: "NEU" } }] }, { text: "xong" }], { packs: [pack], toolsBase: "https://ai.test/agent/", fetchImpl: (async (u: string) => (calls.push(u), new Response("kết quả", { headers: { "content-type": "text/plain" } }))) as never });
     await c.send("tìm NEU");
-    expect(calls[0]).toContain("https://ai.test/agent/tools/search?q=NEU");
+    // mặc định baseUrl là HTTPS nên có thể có thêm yêu cầu hạn mức đi trước: tìm đúng yêu cầu của công cụ
+    expect(calls.some((u) => u.includes("https://ai.test/agent/tools/search?q=NEU"))).toBe(true);
     expect(events.some((e: any) => e.type === "notice" && /không tin cậy/.test(e.text))).toBe(true);
   });
 });
