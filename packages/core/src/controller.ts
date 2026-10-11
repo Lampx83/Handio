@@ -34,6 +34,8 @@ export interface TrustStore {
 export interface ControllerOptions {
   env: Env;
   profile?: Profile;
+  /** Hạn chờ người dùng trả lời câu hỏi của `ask_user` (ms; mặc định 15 phút). Hết hạn thì agent tự quyết. */
+  questionTimeoutMs?: number;
   /** Chính sách quản trị (khoá cài đặt). */
   policy?: Policy;
   /** Giá trị mặc định của cài đặt (vd địa chỉ API của bản phát hành). */
@@ -209,6 +211,7 @@ export class LocalController implements AgentController {
       trustProject: this.trusted,
       packs,
       httpTools: this.httpToolRuntime(),
+      questionTimeoutMs: this.o.questionTimeoutMs,
     });
   }
 

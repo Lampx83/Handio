@@ -88,12 +88,17 @@ type Validator = (args: unknown[]) => boolean;
 const idStr = (v: unknown): v is string => typeof v === "string" && /^[a-z0-9][a-z0-9-]{0,39}$/.test(v);
 const MODES = ["default", "acceptEdits", "auto", "plan", "bypass"];
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+/** Câu trả lời cho `ask_user`: tối đa 4 câu, mỗi câu tối đa 4 chỉ số lựa chọn (số nguyên 0–3, không trùng) + một chữ "Khác" (≤ 500 ký tự); không nhận khoá lạ. */
+const answersOk = (v: unknown): boolean =>
+  Array.isArray(v) && v.length <= 4 && v.every((a) => isObj(a) && Object.keys(a).every((k) => k === "picked" || k === "other")
+    && Array.isArray(a.picked) && a.picked.length <= 4 && a.picked.every((k, i, all) => Number.isInteger(k) && k >= 0 && k <= 3 && all.indexOf(k) === i)
+    && (a.other === undefined || str(a.other, 500)));
 
 export const IPC_VALIDATORS: Record<string, Validator> = {
   getState: (a) => a.length === 0,
   send: (a) => a.length === 1 && str(a[0], MAX_TEXT),
   interrupt: (a) => a.length === 0,
-  respondPermission: (a) => a.length === 2 && str(a[0], 100) && isObj(a[1]) && typeof a[1].allow === "boolean" && (a[1].always === undefined || typeof a[1].always === "boolean") && (a[1].note === undefined || str(a[1].note, 2000)) && (a[1].mode === undefined || MODES.includes(a[1].mode as string)) && (a[1].plan === undefined || str(a[1].plan, 20000)),
+  respondPermission: (a) => a.length === 2 && str(a[0], 100) && isObj(a[1]) && typeof a[1].allow === "boolean" && (a[1].always === undefined || typeof a[1].always === "boolean") && (a[1].note === undefined || str(a[1].note, 2000)) && (a[1].mode === undefined || MODES.includes(a[1].mode as string)) && (a[1].plan === undefined || str(a[1].plan, 20000)) && (a[1].answers === undefined || answersOk(a[1].answers)),
   setMode: (a) => a.length === 1 && typeof a[0] === "string" && MODES.includes(a[0]),
   newSession: (a) => a.length === 0,
   listDir: (a) => a.length === 1 && str(a[0], 1000),
