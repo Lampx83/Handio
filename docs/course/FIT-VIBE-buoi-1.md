@@ -33,7 +33,7 @@
     **Quan sát**: (a) agent hay làm thêm ngoài yêu cầu (streaming, nút xoá hội thoại) → phải rà diff; (b) agent không phải lúc nào cũng tự kiểm tra/chạy thử → luôn tự chạy lại sau mỗi thay đổi; (c) khoá API chỉ để trong `.env`, chỉ chia sẻ `.env.example`. Khi lỗi: **gửi nguyên văn traceback**, không tự diễn giải; lỗi 404 thường do tên mô hình đã đổi → tra tài liệu và sửa. **Bài tập tại lớp**: làm lại hai bước rồi thêm một vai trò tự chọn.
 14. **Câu hỏi ôn tập**: (1) vì sao LLM không “tra đáp án”, giới hạn nào; (2) Claude vs Claude Code, ví dụ tương tự bên OpenAI; (3) bốn bước See–Say–Run, khi nào không nên vibe coding; (4) thành phần nào quyết định lệnh có được thực thi, vì sao quan trọng; (5) viết lại prompt “Sửa lỗi trong ứng dụng” cho đủ mục tiêu–ngữ cảnh–ràng buộc.
 
-## Hệ quả cho NEU Agent (đối chiếu)
+## Hệ quả cho Hando (đối chiếu)
 - Dùng **đúng thuật ngữ**: See–Say–Run–Copy-paste; Mục tiêu–Ngữ cảnh–Ràng buộc; Mức 1/2/3; E-P-C-C; host/permission modes/sandbox.
 - Hỗ trợ **`@file`**, `!lệnh`, `/model`, `/init` (tạo **AGENTS.md**), `/` danh sách lệnh, `Shift+Tab`, `Esc` — giống thao tác học viên sẽ gặp ở Claude Code/Codex.
 - Có các tính năng của Buổi 2–7: context window (thước + `/context`), tệp ngữ cảnh dự án (AGENTS.md, CLAUDE.md), E-P-C-C (plan mode, commit), **subagents tuỳ biến, hooks, slash commands tuỳ biến, skills, MCP**, permission modes, giải thích sandbox/phê duyệt, refactor nhiều tệp, vòng kiểm chứng.

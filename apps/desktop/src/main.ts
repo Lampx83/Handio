@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, safeStorage, session, shell, type MenuItemConstructorOptions } from "electron";
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
@@ -44,12 +45,17 @@ app.enableSandbox();
 if (!SMOKE && !app.requestSingleInstanceLock()) app.quit();
 if (SMOKE) app.setPath("userData", path.join(SMOKE, "userData"));
 
+// Đổi tên hiển thị thành Hando KHÔNG được đổi nơi lưu cài đặt/lịch sử/phiên đăng nhập: ghim đúng thư mục của bản cũ (@neu/agent-desktop).
+if (!SMOKE) app.setPath("userData", path.join(app.getPath("appData"), "@neu", "agent-desktop"));
 const userData = () => app.getPath("userData");
 const cfgFile = () => path.join(userData(), "folders.json");
 
 // ---------------------------------------------------------------- chính sách quản trị
 async function loadPolicy(): Promise<Policy> {
   const files = [
+    process.platform === "darwin" ? "/Library/Application Support/Hando/policy.json" : "",
+    process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "Hando", "policy.json") : "",
+    // tên cũ (trước khi đổi tên thành Hando): quản trị đã đặt chính sách ở đây vẫn có hiệu lực
     process.platform === "darwin" ? "/Library/Application Support/NEU Agent/policy.json" : "",
     process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "NEU Agent", "policy.json") : "",
     __DEV__ && process.env.NEU_POLICY_FILE ? process.env.NEU_POLICY_FILE : "",
@@ -69,6 +75,8 @@ async function loadPolicy(): Promise<Policy> {
 // Gói của người dùng: <userData>/packs. Cả hai được tin cậy (gói trong dự án thì lõi tự đọc và không tin cậy).
 async function loadPacks(): Promise<RawPack[]> {
   const orgDirs = [
+    process.platform === "darwin" ? "/Library/Application Support/Hando/packs" : "",
+    process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "Hando", "packs") : "",
     process.platform === "darwin" ? "/Library/Application Support/NEU Agent/packs" : "",
     process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "NEU Agent", "packs") : "",
     app.isPackaged ? path.join(process.resourcesPath, "packs") : "",
@@ -124,7 +132,9 @@ async function folderFor(profile: Profile): Promise<string> {
       /* thư mục đã bị xoá: dùng mặc định */
     }
   }
-  const dir = SMOKE ? path.join(SMOKE, profile) : path.join(app.getPath("documents"), DEFAULT_DIR[profile]);
+  // người dùng đã có thư mục từ bản cũ ("NEU Work"…) thì giữ nguyên; cài mới dùng Tài liệu/Hando/<Work|Code|Design>
+  const legacy = path.join(app.getPath("documents"), DEFAULT_DIR[profile]);
+  const dir = SMOKE ? path.join(SMOKE, profile) : existsSync(legacy) ? legacy : path.join(app.getPath("documents"), "Hando", profile === "work" ? "Work" : profile === "code" ? "Code" : "Design");
   let fresh = false;
   try {
     await fs.access(dir);
@@ -165,9 +175,12 @@ const makeEnv = (profile: Profile, dir: string) => {
   return env;
 };
 
-/** Thư mục chứa các dự án do ứng dụng tạo: Tài liệu/NEU Agent/<Work|Code|Design>/<tên>. */
+/** Thư mục chứa các dự án do ứng dụng tạo: Tài liệu/Hando/<Work|Code|Design>/<tên> (bản cài cũ có sẵn "NEU Agent" thì giữ để các dự án nằm cùng nơi). */
 function projectsParent(profile: Profile): string {
-  return SMOKE ? path.join(SMOKE, "projects", profile) : path.join(app.getPath("documents"), "NEU Agent", profile === "work" ? "Work" : profile === "code" ? "Code" : "Design");
+  if (SMOKE) return path.join(SMOKE, "projects", profile);
+  const docs = app.getPath("documents");
+  const brand = existsSync(path.join(docs, "NEU Agent")) ? "NEU Agent" : "Hando";
+  return path.join(docs, brand, profile === "work" ? "Work" : profile === "code" ? "Code" : "Design");
 }
 
 function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<string | undefined> } {
@@ -412,11 +425,11 @@ function startUpdater(): void {
 /** Menu "Kiểm tra bản cập nhật…": người dùng chủ động, nên hiện cả bản từng chọn "Để sau" và báo rõ khi đã mới nhất. */
 async function manualUpdateCheck(): Promise<void> {
   if (!updater) {
-    await dialog.showMessageBox({ type: "info", message: "Kiểm tra bản cập nhật", detail: `Bạn đang dùng NEU Agent ${app.getVersion()}. Việc tự kiểm tra bản mới chỉ có trong bản cài đặt chính thức.` });
+    await dialog.showMessageBox({ type: "info", message: "Kiểm tra bản cập nhật", detail: `Bạn đang dùng Hando ${app.getVersion()}. Việc tự kiểm tra bản mới chỉ có trong bản cài đặt chính thức.` });
     return;
   }
   const st = await updater.check(true);
-  if (st.phase === "idle") await dialog.showMessageBox({ type: "info", message: "Bạn đang dùng bản mới nhất", detail: `NEU Agent ${st.current}.` });
+  if (st.phase === "idle") await dialog.showMessageBox({ type: "info", message: "Bạn đang dùng bản mới nhất", detail: `Hando ${st.current}.` });
   else if (st.phase === "error") await dialog.showMessageBox({ type: "warning", message: "Kiểm tra bản cập nhật", detail: st.error ?? "Không kiểm tra được." });
 }
 
@@ -512,7 +525,7 @@ function hardenSession(): void {
 
 async function createWindow(): Promise<void> {
   win = new BrowserWindow({
-    width: 1280, height: 860, minWidth: 900, minHeight: 600, show: !SMOKE, backgroundColor: "#f6f6f3", title: "NEU Agent",
+    width: 1280, height: 860, minWidth: 900, minHeight: 600, show: !SMOKE, backgroundColor: "#f6f6f3", title: "Hando",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

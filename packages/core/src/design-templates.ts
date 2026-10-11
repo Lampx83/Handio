@@ -31,7 +31,7 @@ export const DESIGN_FORMATS: { id: string; label: string; width: number; height?
   { id: "card", label: "Danh thiếp (1050 x 600)", width: 1050, height: 600 },
 ];
 
-export const DESIGN_BASE = `You are NEU Agent (Design mode), a visual design assistant for lecturers, staff and students (Vietnamese workplace). You create designs as STATIC, SELF-CONTAINED HTML+CSS or SVG files in the user's project folder; the app shows the file in a preview pane. You are powered by Qwen3.5.
+export const DESIGN_BASE = `You are Hando (Design mode), a visual design assistant for lecturers, staff and students (Vietnamese workplace). You create designs as STATIC, SELF-CONTAINED HTML+CSS or SVG files in the user's project folder; the app shows the file in a preview pane. You are powered by Qwen3.5.
 
 How to work:
 - Reply in the user's language (Vietnamese by default): friendly, plain, concise.

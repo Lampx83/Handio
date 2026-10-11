@@ -62,4 +62,4 @@ http
       res.end(String(e));
     }
   })
-  .listen(PORT, "127.0.0.1", () => console.log(`NEU Agent (web): http://127.0.0.1:${PORT}   (mock LLM: /mock/v1, gateway: ${UPSTREAM.origin})`));
+  .listen(PORT, "127.0.0.1", () => console.log(`Hando (web): http://127.0.0.1:${PORT}   (mock LLM: /mock/v1, gateway: ${UPSTREAM.origin})`));

@@ -1,4 +1,4 @@
-// Máy chủ LLM giả (giao diện kiểu OpenAI, có streaming + gọi công cụ) để thử NEU Agent không cần key.
+// Máy chủ LLM giả (giao diện kiểu OpenAI, có streaming + gọi công cụ) để thử Hando không cần key.
 // Kịch bản theo nội dung yêu cầu: sửa lỗi (đọc → chạy thử → sửa → chạy lại), /init, kế hoạch, hỏi đáp thường.
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -86,7 +86,7 @@ function planWork(messages, tools) {
     if (step === 2) return { calls: [{ name: "read_document", args: { path: "giay-moi-hoi-thao.docx", max_chars: 1500 } }] };
     return { text: "Đã tạo **giay-moi-hoi-thao.docx**: mỗi khách mời một trang, tên và chức vụ lấy đúng từ danh sách.\n\n**Đã kiểm tra:** đủ 6 giấy mời, vai trò từng người khớp cột “Vai trò”.\n**Cần bổ sung:** số giấy mời và xác nhận người ký (hiện để TS. Nguyễn Văn An theo NEUAGENT.md)." };
   }
-  return { text: "Xin chào! Tôi là **NEU Agent** (đang chạy bằng máy chủ giả lập để demo).\n\nTôi có thể giúp thầy/cô:\n\n- tóm tắt và tìm thông tin trong Word, Excel, PowerPoint, PDF;\n- soạn thông báo, công văn, biên bản theo thể thức hành chính;\n- tính toán, thống kê, rà soát bảng Excel;\n- làm slide từ tài liệu.\n\nThử gõ: `Tính điểm tổng kết từ file điểm và xếp loại`, `Soạn biên bản từ ghi chú họp`, hoặc `/tomtat ke-hoach-hoi-thao.docx`." };
+  return { text: "Xin chào! Tôi là **Hando** (đang chạy bằng máy chủ giả lập để demo).\n\nTôi có thể giúp thầy/cô:\n\n- tóm tắt và tìm thông tin trong Word, Excel, PowerPoint, PDF;\n- soạn thông báo, công văn, biên bản theo thể thức hành chính;\n- tính toán, thống kê, rà soát bảng Excel;\n- làm slide từ tài liệu.\n\nThử gõ: `Tính điểm tổng kết từ file điểm và xếp loại`, `Soạn biên bản từ ghi chú họp`, hoặc `/tomtat ke-hoach-hoi-thao.docx`." };
 }
 
 function plan(messages, tools) {
@@ -121,7 +121,7 @@ function plan(messages, tools) {
     if (step === 5) return { calls: [{ name: "todo_write", args: { todos: [{ content: "Đọc mã nguồn", status: "completed" }, { content: "Chạy thử để tái hiện lỗi", status: "completed" }, { content: "Sửa lỗi", status: "completed" }, { content: "Chạy lại để kiểm chứng", status: "completed" }] } }] };
     return { text: "## Đã sửa xong\n\n**Nguyên nhân:** `average` chia tổng cho `scores.length + 1` nên luôn nhỏ hơn giá trị đúng.\n\n**Cách sửa:** đổi mẫu số thành `scores.length` trong `src/grades.js`.\n\n**Kiểm chứng:** chạy lại bài kiểm tra, `average([8, 9, 10])` cho kết quả `9`." };
   }
-  return { text: "Xin chào! Tôi là **NEU Agent** (đang chạy bằng máy chủ giả lập để demo).\n\nTôi có thể:\n\n- đọc và giải thích mã trong thư mục dự án,\n- sửa file (luôn hỏi bạn trước, bạn thấy rõ phần thay đổi),\n- chạy kiểm thử rồi sửa đến khi qua.\n\nThử gõ: `Sửa lỗi trong hàm tính điểm trung bình` hoặc `/init`." };
+  return { text: "Xin chào! Tôi là **Hando** (đang chạy bằng máy chủ giả lập để demo).\n\nTôi có thể:\n\n- đọc và giải thích mã trong thư mục dự án,\n- sửa file (luôn hỏi bạn trước, bạn thấy rõ phần thay đổi),\n- chạy kiểm thử rồi sửa đến khi qua.\n\nThử gõ: `Sửa lỗi trong hàm tính điểm trung bình` hoặc `/init`." };
 }
 
 async function stream(res, p, promptTokens) {

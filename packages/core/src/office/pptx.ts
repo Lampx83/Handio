@@ -56,7 +56,7 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
   const PptxGenJS = mod.default ?? mod;
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 in
-  pptx.author = "NEU Agent";
+  pptx.author = "Hando";
   pptx.defineSlideMaster({
     title: "MASTER",
     background: { color: "FFFFFF" },

@@ -1,6 +1,6 @@
-# Tài liệu training NEU Agent
+# Tài liệu training Hando
 
-NEU Agent có ba tab, cho ba nhóm người dùng:
+Hando có ba tab, cho ba nhóm người dùng:
 
 | Tab | Dành cho | Làm gì | Tài liệu |
 |---|---|---|---|

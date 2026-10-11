@@ -1,6 +1,6 @@
 # Gói mở rộng (extension packs)
 
-NEU Agent thêm tính năng bằng **gói mở rộng**, không phải bằng cách sửa mã nguồn lõi. Lõi (`packages/core`, `packages/ui`, `apps/*`) là phần chung: động cơ agent, công cụ, giao diện. Mọi thứ riêng của một tổ chức hay một nghiệp vụ — quy trình, mẫu, văn phong, công cụ nối với hệ thống nội bộ — nằm trong gói.
+Hando thêm tính năng bằng **gói mở rộng**, không phải bằng cách sửa mã nguồn lõi. Lõi (`packages/core`, `packages/ui`, `apps/*`) là phần chung: động cơ agent, công cụ, giao diện. Mọi thứ riêng của một tổ chức hay một nghiệp vụ — quy trình, mẫu, văn phong, công cụ nối với hệ thống nội bộ — nằm trong gói.
 
 **Lợi ích:** triển khai cho tổ chức khác = giữ nguyên mã, thay bộ gói. Thêm tính năng mới = thêm một thư mục, không cần dựng lại ứng dụng ở bản web.
 

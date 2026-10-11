@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Đăng nhập NEU Agent</title>
+<title>Đăng nhập Hando</title>
 <style>
 :root{color-scheme:light dark;--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--border:#dedcd3;--accent:#0b4a9e;--err:#c0302b}
 @media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--border:#34363b;--accent:#5b9bff}}
@@ -17,11 +17,14 @@ input[type=text],input[type=password]{width:100%;padding:10px 12px;border-radius
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--border)}
 form{display:grid;gap:10px;margin:0}.note{text-align:center;color:var(--muted);font-size:12.5px;margin:0}
 .guide{display:block;text-align:center;text-decoration:none;color:var(--accent);font-weight:600;border-top:1px solid var(--border);padding-top:14px}
+.logo{display:block;margin:0 auto 4px;border-radius:18px}.tag{text-align:center;color:var(--muted);margin:-4px 0 4px;font-size:14px}
 </style>
 </head>
 <body>
 <div class="card">
-  <h1>NEU Agent</h1>
+  <img class="logo" src="/agent/guide/img/hando-mark.svg" width="76" height="76" alt="">
+  <h1>Hando</h1>
+  <p class="tag">Giúp bạn một tay</p>
   <form method="GET" action="{{.ProxyPrefix}}/start">
     <input type="hidden" name="rd" value="{{if or (eq .Redirect "/") (eq .Redirect "")}}/agent/{{else}}{{.Redirect}}{{end}}">
     <button type="submit" class="primary">Đăng nhập Microsoft</button>

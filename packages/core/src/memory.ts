@@ -9,7 +9,7 @@ export const DIR_MEMORY_FILES = ["AGENTS.md", "CLAUDE.md", "NEUAGENT.md"];
 /** Thư mục hướng dẫn riêng của người dùng (cấp toàn cục, áp dụng cho mọi dự án). */
 export const GLOBAL_MEMORY_DIR = ".neuagent";
 export const GLOBAL_MEMORY_FILES = ["AGENTS.md", "NEUAGENT.md"];
-/** Thư mục quy tắc theo phạm vi (tên của NEU Agent, Antigravity, Claude Code). */
+/** Thư mục quy tắc theo phạm vi (tên của Hando, Antigravity, Claude Code). */
 export const RULE_DIRS = [".neuagent/rules", ".agents/rules", ".claude/rules"];
 
 const MAX_MEMORY_CHARS = 6000;

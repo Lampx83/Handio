@@ -155,7 +155,7 @@ def read_quota_users(db_path, days=30):
 # ---------------------------------------------------------------- tiện ích hiển thị
 def shell(title, body, back="index.html", back_label="← Tổng quan", extra_nav=""):
     return ('<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title><style>%s</style></head><body><main>'
-            '<nav class="top"><b>NEU Agent</b><a href="%s">%s</a>%s<span style="flex:1"></span><a href="data.html">Dữ liệu &amp; CSV</a></nav>%s</main></body></html>' % (_e(title), C.CSS, _e(back), _e(back_label), extra_nav, body))
+            '<nav class="top"><b>Hando</b><a href="%s">%s</a>%s<span style="flex:1"></span><a href="data.html">Dữ liệu &amp; CSV</a></nav>%s</main></body></html>' % (_e(title), C.CSS, _e(back), _e(back_label), extra_nav, body))
 
 
 def tool_rows(tools):

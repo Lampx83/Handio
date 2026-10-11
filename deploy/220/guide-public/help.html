@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
+<link rel="icon" href="img/hando-mark.svg" type="image/svg+xml">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hướng dẫn sử dụng NEU Agent</title>
-<meta name="description" content="Hướng dẫn sử dụng NEU Agent: đăng nhập, ba chế độ Work, Code, Design, cách viết yêu cầu, lệnh /, phím tắt, hạn mức và xử lý sự cố.">
+<title>Hướng dẫn sử dụng Hando</title>
+<meta name="description" content="Hướng dẫn sử dụng Hando: đăng nhập, ba chế độ Work, Code, Design, cách viết yêu cầu, lệnh /, phím tắt, hạn mức và xử lý sự cố.">
 <style>
 :root{color-scheme:light dark;--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#5d636b;--border:#dedcd3;--accent:#0b4a9e;--accent-text:#fff;--soft:#e8f0fb;--code:#eef0f3}
 @media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#a0a4ac;--border:#34363b;--accent:#5b9bff;--accent-text:#0b1220;--soft:#1d2736;--code:#2a2c31}}
@@ -57,12 +58,13 @@ ul.plain{margin:0 0 10px;padding-left:20px}
 ul.plain li{margin-bottom:4px}
 .eg{border-left:3px solid var(--accent);padding:2px 0 2px 12px;margin:6px 0;color:var(--muted);font-style:italic}
 footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
+.brand{display:inline-flex;align-items:center;gap:8px}.brand .logo{border-radius:7px;display:block}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
-    <a class="brand" href="./">NEU Agent</a>
+    <a class="brand" href="./"><img class="logo" src="img/hando-mark.svg" width="30" height="30" alt="">Hando</a>
     <nav class="main"><a href="./">Giới thiệu</a><a href="help.html" aria-current="page">Hướng dẫn sử dụng</a><a href="changelog.html">Có gì mới</a></nav>
     <a class="btn" href="/agent/">Đăng nhập</a>
   </header>
@@ -90,7 +92,7 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
         <h2>Bắt đầu</h2>
         <p class="lead">Ai cũng phải đăng nhập. Dùng ngay trên trình duyệt, không cần cài gì.</p>
         <ol class="steps">
-          <li><b>Đăng nhập.</b> Mở <a href="/agent/">trang NEU Agent</a>, chọn đăng nhập Microsoft bằng <code>@neu.edu.vn</code> (cán bộ, giảng viên) hoặc <code>@st.neu.edu.vn</code> (sinh viên). Nếu được quản trị cấp tài khoản tên + mật khẩu thì nhập vào ô tương ứng.</li>
+          <li><b>Đăng nhập.</b> Mở <a href="/agent/">trang Hando</a>, chọn đăng nhập Microsoft bằng <code>@neu.edu.vn</code> (cán bộ, giảng viên) hoặc <code>@st.neu.edu.vn</code> (sinh viên). Nếu được quản trị cấp tài khoản tên + mật khẩu thì nhập vào ô tương ứng.</li>
           <li><b>Chọn chế độ</b> ở đầu cạnh bên: <b>Work</b>, <b>Code</b> hoặc <b>Design</b>. Muốn thử nhanh, bấm “Dự án mẫu”.</li>
           <li><b>Gõ điều bạn muốn</b> vào ô nhập rồi nhấn <kbd>Enter</kbd>. Kết quả hiện ở khung trò chuyện và trong thư mục dự án.</li>
         </ol>
@@ -206,7 +208,7 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
         <ol class="steps">
           <li>Đăng nhập web, vào <a href="/agent/download/">trang tải bản cài</a>. Chọn <code>.dmg</code> (macOS: chip Apple <code>arm64</code>, chip Intel <code>x64</code>) hoặc <code>.exe</code> (Windows 64-bit).</li>
           <li>So mã băm SHA-256 của tệp với <code>SHA256SUMS.txt</code> cùng trang.</li>
-          <li><b>macOS:</b> kéo NEU Agent vào Applications. <b>Windows:</b> chạy tệp <code>.exe</code> (không cần quyền quản trị).</li>
+          <li><b>macOS:</b> kéo Hando vào Applications. <b>Windows:</b> chạy tệp <code>.exe</code> (không cần quyền quản trị).</li>
           <li>Mở ứng dụng, chọn <b>Đăng nhập Microsoft</b>; trình duyệt mở ra để bạn đăng nhập.</li>
         </ol>
         <div class="note">Bản cài hiện <b>chưa ký số</b> nên hệ điều hành sẽ cảnh báo “nhà phát hành không xác định”. Chỉ mở khi mã băm khớp. macOS: bấm chuột phải vào ứng dụng → <b>Mở</b> (macOS 15: Cài đặt hệ thống → Quyền riêng tư &amp; Bảo mật → <b>Vẫn mở</b>). Windows: <b>Thông tin thêm → Vẫn chạy</b>. Chi tiết trong tệp <code>HUONG-DAN-CAI-DAT.md</code> cùng trang tải.</div>
@@ -260,7 +262,7 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
     </main>
   </div>
 
-  <footer>NEU Agent · Trường Đại học Kinh tế Quốc dân · <a href="./">Giới thiệu</a> · <a href="changelog.html">Nhật ký thay đổi</a> · <a href="/agent/">Đăng nhập</a></footer>
+  <footer>Hando · Trường Đại học Kinh tế Quốc dân · <a href="./">Giới thiệu</a> · <a href="changelog.html">Nhật ký thay đổi</a> · <a href="/agent/">Đăng nhập</a></footer>
 </div>
 </body>
 </html>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NEU Agent - dịch vụ phụ QUẢN LÝ TÀI KHOẢN tên + mật khẩu (máy 220). Chạy bằng root, chỉ dùng thư viện chuẩn của Python 3.
+"""Hando - dịch vụ phụ QUẢN LÝ TÀI KHOẢN tên + mật khẩu (máy 220). Chạy bằng root, chỉ dùng thư viện chuẩn của Python 3.
 
 Vì sao có dịch vụ riêng: tệp /etc/neu-agent/users.htpasswd và việc khởi động lại dịch vụ đăng nhập cần quyền root, còn trang quản trị
 (collector.py) chạy bằng tài khoản thường `neu-diag` đã bị cô lập. Dịch vụ này là CỔNG HẸP giữa hai bên: chỉ nghe trên một socket Unix

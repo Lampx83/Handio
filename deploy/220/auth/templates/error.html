@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{.StatusCode}} · NEU Agent</title>
+<title>{{.StatusCode}} · Hando</title>
 <style>
 :root{color-scheme:light dark;--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--border:#dedcd3;--accent:#0b4a9e}
 @media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--border:#34363b;--accent:#5b9bff}}
@@ -16,7 +16,7 @@ h1{margin:0 0 8px;font-size:20px}p{color:var(--muted);margin:0 0 18px}a{display:
 <body>
 <div class="card">
   <h1>{{if eq .StatusCode 403}}Không có quyền truy cập{{else}}Có lỗi xảy ra{{end}}</h1>
-  <p>{{if eq .StatusCode 403}}Tài khoản này không thuộc nhóm được phép dùng NEU Agent.{{else}}Vui lòng thử lại.{{end}}</p>
+  <p>{{if eq .StatusCode 403}}Tài khoản này không thuộc nhóm được phép dùng Hando.{{else}}Vui lòng thử lại.{{end}}</p>
   <a href="{{.ProxyPrefix}}/sign_out?rd={{.ProxyPrefix}}/sign_in">Đăng nhập tài khoản khác</a>
 </div>
 </body>

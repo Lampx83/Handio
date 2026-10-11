@@ -1,4 +1,4 @@
-# Bảo mật của NEU Agent
+# Bảo mật của Hando
 
 Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nói **đã làm gì, kiểm chứng thế nào, và điều gì CHƯA bảo vệ được**, để người dùng và người quản trị quyết định có cơ sở.
 

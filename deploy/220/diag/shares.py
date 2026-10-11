@@ -1,4 +1,4 @@
-"""NEU Agent - kho CUỘC TRÒ CHUYỆN ĐƯỢC CHIA SẺ (SQLite, chỉ thư viện chuẩn).
+"""Hando - kho CUỘC TRÒ CHUYỆN ĐƯỢC CHIA SẺ (SQLite, chỉ thư viện chuẩn).
 
 Người dùng chủ động bấm "Chia sẻ" một cuộc trò chuyện: ứng dụng che thông tin nhạy cảm rồi gửi bản chụp lên đây, nhận một liên kết
 (/agent/share/<mã ngẫu nhiên 22 ký tự>) để đưa cho người khác ĐÃ ĐĂNG NHẬP đọc. Cùng bản chụp đó giúp nhóm phát triển hiểu người dùng
@@ -180,13 +180,13 @@ def render_page(d):
         if it["k"] == "user":
             parts.append('<div class="m u"><div class="r">Người dùng</div><div class="t">%s</div></div>' % e(it["t"]))
         elif it["k"] == "assistant":
-            parts.append('<div class="m a"><div class="r">NEU Agent</div><div class="t">%s</div></div>' % e(it["t"]))
+            parts.append('<div class="m a"><div class="r">Hando</div><div class="t">%s</div></div>' % e(it["t"]))
         else:
             parts.append('<div class="m c"><div class="r">Công cụ <code>%s</code></div><div class="t">%s</div></div>' % (e(it.get("n", "")), e(it["t"])))
     meta = " · ".join(x for x in [owner_label(d["owner"]), "tab " + d["profile"] if d["profile"] else "", "v" + d["version"] if d["version"] else "", time.strftime("%d/%m/%Y", time.gmtime(d["ts"] + 7 * 3600))] if x)
     note = ("Đã tự che %d thông tin nhạy cảm (khoá, mật khẩu, CCCD, số điện thoại…). " % d["redactions"]) if d["redactions"] else ""
     return ("""<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>%s · NEU Agent</title>
+<meta name="robots" content="noindex,nofollow"><title>%s · Hando</title>
 <style>:root{--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--line:#dedcd3;--accent:#0b4a9e;--soft:#e4edfa}
 @media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--line:#34363b;--accent:#5b9bff;--soft:#1b2a45}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -196,5 +196,5 @@ main{max-width:820px;margin:0 auto;padding:20px 16px 60px}h1{font-size:21px;marg
 .m.c{font-size:13px;color:var(--muted)}.r{font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600}
 .t{white-space:pre-wrap;word-break:break-word}code{font-family:ui-monospace,Menlo,Consolas,monospace}footer{color:var(--muted);font-size:12.5px;margin-top:24px}</style></head>
 <body><main><h1>%s</h1><div class="meta">Chia sẻ bởi %s</div>
-<div class="note">%sĐây là bản chụp tại thời điểm chia sẻ, chỉ người đã đăng nhập NEU Agent mới xem được. Nội dung do AI tạo ra có thể chưa chính xác.</div>
-%s<footer>NEU Agent · Khoa CNTT, Trường ĐH Kinh tế Quốc dân</footer></main></body></html>""" % (e(d["title"]), e(d["title"]), e(meta), e(note), "\n".join(parts)))
+<div class="note">%sĐây là bản chụp tại thời điểm chia sẻ, chỉ người đã đăng nhập Hando mới xem được. Nội dung do AI tạo ra có thể chưa chính xác.</div>
+%s<footer>Hando · Khoa CNTT, Trường ĐH Kinh tế Quốc dân</footer></main></body></html>""" % (e(d["title"]), e(d["title"]), e(meta), e(note), "\n".join(parts)))

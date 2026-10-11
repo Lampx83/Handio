@@ -5,6 +5,12 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Đổi tên thành Hando** (đọc *han-đô*, “bàn tay làm việc giúp bạn”; khẩu hiệu *Giúp bạn một tay*) kèm bộ nhận diện mới: biểu tượng **bàn tay** vector 2D/3D có chuyển động (vẫy tay, đưa tay giúp, gõ phím, đếm ngón, cầm chuột, xong việc), màu xanh Hando và cam “do”, wordmark riêng. Hiện ở thanh trên (vẫy tay khi rê chuột), màn hình chào, trang đăng nhập, trang giới thiệu, biểu tượng ứng dụng và biểu tượng web. Hướng dẫn thương hiệu ở `docs/brand/BRAND.md`.
+
+### Thay đổi
+- Tên hiển thị trong giao diện, lời nhắc của agent, tài liệu và trang giới thiệu là **Hando**. Dữ liệu, cài đặt, lịch sử và phiên đăng nhập của bạn **giữ nguyên**; cập nhật Desktop vẫn dùng như cũ. Cài mới tạo thư mục dự án ở Tài liệu/Hando; ai đã có thư mục cũ thì giữ nguyên. Lần cài bản Desktop đầu tiên trên macOS tạo ứng dụng tên Hando: bạn có thể xoá bản “NEU Agent” cũ.
+
 ## [0.7.1] - 2026-10-11
 
 ### Sửa

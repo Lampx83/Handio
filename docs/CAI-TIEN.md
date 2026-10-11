@@ -1,6 +1,6 @@
-# Cải tiến NEU Agent liên tục
+# Cải tiến Hando liên tục
 
-Mục tiêu: NEU Agent được cập nhật **đều đặn và có lý do** — dựa trên (1) người dùng thật đang dùng thế nào, (2) công nghệ và mô hình đang thay đổi ra sao, (3) phần mềm tương tự đang làm gì. Không chạy theo từng tính năng của người khác: chỉ làm khi nó giải quyết vấn đề của sinh viên và cán bộ NEU, giữ được cam kết riêng tư và chạy được trong hạ tầng của trường.
+Mục tiêu: Hando được cập nhật **đều đặn và có lý do** — dựa trên (1) người dùng thật đang dùng thế nào, (2) công nghệ và mô hình đang thay đổi ra sao, (3) phần mềm tương tự đang làm gì. Không chạy theo từng tính năng của người khác: chỉ làm khi nó giải quyết vấn đề của sinh viên và cán bộ NEU, giữ được cam kết riêng tư và chạy được trong hạ tầng của trường.
 
 ## Nhịp làm việc
 

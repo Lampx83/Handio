@@ -15,7 +15,7 @@ export const LESSONS: Lesson[] = [
     ],
     intro: `Phần mềm đang thay đổi cách được viết: thay vì gõ từng dòng, ta **mô tả điều muốn làm**, để AI đề xuất hoặc tự thực hiện, rồi **kiểm chứng kết quả**. Buổi này đặt nền cho cả học phần: AI thực sự là gì, nó sai ở đâu, bạn dùng nó thế nào cho đúng, và vì sao người chịu trách nhiệm cuối cùng luôn là bạn.
 
-Từ đây trở đi, công cụ thực hành chính của bạn là **NEU Agent** (tab Code). Các khái niệm đều áp dụng cho những công cụ cùng loại như Claude Code, Codex hay Cursor.`,
+Từ đây trở đi, công cụ thực hành chính của bạn là **Hando** (tab Code). Các khái niệm đều áp dụng cho những công cụ cùng loại như Claude Code, Codex hay Cursor.`,
     steps: [
       {
         title: "LLM, token và ba tầng của hệ sinh thái",
@@ -44,7 +44,7 @@ Ghi nhớ: **Claude là mô hình; Claude Code là công cụ agent dùng mô h�
 2. **Knowledge cutoff (giới hạn kiến thức)**: mô hình chỉ biết đến một mốc thời gian, nên có thể dùng API đã lỗi thời hoặc không biết bản mới.
 3. **Context window (cửa sổ ngữ cảnh)**: mô hình chỉ "nhớ" được một lượng văn bản nhất định trong mỗi phiên; phiên càng dài, chỉ dẫn ở đầu càng dễ bị bỏ sót.
 
-**Hoạt động**: hỏi một trợ lý AI cách dùng thư viện Python \`neu-fit-autograde\` (tên này do nhóm giảng dạy đặt ra, **không phải thư viện có thật**). Quan sát: AI có bịa ra hàm và ví dụ cho một thư viện không có không? Sau đó kiểm chứng bằng nguồn chính thức (tìm tên gói trên trang PyPI hoặc dùng công cụ kiểm tra gói nếu NEU Agent cung cấp). Nếu AI từ chối hoặc nói không chắc, đó là hành vi tốt, nhưng bạn vẫn cần biết cách tự kiểm tra.
+**Hoạt động**: hỏi một trợ lý AI cách dùng thư viện Python \`neu-fit-autograde\` (tên này do nhóm giảng dạy đặt ra, **không phải thư viện có thật**). Quan sát: AI có bịa ra hàm và ví dụ cho một thư viện không có không? Sau đó kiểm chứng bằng nguồn chính thức (tìm tên gói trên trang PyPI hoặc dùng công cụ kiểm tra gói nếu Hando cung cấp). Nếu AI từ chối hoặc nói không chắc, đó là hành vi tốt, nhưng bạn vẫn cần biết cách tự kiểm tra.
 
 Kết luận: *mã AI sinh ra phải được đọc và chạy thử*, vì "trôi chảy" không có nghĩa là "đúng".`,
         try: [
@@ -60,7 +60,7 @@ Kết luận: *mã AI sinh ra phải được đọc và chạy thử*, vì "tr�
 - **Mức 2, hỏi đáp**: bạn hỏi trong khung chat (ví dụ ChatGPT), nhận câu trả lời kèm mã, rồi *tự chép sang* trình soạn thảo. Bạn là cầu nối giữa AI và dự án.
 - **Mức 3, agent**: công cụ như Cursor, Claude Code, Codex *tự đọc dự án, sửa tệp, chạy lệnh*. Bạn giao việc và **rà soát** kết quả.
 
-Càng lên mức cao, AI làm được càng nhiều với ít thao tác của bạn, nhưng việc **kiểm soát và chịu trách nhiệm** càng quan trọng. NEU Agent hoạt động ở Mức 3.`,
+Càng lên mức cao, AI làm được càng nhiều với ít thao tác của bạn, nhưng việc **kiểm soát và chịu trách nhiệm** càng quan trọng. Hando hoạt động ở Mức 3.`,
         try: [
           "Mình cần sửa lỗi \"điểm trung bình bị NaN khi danh sách rỗng\" trong một dự án JavaScript. Hãy mô tả cụ thể quy trình làm việc của mình nếu dùng công cụ Mức 1, Mức 2 và Mức 3, bước nào do mình làm, bước nào do công cụ làm.",
         ],
@@ -107,7 +107,7 @@ Hai hiểu lầm cần tránh: *"không cần biết lập trình"* (sai: bạn 
 
 > Bạn gửi prompt → LLM đề xuất **gọi công cụ** → công cụ chạy và trả **kết quả quan sát** → LLM đọc kết quả, tiếp tục (gọi thêm công cụ) hoặc **trả lời** bạn.
 
-Điều rất quan trọng: **mô hình chỉ đề xuất**, ví dụ một đoạn JSON như \`{"tool":"Bash","input":{"command":"pytest -q"}}\`. Chính **host** (chương trình chủ, tức ứng dụng bạn đang dùng như NEU Agent) mới *kiểm tra quyền và sandbox, xin bạn duyệt, thực thi lệnh, rồi gửi kết quả về cho LLM*. Vì vậy mọi cơ chế an toàn nằm ở host, không nằm ở "sự ngoan ngoãn" của mô hình.
+Điều rất quan trọng: **mô hình chỉ đề xuất**, ví dụ một đoạn JSON như \`{"tool":"Bash","input":{"command":"pytest -q"}}\`. Chính **host** (chương trình chủ, tức ứng dụng bạn đang dùng như Hando) mới *kiểm tra quyền và sandbox, xin bạn duyệt, thực thi lệnh, rồi gửi kết quả về cho LLM*. Vì vậy mọi cơ chế an toàn nằm ở host, không nằm ở "sự ngoan ngoãn" của mô hình.
 
 Mỗi vòng đều tốn token và có thể phát sinh lỗi, nên hãy theo dõi quá trình agent làm, đừng chỉ nhìn kết quả cuối.`,
         try: [
@@ -146,7 +146,7 @@ So sánh:
 - Chưa rõ: *"Sửa lỗi trong ứng dụng."*
 - Rõ: *"Thêm ô chọn vai trò vào thanh bên của @app.py, không thay đổi cách đọc API key. Lập kế hoạch trước và dừng lại trước khi sửa mã để tôi rà soát."*
 
-Những thao tác cơ bản của công cụ agent (NEU Agent và các công cụ tương tự): \`@tệp\` đưa tệp vào prompt, \`!lệnh\` chạy lệnh shell, \`Shift+Tab\` bật chế độ lập kế hoạch, \`Esc\` dừng agent, \`/model\` chọn mô hình, \`/init\` tạo tệp ngữ cảnh dự án \`AGENTS.md\`, gõ \`/\` để xem danh sách lệnh. Chi tiết các lệnh có thể khác nhau giữa công cụ: xem tài liệu chính thức của công cụ bạn dùng.`,
+Những thao tác cơ bản của công cụ agent (Hando và các công cụ tương tự): \`@tệp\` đưa tệp vào prompt, \`!lệnh\` chạy lệnh shell, \`Shift+Tab\` bật chế độ lập kế hoạch, \`Esc\` dừng agent, \`/model\` chọn mô hình, \`/init\` tạo tệp ngữ cảnh dự án \`AGENTS.md\`, gõ \`/\` để xem danh sách lệnh. Chi tiết các lệnh có thể khác nhau giữa công cụ: xem tài liệu chính thức của công cụ bạn dùng.`,
         try: [
           "Viết lại yêu cầu \"Sửa lỗi trong ứng dụng\" thành prompt đủ ba phần Mục tiêu, Ngữ cảnh, Ràng buộc cho một dự án web ghi chú (giả sử lỗi là: ghi chú trống vẫn được thêm). Chỉ rõ tệp dùng cú pháp @tệp.",
         ],
@@ -158,7 +158,7 @@ Những thao tác cơ bản của công cụ agent (NEU Agent và các công c�
 
 **Chuẩn bị** (mỗi bước chạy được bằng \`!lệnh\` hoặc trong Terminal):
 1. Tạo thư mục trống rồi môi trường ảo: \`python3 -m venv .venv\` và kích hoạt (macOS/Linux: \`source .venv/bin/activate\`; Windows: \`.venv\\Scripts\\activate\`).
-2. Mở thư mục này trong NEU Agent.
+2. Mở thư mục này trong Hando.
 
 **Prompt 1** tạo chatbot nhớ ngữ cảnh (xem phần Thử bên dưới). Sau khi agent xong:
 3. Điền khóa Gemini của bạn vào tệp \`.env\` (sao chép từ \`.env.example\`). **Khóa chỉ nằm trong \`.env\`; chỉ chia sẻ \`.env.example\`.**
@@ -229,7 +229,7 @@ Các công cụ cùng loại (Claude Code, Codex CLI, Cursor, Gemini CLI) có ý
     steps: [
       {
         title: "Giao diện và các thao tác cơ bản",
-        body: `Trong tab **Code** của NEU Agent, bạn có ô chat để giao việc, cây tệp của dự án, và vùng xem thay đổi (diff). Các công cụ chạy trong terminal (gọi là **CLI**, giao diện dòng lệnh) làm cùng việc nhưng bằng chữ.
+        body: `Trong tab **Code** của Hando, bạn có ô chat để giao việc, cây tệp của dự án, và vùng xem thay đổi (diff). Các công cụ chạy trong terminal (gọi là **CLI**, giao diện dòng lệnh) làm cùng việc nhưng bằng chữ.
 
 Thao tác cần thuộc:
 | Thao tác | Tác dụng |
@@ -253,7 +253,7 @@ Hãy tập \`Esc\` ngay từ đầu: dừng sớm rẻ hơn rất nhiều so v�
         body: `**Context window** là lượng văn bản tối đa mô hình xử lý được trong một phiên: prompt, mã bạn đưa vào, kết quả công cụ, cả các lượt trước. Khi gần đầy, chất lượng giảm và chỉ dẫn ở đầu phiên dễ bị bỏ sót.
 
 Cách quản lý:
-- **Xem mức dùng**: NEU Agent có thước ngữ cảnh và lệnh \`/context\`.
+- **Xem mức dùng**: Hando có thước ngữ cảnh và lệnh \`/context\`.
 - **Tóm tắt** (\`/compact\`): nén hội thoại cũ thành bản tóm tắt ngắn để có chỗ làm tiếp.
 - **Bắt đầu phiên mới** (\`/clear\`): xóa hội thoại khi chuyển sang việc khác hẳn.
 - Chỉ đưa vào các tệp cần thiết (\`@tệp\` đúng chỗ thay vì cả thư mục); chia việc nhỏ.
@@ -267,7 +267,7 @@ Các công cụ khác như Claude Code cũng có cơ chế tương tự; tên l�
       },
       {
         title: "AGENTS.md: dạy agent về dự án của bạn",
-        body: `Mỗi lần bắt đầu phiên mới, agent không nhớ gì về dự án của bạn. **Tệp ngữ cảnh dự án** là cách ghi một lần điều agent cần biết và được nạp đầu mỗi phiên. Tên tệp tùy công cụ: \`AGENTS.md\` (Codex, Cursor và nhiều công cụ khác, cũng là tên NEU Agent ưu tiên), \`CLAUDE.md\` (Claude Code), \`.cursor/rules\` (Cursor).
+        body: `Mỗi lần bắt đầu phiên mới, agent không nhớ gì về dự án của bạn. **Tệp ngữ cảnh dự án** là cách ghi một lần điều agent cần biết và được nạp đầu mỗi phiên. Tên tệp tùy công cụ: \`AGENTS.md\` (Codex, Cursor và nhiều công cụ khác, cũng là tên Hando ưu tiên), \`CLAUDE.md\` (Claude Code), \`.cursor/rules\` (Cursor).
 
 Một AGENTS.md tốt **ngắn** (vài chục dòng), gồm:
 - dự án làm gì, công nghệ dùng;
@@ -368,7 +368,7 @@ Cái giá: kết luận của subagent là *bản tóm tắt*, có thể bỏ s�
       },
       {
         title: "Tạo subagent tùy biến",
-        body: `Trong NEU Agent, subagent tùy biến là các tệp Markdown đặt trong \`.neuagent/agents/\`, mỗi tệp một subagent: phần đầu mô tả **tên**, **khi nào dùng** và **danh sách công cụ được phép**, phần thân là chỉ dẫn. Ví dụ minh họa (định dạng cụ thể: xem hướng dẫn trong NEU Agent hoặc nhờ agent tạo giúp đúng định dạng):
+        body: `Trong Hando, subagent tùy biến là các tệp Markdown đặt trong \`.neuagent/agents/\`, mỗi tệp một subagent: phần đầu mô tả **tên**, **khi nào dùng** và **danh sách công cụ được phép**, phần thân là chỉ dẫn. Ví dụ minh họa (định dạng cụ thể: xem hướng dẫn trong Hando hoặc nhờ agent tạo giúp đúng định dạng):
 
 \`\`\`
 ---
@@ -410,7 +410,7 @@ Kết luận của subagent là *ý kiến tham khảo*, không phải phán quy
 - \`Stop\`: khi agent kết thúc lượt trả lời;
 - \`SessionStart\`: khi bắt đầu phiên.
 
-**Ví dụ**: hook \`PostToolUse\` cho các thao tác sửa tệp để tự chạy \`npm test --silent\` hoặc \`node check.js\`. Nhờ đó mọi lần sửa đều bị kiểm tra, dù agent có quên hay không. Với Claude Code, cấu hình có dạng JSON (một khối \`hooks\` chứa tên sự kiện, bộ lọc và lệnh); với NEU Agent, hãy nhờ agent tạo giúp cấu hình đúng định dạng trong thư mục \`.neuagent\` rồi đối chiếu tài liệu.`,
+**Ví dụ**: hook \`PostToolUse\` cho các thao tác sửa tệp để tự chạy \`npm test --silent\` hoặc \`node check.js\`. Nhờ đó mọi lần sửa đều bị kiểm tra, dù agent có quên hay không. Với Claude Code, cấu hình có dạng JSON (một khối \`hooks\` chứa tên sự kiện, bộ lọc và lệnh); với Hando, hãy nhờ agent tạo giúp cấu hình đúng định dạng trong thư mục \`.neuagent\` rồi đối chiếu tài liệu.`,
         try: [
           "Mình muốn mỗi khi agent sửa tệp .js trong dự án này thì tự chạy node check.js và hiện kết quả. Hãy đề xuất cấu hình hook phù hợp (nêu rõ sự kiện, điều kiện lọc và lệnh), giải thích từng phần, và chưa áp dụng cho tới khi mình đồng ý.",
         ],
@@ -455,7 +455,7 @@ Hook và subagent bổ sung cho nhau: subagent *suy xét*, hook *thực thi cứ
     steps: [
       {
         title: "Lệnh gạch chéo tùy biến",
-        body: `Prompt nào bạn gõ lặp lại nhiều lần (rà soát, viết test, giải thích lỗi) nên được lưu thành **lệnh tùy biến**. Trong NEU Agent, mỗi lệnh là một tệp Markdown trong \`.neuagent/commands/\`; tên tệp là tên lệnh (\`ra-soat.md\` thành \`/ra-soat\`). Nội dung tệp là prompt, và \`$ARGUMENTS\` được thay bằng phần bạn gõ sau tên lệnh.
+        body: `Prompt nào bạn gõ lặp lại nhiều lần (rà soát, viết test, giải thích lỗi) nên được lưu thành **lệnh tùy biến**. Trong Hando, mỗi lệnh là một tệp Markdown trong \`.neuagent/commands/\`; tên tệp là tên lệnh (\`ra-soat.md\` thành \`/ra-soat\`). Nội dung tệp là prompt, và \`$ARGUMENTS\` được thay bằng phần bạn gõ sau tên lệnh.
 
 \`\`\`
 Rà soát thay đổi hiện tại theo checklist:
@@ -494,7 +494,7 @@ Ví dụ skill hữu ích cho sinh viên: "viết-báo-cáo-thực-hành" có m�
         title: "MCP: cắm công cụ bên ngoài",
         body: `**MCP** (Model Context Protocol) là giao thức mở để agent dùng *công cụ do bên khác cung cấp*: đọc cơ sở dữ liệu, tra tài liệu, điều khiển trình duyệt, v.v. Một **máy chủ MCP** là một chương trình chạy riêng. Với kiểu phổ biến, host khởi chạy nó như tiến trình con và nói chuyện qua đầu vào/đầu ra chuẩn (\`stdio\`). Máy chủ cho host biết nó có những công cụ nào; mô hình *đề xuất* gọi, host *kiểm tra quyền rồi thực thi*, đúng vòng lặp bạn đã học ở buổi 1.
 
-Điểm mấu chốt: công cụ MCP là **mã chạy trên máy bạn**, nên cấp quyền cho nó giống như cài một phần mềm. Cách khai báo máy chủ (tên, lệnh khởi chạy, tham số) phụ thuộc công cụ: xem tài liệu của NEU Agent hoặc của công cụ bạn dùng.`,
+Điểm mấu chốt: công cụ MCP là **mã chạy trên máy bạn**, nên cấp quyền cho nó giống như cài một phần mềm. Cách khai báo máy chủ (tên, lệnh khởi chạy, tham số) phụ thuộc công cụ: xem tài liệu của Hando hoặc của công cụ bạn dùng.`,
         try: [
           "Giải thích bằng ví dụ cụ thể: khi mình cắm một máy chủ MCP đọc tệp CSV, từ lúc mình hỏi \"tính điểm trung bình\" đến lúc có câu trả lời, mô hình làm gì, host làm gì, máy chủ MCP làm gì?",
         ],
@@ -629,10 +629,10 @@ Lệnh \`/review\` (hoặc subagent rà soát ở buổi 3) giúp tìm vấn đ�
     goals: [
       "Giải thích được vì sao host (không phải mô hình) kiểm soát quyền",
       "Phân biệt được ba mức sandbox và các chính sách phê duyệt",
-      "Đối chiếu được bốn chế độ quyền của NEU Agent với cách làm của Codex",
+      "Đối chiếu được bốn chế độ quyền của Hando với cách làm của Codex",
       "Viết được phần quy tắc an toàn trong AGENTS.md và bảo vệ được bí mật của dự án",
     ],
-    intro: "Một agent có thể đọc tệp, sửa tệp và chạy lệnh. Nếu không có giới hạn, một lệnh sai hay một chỉ dẫn độc hại ẩn trong tệp lạ có thể xóa dữ liệu hoặc làm lộ khóa bí mật. Buổi này là về **ba lớp phòng thủ**: *sandbox* (agent được làm gì trong máy), *phê duyệt* (khi nào hỏi bạn) và *AGENTS.md* (quy tắc bạn đặt ra). Công cụ tham chiếu là Codex CLI, đối chiếu với NEU Agent.",
+    intro: "Một agent có thể đọc tệp, sửa tệp và chạy lệnh. Nếu không có giới hạn, một lệnh sai hay một chỉ dẫn độc hại ẩn trong tệp lạ có thể xóa dữ liệu hoặc làm lộ khóa bí mật. Buổi này là về **ba lớp phòng thủ**: *sandbox* (agent được làm gì trong máy), *phê duyệt* (khi nào hỏi bạn) và *AGENTS.md* (quy tắc bạn đặt ra). Công cụ tham chiếu là Codex CLI, đối chiếu với Hando.",
     steps: [
       {
         title: "Host kiểm soát quyền",
@@ -668,9 +668,9 @@ Sandbox chặt kèm phê duyệt lỏng cho tốc độ vừa an toàn; sandbox 
         check: "Bạn biết đọc từng phần của một lệnh (đối tượng bị tác động, cờ nguy hiểm) trước khi bấm cho phép.",
       },
       {
-        title: "Năm chế độ quyền của NEU Agent",
-        body: `NEU Agent có năm chế độ; hãy đối chiếu với ý tưởng sandbox và phê duyệt. Mô tả dưới đây là tóm tắt gần đúng để so sánh, hai hệ thống không giống hệt nhau: xem phần hướng dẫn trong NEU Agent để biết chính xác từng chế độ.
-| Chế độ NEU Agent | Hành vi | Gần với |
+        title: "Năm chế độ quyền của Hando",
+        body: `Hando có năm chế độ; hãy đối chiếu với ý tưởng sandbox và phê duyệt. Mô tả dưới đây là tóm tắt gần đúng để so sánh, hai hệ thống không giống hệt nhau: xem phần hướng dẫn trong Hando để biết chính xác từng chế độ.
+| Chế độ Hando | Hành vi | Gần với |
 | --- | --- | --- |
 | **Hỏi trước** | Hỏi bạn trước khi sửa tệp hoặc chạy lệnh | Phê duyệt chặt |
 | **Tự sửa file** | Tự sửa tệp trong dự án; vẫn hỏi khi chạy lệnh | Ghi trong thư mục dự án, hỏi với lệnh |
@@ -704,7 +704,7 @@ Nhưng AGENTS.md chỉ là *lời dặn*, không phải rào chắn cứng: rào
     takeaways: [
       "Host kiểm soát quyền: mô hình chỉ đề xuất, host kiểm sandbox và xin bạn duyệt.",
       "Ba mức sandbox: chỉ đọc, ghi trong thư mục dự án, toàn quyền; bắt đầu từ mức thấp nhất đủ dùng.",
-      "Chế độ NEU Agent: Hỏi trước, Tự sửa file, Tự động, Lập kế hoạch, Toàn quyền; \"Toàn quyền\" chỉ dùng trong môi trường bỏ đi được.",
+      "Chế độ Hando: Hỏi trước, Tự sửa file, Tự động, Lập kế hoạch, Toàn quyền; \"Toàn quyền\" chỉ dùng trong môi trường bỏ đi được.",
       "AGENTS.md chỉ là lời dặn; rào chắn cứng là sandbox cộng phê duyệt; luôn giữ khóa trong .env và ngoài Git.",
     ],
     exercises: ["py-05-mat-khau-manh"],
@@ -731,7 +731,7 @@ Nhưng AGENTS.md chỉ là *lời dặn*, không phải rào chắn cứng: rào
 
 Nguyên tắc: *cho phép những gì bạn thấy an toàn và lặp lại nhiều*, hỏi những gì có thể gây hại có kiểm soát, chặn những gì không bao giờ cần.`,
         try: [
-          "Hãy đề xuất bảng phân quyền cho dự án Python nhỏ của mình gồm ba nhóm: cho phép tự chạy, phải hỏi, bị chặn. Mỗi lệnh hoặc công cụ kèm lý do ngắn. Nếu NEU Agent có chỗ cấu hình riêng thì chỉ mình nơi đó, đừng tự sửa cấu hình.",
+          "Hãy đề xuất bảng phân quyền cho dự án Python nhỏ của mình gồm ba nhóm: cho phép tự chạy, phải hỏi, bị chặn. Mỗi lệnh hoặc công cụ kèm lý do ngắn. Nếu Hando có chỗ cấu hình riêng thì chỉ mình nơi đó, đừng tự sửa cấu hình.",
         ],
         check: "Bảng của bạn không cho phép tự chạy lệnh có thể mất dữ liệu, và mỗi mục có lý do.",
       },
@@ -779,7 +779,7 @@ Nếu một bước làm kết quả xấu đi, đừng cố vá chồng lên: q
       {
         title: "Quay lại khi hỏng: /undo và điểm khôi phục",
         body: `Khi một bước làm hỏng, bạn có ba lưới an toàn (từ nhẹ đến nặng):
-- **\`/undo\`** trong NEU Agent: hoàn tác thay đổi tệp gần nhất của agent.
+- **\`/undo\`** trong Hando: hoàn tác thay đổi tệp gần nhất của agent.
 - **Điểm khôi phục** (checkpoint) của ứng dụng: quay về trạng thái trước một lượt trò chuyện.
 - **Git**: \`git restore <tệp>\` bỏ thay đổi chưa commit ở một tệp; \`git log\` xem lịch sử; \`git revert <mã commit>\` tạo commit mới đảo ngược một commit cũ. Tránh \`git reset --hard\` nếu chưa hiểu: nó xóa thay đổi chưa commit và không hoàn lại được.
 
@@ -1163,7 +1163,7 @@ Trung thực khi trình bày: ghi rõ nguồn dữ liệu và cỡ mẫu, không
 - Lịch sử commit là bằng chứng quá trình làm việc, hợp với nhật ký prompt.
 - Nguyên tắc: **commit trước khi giao việc lớn cho agent**, và commit sau mỗi việc nhỏ đạt tiêu chí xong.
 
-Lưu ý: NEU Agent cũng có điểm khôi phục riêng (và \`/undo\`), nhưng điểm khôi phục trong ứng dụng không thay thế Git, vì chỉ Git cho bạn lịch sử dài hạn và làm việc nhóm.`,
+Lưu ý: Hando cũng có điểm khôi phục riêng (và \`/undo\`), nhưng điểm khôi phục trong ứng dụng không thay thế Git, vì chỉ Git cho bạn lịch sử dài hạn và làm việc nhóm.`,
         try: [
           "Hãy giải thích bằng ví dụ vì sao nên commit trước khi nhờ agent đổi tên một hàm ở 10 tệp, và điều gì có thể xảy ra nếu mình chưa commit gì.",
         ],

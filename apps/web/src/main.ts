@@ -192,7 +192,7 @@ async function main(): Promise<void> {
     design: await make("design", "/design", async () => SAMPLE_DESIGN, "Mẫu thiết kế", "Thiết kế của tôi"),
   };
   ls.set("neu.nosample.v1", "1");
-  mountShell(document.getElementById("root")!, controllers, { productName: "NEU Agent", downloadsBase: new URL("download/", document.baseURI).href, account: await currentAccount(), install: { available: () => !!installEvent, run: () => void installEvent?.prompt() } });
+  mountShell(document.getElementById("root")!, controllers, { productName: "Hando", downloadsBase: new URL("download/", document.baseURI).href, account: await currentAccount(), install: { available: () => !!installEvent, run: () => void installEvent?.prompt() } });
   (window as unknown as { __neu: unknown }).__neu = { controllers };
 }
 

@@ -37,7 +37,7 @@ export function buildBanner(s: UpdateState, api: Pick<UpdateBridge, "download" |
     return b;
   };
   if (s.phase === "available" || (s.phase === "error" && !s.savedPath)) {
-    box.append(el("h3", "", s.required ? "Cần cập nhật NEU Agent" : `Có bản mới NEU Agent ${s.latest}`));
+    box.append(el("h3", "", s.required ? "Cần cập nhật Hando" : `Có bản mới Hando ${s.latest}`));
     box.append(el("p", "", s.required ? `Phiên bản ${s.current} không còn được hỗ trợ. Hãy cập nhật lên ${s.latest} để tiếp tục.` : `Bạn đang dùng ${s.current}${s.released ? ` · phát hành ${s.released}` : ""}.`));
     if (s.error) box.append(el("p", "nu-err", s.error));
     if (state.showNotes && s.notes) box.append(el("div", "nu-notes", s.notes));
@@ -48,15 +48,15 @@ export function buildBanner(s: UpdateState, api: Pick<UpdateBridge, "download" |
     if (s.notes) row.append(btn(state.showNotes ? "Ẩn chi tiết" : "Có gì mới", () => { state.showNotes = !state.showNotes; rerender(); }));
     if (!s.required) row.append(btn("Để sau", () => void api.dismiss()));
   } else if (s.phase === "downloading") {
-    box.append(el("h3", "", `Đang tải NEU Agent ${s.latest}…`));
+    box.append(el("h3", "", `Đang tải Hando ${s.latest}…`));
     const bar = el("div", "nu-bar");
     const fill = el("i");
     fill.style.width = `${Math.round((s.progress ?? 0) * 100)}%`;
     bar.append(fill);
     box.append(bar, el("p", "", "Sau khi tải xong, ứng dụng sẽ kiểm tra mã băm SHA-256 của tệp."));
   } else {
-    box.append(el("h3", "", `Đã tải NEU Agent ${s.latest}`));
-    box.append(el("p", "", "Đã kiểm tra mã băm SHA-256 khớp với máy chủ. Hãy đóng NEU Agent rồi mở tệp vừa tải để cài (chưa có gì bị thay đổi cho tới lúc bạn mở nó)."));
+    box.append(el("h3", "", `Đã tải Hando ${s.latest}`));
+    box.append(el("p", "", "Đã kiểm tra mã băm SHA-256 khớp với máy chủ. Hãy đóng Hando rồi mở tệp vừa tải để cài (chưa có gì bị thay đổi cho tới lúc bạn mở nó)."));
     row.append(btn("Mở thư mục chứa tệp", () => void api.openFolder(), true));
     if (!s.required) row.append(btn("Đóng", () => { state.closed = true; rerender(); }));
   }

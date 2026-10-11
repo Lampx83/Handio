@@ -1,5 +1,5 @@
 /**
- * Chia sẻ cuộc trò chuyện: người dùng chủ động tạo một liên kết để người khác (đã đăng nhập NEU Agent) đọc. Bản chụp được che thông tin
+ * Chia sẻ cuộc trò chuyện: người dùng chủ động tạo một liên kết để người khác (đã đăng nhập Hando) đọc. Bản chụp được che thông tin
  * nhạy cảm ở máy người dùng TRƯỚC khi gửi, và nhóm phát triển cũng đọc được bản đã chia sẻ để cải thiện hệ thống (hộp chia sẻ nói rõ).
  * Phía máy chủ: deploy/220/diag/shares.py.
  */

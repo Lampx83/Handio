@@ -8,7 +8,7 @@ const res = { mac: { signed: false, notarized: false, authority: "", teamId: "",
 const sh = (cmd, a) => { const r = spawnSync(cmd, a, { encoding: "utf8" }); return { ok: r.status === 0, out: (r.stdout || "") + (r.stderr || "") }; };
 
 // ---- macOS (chỉ kiểm tra được trên macOS)
-const apps = ["mac-arm64", "mac"].map((d) => path.join(out, d, "NEU Agent.app")).filter((p) => fs.existsSync(p));
+const apps = ["mac-arm64", "mac"].flatMap((d) => ["Hando.app", "NEU Agent.app"].map((n) => path.join(out, d, n))).filter((p) => fs.existsSync(p));
 if (apps.length && process.platform === "darwin") {
   const app = apps[0];
   const info = sh("codesign", ["-dv", "--verbose=4", app]).out;

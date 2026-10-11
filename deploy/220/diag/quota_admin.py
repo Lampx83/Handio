@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NEU Agent - QUẢN LÝ HẠN MỨC TOKEN trên trang quản trị (máy 220): xem ai đã hết/gần hết hạn mức hôm nay và cấp thêm nhanh.
+"""Hando - QUẢN LÝ HẠN MỨC TOKEN trên trang quản trị (máy 220): xem ai đã hết/gần hết hạn mức hôm nay và cấp thêm nhanh.
 
 Chỉ thư viện chuẩn. Được collector.py gọi (đường /admin/api/quota, chỉ quản trị viên).
 

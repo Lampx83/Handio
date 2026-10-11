@@ -7,6 +7,7 @@ import { accountChip } from "./account-ui";
 import { versionLink } from "./changelog-ui";
 import { openGuide } from "./guide-ui";
 import { openFeedback } from "./feedback-ui";
+import { brandMark } from "./brand";
 import { openShare } from "./share-ui";
 import { TIPS, type GuideTab } from "./guide-content";
 import { DesignPreview } from "./preview";
@@ -347,6 +348,7 @@ class App {
       : st.profile === "design" ? "Gõ / để chọn mẫu: poster, landing page, slide, logo…"
         : st.capabilities.exec ? "Mô tả điều bạn muốn làm; tôi đọc, sửa mã và chạy thử." : "Mô tả điều bạn muốn làm; tôi đọc và sửa mã.";
     this.feedInner.append(h("div", { class: "welcome" },
+      h("div", { class: "welcome-hand" }, brandMark(64, true)),
       h("h2", {}, st.welcomeTitle),
       h("div", {}, line),
       h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip", type: "button", onclick: () => (this.t("suggestion"), void this.submit(x)) }, x))),

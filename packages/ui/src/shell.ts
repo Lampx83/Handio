@@ -1,3 +1,4 @@
+import { brandMark } from "./brand";
 import type { AgentController, Profile } from "@neu/agent-core";
 import { PROFILES, PROFILE_ORDER } from "@neu/agent-core/profiles";
 import { mountApp, type AppHandle } from "./app";
@@ -36,7 +37,7 @@ export function mountShell(root: HTMLElement, controllers: Partial<Record<Profil
   const slots = new Map<Profile, HTMLElement[]>();
   const bar = h("div", { class: "topbar" + (opts.macInset ? " mac-inset" : "") },
     leftHost,
-    h("span", { class: "brand" }, opts.productName ?? "NEU Agent"),
+    h("span", { class: "brand" }, brandMark(22), opts.productName ?? "Hando"),
     h("div", { class: "tabs", role: "tablist", "aria-label": "Chế độ làm việc" }, ...ids.map((id) => {
       const b = h("button", { class: "tab", type: "button", role: "tab", id: "tab-" + id, "aria-controls": "panel-" + id, onclick: () => (id !== active && controllers[id]?.track?.("tab_switch"), select(id)) },
         h("span", { class: "tl" }, PROFILES[id].label), h("span", { class: "dot", "aria-hidden": "true" }));
@@ -82,7 +83,7 @@ export function mountShell(root: HTMLElement, controllers: Partial<Record<Profil
       tabs.get(p)!.setAttribute("aria-selected", String(on));
       tabs.get(p)!.tabIndex = on ? 0 : -1;
     }
-    document.title = `NEU Agent — ${PROFILES[id].label}`;
+    document.title = `Hando — ${PROFILES[id].label}`;
     handles.get(id)?.shown();
   }
 

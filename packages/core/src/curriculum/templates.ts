@@ -13,7 +13,7 @@ export const PROJECT_TEMPLATES: ProjectTemplate[] = [
 Trang web ghi chú đơn giản: thêm, xóa, tìm kiếm ghi chú. Dữ liệu lưu trong \`localStorage\` của trình duyệt (tắt trang mở lại vẫn còn, nhưng chỉ trên máy và trình duyệt này).
 
 ## Cách chạy
-Không cần cài gì. Mở tệp \`index.html\` bằng trình duyệt (bấm đúp, hoặc dùng bản xem trước của NEU Agent).
+Không cần cài gì. Mở tệp \`index.html\` bằng trình duyệt (bấm đúp, hoặc dùng bản xem trước của Hando).
 
 ## Các tệp
 - \`index.html\`: khung trang (ô nhập, danh sách).
@@ -25,7 +25,7 @@ Sửa ghi chú, gắn màu, ghim ghi chú lên đầu, xuất ra tệp văn bả
 `,
       "AGENTS.md": `# Quy ước cho agent (dự án Web ghi chú)
 
-> Tệp ngữ cảnh dự án: NEU Agent, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
+> Tệp ngữ cảnh dự án: Hando, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
 
 - Trả lời bằng tiếng Việt, ngắn gọn, giải thích như cho sinh viên năm 1-2.
 - Công nghệ: HTML + CSS + JavaScript thuần chạy trong trình duyệt. KHÔNG thêm thư viện hay công cụ build.
@@ -250,7 +250,7 @@ Nhập cân nặng (kg) và chiều cao (m), trang tính chỉ số BMI và cho 
 `,
       "AGENTS.md": `# Quy ước cho agent (dự án Trang tính BMI)
 
-> Tệp ngữ cảnh dự án: NEU Agent, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
+> Tệp ngữ cảnh dự án: Hando, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
 
 - Trả lời bằng tiếng Việt, ngắn gọn, dễ hiểu cho sinh viên năm 1-2.
 - Công nghệ: HTML + CSS + JavaScript thuần. KHÔNG thêm thư viện hay công cụ build.
@@ -449,7 +449,7 @@ python3 -m unittest -v
 `,
       "AGENTS.md": `# Quy ước cho agent (dự án Trò chơi đoán số)
 
-> Tệp ngữ cảnh dự án: NEU Agent, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
+> Tệp ngữ cảnh dự án: Hando, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
 
 - Trả lời bằng tiếng Việt, ngắn gọn, giải thích như cho sinh viên năm 1-2.
 - Ngôn ngữ: Python 3, chỉ dùng thư viện chuẩn. KHÔNG thêm thư viện ngoài.
@@ -578,7 +578,7 @@ Kiểm thử logic: \`python3 -m unittest -v\`
 `,
       "AGENTS.md": `# Quy ước cho agent (dự án Sổ chi tiêu)
 
-> Tệp ngữ cảnh dự án: NEU Agent, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
+> Tệp ngữ cảnh dự án: Hando, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
 
 - Trả lời bằng tiếng Việt, ngắn gọn, giải thích như cho sinh viên năm 1-2.
 - Ngôn ngữ: Python 3, chỉ dùng thư viện chuẩn (argparse, json, pathlib, datetime). KHÔNG thêm thư viện ngoài.
@@ -758,7 +758,7 @@ Mở \`quiz.js\`, thêm một đối tượng vào mảng \`CAU_HOI\`:
 `,
       "AGENTS.md": `# Quy ước cho agent (dự án Quiz trắc nghiệm)
 
-> Tệp ngữ cảnh dự án: NEU Agent, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
+> Tệp ngữ cảnh dự án: Hando, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
 
 - Trả lời bằng tiếng Việt, ngắn gọn, giải thích như cho sinh viên năm 1-2.
 - Công nghệ: HTML + CSS + JavaScript thuần. KHÔNG thêm thư viện hay công cụ build.
@@ -1004,7 +1004,7 @@ Lưu ý: không đưa dữ liệu cá nhân thật của người khác vào d�
 `,
       "AGENTS.md": `# Quy ước cho agent (dự án Thống kê điểm từ CSV)
 
-> Tệp ngữ cảnh dự án: NEU Agent, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
+> Tệp ngữ cảnh dự án: Hando, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
 
 - Trả lời bằng tiếng Việt, ngắn gọn, giải thích như cho sinh viên năm 1-2.
 - Ngôn ngữ: Python 3, chỉ dùng thư viện chuẩn (csv, statistics, pathlib...). KHÔNG thêm pandas hay thư viện ngoài.
@@ -1203,7 +1203,7 @@ Trình duyệt sẽ mở trang (thường là http://localhost:8501). Kiểm tra
 `,
       "AGENTS.md": `# Quy ước cho agent (dự án Chatbot Streamlit)
 
-> Tệp ngữ cảnh dự án: NEU Agent, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
+> Tệp ngữ cảnh dự án: Hando, Codex và Cursor đọc \`AGENTS.md\`; Claude Code đọc \`CLAUDE.md\` (nội dung tương đương, có thể sao chép sang).
 
 - Trả lời bằng tiếng Việt, ngắn gọn, giải thích như cho sinh viên năm 1-2.
 - Ngôn ngữ: Python 3. Thư viện cho phép: \`streamlit\`, \`google-genai\`, \`python-dotenv\` (đã có trong \`requirements.txt\`). KHÔNG thêm thư viện khác khi chưa hỏi; kiểm tra thư viện có thật trước khi đề xuất.

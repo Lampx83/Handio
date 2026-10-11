@@ -183,7 +183,7 @@ export class Auth {
       }
       const ok = !!u.searchParams.get("code") && u.searchParams.get("state") === state;
       res.writeHead(ok ? 200 : 400, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" });
-      res.end(`<!doctype html><meta charset="utf-8"><title>NEU Agent</title><body style="font:16px system-ui;text-align:center;margin-top:20vh">${ok ? "✔ Đã đăng nhập. Bạn có thể đóng cửa sổ này và quay lại NEU Agent." : "Đăng nhập không thành công. Hãy quay lại NEU Agent và thử lại."}</body>`);
+      res.end(`<!doctype html><meta charset="utf-8"><title>Hando</title><body style="font:16px system-ui;text-align:center;margin-top:20vh">${ok ? "✔ Đã đăng nhập. Bạn có thể đóng cửa sổ này và quay lại Hando." : "Đăng nhập không thành công. Hãy quay lại Hando và thử lại."}</body>`);
       if (u.searchParams.get("state") !== state) return settle({ error: "Phiên đăng nhập không khớp (state)." });
       settle(ok ? { code: u.searchParams.get("code")! } : { error: u.searchParams.get("error_description") || u.searchParams.get("error") || "Đăng nhập bị từ chối." });
     });

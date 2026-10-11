@@ -584,3 +584,12 @@ dialog.shr { width: min(600px, 96vw); padding: 0; }
 .shr-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
 .shr-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .shr-acts { display: flex; gap: 6px; flex: none; }
+
+/* bàn tay Hando: logo ở thanh trên và màn hình chào */
+.topbar .brand { display: inline-flex; align-items: center; gap: 7px; }
+.brand-mark { display: inline-flex; align-items: flex-end; }
+.brand-mark svg { height: var(--bm, 22px); width: auto; display: block; transform-origin: 50% 92%; }
+.topbar .brand:hover .brand-mark svg, .brand-mark.wave svg { animation: hando-wave 1.5s ease-in-out 1; }
+@keyframes hando-wave { 0%,100% { transform: rotate(0) } 15% { transform: rotate(-16deg) } 30% { transform: rotate(11deg) } 45% { transform: rotate(-13deg) } 60% { transform: rotate(8deg) } 75% { transform: rotate(-4deg) } }
+.welcome-hand { display: flex; justify-content: center; margin: 0 0 6px; }
+@media (prefers-reduced-motion: reduce) { .brand-mark svg { animation: none !important; } }

@@ -1,4 +1,4 @@
-# Cùng phát triển NEU Agent
+# Cùng phát triển Hando
 
 Cảm ơn bạn đã tham gia. Quy trình ngắn gọn: **nhánh riêng → pull request → CI xanh → có người duyệt → gộp vào `main` → tự triển khai**.
 

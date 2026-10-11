@@ -130,7 +130,7 @@ function renderLogin(root: HTMLElement, st: AuthState): void {
   const card = document.createElement("div");
   card.className = "login-card";
   const title = document.createElement("h1");
-  title.textContent = "NEU Agent";
+  title.textContent = "Hando";
   const note = document.createElement("div");
   note.className = "login-note";
   note.textContent = "@neu.edu.vn · @st.neu.edu.vn";
@@ -193,7 +193,7 @@ async function start(): Promise<void> {
   const st = await bridge.auth.status();
   if (st.enabled && !st.signedIn) return renderLogin(root, st);
   mountShell(root, { work: new IpcController("work"), code: new IpcController("code"), design: new IpcController("design") }, {
-    productName: "NEU Agent",
+    productName: "Hando",
     macInset: bridge.platform === "darwin",
     account: st.enabled && st.email ? { email: st.email, name: st.name, kind: st.kind, logout: () => void bridge.auth.logout() } : undefined,
     // phiên hết hạn giữa chừng: đăng xuất cục bộ → tiến trình chính tải lại cửa sổ về màn hình đăng nhập (kèm lời giải thích)
