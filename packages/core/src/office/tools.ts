@@ -75,11 +75,45 @@ export async function commit(ctx: ToolContext, abs: string, bytes: Uint8Array, e
   pushUndo(ctx, abs, old);
 }
 
+/** Lỗi ghi do tệp đang mở/khoá (Windows: PowerPoint, Word, Excel giữ tệp). */
+const LOCK_RE = /\b(EBUSY|EPERM|EACCES)\b|resource busy|locked|being used by another process|sharing violation/i;
+const appOf = (p: string) => (/\.pptx?$/i.test(p) ? "PowerPoint" : /\.docx?$/i.test(p) ? "Word" : /\.xls[xm]?$/i.test(p) ? "Excel" : "ứng dụng khác");
+/** Ghi tệp Office đến tên gốc đã được đổi sang tên khác (vì khoá): lần nối thêm/sửa sau đi theo tên mới. */
+const redirects = new WeakMap<object, Map<string, string>>();
+const redirectsOf = (env: object): Map<string, string> => {
+  let m = redirects.get(env);
+  if (!m) redirects.set(env, (m = new Map()));
+  return m;
+};
+
+/**
+ * Như commit, nhưng tệp đang mở trong Word/PowerPoint/Excel (EBUSY/EPERM/EACCES) thì KHÔNG lỗi, không thử lại:
+ * lưu sang «tên (đã sửa).đuôi» cùng thư mục (thêm số nếu trùng) và trả `note` một câu nói rõ chuyện đó.
+ */
+export async function saveOffice(ctx: ToolContext, abs: string, bytes: Uint8Array, existed: boolean): Promise<{ abs: string; note: string }> {
+  try {
+    await commit(ctx, abs, bytes, existed);
+    return { abs, note: "" };
+  } catch (e) {
+    const msg = e instanceof Error ? `${(e as { code?: string }).code ?? ""} ${e.message}` : String(e);
+    if (!LOCK_RE.test(msg)) throw e;
+    const m = /^(.*?)(\.[^./\\]+)?$/.exec(abs)!;
+    for (let i = 1; i < 100; i++) {
+      const alt = `${m[1]} (đã sửa${i > 1 ? " " + i : ""})${m[2] ?? ""}`;
+      if (await ctx.env.stat(alt)) continue;
+      await commit(ctx, alt, bytes, false);
+      redirectsOf(ctx.env).set(abs, alt);
+      return { abs: alt, note: `Tệp gốc đang mở trong ${appOf(abs)} nên đã lưu thành «${relPath(ctx, alt)}». Đóng tệp gốc nếu muốn thay thế.` };
+    }
+    throw e;
+  }
+}
+
 /**
  * Tệp Word/PowerPoint đang được dựng từng phần: một lời gọi chỉ viết được khoảng 2.000-3.000 ký tự tiếng Việt, nên create_docx/create_pptx
  * nhận `append: true` để nối thêm phần mới. Nội dung Markdown đã gửi được giữ trong bộ nhớ theo (môi trường, đường dẫn) và dựng lại cả tệp.
  */
-interface Building { content: string; opts: Record<string, unknown>; size: number }
+interface Building { content: string; opts: Record<string, unknown>; size: number; slides?: number }
 const building = new WeakMap<object, Map<string, Building>>();
 const buildingOf = (env: object): Map<string, Building> => {
   let m = building.get(env);
@@ -90,7 +124,8 @@ const MAX_BUILD_CHARS = 400_000;
 
 /** Như prepareWrite, nhưng cho nối vào tệp do chính mình vừa dựng (kích thước còn nguyên) mà không bắt đọc lại. */
 async function prepareAppend(ctx: ToolContext, rawPath: unknown, ext: string, tool: string): Promise<{ abs: string; st: Building }> {
-  const abs = await resolveSafe(ctx, rawPath);
+  const given = await resolveSafe(ctx, rawPath);
+  const abs = redirectsOf(ctx.env).get(given) ?? given;
   if (extOf(abs) !== ext) throw new ToolError(`Đường dẫn phải có đuôi ${ext} (nhận “${rawPath}”).`);
   const st = buildingOf(ctx.env).get(abs);
   const info = await ctx.env.stat(abs);
@@ -126,6 +161,28 @@ export const outlinePreview = async (ctx: ToolContext, rawPath: unknown, text: s
 
 /** Tên mặc định cho bản đề xuất: tên-dexuat.docx (cạnh tệp gốc). */
 export const suggestName = (p: unknown): string => String(p ?? "").replace(/(\.docx)?$/i, "-dexuat.docx");
+
+/** Đọc các ảnh dùng trong Markdown của bài trình chiếu (tối đa 20, mỗi ảnh ≤ 8 MB); ảnh thiếu thì bỏ qua (bộ dựng đặt khung thay thế và cảnh báo). */
+async function loadPptxImages(ctx: ToolContext, content: string): Promise<Record<string, Uint8Array>> {
+  const images: Record<string, Uint8Array> = {};
+  for (const src of pptxImageRefs(content).slice(0, 20)) {
+    try {
+      const abs = await resolveSafe(ctx, src);
+      const st = await ctx.env.stat(abs);
+      if (st?.isFile && st.size <= 8_000_000) images[src] = await ctx.env.readBytes(abs);
+    } catch {
+      /* ảnh thiếu */
+    }
+  }
+  return images;
+}
+
+/** Danh sách tiêu đề slide đánh số (để mô hình không phải đọc lại tệp chỉ để kiểm tra). */
+function titleList(titles: string[], max = 30): string {
+  const t = titles.slice(0, max).map((x, i) => `${i + 1}. ${x.length > 60 ? x.slice(0, 58) + "…" : x}`);
+  if (titles.length > max) t.push(`… (+${titles.length - max} slide)`);
+  return t.join("\n");
+}
 
 export function officeTools(env: Env): Tool[] {
   const tools: Tool[] = [
@@ -227,10 +284,10 @@ export function officeTools(env: Env): Tool[] {
           opts = { content: a.content, title: a.title, subtitle: a.subtitle, style: a.style, orientation: a.orientation, letterhead: jsonArg<Letterhead | undefined>(a.letterhead, "letterhead"), signature: jsonArg<Signature | undefined>(a.signature, "signature"), recipients: jsonArg<string[]>(a.recipients, "recipients"), page_numbers: a.page_numbers, accent: a.accent, toc: a.toc === true || a.toc === "true" };
         }
         const bytes = await createDocx(opts);
-        await commit(ctx, abs, bytes, existed);
+        const sv = await saveOffice(ctx, abs, bytes, existed);
         const { content, ...rest } = opts as { content: string } & Record<string, unknown>;
-        buildingOf(ctx.env).set(abs, { content, opts: rest, size: bytes.length });
-        return `Đã ${append ? "nối thêm vào" : existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(bytes.length)}).\n${describeDocx(opts)}\n` + (append ? "Nếu còn phần nữa, gọi tiếp create_docx với append=true. " : "Nếu còn phần nữa, gọi tiếp create_docx với cùng path và append=true (mỗi lần dưới ~2.000 ký tự). ") + "Khi đủ, hãy dùng read_document để kiểm tra lại nội dung trước khi báo cáo.";
+        buildingOf(ctx.env).set(sv.abs, { content, opts: rest, size: bytes.length });
+        return (sv.note ? sv.note + "\n" : "") + `Đã ${append ? "nối thêm vào" : existed ? "ghi đè" : "tạo"} ${relPath(ctx, sv.abs)} (${kb(bytes.length)}).\n${describeDocx(opts)}\n` + (append ? "Nếu còn phần nữa, gọi tiếp create_docx với append=true. " : "Nếu còn phần nữa, gọi tiếp create_docx với cùng path và append=true (mỗi lần dưới ~2.000 ký tự). ") + "Khi đủ, hãy dùng read_document để kiểm tra lại nội dung trước khi báo cáo.";
       },
     },
     {
@@ -276,8 +333,8 @@ export function officeTools(env: Env): Tool[] {
         let abs = src;
         let existed = true;
         if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, ".docx"));
-        await commit(ctx, abs, res.bytes, existed);
-        return `Đã lưu ${relPath(ctx, abs)}.\n` + res.changes.slice(0, 25).join("\n") + "\nSố đoạn ¶ đã thay đổi sau khi chèn/xoá: hãy read_document lại trước lần sửa tiếp theo.";
+        const sv = await saveOffice(ctx, abs, res.bytes, existed);
+        return `Đã lưu ${relPath(ctx, sv.abs)}.\n` + (sv.note ? sv.note + "\n" : "") + res.changes.slice(0, 25).join("\n") + "\nSố đoạn ¶ đã thay đổi sau khi chèn/xoá: hãy read_document lại trước lần sửa tiếp theo.";
       },
     },
     {
@@ -307,9 +364,9 @@ export function officeTools(env: Env): Tool[] {
           const total = sg.counts.reduce((x, y) => x + y, 0);
           if (!total) throw new ToolError(`Không đánh dấu được chỗ nào trong ${a.path}.` + (sg.skipped.some(Boolean) ? " Chữ cần sửa nằm trong phần có định dạng phức tạp (tab, trường…); hãy dùng docx_replace không có suggest, lưu thành bản mới." : " Kiểm tra đúng từng ký tự (chữ hoa/thường, dấu cách)."));
           const dest = await prepareWrite(ctx, a.save_as || suggestName(a.path), ".docx");
-          await commit(ctx, dest.abs, sg.bytes, dest.existed);
+          const sv = await saveOffice(ctx, dest.abs, sg.bytes, dest.existed);
           const miss = reps.filter((_r, i) => sg.counts[i] === 0 && !sg.skipped[i]);
-          return `Đã lưu ${relPath(ctx, dest.abs)} với ${total} đề xuất (Track Changes). Mở bằng Word → thẻ Review để Chấp nhận/Từ chối.\nBảng trước → sau:\n` + sg.changes.slice(0, 15).map((c, i) => `  ${i + 1}. “${c.find.slice(0, 40)}” → “${c.replace.slice(0, 40)}”  | ${c.context}`).join("\n") + (sg.changes.length > 15 ? `\n  … (+${sg.changes.length - 15} chỗ)` : "") + (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` : "") + (sg.skipped.some(Boolean) ? "\n⚠ Một số chỗ nằm trong phần định dạng phức tạp nên chưa đánh dấu được." : "");
+          return (sv.note ? sv.note + "\n" : "") + `Đã lưu ${relPath(ctx, sv.abs)} với ${total} đề xuất (Track Changes). Mở bằng Word → thẻ Review để Chấp nhận/Từ chối.\nBảng trước → sau:\n` + sg.changes.slice(0, 15).map((c, i) => `  ${i + 1}. “${c.find.slice(0, 40)}” → “${c.replace.slice(0, 40)}”  | ${c.context}`).join("\n") + (sg.changes.length > 15 ? `\n  … (+${sg.changes.length - 15} chỗ)` : "") + (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` : "") + (sg.skipped.some(Boolean) ? "\n⚠ Một số chỗ nằm trong phần định dạng phức tạp nên chưa đánh dấu được." : "");
         }
         let res;
         try {
@@ -322,8 +379,8 @@ export function officeTools(env: Env): Tool[] {
         let abs = src;
         let existed = true;
         if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, ".docx"));
-        await commit(ctx, abs, res.bytes, existed);
-        return `Đã lưu ${relPath(ctx, abs)}. Số chỗ đã thay: ` + reps.map((r, i) => `“${r.find.slice(0, 30)}” ×${res.counts[i]}`).join(", ") + (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` : "");
+        const sv = await saveOffice(ctx, abs, res.bytes, existed);
+        return (sv.note ? sv.note + "\n" : "") + `Đã lưu ${relPath(ctx, sv.abs)}. Số chỗ đã thay: ` + reps.map((r, i) => `“${r.find.slice(0, 30)}” ×${res.counts[i]}`).join(", ") + (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` : "");
       },
     },
     {
@@ -354,8 +411,8 @@ export function officeTools(env: Env): Tool[] {
         } catch (e) {
           throw new ToolError((e as Error).message);
         }
-        await commit(ctx, abs, built.bytes, existed);
-        return reportOf(`Đã ${existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(built.bytes.length)}).\n${built.dims.join("\n")}${built.notes.length ? "\n" + built.notes.join("\n") : ""}`, built.report);
+        const sv = await saveOffice(ctx, abs, built.bytes, existed);
+        return reportOf(`Đã ${existed ? "ghi đè" : "tạo"} ${relPath(ctx, sv.abs)} (${kb(built.bytes.length)}).${sv.note ? "\n" + sv.note : ""}\n${built.dims.join("\n")}${built.notes.length ? "\n" + built.notes.join("\n") : ""}`, built.report);
       },
     },
     {
@@ -400,16 +457,18 @@ export function officeTools(env: Env): Tool[] {
         let abs = src;
         let existed = true;
         if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, extOf(src)));
-        await commit(ctx, abs, res.bytes, existed);
-        return reportOf(`Đã lưu ${relPath(ctx, abs)}. Đã sửa: ${res.changed.slice(0, 20).join(", ")}${res.changed.length > 20 ? ` … (+${res.changed.length - 20})` : ""}.${res.notes.length ? "\n" + res.notes.join("\n") : ""}`, res.report);
+        const sv = await saveOffice(ctx, abs, res.bytes, existed);
+        return reportOf(`Đã lưu ${relPath(ctx, sv.abs)}.${sv.note ? " " + sv.note : ""} Đã sửa: ${res.changed.slice(0, 20).join(", ")}${res.changed.length > 20 ? ` … (+${res.changed.length - 20})` : ""}.${res.notes.length ? "\n" + res.notes.join("\n") : ""}`, res.report);
       },
     },
     {
       name: "pptx_edit", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || a.path,
-      description: "Edit an EXISTING PowerPoint (.pptx) while keeping its design. (1) replacements [{find, replace, slide?}]: change text (slides and notes; works even when the text is split across formatting runs). (2) transform {case: upper|lower|capitalize, target: titles (default)|all, slides?}: change letter case, e.g. 'make every title UPPERCASE'. (3) style [{target: titles (default)|all|match, match?, slides?, color, size, bold, italic, underline, font, align, fill}]: text color/size/font/alignment and the fill color of the shape that holds the text. (4) background {color, slides?}: slide background color. (5) set_title [{slide, text}]: set a slide's title by number without knowing the old text (best for 'rename slide 9'). (6) delete_slides [n], duplicate_slides [n] (the copy sits right after the original; to change its text call again with the new slide number), move_slide {slide, to}. Slide numbers always refer to the file as it was BEFORE this call. Read the file with read_document first. In `find` give the slide's own words only: the 'Slide 9:' label that read_document prints is NOT part of the slide. The file is edited IN PLACE (the user can undo); pass save_as ONLY when the user asks to keep the original or to make a copy — never create -v2/-v3 files for a plain 'sửa slide' request. Colors: #RRGGBB or common names (đỏ, xanh dương, xanh lá, cam, vàng, tím, đen, trắng, xám). Not supported: adding new shapes, pictures or animations; to add brand-new slides either duplicate_slides then edit the copy, or rebuild the deck with create_pptx.",
+      description: "Edit an EXISTING .pptx keeping its design (read_document it first). Slide numbers = the file BEFORE this call. replacements [{find, replace, slide?}]: matching ignores case, accents, bullets, quotes and spans lines; leave out the 'Slide N:' label. set_title [{slide, text}]. set_body [{slide, text}]: replace the WHOLE body of a slide, one point per line (2-space indent = sub-point); title, layout, theme, notes stay: prefer it over long replacements. add_slides {after: N|'end', content: Markdown as create_pptx}: new slides in the deck's own design (conclusion, thank-you...). delete_slides [n], duplicate_slides [n], move_slide {slide, to}. transform {case: upper|lower|capitalize, target: titles|all}. style [{target: titles|all|match, match?, slides?, color, size, bold, italic, underline, font, align, fill}]. background {color, slides?}. Edits in place; save_as only to keep the original.",
       parameters: { type: "object", properties: {
         path: S, save_as: { type: "string", description: "new .pptx path; the original stays unchanged" },
         replacements: { type: "array", items: { type: "object", properties: { find: S, replace: S, slide: { type: "integer" } }, required: ["find", "replace"] } },
+        set_body: { type: "array", items: { type: "object", properties: { slide: { type: "integer" }, text: S }, required: ["slide", "text"] } },
+        add_slides: { type: "object", properties: { after: { description: "slide number, 0 = start, or \"end\"" }, content: S }, required: ["content"] },
         transform: { type: "object", properties: { case: { type: "string", enum: ["upper", "lower", "capitalize"] }, target: { type: "string", enum: ["titles", "all"] }, slides: { type: "array", items: { type: "integer" } } }, required: ["case"] },
         style: { type: "array", items: { type: "object", properties: { target: { type: "string", enum: ["titles", "all", "match"] }, match: S, slides: { type: "array", items: { type: "integer" } }, color: S, size: { type: "number" }, bold: { type: "boolean" }, italic: { type: "boolean" }, underline: { type: "boolean" }, font: S, align: { type: "string", enum: ["left", "center", "right", "justify"] }, fill: S } } },
         background: { type: "object", properties: { color: S, slides: { type: "array", items: { type: "integer" } } }, required: ["color"] },
@@ -421,6 +480,8 @@ export function officeTools(env: Env): Tool[] {
       async preview(ctx, a) {
         const bits: string[] = [];
         if (a.replacements) bits.push("thay chữ");
+        if (a.set_body) bits.push("thay phần thân");
+        if (a.add_slides) bits.push("thêm slide");
         if (a.transform) bits.push("đổi hoa/thường");
         if (a.style) bits.push("định dạng");
         if (a.background) bits.push("màu nền");
@@ -439,40 +500,60 @@ export function officeTools(env: Env): Tool[] {
           duplicate_slides: jsonArg<number[]>(a.duplicate_slides, "duplicate_slides"),
           move_slide: jsonArg<PptxEditOptions["move_slide"]>(a.move_slide, "move_slide"),
           set_title: jsonArg<PptxEditOptions["set_title"]>(a.set_title, "set_title"),
+          set_body: jsonArg<PptxEditOptions["set_body"]>(a.set_body, "set_body"),
+          add_slides: jsonArg<PptxEditOptions["add_slides"]>(a.add_slides, "add_slides"),
         };
         if (opts.replacements && (!Array.isArray(opts.replacements) || opts.replacements.some((r) => !r || typeof r.find !== "string" || typeof r.replace !== "string"))) throw new ToolError("replacements phải là danh sách {find, replace}.", "bad_args");
         if (opts.style && !Array.isArray(opts.style)) throw new ToolError("style phải là danh sách.", "bad_args");
-        if (!opts.replacements?.length && !opts.transform && !opts.style?.length && !opts.background && !opts.delete_slides?.length && !opts.duplicate_slides?.length && !opts.move_slide && !opts.set_title?.length)
-          throw new ToolError("Chưa nói cần sửa gì: dùng replacements, set_title, transform, style, background, delete_slides, duplicate_slides hoặc move_slide.", "bad_args");
+        if (opts.set_body && (!Array.isArray(opts.set_body) || opts.set_body.some((r) => !r || typeof r.text !== "string"))) throw new ToolError("set_body phải là danh sách {slide, text}.", "bad_args");
+        const addList = Array.isArray(opts.add_slides) ? opts.add_slides : opts.add_slides ? [opts.add_slides] : [];
+        if (addList.some((x) => !x || typeof x.content !== "string")) throw new ToolError("add_slides phải là {after, content} (content: Markdown như create_pptx).", "bad_args");
+        if (!opts.replacements?.length && !opts.transform && !opts.style?.length && !opts.background && !opts.delete_slides?.length && !opts.duplicate_slides?.length && !opts.move_slide && !opts.set_title?.length && !opts.set_body?.length && !addList.length)
+          throw new ToolError("Chưa nói cần sửa gì: dùng replacements, set_body, add_slides, set_title, transform, style, background, delete_slides, duplicate_slides hoặc move_slide.", "bad_args");
         const src = await resolveSafe(ctx, a.path);
         if (!ctx.readFiles.has(src)) throw new ToolError(`Hãy đọc ${a.path} bằng read_document trước khi sửa.`, "read_first");
         await checkFresh(ctx, src, a.path);
         const { bytes } = await loadBinary(ctx, a.path, [".pptx"]);
+        const images: Record<string, Uint8Array> = {};
+        for (const ad of addList) Object.assign(images, await loadPptxImages(ctx, ad.content));
+        opts.images = images;
         let res;
         try {
           res = await editPptx(bytes, opts);
         } catch (e) {
           throw new ToolError((e as Error).message);
         }
-        const miss = (opts.replacements ?? []).filter((_r, i) => res.counts[i] === 0);
-        const structural = !!(opts.delete_slides?.length || opts.duplicate_slides?.length || opts.move_slide);
-        const hints = (opts.replacements ?? []).flatMap((r, i) => (res.counts[i] === 0 && res.suggestions[i]?.length ? [`Gần giống “${r.find.slice(0, 40)}”: ` + res.suggestions[i].join(" | ")] : []));
-        if (!res.changes.length && !structural) throw new ToolError(`Không có gì thay đổi trong ${a.path}.` + (miss.length ? " Không tìm thấy: " + miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ") + ". Chép đúng chữ có trong slide (không kèm nhãn “Slide N:”); hoặc dùng set_title để đổi tiêu đề theo số slide." + (hints.length ? "\n" + hints.join("\n") : "") : " Kiểm tra số slide và điều kiện (target/match)."), "no_match");
+        const miss = (opts.replacements ?? []).map((r, i) => ({ r, i })).filter((x) => res.counts[x.i] === 0);
+        const structural = !!(opts.delete_slides?.length || opts.duplicate_slides?.length || opts.move_slide || res.added || res.rebuilt.length);
+        const quote = (t: string, n = 40) => `“${t.replace(/\s+/g, " ").slice(0, n)}”`;
+        /** Gợi ý ngắn: slide có chữ gần giống và cách dùng set_body. */
+        const hintFor = (i: number) => {
+          const sl = res.suggestSlide[i];
+          return (res.suggestions[i]?.[0] ? `Gần giống: ${res.suggestions[i][0]}\n` : "") + `Dùng set_body {slide: ${sl ?? "N"}, text: "dòng 1\\ndòng 2"} để thay cả phần thân slide${sl ? ` ${sl}` : ""} (không cần chép đúng chữ), hoặc set_title.`;
+        };
+        if (!res.changes.length && !structural) {
+          if (!miss.length) throw new ToolError(`Không có gì thay đổi trong ${a.path}. Kiểm tra số slide và điều kiện (target/match).`, "no_match");
+          const names = miss.slice(0, 3).map((m) => quote(m.r.find, 30)).join(", ");
+          throw new ToolError(`Không tìm thấy ${names}${miss.length > 3 ? ` (+${miss.length - 3})` : ""}.\n${hintFor(miss[0].i)}`, "no_match");
+        }
         let abs = src;
         let existed = true;
         if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, ".pptx"));
-        await commit(ctx, abs, res.bytes, existed);
-        return `Đã lưu ${relPath(ctx, abs)} (${res.slides} slide).\n` + res.changes.slice(0, 25).join("\n") +
-          (opts.replacements?.length ? "\nSố chỗ đã thay: " + opts.replacements.map((r, i) => `“${r.find.slice(0, 30)}” ×${res.counts[i]}`).join(", ") : "") +
-          (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` + (hints.length ? "\n" + hints.join("\n") : "") : "") +
-          (structural ? `\nThứ tự slide mới: ${res.layout.join(", ")} (số = slide gốc).` : "") +
-          "\nHãy dùng read_document để kiểm tra lại.";
+        const sv = await saveOffice(ctx, abs, res.bytes, existed);
+        const lines: string[] = [`Đã lưu ${relPath(ctx, sv.abs)} (${res.slides} slide).`];
+        if (sv.note) lines.push(sv.note);
+        lines.push(...res.changes.slice(0, 8).map((c) => (c.length > 110 ? c.slice(0, 108) + "…" : c)));
+        if (res.changes.length > 8) lines.push(`… (+${res.changes.length - 8} thay đổi)`);
+        if (miss.length) lines.push(`⚠ Không tìm thấy ${miss.slice(0, 3).map((m) => quote(m.r.find, 30)).join(", ")}.`, hintFor(miss[0].i));
+        if (structural) lines.push(titleList(res.titles));
+        for (const w of res.warnings.slice(0, 2)) lines.push("⚠ " + w);
+        return lines.join("\n");
       },
     },
     {
       name: "create_pptx", kind: "edit", readonly: false, pathArg: "path",
-      description: "Create a PowerPoint (.pptx) from Markdown. Slides are separated by a line containing only ---. Each slide: a '# Title' (or ##) line, then bullets (- item, nested by 2 spaces), paragraphs, tables or code. The first slide with '# Title' and a short subtitle paragraph becomes the cover. A paragraph starting 'Ghi chú:' becomes the presenter notes. A real chart: a fenced block ```chart cột (or ngang, đường, tròn, vành, vùng) with an optional 'title: ...' line and a Markdown table (first column = labels, other columns = numeric series, e.g. 7,5 or 1.200). Keep 3-6 short bullets per slide; split long content across slides. LAYOUTS are chosen automatically from the content, so write it to fit: a title-only slide (or '## 1. Name' + one line) = section divider; the LAST slide with a short title (e.g. 'Cảm ơn') = closing; 2-4 bullets like '92%: sinh viên dùng…' or '**1.200** bài giảng' = big-number cards; 3-6 bullets like '**Hạ tầng**: mô tả…' or 'Hạ tầng: mô tả…' = numbered cards; an ORDERED list (1. 2. 3.) of 3-5 steps = process timeline; a single '> quote' (+ optional attribution line) = quote slide; bullets plus ONE chart, small table or image = two columns. An image: a line '![mô tả](hinh/anh.png)' with a png/jpg/gif file in the project folder. theme chooses the colors: xanh (default), ngoc, xanhla, cam, tim, do, den; pick one that fits the topic or the user's wish.",
-      parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, footer: { type: "string" }, title: { type: "string", description: "deck title for the auto-added cover slide (default: first slide title)" }, subtitle: { type: "string", description: "cover subtitle: unit, presenter" }, auto: { type: "boolean", description: "default true: a cover, an agenda (5+ content slides) and a closing thank-you slide are added when missing; false = exactly the slides you wrote" }, theme: { type: "string", enum: Object.keys(PPTX_THEMES), description: "color theme (default xanh)" }, append: { type: "boolean", description: "true = add these slides to the END of the deck you created earlier at the same path with create_pptx (use it for decks longer than ~6 slides or ~2,000 characters: send the cover and first slides without append, then the next slides with append=true; footer and theme are kept from the first call)" } }, required: ["path", "content"] },
+      description: "Create a PowerPoint (.pptx) from Markdown; slides separated by a line '---'. Slide = '## Title' then '- bullets' (nest by 2 spaces), paragraphs, tables, '![alt](file.png)'. 'Ghi chú: ...' = speaker notes. Chart: ```chart cột|ngang|đường|tròn|vành|vùng, optional 'title: ...', then a Markdown table. Layout is automatic: 2-4 bullets '92%: ...' = number cards; 3-6 '**Label**: ...' = cards; ordered list of 3-5 = timeline; '> quote' = quote slide; list + one chart/table/image = two columns. If the user states a number of slides, pass slide_count (total incl. cover and thank-you; the result has exactly that many). Otherwise cover, agenda (5+ slides) and thank-you are added (auto=false = none). Long deck: first call without append, then append=true with the next slides. The result lists slide titles: no need to read the file again.",
+      parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, slide_count: { type: "integer", description: "exact total number of slides the user asked for (cover and thank-you included)" }, footer: S, title: { type: "string", description: "deck title for the cover" }, subtitle: { type: "string", description: "cover subtitle: unit, presenter" }, auto: { type: "boolean", description: "false = exactly the slides you wrote (no cover/agenda/thank-you)" }, theme: { type: "string", enum: Object.keys(PPTX_THEMES), description: "color theme (default xanh)" }, append: { type: "boolean", description: "true = add these slides at the END of the deck at this path (created earlier or any existing .pptx)" } }, required: ["path", "content"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
         return outlinePreview(ctx, a.path, describePptx(String(a.content ?? "")));
@@ -480,7 +561,12 @@ export function officeTools(env: Env): Tool[] {
       async run(ctx, a) {
         if (typeof a.content !== "string" || !a.content.trim()) throw new ToolError("Thiếu content (Markdown).");
         const append = a.append === true;
-        let abs: string, existed: boolean;
+        const want = Math.floor(Number(a.slide_count ?? 0));
+        const slideCount = Number.isFinite(want) && want >= 1 ? Math.min(want, 80) : undefined;
+        let abs: string;
+        let existed: boolean;
+        let mode: "new" | "rebuild" | "insert" = "new";
+        let st: Building | undefined;
         let content: string = a.content;
         let footer: string | undefined = a.footer;
         let theme: string | undefined = typeof a.theme === "string" ? a.theme : undefined;
@@ -488,36 +574,66 @@ export function officeTools(env: Env): Tool[] {
         let savedSubtitle: string | undefined;
         let savedAuto: boolean | undefined;
         if (append) {
-          const p = await prepareAppend(ctx, a.path, ".pptx", "create_pptx");
-          if (p.st.content.length + a.content.length > MAX_BUILD_CHARS) throw new ToolError("Bài trình chiếu quá dài để nối thêm; hãy tách thành tệp khác.");
-          abs = p.abs;
+          const given = await resolveSafe(ctx, a.path);
+          abs = redirectsOf(ctx.env).get(given) ?? given;
+          if (extOf(abs) !== ".pptx") throw new ToolError(`Đường dẫn phải có đuôi .pptx (nhận “${a.path}”).`);
+          const info = await ctx.env.stat(abs);
+          if (!info?.isFile) throw new ToolError(`Không có bản đang dựng của ${relPath(ctx, abs)}: append chỉ dùng để nối thêm vào tệp .pptx đã có. Hãy gọi create_pptx không có append với phần đầu.`);
           existed = true;
-          content = p.st.content + "\n\n---\n\n" + a.content.replace(/^\s*---\s*\n/, "");
-          footer = p.st.opts.footer as string | undefined;
-          theme = p.st.opts.theme as string | undefined;
-          savedTitle = p.st.opts.title as string | undefined;
-          savedSubtitle = p.st.opts.subtitle as string | undefined;
-          savedAuto = p.st.opts.auto as boolean | undefined;
-        } else ({ abs, existed } = await prepareWrite(ctx, a.path, ".pptx"));
-        let r;
-        try {
-          const images: Record<string, Uint8Array> = {};
-          for (const src of pptxImageRefs(a.content).slice(0, 20)) {
-            try {
-              const abs = await resolveSafe(ctx, src);
-              const st = await ctx.env.stat(abs);
-              if (st?.isFile && st.size <= 8_000_000) images[src] = await ctx.env.readBytes(abs);
-            } catch {
-              /* ảnh thiếu: createPptx đặt khung chữ thay thế và cảnh báo */
-            }
+          st = buildingOf(ctx.env).get(abs);
+          // còn nguyên như lần dựng trước: dựng lại cả bài (có mục lục/cảm ơn đúng chỗ); đã bị sửa/không có trạng thái: chèn slide vào tệp
+          mode = st && st.size === info.size && st.opts.slideCount === undefined ? "rebuild" : "insert";
+          if (mode === "rebuild") {
+            if (st!.content.length + a.content.length > MAX_BUILD_CHARS) throw new ToolError("Bài trình chiếu quá dài để nối thêm; hãy tách thành tệp khác.");
+            content = st!.content + "\n\n---\n\n" + a.content.replace(/^\s*---\s*\n/, "");
+            footer = st!.opts.footer as string | undefined;
+            theme = st!.opts.theme as string | undefined;
+            savedTitle = st!.opts.title as string | undefined;
+            savedSubtitle = st!.opts.subtitle as string | undefined;
+            savedAuto = st!.opts.auto as boolean | undefined;
           }
-          r = await createPptx({ content, footer, theme, images, title: a.title ?? savedTitle, subtitle: a.subtitle ?? savedSubtitle, auto: (a.auto ?? savedAuto) === false ? false : undefined });
-        } catch (e) {
-          throw new ToolError((e as Error).message);
+        } else ({ abs, existed } = await prepareWrite(ctx, a.path, ".pptx"));
+
+        let bytes: Uint8Array;
+        let slides: number;
+        let titles: string[];
+        let warns: string[];
+        let themeKey: string | undefined;
+        if (mode === "insert") {
+          const rel = relPath(ctx, abs);
+          if (!ctx.readFiles.has(abs) && !st) throw new ToolError(`Hãy đọc ${rel} bằng read_document trước khi nối thêm slide vào nó.`, "read_first");
+          await checkFresh(ctx, abs, rel);
+          const images = await loadPptxImages(ctx, a.content);
+          let res;
+          try {
+            res = await editPptx(await ctx.env.readBytes(abs), { add_slides: { after: "end", content: a.content }, images });
+          } catch (e) {
+            throw new ToolError((e as Error).message);
+          }
+          ({ bytes, slides, titles } = res);
+          warns = res.warnings;
+        } else {
+          let r;
+          try {
+            const images = await loadPptxImages(ctx, a.content);
+            r = await createPptx({ content, footer, theme, images, title: a.title ?? savedTitle, subtitle: a.subtitle ?? savedSubtitle, auto: (a.auto ?? savedAuto) === false ? false : undefined, slideCount });
+          } catch (e) {
+            throw new ToolError((e as Error).message);
+          }
+          bytes = r.bytes;
+          slides = r.slides;
+          titles = r.titles;
+          themeKey = r.theme;
+          const prev = mode === "rebuild" ? st!.slides ?? 0 : 0;
+          const general = r.warnings.filter((w) => !r.slideWarnings.some((sw) => sw.text === w));
+          warns = [...general, ...r.slideWarnings.filter((w) => w.slide > prev).map((w) => w.text)];
         }
-        await commit(ctx, abs, r.bytes, existed);
-        buildingOf(ctx.env).set(abs, { content, opts: { footer, theme, title: a.title ?? savedTitle, subtitle: a.subtitle ?? savedSubtitle, auto: a.auto ?? savedAuto }, size: r.bytes.length });
-        return `Đã ${append ? "nối thêm vào" : existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(r.bytes.length)}, ${r.slides} slide${append ? " tổng cộng" : ""}, chủ đề màu “${r.theme}”).` + (r.warnings.length ? "\n⚠ " + r.warnings.join("\n⚠ ") : "") + "\nNếu còn slide nữa, gọi tiếp create_pptx với cùng path và append=true (mỗi lần 3-5 slide). Khi đủ, dùng read_document để kiểm tra lại."
+        const sv = await saveOffice(ctx, abs, bytes, existed);
+        if (mode === "insert") buildingOf(ctx.env).delete(abs);
+        else buildingOf(ctx.env).set(sv.abs, { content, opts: { footer, theme, title: a.title ?? savedTitle, subtitle: a.subtitle ?? savedSubtitle, auto: a.auto ?? savedAuto, slideCount: mode === "new" ? slideCount : undefined }, size: bytes.length, slides });
+        const verb = append ? "nối thêm vào" : existed ? "ghi đè" : "tạo";
+        const head = append ? `Đã ${verb} ${relPath(ctx, sv.abs)}: tổng ${slides} slide.` : `Đã ${verb} ${relPath(ctx, sv.abs)}: ${slides} slide (${kb(bytes.length)}${themeKey ? `, chủ đề “${themeKey}”` : ""}).`;
+        return [head, ...(sv.note ? [sv.note] : []), titleList(titles), ...warns.slice(0, 2).map((w) => "⚠ " + w)].join("\n");
       },
     },
   ];

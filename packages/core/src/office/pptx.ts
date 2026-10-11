@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { brandName } from "../brand";
 import { loadZip, decodeXml } from "./docx-read";
-import { slideOrder } from "./pptx-edit";
+import { slideOrder } from "./pptx-zip";
 import { parseChart, type ChartSpec } from "./chart";
-import { parseBlocks, runsText, type Block, type Run } from "./mdblocks";
+import { parseBlocks, parseInline, runsText, type Block, type Run } from "./mdblocks";
 
 export interface PptxOptions {
   /** Markdown: các slide ngăn cách bằng dòng `---`. Slide đầu `# Tiêu đề` + dòng phụ = slide bìa. Dòng "Ghi chú: …" = ghi chú người trình bày. */
@@ -20,11 +20,15 @@ export interface PptxOptions {
   auto?: boolean;
   /** Ảnh dùng trong `![mô tả](đường-dẫn)`: khoá = đúng chuỗi đường dẫn trong Markdown, giá trị = byte tệp ảnh (png/jpg/gif). */
   images?: Record<string, Uint8Array>;
+  /** Tổng số slide người dùng yêu cầu (gồm bìa và cảm ơn): bộ dựng ĐẠT ĐÚNG số này (gộp slide ngắn nếu nhiều, không tách slide, mục lục chỉ khi còn chỗ và từ 8 slide). */
+  slideCount?: number;
+  /** Bảng màu tự đặt (thay cho `theme`), dùng khi chèn slide vào tệp không do bộ dựng tạo. */
+  themeSpec?: Theme;
 }
 
 // ---------------------------------------------------------------- chủ đề màu
 
-interface Theme { primary: string; dark: string; accent: string; tint: string; text: string; muted: string; line: string }
+export interface Theme { primary: string; dark: string; accent: string; tint: string; text: string; muted: string; line: string }
 
 export const PPTX_THEMES: Record<string, Theme> = {
   xanh: { primary: "0B4A9E", dark: "082F63", accent: "F2B134", tint: "EEF3FB", text: "1F2937", muted: "5B6472", line: "D9E1EE" },
@@ -74,10 +78,29 @@ export function pickTheme(name?: string): { key: string; theme: Theme; known: bo
   return key ? { key, theme: PPTX_THEMES[key], known: true } : { key: "xanh", theme: PPTX_THEMES.xanh, known: !n };
 }
 
-/** Trộn màu hex với trắng (amt 0..1). */
+/** Bảng màu suy ra từ màu của một tệp có sẵn (accent1/accent2, dk1/dk2, lt2); null nếu không đọc được. */
+export function deriveTheme(c: Partial<Record<"dk1" | "dk2" | "lt2" | "accent1" | "accent2", string>>): Theme | null {
+  const ok = (h?: string) => (h && /^[0-9A-Fa-f]{6}$/.test(h) ? h.toUpperCase() : null);
+  const primary = ok(c.accent1);
+  if (!primary) return null;
+  const lum = (h: string) => { const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); return 0.299 * r + 0.587 * g + 0.114 * b; };
+  const dk2 = ok(c.dk2);
+  const dark = dk2 && lum(dk2) < 110 ? dk2 : tintOf(primary, -0.45);
+  const lt2 = ok(c.lt2);
+  return {
+    primary, dark,
+    accent: ok(c.accent2) ?? "F2B134",
+    tint: lt2 && lum(lt2) > 215 ? lt2 : tintOf(primary, 0.92),
+    text: ok(c.dk1) && lum(ok(c.dk1)!) < 90 ? ok(c.dk1)! : "1F2937",
+    muted: "5B6472",
+    line: tintOf(primary, 0.85),
+  };
+}
+
+/** Trộn màu hex với trắng (amt 0..1); amt âm = trộn với đen. */
 function tintOf(hex: string, amt: number): string {
   const c = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16));
-  return c.map((v) => Math.round(v + (255 - v) * amt).toString(16).padStart(2, "0")).join("").toUpperCase();
+  return c.map((v) => Math.round(amt >= 0 ? v + (255 - v) * amt : v * (1 + amt)).toString(16).padStart(2, "0")).join("").toUpperCase();
 }
 
 /** Màu chữ dễ đọc trên nền `hex` (trắng hoặc xanh đen). */
@@ -101,40 +124,89 @@ interface SlideSpec {
 
 const IMG_RE = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
 
+type HeadingBlock = Extract<Block, { t: "heading" }>;
+
+/**
+ * Tách một nhóm khối (giữa hai dòng `---`) thành một hoặc nhiều slide:
+ * - `##`/`###` NGAY SAU tiêu đề, khi sau đó chỉ còn đoạn văn = dòng phụ của slide (bìa);
+ * - tiêu đề cùng cấp hoặc cao hơn, và `##` sau một `#` đầu nhóm = bắt đầu slide mới (không cần `---`);
+ * - tiêu đề sâu hơn còn lại = dòng nhỏ in đậm trong slide (không bị mất chữ).
+ */
+function splitGroup(g: Block[]): Block[][] {
+  const hi = g.findIndex((b) => b.t === "heading");
+  if (hi < 0) return [g];
+  const L = (g[hi] as HeadingBlock).level;
+  const blocks = g.slice();
+  let j = hi + 1;
+  while (j < blocks.length && blocks[j].t === "heading" && (blocks[j] as HeadingBlock).level > L) j++;
+  if (j > hi + 1 && blocks.slice(j).every((b) => b.t === "para")) {
+    for (let k = hi + 1; k < j; k++) blocks[k] = { t: "para", runs: (blocks[k] as HeadingBlock).runs };
+  }
+  const parts: Block[][] = [[]];
+  blocks.forEach((b, k) => {
+    if (k > hi && b.t === "heading" && (b.level <= L || (L === 1 && b.level === 2))) parts.push([]);
+    parts[parts.length - 1].push(b);
+  });
+  return parts.map((part) => {
+    const first = part.findIndex((b) => b.t === "heading");
+    return part.map((b, k): Block => (b.t === "heading" && k > first ? { t: "para", runs: b.runs.map((r) => ({ ...r, bold: true })) } : b));
+  });
+}
+
+/** Đoạn nhiều dòng liền nhau: ≥ 3 dòng (hoặc dài) trên slide thường = danh sách ý; ngắn/bìa = giữ các dòng trong một đoạn. */
+function splitLines(b: Extract<Block, { t: "para" }>, coverLike: boolean): Block {
+  const lines = b.lines!;
+  if (!coverLike && (lines.length >= 3 || lines.join("").length > 120)) return { t: "list", items: lines.map((l) => ({ level: 0, ordered: false, runs: parseInline(l) })) };
+  const runs: Run[] = [];
+  lines.forEach((l, i) => {
+    if (i) runs.push({ text: "\n" });
+    runs.push(...parseInline(l));
+  });
+  return { t: "para", runs, align: b.align };
+}
+
+/** “Slide 5: Tiêu đề” (nhãn do read_document in ra) → “Tiêu đề”. */
+const cleanTitle = (t: string): string => t.replace(/^\s*slide\s*\d+\s*[a-z]?\s*[:：.\-–—]\s*/i, "").trim();
+
 export function parseSlides(content: string): SlideSpec[] {
   const blocks = parseBlocks(content);
-  const groups: Block[][] = [[]];
+  const raw: Block[][] = [[]];
   for (const b of blocks) {
-    if (b.t === "hr") groups.push([]);
-    else groups[groups.length - 1].push(b);
+    if (b.t === "hr") raw.push([]);
+    else raw[raw.length - 1].push(b);
   }
-  return groups
-    .filter((g) => g.length)
-    .map((g, idx) => {
-      const hi = g.findIndex((b) => b.t === "heading");
-      const title = hi >= 0 ? runsText((g[hi] as Extract<Block, { t: "heading" }>).runs) : "";
-      const body = hi >= 0 ? [...g.slice(0, hi), ...g.slice(hi + 1)] : g;
-      let notes = "";
-      const rest: SlideBlock[] = [];
-      for (const b of body) {
-        if (b.t === "para") {
-          const txt = runsText(b.runs).trim();
-          const m = /^(ghi chú|notes?|speaker notes?)\s*[:：]\s*([\s\S]*)$/i.exec(txt);
-          if (m) {
-            notes += (notes ? "\n" : "") + m[2];
-            continue;
-          }
-          const im = IMG_RE.exec(txt);
-          if (im) {
-            rest.push({ t: "image", alt: im[1], src: im[2] });
-            continue;
-          }
+  const groups = raw.filter((g) => g.length).flatMap(splitGroup).filter((g) => g.length);
+  return groups.map((g, idx) => {
+    const hi = g.findIndex((b) => b.t === "heading");
+    const head = hi >= 0 ? (g[hi] as HeadingBlock) : null;
+    const title = head ? cleanTitle(runsText(head.runs)) : "";
+    const body = hi >= 0 ? [...g.slice(0, hi), ...g.slice(hi + 1)] : g;
+    const coverLike = idx === 0 && head?.level === 1;
+    let notes = "";
+    const rest: SlideBlock[] = [];
+    for (const b of body) {
+      if (b.t === "para") {
+        const txt = runsText(b.runs).trim();
+        const m = /^(ghi chú|notes?|speaker notes?)\s*[:：]\s*([\s\S]*)$/i.exec(txt);
+        if (m) {
+          notes += (notes ? "\n" : "") + m[2];
+          continue;
         }
-        rest.push(b);
+        const im = IMG_RE.exec(txt);
+        if (im) {
+          rest.push({ t: "image", alt: im[1], src: im[2] });
+          continue;
+        }
+        if (b.lines && b.lines.length > 1) {
+          rest.push(splitLines(b, coverLike));
+          continue;
+        }
       }
-      const cover = idx === 0 && hi >= 0 && (g[hi] as Extract<Block, { t: "heading" }>).level === 1 && rest.every((b) => b.t === "para");
-      return { title, blocks: rest, notes, cover };
-    });
+      rest.push(b);
+    }
+    const cover = idx === 0 && head !== null && head.level === 1 && rest.every((b) => b.t === "para");
+    return { title, blocks: rest, notes, cover };
+  });
 }
 
 /** Đường dẫn ảnh được dùng trong nội dung (để công cụ đọc tệp trước khi dựng). */
@@ -150,6 +222,10 @@ const MX = 0.7;
 const CW = SW - 2 * MX;
 const TOP = 1.8;
 const BOTTOM = 6.8;
+
+/** Chỉ cảnh báo tràn khi ước lượng vượt chỗ trống quá 20% (ước lượng của ta hơi dư so với PowerPoint thật). */
+const OVERFLOW = 1.2;
+const overflowMsg = (idx: number, title: string) => `Slide ${idx + 1}${title ? ` “${title.slice(0, 40)}”` : ""}: có thể tràn chữ, nên rút gọn.`;
 
 const cplOf = (w: number, fs: number) => Math.max(8, Math.floor((w * 72) / (fs * 0.48)));
 const linesOf = (text: string, w: number, fs: number) => Math.max(1, Math.ceil(text.length / cplOf(w, fs)));
@@ -198,15 +274,122 @@ const ICONS: [RegExp, string][] = [
 ];
 const iconFor = (label: string): string | null => ICONS.find(([re]) => re.test(label))?.[1] ?? null;
 
-const CLOSING_RE = /^\s*(cảm ơn|cam on|xin cảm ơn|hỏi đáp|hoi dap|q\s*&\s*a|thank|kết thúc|ket thuc|liên hệ|lien he)/i;
+export const CLOSING_RE = /^\s*(cảm ơn|cam on|xin cảm ơn|hỏi đáp|hoi dap|q\s*&\s*a|thank|kết thúc|ket thuc|liên hệ|lien he)/i;
+const THANKS_RE = /^\W*(xin\s+)?(cảm ơn|cam on|thank)/i;
 const ds = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 const para = (text: string): SlideBlock => ({ t: "para", runs: [{ text }] });
+
+/** Slide kết thúc: tiêu đề kiểu “Cảm ơn/Hỏi đáp”, chỉ có tiêu đề, hoặc dòng cuối là lời cảm ơn. */
+function isClosingSpec(s: SlideSpec, isFirst: boolean): boolean {
+  if (isFirst) return false;
+  if (CLOSING_RE.test(s.title) || (s.title && !s.blocks.length)) return true;
+  const lb = s.blocks[s.blocks.length - 1];
+  return !!lb && lb.t === "para" && THANKS_RE.test(runsText(lb.runs).trim());
+}
+
+const specWeight = (s: SlideSpec): number => s.blocks.reduce((w, b) => w + (b.t === "list" ? b.items.length : b.t === "para" ? Math.ceil(runsText(b.runs).length / 80) : 4), 0);
+const isRichSpec = (s: SlideSpec): boolean => s.blocks.some((b) => b.t === "table" || b.t === "code" || b.t === "image" || b.t === "quote");
+const agendaOf = (body: SlideSpec[]): SlideSpec => ({ title: "Nội dung chính", blocks: [], notes: "", cover: false, agenda: body.slice(0, 12).map((s) => s.title.replace(/^\s*\d+\s*[.)\-:]\s+/, "").replace(/\s*\(\d+\/\d+\)$/, "")).filter((t, i, a) => a.indexOf(t) === i) });
+const isAgendaTitle = (t: string) => /^\s*(mục lục|nội dung( chính)?|agenda)\b/i.test(t);
+
+/** Gộp hai slide liền nhau thành một: tiêu đề “A & B”, mỗi bên giữ tối đa vài ý đầu. */
+function mergeSpecs(a: SlideSpec, b: SlideSpec): SlideSpec {
+  const items = (s: SlideSpec) => s.blocks.flatMap((x) => (x.t === "list" ? x.items : x.t === "para" ? [{ level: 0, ordered: false, runs: x.runs }] : []));
+  const ai = items(a);
+  const bi = items(b);
+  const cap = 6;
+  const takeA = Math.min(ai.length, bi.length ? Math.max(cap - Math.min(bi.length, 3), 3) : cap);
+  const takeB = Math.min(bi.length, cap - Math.min(takeA, ai.length));
+  const rich = [...a.blocks, ...b.blocks].filter((x) => x.t === "table" || x.t === "code" || x.t === "image" || x.t === "quote");
+  const merged = [...ai.slice(0, takeA), ...bi.slice(0, takeB)];
+  const bt = b.title.replace(/^\s*\d+\s*[.)\-:]\s+/, "");
+  const title = a.title && bt ? `${a.title} & ${bt}` : a.title || bt;
+  return { title, blocks: [...(merged.length ? [{ t: "list" as const, items: merged }] : []), ...rich], notes: [a.notes, b.notes].filter(Boolean).join("\n"), cover: false };
+}
+
+/** Chia đôi slide có đúng một danh sách phẳng từ 4 ý (để đủ số slide yêu cầu). */
+function halve(s: SlideSpec): SlideSpec[] | null {
+  const only = s.blocks.length === 1 && s.blocks[0].t === "list" ? (s.blocks[0] as Extract<Block, { t: "list" }>) : null;
+  if (!only || only.items.length < 4 || !only.items.every((i) => i.level === 0) || s.agenda) return null;
+  const h = Math.ceil(only.items.length / 2);
+  return [
+    { ...s, title: `${s.title} (1/2)`, blocks: [{ t: "list", items: only.items.slice(0, h) }] },
+    { ...s, title: `${s.title} (2/2)`, blocks: [{ t: "list", items: only.items.slice(h) }], notes: "" },
+  ];
+}
+
+/** Đạt đúng `n` slide: bìa + nội dung + cảm ơn; gộp slide ngắn liền kề nếu nhiều, không tách (trừ khi thiếu), mục lục chỉ khi còn chỗ và từ 8 slide. */
+function fitToCount(specs: SlideSpec[], o: PptxOptions, footer: string, n: number, warn: (t: string) => void): SlideSpec[] {
+  const auto = o.auto !== false;
+  const deckTitle = (o.title ?? "").trim() || specs.find((s) => s.title)?.title || "Bài trình chiếu";
+  let body = specs.slice();
+  if (body[0] && !body[0].cover && body[0].title.trim() === deckTitle) body[0] = { ...body[0], title: "Tổng quan" };
+  let cover: SlideSpec | null = null;
+  if (body[0]?.cover) cover = body.shift()!;
+  else if (auto) {
+    const sub = [(o.subtitle ?? "").trim() || footer, `Ngày ${ds(new Date())}`].filter(Boolean).join("\n");
+    cover = { title: deckTitle, blocks: sub ? [para(sub)] : [], notes: "", cover: true };
+  }
+  if (cover && o.subtitle && !cover.blocks.length) cover = { ...cover, blocks: [para(o.subtitle)] };
+  let closing: SlideSpec | null = null;
+  if (body.length && isClosingSpec(body[body.length - 1], false) && (cover || body.length > 1)) closing = body.pop()!;
+  else if (auto && n >= 3) closing = { title: "Cảm ơn quý vị đã lắng nghe", blocks: [para("Rất mong nhận được ý kiến đóng góp.")], notes: "", cover: false };
+  let reserved = (cover ? 1 : 0) + (closing ? 1 : 0);
+  if (n - reserved < 1 && closing) {
+    closing = null;
+    reserved--;
+  }
+  if (n - reserved < 1 && cover) {
+    cover = null;
+    reserved--;
+  }
+  const slots = Math.max(1, n - reserved);
+  // nhiều hơn chỗ: gộp cặp liền kề nhẹ nhất
+  let merged = 0;
+  while (body.length > slots && body.length > 1) {
+    let at = 0;
+    let best = Infinity;
+    for (let i = 0; i + 1 < body.length; i++) {
+      const cost = specWeight(body[i]) + specWeight(body[i + 1]) + (isRichSpec(body[i]) || isRichSpec(body[i + 1]) ? 1000 : 0);
+      if (cost < best) {
+        best = cost;
+        at = i;
+      }
+    }
+    body.splice(at, 2, mergeSpecs(body[at], body[at + 1]));
+    merged++;
+  }
+  if (merged) warn(`Nội dung nhiều hơn chỗ: đã gộp ${merged} cặp slide ngắn liền kề để đủ ${n} slide.`);
+  // mục lục: chỉ khi còn chỗ và từ 8 slide
+  const titled = body.filter((s) => s.title);
+  if (auto && n >= 8 && body.length < slots && titled.length >= 5 && !body.some((s) => isAgendaTitle(s.title))) body = [agendaOf(body), ...body];
+  // ít hơn chỗ: chia đôi danh sách dài (không bịa nội dung)
+  while (body.length < slots) {
+    let at = -1;
+    let most = 3;
+    body.forEach((s, i) => {
+      const w = halve(s) ? specWeight(s) : 0;
+      if (w > most) {
+        most = w;
+        at = i;
+      }
+    });
+    if (at < 0) break;
+    body.splice(at, 1, ...halve(body[at])!);
+  }
+  const out = [...(cover ? [cover] : []), ...body, ...(closing ? [closing] : [])];
+  if (out.length < n) warn(`Chỉ có ${out.length}/${n} slide: thiếu ${n - out.length}, cần thêm nội dung (append hoặc add_slides).`);
+  return out;
+}
 
 /**
  * Bài mô hình viết thường thiếu bộ khung: không bìa, không mục lục, danh sách quá dài, không trang cảm ơn.
  * Bổ sung ở đây (không phụ thuộc vào việc mô hình nhớ làm): bìa, mục lục (≥ 5 slide nội dung), chia danh sách > 6 mục thành nhiều slide, trang cảm ơn.
+ * Có `slideCount` thì đi đường riêng để ĐẠT ĐÚNG số slide.
  */
-function structureSpecs(specs: SlideSpec[], o: PptxOptions, footer: string): SlideSpec[] {
+function structureSpecs(specs: SlideSpec[], o: PptxOptions, footer: string, warn: (t: string) => void): SlideSpec[] {
+  const want = Math.floor(Number(o.slideCount) || 0);
+  if (want >= 1) return fitToCount(specs, o, footer, Math.min(want, 80), warn);
   if (o.auto === false) return specs;
   const out: SlideSpec[] = [];
   const deckTitle = (o.title ?? "").trim() || specs.find((s) => s.title)?.title || "Bài trình chiếu";
@@ -230,17 +413,26 @@ function structureSpecs(specs: SlideSpec[], o: PptxOptions, footer: string): Sli
     out.unshift({ title, blocks: sub ? [para(sub)] : [], notes: "", cover: true });
   } else if (o.subtitle && !out[0].blocks.length) out[0] = { ...out[0], blocks: [para(o.subtitle)] };
   const last = out[out.length - 1];
-  const closing = out.length > 1 && (CLOSING_RE.test(last.title) || (last.title && !last.blocks.length && last !== out[0]));
+  const closing = out.length > 1 && isClosingSpec(last, last === out[0]);
   if (!closing) out.push({ title: "Cảm ơn quý vị đã lắng nghe", blocks: [para("Rất mong nhận được ý kiến đóng góp.")], notes: "", cover: false });
   // mục lục: từ 5 slide nội dung trở lên
   const body = out.filter((s, i) => i > 0 && !s.cover && s.title && !CLOSING_RE.test(s.title) && !(s.blocks.length === 0));
-  if (body.length >= 5 && !out.some((s) => /^\s*(mục lục|nội dung( chính)?|agenda)\b/i.test(s.title))) {
-    out.splice(1, 0, { title: "Nội dung chính", blocks: [], notes: "", cover: false, agenda: body.slice(0, 12).map((s) => s.title.replace(/^\s*\d+\s*[.)\-:]\s+/, "").replace(/\s*\(\d+\/\d+\)$/, "")).filter((t, i, a) => a.indexOf(t) === i) });
-  }
+  if (body.length >= 5 && !out.some((s) => isAgendaTitle(s.title))) out.splice(1, 0, agendaOf(body));
   return out;
 }
 
-export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; slides: number; warnings: string[]; theme: string }> {
+export interface PptxBuilt {
+  bytes: Uint8Array;
+  slides: number;
+  warnings: string[];
+  /** Cảnh báo gắn với một slide cụ thể (số slide tính từ 1). */
+  slideWarnings: { slide: number; text: string }[];
+  theme: string;
+  /** Tiêu đề từng slide theo thứ tự (bìa, mục lục, cảm ơn cũng có). */
+  titles: string[];
+}
+
+export async function createPptx(o: PptxOptions): Promise<PptxBuilt> {
   const mod: any = await import("pptxgenjs");
   const PptxGenJS = mod.default ?? mod;
   const pptx = new PptxGenJS();
@@ -249,10 +441,17 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
   pptx.theme = { headFontFace: FONT, bodyFontFace: FONT };
   const parsed = parseSlides(o.content);
   if (!parsed.length) throw new Error("Nội dung trống: cần ít nhất một slide.");
-  const specs = structureSpecs(parsed, o, o.footer ?? "");
   const warnings: string[] = [];
-  const picked = o.theme ? pickTheme(o.theme) : pickTheme(themeForTopic([o.title ?? "", ...parsed.slice(0, 4).map((x) => x.title)].join(" ")));
-  if (!picked.known) warnings.push(`Chủ đề “${o.theme}” không có; đã dùng “xanh”. Chủ đề có sẵn: ${Object.keys(PPTX_THEMES).join(", ")}.`);
+  const slideWarnings: { slide: number; text: string }[] = [];
+  const warn = (text: string, slide?: number) => {
+    warnings.push(text);
+    if (slide) slideWarnings.push({ slide, text });
+  };
+  const specs = structureSpecs(parsed, o, o.footer ?? "", warn);
+  const picked = o.themeSpec
+    ? { key: (o.theme ?? "").trim() || "tuychinh", theme: o.themeSpec, known: true }
+    : o.theme ? pickTheme(o.theme) : pickTheme(themeForTopic([o.title ?? "", ...parsed.slice(0, 4).map((x) => x.title)].join(" ")));
+  if (!picked.known) warn(`Chủ đề “${o.theme}” không có; đã dùng “xanh”. Chủ đề có sẵn: ${Object.keys(PPTX_THEMES).join(", ")}.`);
   const t = picked.theme;
   const soft = tintOf(t.primary, 0.78);
 
@@ -351,7 +550,7 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
         if (slide) {
           const spec = parseChart(b.text, b.info ?? "");
           if ("error" in spec) {
-            warnings.push(`Slide ${idx + 1}: biểu đồ lỗi — ${spec.error}.`);
+            warn(`Slide ${idx + 1}: biểu đồ lỗi — ${spec.error}.`, idx + 1);
             slide.addText(`[Biểu đồ không tạo được: ${spec.error}]`, { x, y, w, h: 0.5, fontFace: FONT, fontSize: 14, color: "B00020" });
           } else {
             card(slide, x, y, w, h);
@@ -402,7 +601,7 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
     const data = o.images?.[b.src];
     const mime = data ? imageMime(data) : null;
     if (!data || !mime) {
-      warnings.push(data ? `Ảnh “${b.src}” không đọc được (chỉ nhận png, jpg, gif).` : `Không tìm thấy ảnh “${b.src}” trong thư mục dự án.`);
+      warn(data ? `Ảnh “${b.src}” không đọc được (chỉ nhận png, jpg, gif).` : `Không tìm thấy ảnh “${b.src}” trong thư mục dự án.`);
       card(slide, x, y, w, h, t.tint, t.line);
       slide.addText(`[Ảnh: ${b.alt || b.src}]`, { x, y, w, h, fontFace: FONT, fontSize: 16, color: t.muted, align: "center", valign: "middle" });
       return;
@@ -549,14 +748,14 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
         const avail = BOTTOM - TOP;
         const fs = fitSize(textual, lw, avail, 24);
         const h = stack(null, textual, 0, 0, lw, fs, idx);
-        if (h > avail) warnings.push(`Slide ${idx + 1}${sp.title ? ` “${sp.title}”` : ""}: nhiều nội dung, có thể bị tràn — nên tách thành 2 slide.`);
+        if (h > avail * OVERFLOW) warn(overflowMsg(idx, sp.title), idx + 1);
         stack(slide, textual, MX, TOP + 0.05, lw, fs, idx);
         const v = vis[0];
         if (v.t === "image") addPic(slide, v, rx, TOP, rw, avail - 0.1);
         else if (v.t === "table") stack(slide, [v], rx, TOP + 0.05, rw, 18, idx);
         else {
           const spec = v.t === "code" ? parseChart(v.text, v.info ?? "") : { error: "?" };
-          if ("error" in spec) warnings.push(`Slide ${idx + 1}: biểu đồ lỗi — ${spec.error}.`);
+          if ("error" in spec) warn(`Slide ${idx + 1}: biểu đồ lỗi — ${spec.error}.`, idx + 1);
           else {
             card(slide, rx, TOP, rw, avail - 0.1);
             addChart(pptx, slide, spec, rx + 0.15, TOP + 0.1, rw - 0.3, avail - 0.3, t);
@@ -567,7 +766,7 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
         const sparse = sp.blocks.length === 1 && lists.length === 1 && lists[0].items.length <= 3;
         const fs = fitSize(sp.blocks, CW, avail, sparse ? 32 : 26);
         const h = stack(null, sp.blocks, 0, 0, CW, fs, idx);
-        if (h > avail + 0.15) warnings.push(`Slide ${idx + 1}${sp.title ? ` “${sp.title}”` : ""}: nhiều nội dung, có thể bị tràn — nên tách thành 2 slide.`);
+        if (h > avail * OVERFLOW) warn(overflowMsg(idx, sp.title), idx + 1);
         stack(slide, sp.blocks, MX, TOP + 0.05, CW, fs, idx);
       }
     }
@@ -575,7 +774,7 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
   });
   const out: any = await pptx.write({ outputType: "uint8array" });
   const raw: Uint8Array = out instanceof Uint8Array ? out : new Uint8Array(out);
-  return { bytes: await applyThemeColors(raw, t, picked.key), slides: specs.length, warnings, theme: picked.key };
+  return { bytes: await applyThemeColors(raw, t, picked.key), slides: specs.length, warnings, slideWarnings, theme: picked.key, titles: specs.map((sp) => sp.title || "(không tiêu đề)") };
 }
 
 /** Ghi bảng màu của chủ đề vào chính tệp (theme1.xml) để tab Design/Variants của PowerPoint và hình mới thêm dùng đúng màu. */
