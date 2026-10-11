@@ -8,6 +8,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ### Sửa
 - **Dán ảnh (Ctrl+V) ở tab Code agent đọc được ngay**: trước đây agent ghép nhầm đường dẫn `dan/…` vào thư mục dự án nên báo "Không có tệp ảnh" rồi nhờ bạn tải ảnh lên. Nay `@dan/<tên>` luôn trỏ đúng ảnh vừa dán; thông báo cho biết ảnh được lưu tạm ở đâu (ngoài dự án, giữ 30 ảnh gần nhất). Bản web không có thư mục tạm thì lưu vào `.neuagent/pasted/` của dự án.
 - **Chế độ mặc định là "Tự động"** cho cả người đã dùng bản cũ: trước đây cài đặt cũ trên máy lưu sẵn "Hỏi trước" và đè lên mặc định nên ứng dụng cứ mở ở chế độ Hỏi trước. Từ nay chế độ chọn ở thanh dưới ô nhập chỉ áp dụng cho phiên đang mở; mở lại ứng dụng là "Tự động".
+- **Xoá/chép/di chuyển tệp xong không còn bị ép "đọc lại tài liệu"** (một bước thừa agent phải làm sau mỗi lần dọn thư mục).
 
 ### Thêm
 - **Tab Code tự thấy lỗi của trang web đang làm** (công cụ `check_page`, bản Desktop): sau khi chạy máy chủ dev hoặc ghi tệp HTML, agent mở thử trang trong một trình duyệt ẩn, cách ly (chỉ localhost và tệp trong dự án; chặn mọi yêu cầu ra ngoài) rồi đọc lỗi console, yêu cầu hỏng, màn hình trắng. Không còn cảnh bạn phải chép lỗi từ trình duyệt dán vào chat.

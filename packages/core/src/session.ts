@@ -27,7 +27,11 @@ import { ASK_LIMITS, cleanAnswers, formatAnswers, parseAskQuestions } from "./as
 import type { AskQuestion, PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
 
 /** Công cụ Office có cấu trúc: kết quả đã liệt kê nội dung vừa ghi nên cổng "đọc lại" không cần thêm một lần đọc. */
-const SELF_REPORTING = new Set(["create_docx", "create_xlsx", "create_pptx", "create_pdf", "docx_edit", "xlsx_edit", "pptx_edit", "docx_replace", "xlsx_pivot"]);
+const SELF_REPORTING = new Set([
+  "create_docx", "create_xlsx", "create_pptx", "create_pdf", "docx_edit", "xlsx_edit", "pptx_edit", "docx_replace", "xlsx_pivot",
+  // thao tác tệp không có nội dung để "đọc lại": kết quả đã liệt kê việc đã làm (đã gặp: xoá 12 tệp xong vẫn bị ép read_document)
+  "delete_file", "move_file", "copy_file", "make_dir", "zip_files", "unzip_file",
+]);
 const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
 /** Công cụ ghi tệp mà đối số mang cả nội dung lớn. */
 const BULKY_ARGS = new Set(["write_file", "edit_file", "create_docx", "create_xlsx", "create_pptx", "create_pdf", "docx_edit", "xlsx_edit", "pptx_edit"]);

@@ -107,6 +107,10 @@ describe("cổng 'đọc lại' không thêm bước thừa sau công cụ Offic
     await a.c.send("tạo báo cáo ngắn");
     expect(a.llm.calls.some((x) => x.messages.some((m) => String(m.content).includes("ĐỌC LẠI")))).toBe(false);
 
+    const del = await makeController([{ calls: [{ name: "delete_file", args: { path: "README.md" } }] }, { text: "Đã xoá README.md." }], { profile: "work" });
+    await del.c.send("xoá README.md");
+    expect(del.llm.calls.some((x) => x.messages.some((m) => String(m.content).includes("ĐỌC LẠI")))).toBe(false);
+
     const b = await makeController([{ calls: [{ name: "write_file", args: { path: "ghi-chu.txt", content: "abc" } }] }, { text: "Đã ghi." }, { text: "Xong." }], { profile: "work" });
     await b.c.send("ghi một ghi chú");
     expect(b.llm.calls.some((x) => x.messages.some((m) => String(m.content).includes("ĐỌC LẠI")))).toBe(true);
