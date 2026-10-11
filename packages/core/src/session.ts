@@ -1,3 +1,4 @@
+import { TOOL_GROUPS, groupOfTool, groupsFor, matchGroups } from "./tool-groups";
 import { brandText } from "./brand";
 import type { Env } from "./env";
 import { LlmClient, LlmError, type ChatMessage, type ChatResult, type ToolSchema } from "./llm";
@@ -106,6 +107,10 @@ export class Session {
   calls = 0;
   charsPerToken = 3;
   lastPromptTokens = 0;
+  /** Kích thước (ký tự) lược đồ công cụ của lần gọi gần nhất ở tác tử chính: một phần của lời nhắc vào mô hình. */
+  toolsChars = 0;
+  /** Nhóm công cụ đã bật (xem tool-groups.ts); giữ đến hết phiên. */
+  readonly enabledGroups = new Set<string>();
   /** Số thứ tự lượt hỏi (để gắn thay đổi vào lượt, phục vụ "Thay đổi" và /rewind). */
   turnNo = 0;
   readonly turnMarks = new WeakMap<ChatMessage, number>();
@@ -224,6 +229,21 @@ export class Session {
       summarize: (a) => `${a.agent || "explore"}: ${String(a.description || a.prompt || "").slice(0, 70)}`,
       run: async (_ctx, a) => this.runSubagent(String(a.prompt ?? ""), String(a.agent || "explore"), String(a.description || "")),
     };
+    const useTools: Tool = {
+      name: "use_tools", kind: "meta", readonly: true,
+      description: "Turn on extra tool groups when you need them (they are hidden by default to save context). Groups: " + TOOL_GROUPS.filter((g) => g.profiles.includes(this.profile)).map((g) => `${g.id} = ${g.label}`).join("; ") + ". Call once with the groups you need, then use the new tools in your next step.",
+      parameters: { type: "object", properties: { groups: { type: "array", items: { type: "string" }, description: "group ids" } }, required: ["groups"] },
+      summarize: (a) => "bật nhóm công cụ " + (Array.isArray(a.groups) ? a.groups.join(", ") : ""),
+      run: async (_ctx, a) => {
+        const ids = (Array.isArray(a.groups) ? a.groups : []).map(String);
+        const valid = groupsFor(this.profile).map((g) => g.id);
+        const bad = ids.filter((i: string) => !valid.includes(i));
+        const added = this.enableGroups(ids);
+        const names = groupsFor(this.profile).filter((g) => ids.includes(g.id)).flatMap((g) => g.tools).filter((n) => this.tools.has(n));
+        if (bad.length && !names.length) return `Lỗi: không có nhóm ${bad.join(", ")}. Nhóm hợp lệ: ${valid.join(", ")}.`;
+        return `Đã bật ${added.length ? added.join(", ") : "(đã bật từ trước)"}. Công cụ dùng được từ bước kế tiếp: ${names.join(", ") || "(không có)"}.`;
+      },
+    };
     const exitPlan: Tool = {
       name: "exit_plan_mode", kind: "meta", readonly: false,
       description: "Only in plan mode: present your plan to the user for approval before changing anything.",
@@ -264,7 +284,7 @@ export class Session {
       },
       run: async (_ctx, a) => this.askQuestions(parseAskQuestions(a.questions)),
     };
-    return [task, exitPlan, askUser];
+    return [task, exitPlan, askUser, useTools];
   }
 
   /** `ask_user`: hỏi người dùng rồi trả câu trả lời thành chữ cho mô hình. Không cấp quyền gì cho công cụ khác (bỏ qua `always`/`mode`). */
@@ -323,9 +343,36 @@ export class Session {
       if (depth > 0 && (t.name === "task" || t.name === "exit_plan_mode" || t.name === "ask_user")) continue;
       if (t.name === "exit_plan_mode" && this.perms.mode !== "plan") continue;
       if (def?.tools && !def.tools.includes(t.name)) continue;
+      if (depth === 0 && !def && this.gatedOff(t.name)) continue;
       out.push(t);
     }
     return out;
+  }
+
+  /** Công cụ thuộc một nhóm CHƯA bật (của tab hiện tại)? */
+  private gatedOff(tool: string): boolean {
+    if (tool === "use_tools") return groupsFor(this.profile).every((g) => this.enabledGroups.has(g.id));
+    const g = groupOfTool(this.profile, tool);
+    return !!g && !this.enabledGroups.has(g);
+  }
+
+  /** Bật các nhóm công cụ có chủ đề được nhắc trong tin nhắn người dùng/kết quả công cụ gần đây. Trả về nhóm mới bật. */
+  refreshGroups(messages: ChatMessage[]): string[] {
+    const texts: string[] = [];
+    let users = 0, tools = 0;
+    for (let i = messages.length - 1; i >= 0 && (users < 3 || tools < 3); i--) {
+      const m = messages[i];
+      const c = typeof m.content === "string" ? m.content : "";
+      if (m.role === "user" && users < 3 && c) { texts.push(c.slice(0, 4000)); users++; }
+      else if (m.role === "tool" && tools < 3 && c) { texts.push(c.slice(0, 2500)); tools++; }
+    }
+    return this.enableGroups(matchGroups(this.profile, texts));
+  }
+
+  enableGroups(ids: string[]): string[] {
+    const added: string[] = [];
+    for (const id of ids) if (!this.enabledGroups.has(id) && groupsFor(this.profile).some((g) => g.id === id)) { this.enabledGroups.add(id); added.push(id); }
+    return added;
   }
 
   systemPrompt(def: AgentDef | null, depth: number): string {
@@ -734,8 +781,24 @@ export class Session {
   contextPct(): number {
     return Math.min(99, Math.floor((100 * this.main.estimateTokens()) / this.o.getSettings().contextTokens));
   }
+  /** Cửa sổ ngữ cảnh đang dùng vào việc gì (token ước lượng; tổng khớp thước ngữ cảnh, chia theo tỉ lệ ký tự). */
+  contextBreakdown(): { used: number; limit: number; parts: { name: string; tokens: number }[] } {
+    const limit = this.o.getSettings().contextTokens;
+    const used = this.main.estimateTokens();
+    const mem = this.memory.reduce((n, m) => n + m.text.length, 0);
+    const sysAll = this.systemPrompt(null, 0).length;
+    const tools = this.toolsChars || JSON.stringify(this.toolsFor(null, 0).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }))).length;
+    const bytes = (role: string) => this.main.messages.filter((m) => m.role === role).reduce((n, m) => n + (m.content?.length ?? 0) + (m.tool_calls ? JSON.stringify(m.tool_calls).length : 0), 0);
+    const raw: [string, number][] = [
+      ["Lời nhắc hệ thống", Math.max(0, sysAll - mem)], ["Công cụ", tools], ["Hướng dẫn dự án", mem],
+      ["Tin nhắn của bạn", bytes("user")], ["Trả lời của AI", bytes("assistant")], ["Kết quả công cụ", bytes("tool")],
+    ];
+    const all = raw.reduce((n, [, c]) => n + c, 0);
+    const scale = all > 0 ? used / all : 0;
+    return { used, limit, parts: raw.map(([name, c]) => ({ name, tokens: Math.round(c * scale) })).filter((x) => x.tokens > 0) };
+  }
   emitUsage(): void {
-    this.emit({ type: "usage", promptTokens: this.promptTokens, completionTokens: this.completionTokens, contextPct: this.contextPct(), calls: this.calls, cachedTokens: this.cachedTokens });
+    this.emit({ type: "usage", promptTokens: this.promptTokens, completionTokens: this.completionTokens, contextPct: this.contextPct(), calls: this.calls, cachedTokens: this.cachedTokens, context: this.contextBreakdown() });
   }
   publicSettings() {
     return toPublic(this.o.getSettings());
@@ -757,8 +820,24 @@ export class Agent {
 
   constructor(private s: Session, private def: AgentDef | null = null, private depth = 0) {}
 
+  /** Neo ước lượng: số token THẬT của lần gọi gần nhất (usage.prompt_tokens) và số ký tự đã gửi lúc đó. */
+  private anchor: { tokens: number; chars: number } | null = null;
+
+  private promptChars(): number {
+    const tools = this.depth === 0 ? this.s.toolsChars : 0;
+    return this.s.systemPrompt(this.def, this.depth).length + JSON.stringify(this.messages).length + tools;
+  }
+
+  /**
+   * Số token lời nhắc hiện tại (gồm lược đồ công cụ). Sau lần gọi đầu tiên: token thật của lần gọi gần nhất cộng phần thay đổi
+   * (tin mới, hoặc bớt đi sau khi tóm tắt) quy đổi bằng tỉ lệ ký tự/token đã hiệu chỉnh — sát thực tế hơn nhiều so với chia cả khối.
+   */
   estimateTokens(): number {
-    const chars = this.s.systemPrompt(this.def, this.depth).length + JSON.stringify(this.messages).length;
+    const chars = this.promptChars();
+    if (this.depth === 0 && this.anchor) {
+      const est = this.anchor.tokens + (chars - this.anchor.chars) / this.s.charsPerToken;
+      return Math.max(Math.floor(chars / (this.s.charsPerToken * 2)), Math.floor(est));
+    }
     return Math.floor(chars / this.s.charsPerToken);
   }
 
@@ -832,7 +911,9 @@ export class Agent {
   private async manageContext(): Promise<void> {
     const limit = this.s.o.getSettings().contextTokens;
     if (this.estimateTokens() > 0.45 * limit && this.pruneToolResults()) this.s.emit({ type: "notice", level: "info", text: "Đã lược bớt kết quả công cụ cũ để tiết kiệm ngữ cảnh." });
-    if (this.estimateTokens() > 0.75 * limit) await this.compact("", true);
+    const used = this.estimateTokens();
+    // quá 75% cửa sổ, hoặc còn dưới ~3k token cho câu trả lời (lời gọi công cụ dài sẽ bị cắt giữa chừng): tóm tắt phần cũ trước
+    if (used > 0.75 * limit || limit - used - 600 < 3000) await this.compact("", true);
   }
 
   private transcript(maxChars = 14000): string {
@@ -900,7 +981,9 @@ export class Agent {
     this.messages.push(userMsg);
     if (this.depth === 0) s.beginTurn(userMsg);
     let stopRetries = 0;
-    const maxSteps = this.depth === 0 ? s.o.getSettings().maxSteps : 25;
+    // Hạn mức bước là CHẶN AN TOÀN chống chạy vô hạn, không phải điểm dừng để người dùng gõ "tiếp tục": tác tử chính được tới 3 lần
+    // số bước cài đặt trong một lượt (chuyện lặp vô ích đã có các chốt riêng: lặp lệnh, lặp lỗi, lặp chữ).
+    const maxSteps = this.depth === 0 ? s.o.getSettings().maxSteps * 3 : 25;
     let final = "";
     this.repeatKey = "";
     this.repeatN = 0;
@@ -985,9 +1068,9 @@ export class Agent {
           return why || final || "(đã dừng vì lặp vô ích)";
         }
       }
-      s.emit({ type: "notice", level: "warn", text: `Đã đạt giới hạn ${maxSteps} bước. Gõ "tiếp tục" nếu muốn làm tiếp.` });
+      s.emit({ type: "notice", level: "warn", text: `Đã đạt giới hạn an toàn ${maxSteps} bước trong một lượt.` });
       // một lượt cuối không dùng công cụ để người dùng nhận được bản tóm tắt tiến độ (thay vì lượt kết thúc đột ngột)
-      return (await this.wrapUp(signal, "[Hệ thống] Đã hết số bước cho phép trong lượt này. Không gọi công cụ nữa. Hãy tóm tắt ngắn gọn: đã làm được gì, còn lại việc gì, và bước tiếp theo bạn đề xuất (người dùng gõ \"tiếp tục\" để làm tiếp).")) || final;
+      return (await this.wrapUp(signal, "[Hệ thống] Đã hết số bước cho phép trong lượt này. Không gọi công cụ nữa. Hãy tóm tắt ngắn gọn: đã làm được gì, còn lại việc gì, và bước tiếp theo bạn đề xuất (nói bạn sẽ làm tiếp phần còn lại ở lượt sau).")) || final;
     } catch (e) {
       if (e instanceof LlmError && e.kind === "abort") {
         this.repairHistory();
@@ -1061,15 +1144,20 @@ export class Agent {
   private outputBudget(system: string, tools: ToolSchema[]): number {
     const st = this.s.o.getSettings();
     const ctx = st.contextTokens || 32768;
-    const used = Math.ceil((system.length + JSON.stringify(this.messages).length + JSON.stringify(tools).length) / Math.max(1.8, this.s.charsPerToken));
-    const room = ctx - used - 800;
+    // cùng cách tính với thước ngữ cảnh (đã gồm lược đồ công cụ, neo theo token thật): trước đây cộng đôi phần công cụ nên "room" tụt
+    // về âm ở ~22k token thật và ngân sách rơi xuống sàn 1024 → lời gọi tạo tệp dài luôn bị cắt giữa chừng
+    void system; void tools;
+    const used = this.estimateTokens();
+    const room = ctx - used - 600;
     const want = st.maxOutputTokens && st.maxOutputTokens !== 4096 ? st.maxOutputTokens : 12288;
-    return Math.max(1024, Math.min(want, room, 16384));
+    return Math.max(Math.min(2048, want), Math.min(want, room, 16384)); // sàn 2048, trừ khi người dùng tự đặt nhỏ hơn
   }
 
   private async callModel(signal?: AbortSignal, noTools = false): Promise<ChatResult> {
     const s = this.s;
+    if (!noTools && this.depth === 0 && !this.def) s.refreshGroups(this.messages);
     const tools: ToolSchema[] = noTools ? [] : s.toolsFor(this.def, this.depth).map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
+    if (this.depth === 0 && !this.def) s.toolsChars = JSON.stringify(tools).length;
     const system = s.systemPrompt(this.def, this.depth);
     const settings = s.o.getSettings();
     const notify = (text: string) => s.emit({ type: "notice", level: "warn", text });
@@ -1128,7 +1216,9 @@ export class Agent {
     }
     if (!resp) throw new LlmError("Không gọi được mô hình.");
     if (repeatCut >= 0 && resp.finish !== "repeat" && !signal?.aborted) resp = { ...resp, content: streamed.slice(0, repeatCut).trim(), toolCalls: [], finish: "repeat" };
-    s.track(resp.usage, system.length + JSON.stringify(this.messages).length);
+    const sentChars = system.length + JSON.stringify(this.messages).length + (this.depth === 0 ? s.toolsChars : 0);
+    s.track(resp.usage, sentChars);
+    if (this.depth === 0 && (resp.usage.prompt_tokens ?? 0) > 200) this.anchor = { tokens: resp.usage.prompt_tokens!, chars: sentChars };
     if (this.depth === 0) s.emitUsage(); // sau MỖI lần gọi mô hình: thước ngữ cảnh cập nhật ngay và chẩn đoán biết đỉnh token của từng lượt
     s.emitUsage();
     return resp;
@@ -1146,6 +1236,10 @@ export class Agent {
     const s = this.s;
     const { name } = tc;
     const tool = s.tools.get(name);
+    if (tool && this.depth === 0 && !this.def) {
+      const g = groupOfTool(s.profile, name);
+      if (g) s.enableGroups([g]);
+    }
     const allowed = new Set(s.toolsFor(this.def, this.depth).map((t) => t.name));
     let args: Record<string, unknown>;
     try {

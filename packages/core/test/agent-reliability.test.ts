@@ -96,9 +96,9 @@ describe("B-02: chống lặp và hết bước", () => {
 
   it("hết bước: nhắc sớm khi còn ít bước và có lượt tóm tắt cuối không dùng công cụ", async () => {
     let i = 0;
-    const { c, events, llm } = await makeController((m) => (m.at(-1)?.role === "user" && String(m.at(-1)!.content).includes("Đã hết số bước") ? { text: "Đã đọc 11 file; còn lại: tổng hợp. Gõ tiếp tục." } : { calls: [{ name: "read_file", args: { path: "README.md", offset: ++i } }] }), { settings: { maxSteps: 12 } as any });
+    const { c, events, llm } = await makeController((m) => (m.at(-1)?.role === "user" && String(m.at(-1)!.content).includes("Đã hết số bước") ? { text: "Đã đọc 11 file; còn lại: tổng hợp. Gõ tiếp tục." } : { calls: [{ name: "read_file", args: { path: "README.md", offset: ++i } }] }), { settings: { maxSteps: 4 } as any });
     await c.send("đọc nhiều");
-    expect(notices(events).some((t) => /giới hạn 12 bước/.test(t))).toBe(true);
+    expect(notices(events).some((t) => /giới hạn an toàn 12 bước/.test(t))).toBe(true);
     expect(llm.calls.some((x) => x.messages.some((m) => String(m.content).includes("Chỉ còn 3 bước")))).toBe(true);
     expect(llm.calls.at(-1)!.opts.tools ?? []).toHaveLength(0);
     expect(events.filter((e: any) => e.type === "message_end").at(-1)).toMatchObject({ text: expect.stringContaining("Gõ tiếp tục") });

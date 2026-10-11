@@ -511,7 +511,7 @@ export class DiagnosticsRecorder {
   /** Nhận diện vài thông báo của hệ thống (chỉ khớp chuỗi cục bộ; chỉ MÃ được lưu). Có test chạy phiên thật để phát hiện khi câu chữ đổi. */
   private onNotice(text: string): void {
     const t = this.turn;
-    if (/giới hạn \d+ bước/.test(text)) {
+    if (/giới hạn (an toàn )?\d+ bước/.test(text)) {
       if (t) t.stepLimit = true;
       this.signal("step_limit", undefined, t?.steps);
     } else if (/^Lời gọi công cụ bị cắt/.test(text)) this.signal("args_truncated");
