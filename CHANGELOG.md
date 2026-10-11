@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.5] - 2026-10-11
+
 ### Thay đổi
 - **Bài trình chiếu đẹp và đủ bộ khung hơn** (học theo bộ quy tắc thiết kế slide của Claude): tự thêm **trang bìa**, **mục lục** (từ 5 slide nội dung) và **trang cảm ơn** nếu bài thiếu; danh sách quá dài tự chia thành nhiều slide; ý ngắn hiện thành hàng có **biểu tượng trong vòng tròn màu** thay vì chỉ có chữ; bỏ các sọc/vạch trang trí; danh sách gạch đầu dòng là danh sách thật (dễ sửa trong PowerPoint); tiêu đề 36pt; thêm 9 bảng màu và **tự chọn màu theo chủ đề** bài (y tế, tài chính, công nghệ, môi trường…); bảng màu được ghi vào chính tệp nên tab Design của PowerPoint dùng đúng màu.
 - **Biểu đồ theo nguyên tắc trực quan hoá dữ liệu**: thứ tự màu cố định đã kiểm tra cho người khó phân biệt màu; hướng dẫn cho AI chọn đúng loại biểu đồ, không dùng hai trục, mỗi biểu đồ có tiêu đề nêu kết luận.
