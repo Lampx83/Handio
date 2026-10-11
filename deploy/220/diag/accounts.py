@@ -26,7 +26,7 @@ import sys
 import time
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,31}$")
-ACTOR_RE = re.compile(r"^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9.-]{1,190}$")
+ACTOR_RE = re.compile(r"^([A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9.-]{1,190}|[a-z0-9][a-z0-9._-]{2,31})$")   # email, hoặc tên đăng nhập của quản trị viên dùng tài khoản mật khẩu
 CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 MAX_REQ = 2048
 MIN_PW, MAX_PW = 6, 200

@@ -52,14 +52,14 @@ fi
 ADMIN_LIST=()
 while [ $# -gt 0 ]; do
   case "$1" in
-    --admin) [ -n "${2:-}" ] || { echo "--admin cần email."; exit 1; }; ADMIN_LIST+=("$2"); shift 2;;
+    --admin) [ -n "${2:-}" ] || { echo "--admin cần email hoặc tên đăng nhập."; exit 1; }; ADMIN_LIST+=("$2"); shift 2;;
     *) echo "Tham số lạ: $1"; exit 1;;
   esac
 done
 if [ -n "${NEU_DIAG_ADMINS:-}" ]; then IFS=',' read -r -a _extra <<< "$NEU_DIAG_ADMINS"; ADMIN_LIST+=("${_extra[@]}"); fi
 for a in "${ADMIN_LIST[@]:-}"; do
   [ -z "$a" ] && continue
-  [[ "$a" =~ ^[A-Za-z0-9._%+\'-]{1,64}@[A-Za-z0-9.-]{1,190}$ ]] || { echo "Email quản trị không hợp lệ: $a"; exit 1; }
+  [[ "$a" =~ ^[A-Za-z0-9._%+\'-]{1,64}@[A-Za-z0-9.-]{1,190}$ || "$a" =~ ^[a-z0-9][a-z0-9._-]{2,31}$ ]] || { echo "Quản trị không hợp lệ (email, hoặc tên đăng nhập chữ thường của tài khoản mật khẩu): $a"; exit 1; }
 done
 
 [ -f "$HERE/../users.sh" ] || { echo "Thiếu $HERE/../users.sh (quản lý tài khoản dùng nó)."; exit 1; }
@@ -115,7 +115,7 @@ if [ ! -s "$SECRET" ]; then
   (umask 077; python3 -c 'import secrets; print(secrets.token_hex(32))' > "$SECRET"); chmod 600 "$SECRET"
   echo "Đã tạo bí mật HMAC mới ($SECRET). Giữ nguyên tệp này khi cài lại để số liệu theo người dùng liên tục."
 fi
-if [ ! -f "$ADMINS" ]; then (umask 027; printf '# Quản trị viên được xem /agent/admin/ (mỗi dòng một email). Sau khi sửa: sudo systemctl restart neu-agent-diag\n' > "$ADMINS"); fi
+if [ ! -f "$ADMINS" ]; then (umask 027; printf '# Quản trị viên được xem /agent/admin/ (mỗi dòng một email, hoặc tên đăng nhập của tài khoản mật khẩu). Sau khi sửa: sudo systemctl restart neu-agent-diag\n' > "$ADMINS"); fi
 chmod 640 "$ADMINS"
 for a in "${ADMIN_LIST[@]:-}"; do
   [ -z "$a" ] && continue

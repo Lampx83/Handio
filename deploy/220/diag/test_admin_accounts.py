@@ -143,10 +143,29 @@ class AdminAccounts(unittest.TestCase):
             self.assertEqual(self.post({"op": "kick"}, email=email)[0], 403, repr(email))
         self.assertEqual(self.users(), [], "không có gì thay đổi")
 
-    def test_tai_khoan_mat_khau_khong_bao_gio_la_quan_tri_vien(self):
-        # nginx đặt X-User-Email = tên đăng nhập (không có @) cho tài khoản mật khẩu: không vượt qua kiểm tra email quản trị
+    def test_tai_khoan_mat_khau_chi_la_quan_tri_vien_khi_duoc_liet_ke_ten(self):
+        # nginx đặt X-User-Email = tên đăng nhập (không có @) cho tài khoản mật khẩu
         self.assertEqual(self.post({"op": "add", "name": "khach01", "password": PW})[0], 200)
-        self.assertEqual(self.req("GET", "/admin/api/accounts", email="khach01")[0], 403)
+        self.assertEqual(self.post({"op": "add", "name": "test01", "password": PW})[0], 200)
+        self.assertEqual(self.req("GET", "/admin/api/accounts", email="khach01")[0], 403, "chưa liệt kê: bị từ chối")
+        self.assertEqual(self.req("GET", "/admin/api/accounts", email="test01")[0], 403, "chưa liệt kê: bị từ chối")
+        with open(self.admins, "a") as f:
+            f.write("# tài khoản mật khẩu được cấp quyền\ntest01\n")
+        try:
+            self.assertEqual(self.req("GET", "/admin/api/accounts", email="test01")[0], 200)
+            self.assertEqual(self.req("GET", "/admin/accounts", email="test01")[0], 200)
+            self.assertEqual(self.post({"op": "kick"}, email="test01")[0], 200)
+            self.assertEqual(self.req("GET", "/admin/api/accounts", email="khach01")[0], 403, "chỉ đúng tên được liệt kê")
+            self.assertEqual(self.req("GET", "/admin/api/accounts", email="test010")[0], 403)
+            self.assertEqual(self.req("GET", "/admin/api/accounts", email="TEST01")[0], 403, "tên đăng nhập luôn chữ thường")
+            self.assertEqual(self.req("GET", "/admin/api/accounts", email="test01@neu.edu.vn")[0], 403, "email cùng tên không thừa quyền")
+            self.assertEqual(self.post({"op": "kick"}, email="test01", headers={"X-Neu-Admin": "1", "Content-Type": "text/plain"})[0], 403, "vẫn chống CSRF")
+            audit = self.req("GET", "/admin/api/accounts", email="test01")[1]
+            self.assertIn("test01", {e.get("actor") for e in json.loads(audit)["audit"]}, "nhật ký ghi đúng người làm")
+        finally:
+            with open(self.admins, "w") as f:
+                f.write("Admin@NEU.edu.vn\n")
+        self.assertEqual(self.req("GET", "/admin/api/accounts", email="test01")[0], 403, "gỡ khỏi danh sách là mất quyền")
 
     def test_trang_va_tep_tinh_voi_csp_chat(self):
         st, body, h = self.req("GET", "/admin/accounts")

@@ -55,7 +55,7 @@ sudo ./diag/install-diag.sh --admin ban@neu.edu.vn           # người dùng ne
 
 - Chạy lại script để cập nhật (an toàn lặp lại, sao lưu ở `/var/backups/neu-agent-diag/`). `--uninstall` gỡ dịch vụ (giữ dữ liệu và bí mật).
 - Bí mật HMAC: `/etc/neu-agent/diag-secret` (tạo một lần; **đổi nó = mã người dùng cũ không còn khớp**).
-- Quản trị viên xem báo cáo: danh sách ở `/etc/neu-agent/admins.txt` (mỗi dòng một email); sửa xong `sudo systemctl restart neu-agent-diag`. Xem tại `https://ai.neu.edu.vn/agent/admin/` (nginx xác thực SSO, bộ thu đối chiếu email, CSP chặt, không tài nguyên ngoài). Không phải quản trị viên → 403.
+- Quản trị viên xem báo cáo: danh sách ở `/etc/neu-agent/admins.txt` (mỗi dòng một email, hoặc tên đăng nhập của tài khoản mật khẩu — xem `docs/SECURITY.md`); sửa xong `sudo systemctl restart neu-agent-diag`. Xem tại `https://ai.neu.edu.vn/agent/admin/` (nginx xác thực SSO, bộ thu đối chiếu email, CSP chặt, không tài nguyên ngoài). Không phải quản trị viên → 403.
 - Chạy báo cáo ngay: `sudo systemctl start neu-agent-diag-report.service`; xem `latest.md` trong `/var/lib/neu-agent/reports/`.
 - Sức khoẻ: `cat /var/lib/neu-agent/health.json`, `tail /var/log/neu-agent/health.log`, `curl https://ai.neu.edu.vn/agent/healthz`. Công cụ giám sát ngoài chỉ cần gọi `/agent/healthz` (200 `{"ok":true}`; 503 `{"ok":false}` khi có kiểm tra lỗi hoặc dữ liệu sức khoẻ cũ hơn 15 phút).
 - Gợi ý bằng mô hình (tuỳ chọn): đặt key vào `/etc/neu-agent/llm-key` (600) rồi chạy lại `install-diag.sh`. Chỉ gửi **số liệu tổng hợp** (không sự kiện thô, không chuỗi tự do) tới `http://192.0.2.10:8037`; kết quả là *bản nháp* ghi rõ cần người kiểm tra.
@@ -63,7 +63,7 @@ sudo ./diag/install-diag.sh --admin ban@neu.edu.vn           # người dùng ne
 
 ## 4b. Trang quản trị tổng quan — `https://ai.neu.edu.vn/agent/admin/`
 
-Chỉ email trong `/etc/neu-agent/admins.txt` mới xem được. Trang mặc định (`index.html`, do `deploy/220/diag/stats.py` tạo, **tự làm mới mỗi 10 phút** bởi `neu-agent-diag-stats.timer`) gồm:
+Chỉ email (hoặc tên đăng nhập) trong `/etc/neu-agent/admins.txt` mới xem được. Trang mặc định (`index.html`, do `deploy/220/diag/stats.py` tạo, **tự làm mới mỗi 10 phút** bởi `neu-agent-diag-stats.timer`) gồm:
 
 - **Số người dùng**: 24 giờ / 7 ngày / 30 ngày / cả 90 ngày giữ dữ liệu; người dùng mới 7 ngày; tỷ lệ quay lại (tuần này so với tuần trước); số máy cài hoạt động.
 - **Biểu đồ 30 ngày**: người dùng hoạt động, người dùng mới, lượt làm việc (kèm lượt lỗi), lệnh gọi mô hình qua nginx (kèm 5xx), lượt tải bản cài, lượt Desktop kiểm tra cập nhật; lượt làm việc theo giờ trong ngày (giờ VN).

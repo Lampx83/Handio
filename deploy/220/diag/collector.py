@@ -389,7 +389,9 @@ def pseudonym(secret, email):
 def read_admins(path):
     try:
         with open(path, encoding="utf-8") as f:
-            return {ln.strip().lower() for ln in f if ln.strip() and not ln.lstrip().startswith("#") and EMAIL_RE.match(ln.strip())}
+            names = {ln.strip().lower() for ln in f if ln.strip() and not ln.lstrip().startswith("#")}
+        # email Microsoft, hoặc tên đăng nhập của tài khoản tên + mật khẩu (không có @) NẾU được liệt kê đúng tên ở đây
+        return {x for x in names if EMAIL_RE.match(x) or IDENT_RE.match(x)}
     except OSError:
         return set()
 
@@ -527,7 +529,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _admin(self, p):
         c = self.cfg
-        email = self._email().lower()
+        email = self._ident().lower()
         if not email or email not in read_admins(c.admins_file):
             return self._send(403, {"ok": False, "error": "forbidden"})
         name = p[len("/admin/"):] if p.startswith("/admin/") else ""
@@ -558,8 +560,8 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- quản lý tài khoản (chỉ quản trị viên; việc ghi do dịch vụ phụ root làm)
     def _admin_email(self):
-        """Email quản trị viên hợp lệ, hoặc "" (đã trả lời 403)."""
-        email = self._email().lower()
+        """Danh tính quản trị viên hợp lệ (email hoặc tên đăng nhập có trong admins.txt), hoặc "" (đã trả lời 403)."""
+        email = self._ident().lower()
         if not email or email not in read_admins(self.cfg.admins_file):
             self._send(403, {"ok": False, "error": "forbidden"})
             return ""
