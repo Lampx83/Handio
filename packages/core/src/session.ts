@@ -25,6 +25,8 @@ import { visionTool } from "./vision";
 import { ASK_LIMITS, cleanAnswers, formatAnswers, parseAskQuestions } from "./ask";
 import type { AskQuestion, PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
 
+/** Công cụ Office có cấu trúc: kết quả đã liệt kê nội dung vừa ghi nên cổng "đọc lại" không cần thêm một lần đọc. */
+const SELF_REPORTING = new Set(["create_docx", "create_xlsx", "create_pptx", "create_pdf", "docx_edit", "xlsx_edit", "pptx_edit", "docx_replace", "xlsx_pivot"]);
 const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
 const MAX_TOOL_CHARS = 12000;
 /** Hạn chờ người dùng trả lời một câu hỏi của `ask_user` (không ai trả lời thì agent tự quyết, không treo phiên). */
@@ -684,7 +686,11 @@ export class Session {
     const L = this.turnLog;
     if (name === "bash" || name === "run_javascript") L.checks.push({ seq: ++L.seq, ok: passed });
     if (passed && (name === "read_document" || name === "read_file")) L.reads.push(++L.seq); // đọc lại để kiểm tra
-    if (wrote) L.lastEdit = ++L.seq;
+    if (wrote) {
+      L.lastEdit = ++L.seq;
+      // công cụ Office có cấu trúc đã tự báo lại những gì vừa ghi (số slide + tiêu đề, số đoạn/bảng…): không bắt đọc lại thêm một bước
+      if (passed && SELF_REPORTING.has(name)) L.reads.push(++L.seq);
+    }
   }
 
   /** Tóm tắt lượt vừa xong: các tệp đã đổi và đã chạy kiểm tra hay chưa. null nếu lượt này không đổi tệp nào. */
