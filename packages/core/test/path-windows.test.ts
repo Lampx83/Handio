@@ -67,4 +67,11 @@ describe("đường dẫn Windows", () => {
       await expect(resolveSafe(ctx, p), p).rejects.toThrow(ToolError);
     }
   });
+
+  it("resolveSafe: nhận lại đường dẫn tuyệt đối mà mô hình gộp hai dấu cách thành một (lỗi thấy trong dữ liệu thật)", async () => {
+    const ctx = winCtx([ROOT + "\\dan", ROOT + "\\dan\\anh.png"]);
+    await expect(resolveSafe(ctx, "E:\\Slide duoc ly test\\dan\\anh.png")).resolves.toBe("E:/Slide duoc ly  test/dan/anh.png");
+    await expect(resolveSafe(ctx, "E:\\Slide duoc ly test")).resolves.toBe("E:/Slide duoc ly  test");
+    await expect(resolveSafe(ctx, "E:\\Slide duoc ly test2\\x.png")).rejects.toThrow(ToolError); // tên khác thật sự thì vẫn chặn
+  });
 });

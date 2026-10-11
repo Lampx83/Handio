@@ -10,6 +10,12 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Chọn chủ đề màu cho bài trình chiếu**: xanh (mặc định), ngọc, xanh lá, cam, tím, đỏ, đen; chỉ cần nói “dùng tông cam”.
 - **Chèn ảnh có sẵn trong thư mục dự án** (png, jpg, gif) vào slide; ảnh thiếu thì giữ khung chữ và báo rõ.
 
+- **Tạo tài liệu Word và bài trình chiếu dài không còn bị cắt giữa chừng**: AI dựng từng phần rồi nối vào cùng một tệp (`append`), thay vì viết hết trong một lần (lần dài quá bị cắt và tạo ra nhiều tệp rời).
+
+### Sửa
+- **Tệp Word/PowerPoint trong thư mục dự án có dấu cách đôi** (ví dụ `Slide  test`) hoặc đường dẫn đầy đủ do AI gõ lại sai một dấu cách: nay vẫn nhận ra đúng thư mục dự án thay vì báo “ngoài thư mục dự án”.
+- AI được nhắc dùng đường dẫn tương đối (ví dụ `bao-cao.docx`) thay vì gõ cả đường dẫn đầy đủ.
+
 ### Thay đổi
 - **Làm trang web/thiết kế đẹp hơn mặc định**: hướng dẫn của AI ở tab Design và Code nay có công thức thiết kế cụ thể (bảng màu, cỡ chữ, khoảng cách, thẻ có bóng, nút, hình minh hoạ bằng SVG, bố cục landing page đầy đủ) để kết quả đầu tiên đã trông chuyên nghiệp.
 

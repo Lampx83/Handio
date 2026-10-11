@@ -1,7 +1,7 @@
 import { diffLines, type DiffLine } from "./diff";
 import type { DirEntry, Env } from "./env";
 import { matchGlob } from "./glob";
-import { basename, dirname, isInside, join, relative, resolve } from "./path";
+import { basename, dirname, isAbsolute, isInside, join, normalize, relative, resolve } from "./path";
 import type { ToolInfo } from "./permissions";
 import type { ProcessManager } from "./processes";
 import { isSensitivePath } from "./sensitive";
@@ -89,7 +89,14 @@ const dec = new TextDecoder();
 export async function resolveSafe(ctx: ToolContext, p: unknown): Promise<string> {
   if (typeof p !== "string" || !p.trim()) throw new ToolError("Thiếu đường dẫn.", "bad_args");
   const raw = p.startsWith("~") && ctx.env.home ? ctx.env.home + p.slice(1) : p;
-  const abs = resolve(ctx.root, raw);
+  let abs = resolve(ctx.root, raw);
+  if (isAbsolute(raw) && !isInside(ctx.root, abs)) {
+    // Mô hình hay gõ lại đường dẫn tuyệt đối mà gộp hai dấu cách liền nhau thành một ("Slide  test" → "Slide test"): nhận lại về đúng thư mục dự án.
+    const squash = (seg: string) => seg.replace(/\s+/g, " ").toLowerCase();
+    const rs = normalize(ctx.root).split("/").filter(Boolean);
+    const as = normalize(abs).split("/").filter(Boolean);
+    if (rs.length && as.length >= rs.length && rs.every((seg, i) => squash(seg) === squash(as[i]))) abs = join(ctx.root, ...as.slice(rs.length));
+  }
   let cur = abs;
   const rest: string[] = [];
   let real = abs;

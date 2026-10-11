@@ -69,6 +69,30 @@ export async function commit(ctx: ToolContext, abs: string, bytes: Uint8Array, e
   pushUndo(ctx, abs, old);
 }
 
+/**
+ * Tệp Word/PowerPoint đang được dựng từng phần: một lời gọi chỉ viết được khoảng 2.000-3.000 ký tự tiếng Việt, nên create_docx/create_pptx
+ * nhận `append: true` để nối thêm phần mới. Nội dung Markdown đã gửi được giữ trong bộ nhớ theo (môi trường, đường dẫn) và dựng lại cả tệp.
+ */
+interface Building { content: string; opts: Record<string, unknown>; size: number }
+const building = new WeakMap<object, Map<string, Building>>();
+const buildingOf = (env: object): Map<string, Building> => {
+  let m = building.get(env);
+  if (!m) building.set(env, (m = new Map()));
+  return m;
+};
+const MAX_BUILD_CHARS = 400_000;
+
+/** Như prepareWrite, nhưng cho nối vào tệp do chính mình vừa dựng (kích thước còn nguyên) mà không bắt đọc lại. */
+async function prepareAppend(ctx: ToolContext, rawPath: unknown, ext: string, tool: string): Promise<{ abs: string; st: Building }> {
+  const abs = await resolveSafe(ctx, rawPath);
+  if (extOf(abs) !== ext) throw new ToolError(`Đường dẫn phải có đuôi ${ext} (nhận “${rawPath}”).`);
+  const st = buildingOf(ctx.env).get(abs);
+  const info = await ctx.env.stat(abs);
+  if (!st || !info?.isFile) throw new ToolError(`Không có bản đang dựng của ${relPath(ctx, abs)}: append chỉ dùng ngay sau khi chính bạn tạo tệp này bằng ${tool} (không có append) trong cùng phiên làm việc. Hãy gọi ${tool} không có append với phần đầu.`);
+  if (info.size !== st.size) throw new ToolError(`${relPath(ctx, abs)} đã bị sửa ngoài ${tool} kể từ lần dựng trước. Hãy đọc nó bằng read_document rồi tạo lại.`);
+  return { abs, st };
+}
+
 /** Thay mỗi sheet có `generate` bằng các hàng đã sinh (hàng tiêu đề lấy từ tên cột, trừ khi người gọi tự đưa `rows` đầu tiên). */
 export function expandGenerated(sheets: SheetSpec[]): SheetSpec[] {
   if (!Array.isArray(sheets)) return sheets;
@@ -173,18 +197,32 @@ export function officeTools(env: Env): Tool[] {
         letterhead: { type: "object", properties: { agency_parent: S, agency: S, doc_number: S, place_date: S } },
         signature: { type: "object", properties: { role: S, name: S, on_behalf: S }, required: ["role"] },
         recipients: { type: "array", items: S }, page_numbers: { type: "boolean" },
+        append: { type: "boolean", description: "true = add this content to the END of the document you created earlier at the same path with create_docx (use it when the document is longer than ~2,000 characters: send the first part without append, then each next part with append=true; title/style/letterhead/signature are kept from the first call)" },
       }, required: ["path", "content"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
         return outlinePreview(ctx, a.path, describeDocx({ content: String(a.content ?? ""), title: a.title, letterhead: a.letterhead, signature: a.signature }));
       },
       async run(ctx, a) {
-        const { abs, existed } = await prepareWrite(ctx, a.path, ".docx");
         if (typeof a.content !== "string" || !a.content.trim()) throw new ToolError("Thiếu content (nội dung Markdown).");
-        const opts = { content: a.content, title: a.title, subtitle: a.subtitle, style: a.style, orientation: a.orientation, letterhead: jsonArg<Letterhead | undefined>(a.letterhead, "letterhead"), signature: jsonArg<Signature | undefined>(a.signature, "signature"), recipients: jsonArg<string[]>(a.recipients, "recipients"), page_numbers: a.page_numbers };
+        const append = a.append === true;
+        let abs: string, existed: boolean;
+        let opts: Parameters<typeof createDocx>[0];
+        if (append) {
+          const r = await prepareAppend(ctx, a.path, ".docx", "create_docx");
+          if (r.st.content.length + a.content.length > MAX_BUILD_CHARS) throw new ToolError("Tài liệu quá dài để nối thêm; hãy tách thành tệp khác.");
+          abs = r.abs;
+          existed = true;
+          opts = { ...(r.st.opts as object), content: r.st.content + "\n\n" + a.content } as typeof opts;
+        } else {
+          ({ abs, existed } = await prepareWrite(ctx, a.path, ".docx"));
+          opts = { content: a.content, title: a.title, subtitle: a.subtitle, style: a.style, orientation: a.orientation, letterhead: jsonArg<Letterhead | undefined>(a.letterhead, "letterhead"), signature: jsonArg<Signature | undefined>(a.signature, "signature"), recipients: jsonArg<string[]>(a.recipients, "recipients"), page_numbers: a.page_numbers };
+        }
         const bytes = await createDocx(opts);
         await commit(ctx, abs, bytes, existed);
-        return `Đã ${existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(bytes.length)}).\n${describeDocx(opts)}\nHãy dùng read_document để kiểm tra lại nội dung trước khi báo cáo.`;
+        const { content, ...rest } = opts as { content: string } & Record<string, unknown>;
+        buildingOf(ctx.env).set(abs, { content, opts: rest, size: bytes.length });
+        return `Đã ${append ? "nối thêm vào" : existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(bytes.length)}).\n${describeDocx(opts)}\n` + (append ? "Nếu còn phần nữa, gọi tiếp create_docx với append=true. " : "Nếu còn phần nữa, gọi tiếp create_docx với cùng path và append=true (mỗi lần dưới ~2.000 ký tự). ") + "Khi đủ, hãy dùng read_document để kiểm tra lại nội dung trước khi báo cáo.";
       },
     },
     {
@@ -309,14 +347,27 @@ export function officeTools(env: Env): Tool[] {
     {
       name: "create_pptx", kind: "edit", readonly: false, pathArg: "path",
       description: "Create a PowerPoint (.pptx) from Markdown. Slides are separated by a line containing only ---. Each slide: a '# Title' (or ##) line, then bullets (- item, nested by 2 spaces), paragraphs, tables or code. The first slide with '# Title' and a short subtitle paragraph becomes the cover. A paragraph starting 'Ghi chú:' becomes the presenter notes. A real chart: a fenced block ```chart cột (or ngang, đường, tròn, vành, vùng) with an optional 'title: ...' line and a Markdown table (first column = labels, other columns = numeric series, e.g. 7,5 or 1.200). Keep 3-6 short bullets per slide; split long content across slides. LAYOUTS are chosen automatically from the content, so write it to fit: a title-only slide (or '## 1. Name' + one line) = section divider; the LAST slide with a short title (e.g. 'Cảm ơn') = closing; 2-4 bullets like '92%: sinh viên dùng…' or '**1.200** bài giảng' = big-number cards; 3-6 bullets like '**Hạ tầng**: mô tả…' or 'Hạ tầng: mô tả…' = numbered cards; an ORDERED list (1. 2. 3.) of 3-5 steps = process timeline; a single '> quote' (+ optional attribution line) = quote slide; bullets plus ONE chart, small table or image = two columns. An image: a line '![mô tả](hinh/anh.png)' with a png/jpg/gif file in the project folder. theme chooses the colors: xanh (default), ngoc, xanhla, cam, tim, do, den; pick one that fits the topic or the user's wish.",
-      parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, footer: { type: "string" }, theme: { type: "string", enum: Object.keys(PPTX_THEMES), description: "color theme (default xanh)" } }, required: ["path", "content"] },
+      parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, footer: { type: "string" }, theme: { type: "string", enum: Object.keys(PPTX_THEMES), description: "color theme (default xanh)" }, append: { type: "boolean", description: "true = add these slides to the END of the deck you created earlier at the same path with create_pptx (use it for decks longer than ~6 slides or ~2,000 characters: send the cover and first slides without append, then the next slides with append=true; footer and theme are kept from the first call)" } }, required: ["path", "content"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
         return outlinePreview(ctx, a.path, describePptx(String(a.content ?? "")));
       },
       async run(ctx, a) {
-        const { abs, existed } = await prepareWrite(ctx, a.path, ".pptx");
         if (typeof a.content !== "string" || !a.content.trim()) throw new ToolError("Thiếu content (Markdown).");
+        const append = a.append === true;
+        let abs: string, existed: boolean;
+        let content: string = a.content;
+        let footer: string | undefined = a.footer;
+        let theme: string | undefined = typeof a.theme === "string" ? a.theme : undefined;
+        if (append) {
+          const p = await prepareAppend(ctx, a.path, ".pptx", "create_pptx");
+          if (p.st.content.length + a.content.length > MAX_BUILD_CHARS) throw new ToolError("Bài trình chiếu quá dài để nối thêm; hãy tách thành tệp khác.");
+          abs = p.abs;
+          existed = true;
+          content = p.st.content + "\n\n---\n\n" + a.content.replace(/^\s*---\s*\n/, "");
+          footer = p.st.opts.footer as string | undefined;
+          theme = p.st.opts.theme as string | undefined;
+        } else ({ abs, existed } = await prepareWrite(ctx, a.path, ".pptx"));
         let r;
         try {
           const images: Record<string, Uint8Array> = {};
@@ -329,12 +380,13 @@ export function officeTools(env: Env): Tool[] {
               /* ảnh thiếu: createPptx đặt khung chữ thay thế và cảnh báo */
             }
           }
-          r = await createPptx({ content: a.content, footer: a.footer, theme: typeof a.theme === "string" ? a.theme : undefined, images });
+          r = await createPptx({ content, footer, theme, images });
         } catch (e) {
           throw new ToolError((e as Error).message);
         }
         await commit(ctx, abs, r.bytes, existed);
-        return `Đã ${existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(r.bytes.length)}, ${r.slides} slide).` + (r.warnings.length ? "\n⚠ " + r.warnings.join("\n⚠ ") : "") + "\nHãy dùng read_document để kiểm tra lại.";
+        buildingOf(ctx.env).set(abs, { content, opts: { footer, theme }, size: r.bytes.length });
+        return `Đã ${append ? "nối thêm vào" : existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(r.bytes.length)}, ${r.slides} slide${append ? " tổng cộng" : ""}).` + (r.warnings.length ? "\n⚠ " + r.warnings.join("\n⚠ ") : "") + "\nNếu còn slide nữa, gọi tiếp create_pptx với cùng path và append=true (mỗi lần 3-5 slide). Khi đủ, dùng read_document để kiểm tra lại."
       },
     },
   ];
