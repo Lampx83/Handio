@@ -45,7 +45,7 @@ app.enableSandbox();
 if (!SMOKE && !app.requestSingleInstanceLock()) app.quit();
 if (SMOKE) app.setPath("userData", path.join(SMOKE, "userData"));
 
-// Đổi tên hiển thị thành Hando KHÔNG được đổi nơi lưu cài đặt/lịch sử/phiên đăng nhập: ghim đúng thư mục của bản cũ (@neu/agent-desktop).
+// Đổi tên hiển thị thành Handio KHÔNG được đổi nơi lưu cài đặt/lịch sử/phiên đăng nhập: ghim đúng thư mục của bản cũ (@neu/agent-desktop).
 if (!SMOKE) app.setPath("userData", path.join(app.getPath("appData"), "@neu", "agent-desktop"));
 const userData = () => app.getPath("userData");
 const cfgFile = () => path.join(userData(), "folders.json");
@@ -53,9 +53,11 @@ const cfgFile = () => path.join(userData(), "folders.json");
 // ---------------------------------------------------------------- chính sách quản trị
 async function loadPolicy(): Promise<Policy> {
   const files = [
+    process.platform === "darwin" ? "/Library/Application Support/Handio/policy.json" : "",
+    process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "Handio", "policy.json") : "",
+    // tên cũ ("Hando" của bản 0.8.0, "NEU Agent" trước đó): quản trị đã đặt chính sách ở đây vẫn có hiệu lực
     process.platform === "darwin" ? "/Library/Application Support/Hando/policy.json" : "",
     process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "Hando", "policy.json") : "",
-    // tên cũ (trước khi đổi tên thành Hando): quản trị đã đặt chính sách ở đây vẫn có hiệu lực
     process.platform === "darwin" ? "/Library/Application Support/NEU Agent/policy.json" : "",
     process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "NEU Agent", "policy.json") : "",
     __DEV__ && process.env.NEU_POLICY_FILE ? process.env.NEU_POLICY_FILE : "",
@@ -75,6 +77,8 @@ async function loadPolicy(): Promise<Policy> {
 // Gói của người dùng: <userData>/packs. Cả hai được tin cậy (gói trong dự án thì lõi tự đọc và không tin cậy).
 async function loadPacks(): Promise<RawPack[]> {
   const orgDirs = [
+    process.platform === "darwin" ? "/Library/Application Support/Handio/packs" : "",
+    process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "Handio", "packs") : "",
     process.platform === "darwin" ? "/Library/Application Support/Hando/packs" : "",
     process.platform === "win32" && process.env.ProgramData ? path.join(process.env.ProgramData, "Hando", "packs") : "",
     process.platform === "darwin" ? "/Library/Application Support/NEU Agent/packs" : "",
@@ -132,9 +136,11 @@ async function folderFor(profile: Profile): Promise<string> {
       /* thư mục đã bị xoá: dùng mặc định */
     }
   }
-  // người dùng đã có thư mục từ bản cũ ("NEU Work"…) thì giữ nguyên; cài mới dùng Tài liệu/Hando/<Work|Code|Design>
+  // người dùng đã có thư mục từ bản cũ ("NEU Work"…) thì giữ nguyên; cài mới dùng Tài liệu/Handio/<Work|Code|Design>
   const legacy = path.join(app.getPath("documents"), DEFAULT_DIR[profile]);
-  const dir = SMOKE ? path.join(SMOKE, profile) : existsSync(legacy) ? legacy : path.join(app.getPath("documents"), "Hando", profile === "work" ? "Work" : profile === "code" ? "Code" : "Design");
+  const sub = profile === "work" ? "Work" : profile === "code" ? "Code" : "Design";
+  const hando = path.join(app.getPath("documents"), "Hando", sub); // tên 0.8.0
+  const dir = SMOKE ? path.join(SMOKE, profile) : existsSync(legacy) ? legacy : existsSync(hando) ? hando : path.join(app.getPath("documents"), "Handio", sub);
   let fresh = false;
   try {
     await fs.access(dir);
@@ -175,11 +181,11 @@ const makeEnv = (profile: Profile, dir: string) => {
   return env;
 };
 
-/** Thư mục chứa các dự án do ứng dụng tạo: Tài liệu/Hando/<Work|Code|Design>/<tên> (bản cài cũ có sẵn "NEU Agent" thì giữ để các dự án nằm cùng nơi). */
+/** Thư mục chứa các dự án do ứng dụng tạo: Tài liệu/Handio/<Work|Code|Design>/<tên> (bản cài cũ có sẵn "NEU Agent" hoặc "Hando" thì giữ để các dự án nằm cùng nơi). */
 function projectsParent(profile: Profile): string {
   if (SMOKE) return path.join(SMOKE, "projects", profile);
   const docs = app.getPath("documents");
-  const brand = existsSync(path.join(docs, "NEU Agent")) ? "NEU Agent" : "Hando";
+  const brand = ["NEU Agent", "Hando"].find((n) => existsSync(path.join(docs, n))) ?? "Handio";
   return path.join(docs, brand, profile === "work" ? "Work" : profile === "code" ? "Code" : "Design");
 }
 
@@ -425,11 +431,11 @@ function startUpdater(): void {
 /** Menu "Kiểm tra bản cập nhật…": người dùng chủ động, nên hiện cả bản từng chọn "Để sau" và báo rõ khi đã mới nhất. */
 async function manualUpdateCheck(): Promise<void> {
   if (!updater) {
-    await dialog.showMessageBox({ type: "info", message: "Kiểm tra bản cập nhật", detail: `Bạn đang dùng Hando ${app.getVersion()}. Việc tự kiểm tra bản mới chỉ có trong bản cài đặt chính thức.` });
+    await dialog.showMessageBox({ type: "info", message: "Kiểm tra bản cập nhật", detail: `Bạn đang dùng Handio ${app.getVersion()}. Việc tự kiểm tra bản mới chỉ có trong bản cài đặt chính thức.` });
     return;
   }
   const st = await updater.check(true);
-  if (st.phase === "idle") await dialog.showMessageBox({ type: "info", message: "Bạn đang dùng bản mới nhất", detail: `Hando ${st.current}.` });
+  if (st.phase === "idle") await dialog.showMessageBox({ type: "info", message: "Bạn đang dùng bản mới nhất", detail: `Handio ${st.current}.` });
   else if (st.phase === "error") await dialog.showMessageBox({ type: "warning", message: "Kiểm tra bản cập nhật", detail: st.error ?? "Không kiểm tra được." });
 }
 
@@ -525,7 +531,7 @@ function hardenSession(): void {
 
 async function createWindow(): Promise<void> {
   win = new BrowserWindow({
-    width: 1280, height: 860, minWidth: 900, minHeight: 600, show: !SMOKE, backgroundColor: "#f6f6f3", title: "Hando",
+    width: 1280, height: 860, minWidth: 900, minHeight: 600, show: !SMOKE, backgroundColor: "#f6f6f3", title: "Handio",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

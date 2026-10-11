@@ -176,7 +176,7 @@ export async function createDocx(o: DocxOptions): Promise<Uint8Array> {
 
   const margin = formal ? { top: 2 * CM, bottom: 2 * CM, left: 3 * CM, right: 2 * CM } : { top: 1134, bottom: 1134, left: 1134, right: 1134 };
   const doc = new d.Document({
-    creator: "Hando",
+    creator: "Handio",
     title: o.title || runsText(blocks.find((b): b is Extract<Block, { t: "heading" }> => b.t === "heading")?.runs ?? [{ text: "Tài liệu" }]),
     styles: {
       default: { document: { run: { font, size }, paragraph: { spacing: { line: formal ? 312 : 276 } } } },

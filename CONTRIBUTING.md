@@ -1,11 +1,11 @@
-# Cùng phát triển Hando
+# Cùng phát triển Handio
 
 Cảm ơn bạn đã tham gia. Quy trình ngắn gọn: **nhánh riêng → pull request → CI xanh → có người duyệt → gộp vào `main` → tự triển khai**.
 
 ## Chuẩn bị
 
 ```bash
-git clone https://github.com/Lampx83/NEUAGENT.git && cd NEUAGENT
+git clone https://github.com/Lampx83/Handio.git && cd Handio
 npm ci                 # Node 22
 npm run dev:web        # bản web ở localhost, có mô hình giả để thử không cần key
 npm run desktop        # bản Desktop (Electron)

@@ -65,7 +65,7 @@
       if (!r.ok) { box.appendChild(el("div", r.message || "Không tải được.", "msg err")); return; }
       r.item.items.forEach(function (it) {
         var m = el("div", null, "m " + (it.k === "user" ? "u" : it.k === "tool" ? "c" : "a"));
-        m.appendChild(el("div", it.k === "user" ? "Người dùng" : it.k === "assistant" ? "Hando" : "Công cụ " + (it.n || ""), "r"));
+        m.appendChild(el("div", it.k === "user" ? "Người dùng" : it.k === "assistant" ? "Handio" : "Công cụ " + (it.n || ""), "r"));
         m.appendChild(el("div", it.t)).style.whiteSpace = "pre-wrap";
         box.appendChild(m);
       });

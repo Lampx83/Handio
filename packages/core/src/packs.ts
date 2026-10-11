@@ -7,7 +7,7 @@ import { sanitizeHttpTools, type HttpToolSpec } from "./http-tools";
 import type { Profile } from "./profiles";
 
 /**
- * GÓI MỞ RỘNG (extension pack): cách thêm tính năng cho Hando mà KHÔNG sửa mã nguồn lõi.
+ * GÓI MỞ RỘNG (extension pack): cách thêm tính năng cho Handio mà KHÔNG sửa mã nguồn lõi.
  * Một gói là một thư mục chỉ gồm tệp chữ (xem docs/EXTENSIONS.md):
  *   pack.json            {id, name, version, description, profiles?}
  *   prompt.md            lời dặn thêm vào system prompt (quy ước của tổ chức, văn phong…)

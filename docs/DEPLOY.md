@@ -1,4 +1,4 @@
-# Triển khai và vận hành Hando
+# Triển khai và vận hành Handio
 
 ## 1. Kiểm tra chất lượng (chạy trước khi phát hành)
 
@@ -82,7 +82,7 @@ NEU_MOCK=1 npm run desktop       # thêm mẫu "Demo giả lập" trong Cài đ�
 ```
 
 - Lần đầu tạo hai thư mục `~/Documents/NEU Agent` (dự án mẫu) và `~/Documents/NEU Agent` (dữ liệu mẫu). Đổi bằng menu **Tệp → Mở thư mục Code…/Work…**.
-- **Key tích hợp sẵn** (`apps/desktop/src/main.ts`): ứng dụng tự dùng key `Hando` của Khoa, **chỉ gửi tới `192.0.2.11:8037`** và chỉ khi người dùng chưa tự nhập key (đổi địa chỉ sang máy chủ khác thì không gửi). Là key dùng chung đặt trong mã nguồn nên ai có ứng dụng đều lấy được: đặt giới hạn và thu hồi/đổi tại Kong; ghi đè bằng biến môi trường `NEU_BUILTIN_KEY`.
+- **Key tích hợp sẵn** (`apps/desktop/src/main.ts`): ứng dụng tự dùng key `Handio` của Khoa, **chỉ gửi tới `192.0.2.11:8037`** và chỉ khi người dùng chưa tự nhập key (đổi địa chỉ sang máy chủ khác thì không gửi). Là key dùng chung đặt trong mã nguồn nên ai có ứng dụng đều lấy được: đặt giới hạn và thu hồi/đổi tại Kong; ghi đè bằng biến môi trường `NEU_BUILTIN_KEY`.
 - Cài đặt nằm ở thư mục dữ liệu ứng dụng; **key người dùng tự nhập được mã hoá bằng kho khoá của hệ điều hành** (Keychain/DPAPI/libsecret qua `safeStorage`). Nếu hệ điều hành không có kho khoá, key lưu dạng tệp chỉ chủ sở hữu đọc được.
 - Tab Code chạy lệnh thật (có hỏi quyền). Tab Work **không** có công cụ chạy lệnh. Xuất PDF cần LibreOffice.
 - Giao diện chạy trong cửa sổ cách ly (`sandbox`, `contextIsolation`, CSP `connect-src 'none'`); chỉ tiến trình chính mới có mạng/ổ đĩa, qua một danh sách lệnh IPC cố định.

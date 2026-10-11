@@ -1,4 +1,4 @@
-# Hando
+# Handio
 
 Bộ công cụ trợ lý AI dạng *agent* của Trường Đại học Kinh tế Quốc dân, chạy trên mô hình Qwen3.5 do Khoa CNTT vận hành (máy chủ 232, qua Kong cổng 8037). Không cần tài khoản Claude/Codex.
 

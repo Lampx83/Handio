@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hando - kiểm tra sức khoẻ máy 220 (chạy mỗi 5 phút bằng systemd timer). Chỉ dùng thư viện chuẩn của Python 3.
+"""Handio - kiểm tra sức khoẻ máy 220 (chạy mỗi 5 phút bằng systemd timer). Chỉ dùng thư viện chuẩn của Python 3.
 
 Kiểm tra: oauth2-proxy /ping, cổng mô hình (TCP + HTTP trả lời), dung lượng đĩa, bộ thu chẩn đoán còn sống.
 Ghi /var/lib/neu-agent/health.json (chi tiết, quyền 0640, KHÔNG phục vụ ra ngoài) và thêm một dòng vào health.log mỗi lần có lỗi.

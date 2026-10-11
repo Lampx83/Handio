@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hando - báo cáo chất lượng hằng ngày (máy 220). Chỉ dùng thư viện chuẩn của Python 3.
+"""Handio - báo cáo chất lượng hằng ngày (máy 220). Chỉ dùng thư viện chuẩn của Python 3.
 
 Đọc (a) JSONL chẩn đoán của bộ thu (collector.py) và (b) nhật ký truy cập JSON của nginx, rồi viết:
   <out>/YYYY-MM-DD.md, <out>/YYYY-MM-DD.html (một tệp tĩnh, không tài nguyên ngoài), <out>/latest.{md,html,json}
@@ -442,7 +442,7 @@ def llm_input(W, B, fs, an):
 
 
 def call_llm(data, url, model, key, timeout=90):
-    prompt = ("Bạn là kỹ sư vận hành hệ thống 'Hando' (trợ lý AI cho tab Work/Code/Design). Dưới đây là SỐ LIỆU TỔNG HỢP 24 giờ (không có nội dung người dùng) dạng JSON. "
+    prompt = ("Bạn là kỹ sư vận hành hệ thống 'Handio' (trợ lý AI cho tab Work/Code/Design). Dưới đây là SỐ LIỆU TỔNG HỢP 24 giờ (không có nội dung người dùng) dạng JSON. "
               "Viết tối đa 8 gạch đầu dòng bằng TIẾNG VIỆT: vấn đề đáng chú ý nhất, nguyên nhân khả dĩ, và đề xuất cải tiến cụ thể, ưu tiên theo mức ảnh hưởng. Không bịa số liệu ngoài JSON.\n\n" + json.dumps(data, ensure_ascii=False))
     body = json.dumps({"model": model, "messages": [{"role": "user", "content": prompt}], "temperature": 0.2, "max_tokens": 900, "chat_template_kwargs": {"enable_thinking": False}}).encode()
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "x-ollama-seckey": key})
@@ -475,7 +475,7 @@ def tables(W):
 
 
 def render_md(day, W, B, fs, an, llm_text, llm_err, links):
-    L = ["# Báo cáo chất lượng Hando — %s" % day, "", "_Cửa sổ: 24 giờ gần nhất; mốc so sánh: 7 ngày trước đó. Số liệu giả danh, **không chứa nội dung** người dùng._", ""]
+    L = ["# Báo cáo chất lượng Handio — %s" % day, "", "_Cửa sổ: 24 giờ gần nhất; mốc so sánh: 7 ngày trước đó. Số liệu giả danh, **không chứa nội dung** người dùng._", ""]
     L += ["- Lượt làm việc: **%d** · người dùng (giả danh): **%d** · máy cài: **%d** · sự kiện: %d · báo lỗi thủ công: %d" % (W["turns"], W["users"], W["installs"], W["events"], W["reports"]),
           "- Lệnh gọi mô hình qua nginx: **%d** · 5xx %s · p95 %s" % (W["nginx"]["vllm"]["n"], _p(W["nginx"]["vllm"]["rate_5xx"]), fmt(W["nginx"]["vllm"]["rt_s"]["p95"], "s")), ""]
     L += ["## Phát hiện & đề xuất cải tiến", ""]
@@ -518,8 +518,8 @@ table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;p
 def render_html(day, W, B, fs, an, llm_text, llm_err, links):
     e = html.escape
     sevc = {"cao": "cao", "trung bình": "tb", "thấp": "thap"}
-    o = ["<!doctype html><html lang=\"vi\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Báo cáo chất lượng Hando %s</title><style>%s</style></head><body><main>" % (e(day), CSS)]
-    o.append("<h1>Báo cáo chất lượng Hando — %s</h1><p class=\"sub\">24 giờ gần nhất, so với 7 ngày trước đó. Số liệu giả danh, không chứa nội dung người dùng.</p>" % e(day))
+    o = ["<!doctype html><html lang=\"vi\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Báo cáo chất lượng Handio %s</title><style>%s</style></head><body><main>" % (e(day), CSS)]
+    o.append("<h1>Báo cáo chất lượng Handio — %s</h1><p class=\"sub\">24 giờ gần nhất, so với 7 ngày trước đó. Số liệu giả danh, không chứa nội dung người dùng.</p>" % e(day))
     v = W["nginx"]["vllm"]
     kp = [(W["turns"], "lượt làm việc"), (W["users"], "người dùng (giả danh)"), (_p(W["rates"]["error"]), "lượt kết thúc bằng lỗi"), (_p(W["rates"]["step_limit"] + W["rates"]["loop"]), "chạm giới hạn/lặp"), (v["n"], "lệnh gọi mô hình (nginx)"), (_p(v["rate_5xx"]), "5xx của cổng mô hình"), (fmt(v["rt_s"]["p95"], " s", 0), "p95 /vllm"), (W["reports"], "báo lỗi thủ công")]
     o.append("<div class=\"kpi\">" + "".join("<div><b>%s</b><span>%s</span></div>" % (e(str(a)), e(b)) for a, b in kp) + "</div>")

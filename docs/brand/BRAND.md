@@ -1,19 +1,19 @@
-# Bộ nhận diện thương hiệu Hando
+# Bộ nhận diện thương hiệu Handio
 
-**Hando** (đọc: *han-đô*) là trợ lý AI của Trường Đại học Kinh tế Quốc dân giúp làm việc văn phòng, viết mã và thiết kế.
+**Handio** (đọc: *han-đi-ô*) là trợ lý AI của Trường Đại học Kinh tế Quốc dân giúp làm việc văn phòng, viết mã và thiết kế.
 Tên gồm *hand* (bàn tay) + *do* (làm): **bàn tay làm việc giúp bạn**, đúng nghĩa "giúp bạn một tay".
 
 ## 1. Cốt lõi
 | | |
 |---|---|
-| Tên | **Hando** (viết hoa chữ H, còn lại thường; không viết HANDO, hando). Khi cần phiên âm: *han-đô* |
-| Khẩu hiệu | **Giúp bạn một tay.** Biến thể: "Giao việc, Hando làm." |
+| Tên | **Handio** (viết hoa chữ H, còn lại thường; không viết HANDIO, handio). Khi cần phiên âm: *han-đi-ô* |
+| Khẩu hiệu | **Giúp bạn một tay.** Biến thể: "Giao việc, Handio làm." |
 | Mô tả ngắn | Trợ lý AI làm việc văn phòng, viết mã và thiết kế — nói ít, ra sản phẩm hoàn chỉnh. |
 | Chủ sở hữu | Khoa Công nghệ thông tin, Trường Đại học Kinh tế Quốc dân |
 | Giọng điệu | Thân thiện, rõ ràng, ngắn gọn; "bạn" và "tôi"; không hứa quá; nói thật khi làm chưa được |
 
 ## 2. Biểu tượng: bàn tay
-Một bàn tay mở giơ lên (giúp, chào) với **dấu tích xanh trong lòng bàn tay** (xong việc) và **còng tay màu cam** (màu của "do", hành động).
+Một bàn tay mở giơ lên (giúp, chào) với **dấu tích xanh trong lòng bàn tay** (xong việc) và **còng tay màu cam** (màu của "io", đầu vào/đầu ra: giao việc và nhận kết quả).
 Cánh tay chảy ra khỏi khung: tay luôn sẵn sàng giúp.
 
 Hai phong cách, cùng hình học, chọn một cho từng bối cảnh:
@@ -45,10 +45,10 @@ Không dùng quá một bàn tay chuyển động trong cùng một màn hình.
 ## 4. Màu
 | Tên | Hex | Dùng cho |
 |---|---|---|
-| **Xanh Hando** | `#0B4A9E` | màu chính, nút chính, chữ "Han", liên kết |
+| **Xanh Handio** | `#0B4A9E` | màu chính, nút chính, chữ "Hand", liên kết |
 | Xanh sáng | `#1B7FD0` | nền chuyển sắc, nhấn nhẹ |
 | Xanh sâu | `#083A7D` | nền tối, tiêu đề trên nền sáng |
-| **Cam "do"** | `#F59E0B` | còng tay, chữ "do", điểm nhấn hành động (ít, không quá 10% diện tích) |
+| **Cam "io"** | `#F59E0B` | còng tay, chữ "io", điểm nhấn hành động (ít, không quá 10% diện tích) |
 | Xanh nhạt | `#E4EDFA` | nền thẻ, vùng nhấn |
 | Mực | `#1F2328` | chữ chính |
 | Xám | `#6B7078` | chữ phụ |
@@ -59,7 +59,7 @@ Không dùng quá một bàn tay chuyển động trong cùng một màn hình.
 Chế độ tối: nền `#17181A`, xanh `#5B9BFF`, chữ `#E8E6E1` (đã dùng trong ứng dụng).
 
 ## 4b. Chữ
-- **Wordmark "Hando"**: vẽ riêng, nét đều đầu tròn; **"Han" xanh, "do" cam** (`wordmark.svg`, bản trắng `wordmark-white.svg`). Không dùng phông thay thế cho wordmark.
+- **Wordmark "Handio"**: vẽ riêng, nét đều đầu tròn; **"Hand" xanh, "io" cam** (`wordmark.svg`, bản trắng `wordmark-white.svg`). Không dùng phông thay thế cho wordmark.
 - **Giao diện**: chữ hệ thống (`system-ui`, Segoe UI, Roboto…) có đủ tiếng Việt.
 - **In ấn/slide**: *Be Vietnam Pro* hoặc *Inter* (đủ dấu tiếng Việt). Tiêu đề đậm, nội dung thường, cỡ ≥ 16 px/12 pt.
 
@@ -68,7 +68,7 @@ Chế độ tối: nền `#17181A`, xanh `#5B9BFF`, chữ `#E8E6E1` (đã dùng 
 - **Cỡ tối thiểu**: biểu tượng ≥ 16 px (dùng 2D), logo ngang ≥ 96 px chiều cao chữ.
 - **Nền**: biểu tượng có nền xanh dùng trên nền sáng hoặc tối; bàn tay không nền (`hand-free-*`) chỉ đặt trên nền đủ tương phản với màu trắng (xanh, tối, ảnh tối).
 - **Không**: kéo méo, xoay ngược, đổi màu cam sang màu khác, thêm viền/bóng khác, đặt chữ chồng lên bàn tay, dùng cả 2D và 3D cạnh nhau.
-- **Cùng thương hiệu NEU**: ghi "Hando · Khoa Công nghệ thông tin, Trường Đại học Kinh tế Quốc dân" ở chân trang/slide cuối; không đặt logo trường lên logo Hando.
+- **Cùng thương hiệu NEU**: ghi "Handio · Khoa Công nghệ thông tin, Trường Đại học Kinh tế Quốc dân" ở chân trang/slide cuối; không đặt logo trường lên logo Handio.
 
 ## 6. Tệp
 | Tệp | Là gì |
@@ -76,9 +76,12 @@ Chế độ tối: nền `#17181A`, xanh `#5B9BFF`, chữ `#E8E6E1` (đã dùng 
 | `hand-{2d,3d}-<chuyển động>.svg` | bàn tay trên ô vuông xanh bo góc (biểu tượng ứng dụng) |
 | `hand-free-{2d,3d}-<chuyển động>.svg` | bàn tay không nền |
 | `app-icon-{2d,3d}-{1024…16}.png` | PNG của biểu tượng (góc bo trong suốt) |
-| `wordmark.svg`, `wordmark-white.svg` | chữ Hando |
+| `wordmark.svg`, `wordmark-white.svg` | chữ Handio |
 | `logo-horizontal.svg` | biểu tượng + chữ ngang |
 | `banner-1200x630.png` | ảnh bìa/chia sẻ mạng xã hội |
+| `handio-work.svg` | minh hoạ **đang làm việc**: hai **tay rô-bốt** gõ phím và cầm chuột, nền trong suốt, có chuyển động (tự tắt khi bật "giảm chuyển động"). Bàn phím là vector (có đủ phím dưới tay); hai tay là ảnh gốc đã tách nền |
+| `handio-work.png` | cả tranh (bàn phím + chuột + hai tay) đã **tách nền**, trong suốt, 1536 × 1000 |
+| `handio-work-left.webp`, `handio-work-right.webp` | hai lớp tách nền (tay trái + cánh tay; chuột + tay phải + cánh tay) dùng dựng chuyển động |
 | `hand-gallery.html` | xem tất cả và chuyển động |
 
 Được dùng trong: biểu tượng Desktop (`apps/desktop/build/icon.png`), web (`apps/web/icon*.png|svg`), trang giới thiệu/đăng nhập, thanh trên và màn hình chào của ứng dụng.
@@ -87,6 +90,8 @@ Chế độ tối: nền `#17181A`, xanh `#5B9BFF`, chữ `#E8E6E1` (đã dùng 
 ```bash
 python3 docs/brand/build_hand.py              # bàn tay SVG (2D/3D, chuyển động) + thư viện + biểu tượng nhúng giao diện
 python3 docs/brand/serve-render.py &          # rồi mở http://127.0.0.1:5181/render.html#auto để dựng PNG từ SVG bằng trình duyệt
+python3 docs/brand/build_work.py              # minh hoạ hai tay rô-bốt gõ phím + chuột (động), ghép các lớp tách nền
+python3 docs/brand/cutout_work.py <tranh.png>  # (tuỳ chọn) tách nền lại từ tranh gốc; cần numpy, scipy, pillow
 python3 docs/brand/build_assets.py --style 3d  # wordmark, logo ngang, banner; chép biểu tượng vào ứng dụng (2d hoặc 3d)
 ```
 Đổi sang phong cách 2D: chạy lại `build_assets.py --style 2d` rồi dựng lại ứng dụng.

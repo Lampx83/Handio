@@ -1,6 +1,6 @@
-# Cài đặt Hando (Windows và macOS)
+# Cài đặt Handio (Windows và macOS)
 
-Hando là ứng dụng máy tính giúp **học lập trình (tab Code)** và **xử lý công việc văn phòng (tab Work)**. Ứng dụng làm việc trên thư mục thật của bạn và luôn hỏi trước khi sửa tệp hay chạy lệnh.
+Handio là ứng dụng máy tính giúp **học lập trình (tab Code)** và **xử lý công việc văn phòng (tab Work)**. Ứng dụng làm việc trên thư mục thật của bạn và luôn hỏi trước khi sửa tệp hay chạy lệnh.
 
 ## Chọn đúng tệp
 
@@ -22,10 +22,10 @@ Get-FileHash .\NEU-Agent-*-win-x64.exe -Algorithm SHA256
 
 ## macOS
 
-1. Mở tệp `.dmg`, kéo **Hando** vào thư mục **Applications**.
+1. Mở tệp `.dmg`, kéo **Handio** vào thư mục **Applications**.
 2. Lần đầu mở, macOS sẽ báo *“không thể xác minh nhà phát triển”*. Đây là bình thường vì bản này **chưa được Apple ký/notarize** (cần tài khoản Apple Developer). Cách mở an toàn:
-   - **macOS 15 (Sequoia) trở lên:** mở ứng dụng một lần (bị chặn) → *Cài đặt hệ thống* → *Quyền riêng tư & Bảo mật* → kéo xuống phần *Bảo mật* → bấm **Vẫn mở** cho Hando.
-   - **macOS 14 trở xuống:** trong Finder, bấm chuột phải vào Hando → **Mở** → **Mở**.
+   - **macOS 15 (Sequoia) trở lên:** mở ứng dụng một lần (bị chặn) → *Cài đặt hệ thống* → *Quyền riêng tư & Bảo mật* → kéo xuống phần *Bảo mật* → bấm **Vẫn mở** cho Handio.
+   - **macOS 14 trở xuống:** trong Finder, bấm chuột phải vào Handio → **Mở** → **Mở**.
    - Cách dòng lệnh (chỉ làm với tệp bạn đã kiểm tra mã băm): `xattr -dr com.apple.quarantine "/Applications/NEU Agent.app"`.
 3. Thư mục làm việc mặc định: `~/Documents/NEU Code` và `~/Documents/NEU Work` (tạo tự động kèm dữ liệu mẫu). Đổi bằng menu **Tệp → Mở thư mục…**.
 

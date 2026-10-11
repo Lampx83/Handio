@@ -33,7 +33,7 @@ interface Seg {
   simple: boolean;
 }
 
-export async function docxSuggest(bytes: Uint8Array, rules: SuggestRule[], author = "Hando", date = new Date().toISOString().replace(/\.\d+Z$/, "Z")): Promise<SuggestResult> {
+export async function docxSuggest(bytes: Uint8Array, rules: SuggestRule[], author = "Handio", date = new Date().toISOString().replace(/\.\d+Z$/, "Z")): Promise<SuggestResult> {
   const zip = await loadZip(bytes);
   const counts = rules.map(() => 0);
   const skipped = rules.map(() => 0);

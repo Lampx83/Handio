@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hando — bàn tay VECTOR (SVG) 2D và 3D, có chuyển động. Một nguồn hình học, nhiều phiên bản:
+"""Handio — bàn tay VECTOR (SVG) 2D và 3D, có chuyển động. Một nguồn hình học, nhiều phiên bản:
   hand-{2d|3d}-{static|wave|offer|wiggle|count|working|done|breathe}.svg        (bàn tay trên nền ô vuông xanh = biểu tượng ứng dụng)
   hand-free-{2d|3d}-{...}.svg                                                    (bàn tay không nền, đặt lên mọi nền)
 Chạy: python3 docs/brand/build_hand.py   (chỉ dùng thư viện chuẩn)
@@ -233,7 +233,7 @@ def hand_svg(style="2d", anim="static", bg=True, size=512):
         inner = f"{shadow}{hand}{extra}"
         vb, w = "40 80 340 540", size
     h = size if bg else round(size * 540 / 340)
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}" width="{w}" height="{h}" role="img" aria-label="Hando — bàn tay giúp bạn một tay">'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{vb}" width="{w}" height="{h}" role="img" aria-label="Handio — bàn tay giúp bạn một tay">'
             f'<defs>{"".join(defs)}</defs>{style_block}{inner}</svg>\n')
 
 
@@ -251,7 +251,7 @@ def gallery():
     for style in ("2d", "3d"):
         free += f'<figure class="free"><img src="hand-free-{style}-wave.svg" alt="" height="200"><figcaption><b>{style.upper()}</b> · không nền, vẫy tay</figcaption></figure>'
     return f"""<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hando — bàn tay vector 2D / 3D</title>
+<title>Handio — bàn tay vector 2D / 3D</title>
 <style>:root{{--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--line:#dedcd3;--accent:#0b4a9e}}
 @media (prefers-color-scheme:dark){{:root{{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--line:#34363b;--accent:#5b9bff}}}}
 *{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}}
@@ -261,10 +261,11 @@ figure{{margin:0;background:var(--panel);border:1px solid var(--line);border-rad
 figure img{{display:block;margin:0 auto 8px;max-width:100%;height:auto}}figcaption{{font-size:13px;color:var(--muted)}}code{{font-size:12px}}
 .free{{background:linear-gradient(135deg,#fff,#e9f1fd)}}.dark{{background:#0b1b33}}.dark figcaption{{color:#9fb6d6}}
 @media (prefers-color-scheme:dark){{.free{{background:linear-gradient(135deg,#1f2023,#14243d)}}}}</style></head>
-<body><main><h1>Hando — bàn tay giúp bạn một tay</h1>
-<p class="muted">Bàn tay vector (SVG) có hai phong cách: <b>2D</b> phẳng, nét sạch (hợp biểu tượng nhỏ) và <b>3D</b> kiểu đất sét (tạo khối bằng ánh sáng SVG, vẫn là vector). Mỗi phong cách có 7 chuyển động; cánh tay có còng cam (màu "do"), dấu tích trong lòng bàn tay là "xong việc". Chuyển động tự tắt khi hệ điều hành bật "giảm chuyển động".</p>
+<body><main><h1>Handio — bàn tay giúp bạn một tay</h1>
+<p class="muted">Bàn tay vector (SVG) có hai phong cách: <b>2D</b> phẳng, nét sạch (hợp biểu tượng nhỏ) và <b>3D</b> kiểu đất sét (tạo khối bằng ánh sáng SVG, vẫn là vector). Mỗi phong cách có 7 chuyển động; cánh tay có còng cam (màu "io"), dấu tích trong lòng bàn tay là "xong việc". Chuyển động tự tắt khi hệ điều hành bật "giảm chuyển động".</p>
 <h2>Không nền (đặt lên mọi nền)</h2><div class="grid">{free}</div>
 <h2>Biểu tượng ứng dụng (trên ô vuông xanh)</h2><div class="grid">{cards}</div>
+<h2>Đang làm việc: hai tay rô-bốt gõ phím và cầm chuột</h2><div class="grid" style="grid-template-columns:1fr"><figure><img src="handio-work.svg" alt="Handio đang làm việc" style="max-width:640px"><figcaption><code>handio-work.svg</code> (động). Hai tay rô-bốt là ảnh gốc đã tách nền, bàn phím vẽ lại bằng vector; bản tĩnh trong suốt: <code>handio-work.png</code>.</figcaption></figure></div>
 <h2>Cỡ nhỏ</h2><div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
 <figure><img src="hand-2d-static.svg" width="64" height="64" alt=""><img src="hand-2d-static.svg" width="32" height="32" alt=""><img src="hand-2d-static.svg" width="16" height="16" alt=""><figcaption>2D · 64 / 32 / 16 px</figcaption></figure>
 <figure><img src="hand-3d-static.svg" width="64" height="64" alt=""><img src="hand-3d-static.svg" width="32" height="32" alt=""><img src="hand-3d-static.svg" width="16" height="16" alt=""><figcaption>3D · 64 / 32 / 16 px</figcaption></figure></div>

@@ -1,6 +1,6 @@
-# Cải tiến Hando liên tục
+# Cải tiến Handio liên tục
 
-Mục tiêu: Hando được cập nhật **đều đặn và có lý do** — dựa trên (1) người dùng thật đang dùng thế nào, (2) công nghệ và mô hình đang thay đổi ra sao, (3) phần mềm tương tự đang làm gì. Không chạy theo từng tính năng của người khác: chỉ làm khi nó giải quyết vấn đề của sinh viên và cán bộ NEU, giữ được cam kết riêng tư và chạy được trong hạ tầng của trường.
+Mục tiêu: Handio được cập nhật **đều đặn và có lý do** — dựa trên (1) người dùng thật đang dùng thế nào, (2) công nghệ và mô hình đang thay đổi ra sao, (3) phần mềm tương tự đang làm gì. Không chạy theo từng tính năng của người khác: chỉ làm khi nó giải quyết vấn đề của sinh viên và cán bộ NEU, giữ được cam kết riêng tư và chạy được trong hạ tầng của trường.
 
 ## Nhịp làm việc
 

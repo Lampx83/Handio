@@ -1,4 +1,4 @@
-# Quản lý phiên bản, phát hành và cập nhật Hando
+# Quản lý phiên bản, phát hành và cập nhật Handio
 
 Tài liệu này trả lời ba câu hỏi: **phiên bản được đánh số và theo dõi thế nào**, **phát hành một bản mới thế nào**, và **người dùng nhận bản mới thế nào**. Ký số xem [RELEASE-SIGNING.md](RELEASE-SIGNING.md); cài lên máy chủ xem [DEPLOY.md](DEPLOY.md); cải tiến liên tục xem [CAI-TIEN.md](CAI-TIEN.md).
 
@@ -59,9 +59,9 @@ npm run version:bump -- minor         # patch | minor | major | X.Y.Z[-beta.1]; 
 **Desktop** ([apps/desktop/src/updater.ts](../apps/desktop/src/updater.ts), [packages/core/src/updates.ts](../packages/core/src/updates.ts)):
 
 1. Sau khi đăng nhập, 15 giây sau khi mở và **mỗi 6 giờ**, ứng dụng đọc `https://ai.neu.edu.vn/agent/download/latest.json` (kèm tiêu đề đăng nhập; không theo chuyển hướng; phản hồi là trang HTML thì bỏ qua).
-2. Nếu có bản cao hơn: hiện thanh ở góc dưới phải — *“Có bản mới Hando X.Y.Z”*, nút **Có gì mới** (ghi chú từ CHANGELOG), **Tải về (kích thước)** và **Để sau** (ẩn đúng bản đó; bản mới hơn sẽ hiện lại).
+2. Nếu có bản cao hơn: hiện thanh ở góc dưới phải — *“Có bản mới Handio X.Y.Z”*, nút **Có gì mới** (ghi chú từ CHANGELOG), **Tải về (kích thước)** và **Để sau** (ẩn đúng bản đó; bản mới hơn sẽ hiện lại).
 3. Bấm **Tải về**: tải đúng tệp hợp máy (macOS đúng chip Apple/Intel; Windows `.exe`) vào thư mục *Tải xuống*, hiện tiến trình, **kiểm tra kích thước và SHA-256** với `latest.json`. Sai mã băm thì xoá tệp và báo lỗi. Đúng thì báo *“Đã tải … đã kiểm tra mã băm”* và mở thư mục chứa tệp.
-4. Người dùng **đóng Hando rồi mở tệp vừa tải** để cài đè (dữ liệu và cài đặt giữ nguyên vì nằm ngoài thư mục ứng dụng).
+4. Người dùng **đóng Handio rồi mở tệp vừa tải** để cài đè (dữ liệu và cài đặt giữ nguyên vì nằm ngoài thư mục ứng dụng).
 5. Có thể kiểm tra thủ công bất kỳ lúc nào: menu **Tệp → Kiểm tra bản cập nhật…** (báo cả khi đã là bản mới nhất, và hiện lại bản từng bấm “Để sau”).
 6. Nếu `latest.json` có `minVersion` cao hơn bản đang chạy: hộp thoại **“Cần cập nhật”**, không có nút bỏ qua.
 

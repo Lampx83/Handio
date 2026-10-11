@@ -1,10 +1,10 @@
-# AGENTS.md — hướng dẫn cho AI viết mã trong kho Hando
+# AGENTS.md — hướng dẫn cho AI viết mã trong kho Handio
 
 Tệp này dành cho Claude Code, Codex, Cursor, Copilot, Gemini… và người mới. Các thư mục con có `AGENTS.md` riêng (quy tắc hẹp, ưu tiên hơn tệp này): `apps/desktop/`, `apps/web/`, `packages/core/`, `packages/ui/`, `deploy/`, `docs/`.
 
 ## Dự án là gì
 
-Hando: trợ lý AI dạng *agent* của Trường ĐH Kinh tế Quốc dân (web + Desktop Electron), mô hình Qwen3.5 do Khoa CNTT vận hành (qua gateway Kong ở máy 232). Ba tab: **Work** (Word/Excel/PowerPoint/PDF cho khối văn phòng), **Code** (vibe coding cho sinh viên FIT-VIBE), **Design** (HTML/SVG, xem trước, xuất PDF/PNG). Mỗi tab có nhiều *dự án* (thư mục) và lịch sử trò chuyện. **Mọi người dùng bắt buộc đăng nhập** (Microsoft Entra @neu.edu.vn / @st.neu.edu.vn, hoặc tài khoản tên + mật khẩu do quản trị tạo).
+Handio: trợ lý AI dạng *agent* của Trường ĐH Kinh tế Quốc dân (web + Desktop Electron), mô hình Qwen3.5 do Khoa CNTT vận hành (qua gateway Kong ở máy 232). Ba tab: **Work** (Word/Excel/PowerPoint/PDF cho khối văn phòng), **Code** (vibe coding cho sinh viên FIT-VIBE), **Design** (HTML/SVG, xem trước, xuất PDF/PNG). Mỗi tab có nhiều *dự án* (thư mục) và lịch sử trò chuyện. **Mọi người dùng bắt buộc đăng nhập** (Microsoft Entra @neu.edu.vn / @st.neu.edu.vn, hoặc tài khoản tên + mật khẩu do quản trị tạo).
 
 ## Bản đồ kho (npm workspaces, TypeScript strict)
 

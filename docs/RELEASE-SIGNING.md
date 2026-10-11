@@ -19,7 +19,7 @@ Ký số cần danh tính pháp lý và thanh toán của **người đứng tê
 
 | Nền tảng | Cách | Chi phí/thời gian | Ghi chú |
 |---|---|---|---|
-| **Cài từ trình duyệt (PWA)** | Mở trang web → Chrome/Edge → *Cài đặt Hando* (nút trong hộp “Tải ứng dụng” hoặc biểu tượng trên thanh địa chỉ) | Miễn phí, **dùng ngay** | Không tải tệp thực thi nên không có cảnh báo nào. Chạy bản web (thư mục ảo, không terminal) |
+| **Cài từ trình duyệt (PWA)** | Mở trang web → Chrome/Edge → *Cài đặt Handio* (nút trong hộp “Tải ứng dụng” hoặc biểu tượng trên thanh địa chỉ) | Miễn phí, **dùng ngay** | Không tải tệp thực thi nên không có cảnh báo nào. Chạy bản web (thư mục ảo, không terminal) |
 | **macOS** | Đăng ký [Apple Developer Program](https://developer.apple.com/programs/enroll/) **cá nhân** (không cần số D-U-N-S, xác minh bằng giấy tờ tuỳ thân), lấy chứng chỉ *Developer ID Application* + khoá API để notarize. Notarize nhận cả tài khoản cá nhân | 99 USD/năm, thường vài ngày | Hộp cảnh báo của macOS sẽ ghi tên cá nhân người đăng ký. Sau này đổi sang tổ chức khi trường có D-U-N-S |
 | **Windows** | Phát hành qua **Microsoft Store** dạng MSIX: Microsoft ký, không có SmartScreen. Từ 2025 tài khoản nhà phát triển cá nhân [miễn phí](https://alternativeto.net/news/2025/9/microsoft-finally-drops-microsoft-store-publishing-fee-for-individual-developers-globally) (chưa xác nhận được Việt Nam có trong danh sách quốc gia hỗ trợ: hãy thử đăng ký ở Partner Center) | Miễn phí, qua kiểm duyệt của Microsoft | Cần thêm mục tiêu `appx` (tên/nhà phát hành lấy từ Partner Center). Tôi làm phần này khi bạn có tài khoản |
 | Windows (ngoài Store) | Mua chứng chỉ code-signing OV loại ký đám mây (SSL.com eSigner, DigiCert KeyLocker…) | khoảng 200–400 USD/năm | Cá nhân cũng mua được ở một số nhà cấp; vẫn cần thời gian để SmartScreen tin tưởng |
@@ -52,7 +52,7 @@ Kiểm tra bản đã dựng: `npm run verify:signature -w @neu/agent-desktop` (
 
 ## Chứng chỉ cố định cho bản CHƯA có Developer ID (tránh hộp thoại Keychain lặp lại)
 
-Bản ký "ad-hoc" có danh tính đổi theo từng bản build, nên Keychain của macOS hỏi lại *"Hando wants to use your confidential information…"* sau mỗi lần cập nhật (bấm "Always Allow" cũng không giữ được sang bản sau). Cách chữa tạm khi chưa có Developer ID: ký mọi bản bằng **một chứng chỉ tự cấp cố định** của máy dựng.
+Bản ký "ad-hoc" có danh tính đổi theo từng bản build, nên Keychain của macOS hỏi lại *"Handio wants to use your confidential information…"* sau mỗi lần cập nhật (bấm "Always Allow" cũng không giữ được sang bản sau). Cách chữa tạm khi chưa có Developer ID: ký mọi bản bằng **một chứng chỉ tự cấp cố định** của máy dựng.
 
 ```bash
 D=~/.neu-agent-signing; mkdir -p $D && chmod 700 $D && cd $D

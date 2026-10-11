@@ -11,7 +11,7 @@ const when = (ts: number): string => {
 
 /**
  * Hộp "Chia sẻ cuộc trò chuyện": xem trước (đã che thông tin nhạy cảm), đồng ý rõ ràng, tạo liên kết cho người khác đọc, và thu hồi.
- * Nói thẳng cho người dùng: người có liên kết (đã đăng nhập Hando) và nhóm phát triển đều đọc được bản chia sẻ.
+ * Nói thẳng cho người dùng: người có liên kết (đã đăng nhập Handio) và nhóm phát triển đều đọc được bản chia sẻ.
  */
 export function openShare(ctl: AgentController, opts: { track?: (a: string) => void; chatId?: string } = {}): void {
   if (!ctl.shareChat) return;
@@ -76,7 +76,7 @@ export function openShare(ctl: AgentController, opts: { track?: (a: string) => v
     say(r.message, true);
     const input = h("input", { type: "text", class: "shr-url", readonly: "", value: r.url, "aria-label": "Liên kết chia sẻ" }) as HTMLInputElement;
     result.replaceChildren(
-      h("div", { class: "shr-h" }, "Liên kết (chỉ người đã đăng nhập Hando mở được):"),
+      h("div", { class: "shr-h" }, "Liên kết (chỉ người đã đăng nhập Handio mở được):"),
       h("div", { class: "shr-copy" }, input, h("button", { class: "btn primary sm", type: "button", onclick: () => void copy(r.url!) }, "Sao chép")));
     input.focus();
     input.select();
@@ -92,7 +92,7 @@ export function openShare(ctl: AgentController, opts: { track?: (a: string) => v
       h("div", { class: "shr-warn" },
         h("b", {}, "Trước khi chia sẻ, hãy lưu ý:"),
         h("ul", {},
-          h("li", {}, "Bất kỳ ai đã đăng nhập Hando và có liên kết đều đọc được toàn bộ cuộc trò chuyện này."),
+          h("li", {}, "Bất kỳ ai đã đăng nhập Handio và có liên kết đều đọc được toàn bộ cuộc trò chuyện này."),
           h("li", {}, "Nhóm phát triển cũng đọc được các cuộc trò chuyện được chia sẻ để hiểu người dùng gặp gì và cải thiện hệ thống."),
           h("li", {}, "Khoá/mật khẩu, CCCD, số điện thoại, email, số tài khoản được tự che, nhưng bạn vẫn nên tự kiểm tra, đừng chia sẻ thông tin riêng tư của người khác."),
           h("li", {}, "Nội dung các tệp không được chia sẻ, chỉ có chữ trao đổi và tóm tắt thao tác."),

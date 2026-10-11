@@ -1,6 +1,6 @@
 appId: vn.edu.neu.agent
-productName: Hando
-copyright: Hando
+productName: Handio
+copyright: Handio
 directories:
   output: release
   buildResources: build
@@ -53,7 +53,7 @@ mac:
     NSMicrophoneUsageDescription: ""
     NSCameraUsageDescription: ""
 dmg:
-  title: "Hando ${version}"
+  title: "Handio ${version}"
   contents:
     - { x: 130, y: 220 }
     - { x: 410, y: 220, type: link, path: /Applications }
@@ -73,6 +73,6 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: Hando
+  shortcutName: Handio
   deleteAppDataOnUninstall: false
   runAfterFinish: true

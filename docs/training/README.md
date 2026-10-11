@@ -1,6 +1,6 @@
-# Tài liệu training Hando
+# Tài liệu training Handio
 
-Hando có ba tab, cho ba nhóm người dùng:
+Handio có ba tab, cho ba nhóm người dùng:
 
 | Tab | Dành cho | Làm gì | Tài liệu |
 |---|---|---|---|
