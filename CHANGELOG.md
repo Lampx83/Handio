@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.3] - 2026-10-11
+
 ### Thêm
 - **Tự cập nhật ngay trong ứng dụng (Windows và macOS)**: ứng dụng tự tải nền bản mới, kiểm mã băm, rồi tự cài khi bạn đóng ứng dụng, hoặc bấm “Cài đặt và khởi động lại” để cài ngay. Không cần mở tệp tải về nữa. Tắt được ở menu **Tệp → Tự động cập nhật**. Lần đầu lên bản này vẫn cần cập nhật theo cách cũ một lần.
 - **Cập nhật xong tự làm tiếp việc đang dở**: nếu agent đang làm việc lúc cập nhật, ứng dụng dừng gọn, lưu lại và sau khi mở lại tự mở đúng cuộc trò chuyện rồi nhắn agent làm tiếp.
