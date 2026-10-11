@@ -209,16 +209,24 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VER: ${{ steps.pack.outputs.version }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           # chỉ tạo khi máy chủ đã nhận (hoặc chạy thử không đưa lên máy chủ thì tạo bản nháp)
           draft=""; [ "${{ steps.server.outcome }}" = "success" ] || draft="--draft"
-          if gh release view "v$VER" >/dev/null 2>&1; then
-            gh release upload "v$VER" out/* --clobber
-            gh release edit "v$VER" --notes-file release-notes.md
-            # bản nháp tạo từ lần chạy trước (chưa đưa lên được máy chủ): đã đưa lên máy chủ thành công thì công bố luôn
-            [ -n "$draft" ] || gh release edit "v$VER" --draft=false --latest
-          else
-            gh release create "v$VER" out/* --target "$GITHUB_SHA" --title "NEU Agent $VER" --notes-file release-notes.md $draft
+          release() {
+            set -e
+            if gh release view "v$VER" >/dev/null 2>&1; then
+              gh release upload "v$VER" out/* --clobber
+              gh release edit "v$VER" --notes-file release-notes.md
+              # bản nháp tạo từ lần chạy trước (chưa đưa lên được máy chủ): đã đưa lên máy chủ thành công thì công bố luôn
+              [ -n "$draft" ] || gh release edit "v$VER" --draft=false --latest
+            else
+              gh release create "v$VER" out/* --target "$GITHUB_SHA" --title "NEU Agent $VER" --notes-file release-notes.md $draft
+            fi
+          }
+          # Trang phát hành GitHub chỉ là bản lưu: người dùng cập nhật từ MÁY CHỦ (bước trước). Nếu bước này lỗi (đã gặp 403 "Resource not accessible
+          # by integration" với 0.8.5 dù quyền hợp lệ) thì cảnh báo to nhưng KHÔNG làm cả lần phát hành thành "thất bại".
+          if ! release; then
+            echo "::warning::Không tạo được trang phát hành GitHub v$VER (máy chủ đã nhận bản cài: ${{ steps.server.outcome }}). Tạo tay: gh release create v$VER --target $GITHUB_SHA --notes-file release-notes.md (tệp trong artifact desktop-$VER)."
           fi
       - name: Tóm tắt
         if: always()
