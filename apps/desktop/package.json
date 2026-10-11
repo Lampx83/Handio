@@ -1,6 +1,6 @@
 {
   "name": "@neu/agent-desktop",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "description": "NEU Agent — trợ lý AI giúp học lập trình và xử lý công việc văn phòng",
   "main": "dist/main.js",

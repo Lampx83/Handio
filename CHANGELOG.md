@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.2] - 2026-10-11
+
 ### Thêm
 - **Quản trị: ghi nội dung hội thoại của tài khoản chỉ định** (mặc định tắt) vào CSDL riêng trên máy chủ để nghiên cứu, kèm lệnh bật/tắt/xuất/xoá (`quota.sh capture …`, xem docs/QUOTA.md). Chỉ ghi đúng các tài khoản được liệt kê (hoặc theo tiền tố như `test0*` cho tài khoản tên; không áp cho email); người khác không bị ảnh hưởng.
 - **Cấp quyền quản trị cho tài khoản tên + mật khẩu**: ghi đúng tên đăng nhập (ví dụ `test01`) vào danh sách quản trị trên máy chủ là tài khoản đó vào được `/agent/admin/`. Mặc định không tài khoản mật khẩu nào là quản trị viên.
