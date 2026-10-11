@@ -97,7 +97,11 @@ PY
       export)
         python3 - "$CAPDB" "${3:-}" "${4:-}" <<'PY'
 import json, sqlite3, sys, time
-db = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True); db.row_factory = sqlite3.Row
+try:
+    db = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True); db.row_factory = sqlite3.Row
+    db.execute("select 1 from captures limit 1")
+except sqlite3.Error:
+    sys.exit("Chưa có dữ liệu: CSDL chỉ được tạo khi tài khoản đang được ghi gửi yêu cầu đầu tiên (sau lệnh capture add).")
 q, args = "select * from captures", []
 w = []
 if sys.argv[2]: w.append("user=?"); args.append(sys.argv[2].strip().lower())
