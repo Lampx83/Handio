@@ -155,6 +155,38 @@ describe("ảnh dán Ctrl+V lưu tạm ngoài dự án", () => {
     expect((await env.readdir(env.scratchDir!)).length).toBeLessThanOrEqual(30);
   });
 
+  it("read_image nhận 'dan/<tên>' và cả đường dẫn bị ghép vào thư mục dự án (lỗi thật: 'Không có tệp ảnh …/Đồng hồ/dan/anh-dan-….png')", async () => {
+    const reads: string[] = [];
+    const { c, env, events } = await makeController([
+      { calls: [{ name: "read_image", args: { path: "/ws/dan/anh-dan-20261011-224814.png" } }] },
+      { calls: [{ name: "read_image", args: { path: "dan/anh-dan-20261011-224814.png" } }] },
+      { text: "xong" },
+    ], {});
+    (c.currentSession.o as unknown as { llm: { vision: (u: string) => Promise<string> } }).llm.vision = async (u: string) => (reads.push(u.slice(0, 22)), "Chữ trong ảnh");
+    await c.pasteImages!([{ name: "anh-dan-20261011-224814.png", data: PNG }]);
+    await c.send("@dan/anh-dan-20261011-224814.png lỗi gì đây");
+    const res = events.filter((e) => e.type === "tool_result") as { name: string; ok: boolean; output: string }[];
+    const imgs = res.filter((r) => r.name === "read_image");
+    expect(imgs.map((r) => r.ok)).toEqual([true, true]);
+    expect(imgs[0].output).not.toMatch(/Không có tệp ảnh/);
+    expect(reads.length).toBe(2);
+    expect(await env.stat(`${env.root}/dan`)).toBeNull(); // không tạo gì trong dự án
+  });
+
+  it("tệp trùng tên có thật trong dự án thì dùng tệp của dự án (không bị thay bằng ảnh tạm)", async () => {
+    const { c, env } = await makeController([{ text: "ok" }], { seed: { "dan/anh-dan-1.png": "trong-du-an" } });
+    await c.pasteImages!([{ name: "anh-dan-1.png", data: PNG }]);
+    const { resolveSafe } = await import("../src/tools");
+    const abs = await resolveSafe(c.currentSession.ctx, "dan/anh-dan-1.png");
+    expect(abs).toBe(`${env.root}/dan/anh-dan-1.png`);
+  });
+
+  it("pasteImages trả thư mục đã lưu để giao diện báo cho người dùng", async () => {
+    const { c, env } = await makeController([{ text: "ok" }], {});
+    const r = await c.pasteImages!([{ name: "a.png", data: PNG }]);
+    expect(r.dir).toBe(env.scratchDir);
+  });
+
   it("đường dẫn lạ trong dan/ không thoát ra ngoài thư mục tạm", async () => {
     const { c } = await makeController([{ text: "ok" }], {});
     const out = await c.currentSession.handleInput("xem @dan/../../etc/passwd và @dan/../../../../../etc/hosts");

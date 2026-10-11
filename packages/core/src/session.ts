@@ -605,7 +605,7 @@ export class Session {
       }
       if (/\.(png|jpe?g|webp|gif)$/i.test(rel)) {
         if (this.tools.has("read_image")) {
-          blocks.push(`<image path="${rel}">Ảnh: dùng công cụ read_image để xem (chép chữ, đọc bảng, mô tả).</image>`);
+          blocks.push(`<image path="${rel}">Ảnh người dùng vừa dán/đính kèm${outside ? " (lưu tạm ngoài thư mục dự án; đường dẫn này dùng được nguyên văn)" : ""}. Gọi read_image với đúng path này để xem (chép chữ, đọc bảng, mô tả).</image>`);
           names.push(`@${rel} (ảnh)`);
         }
         continue;

@@ -1508,10 +1508,12 @@ class App {
     let refs: string[] = [];
     let errors: string[] = [];
     let inProject = false;
+    let dir = "";
     if (this.ctl.pasteImages) {
       const r = await this.ctl.pasteImages(files);
       refs = r.refs;
       errors = r.errors;
+      dir = r.dir ?? "";
     } else {
       const r = await this.ctl.uploadFiles(files);
       refs = r.saved.filter((n) => !/\s/.test(n));
@@ -1531,7 +1533,9 @@ class App {
       el.selectionStart = el.selectionEnd = before.length + ins.length;
       this.autoGrow();
       el.focus();
-      this.append(h("div", { class: "notice" }, inProject ? "Đã lưu ảnh dán vào thư mục làm việc: " + refs.join(", ") : "Đã đính kèm ảnh dán (lưu tạm, không nằm trong dự án): " + refs.map((r) => r.replace(/^dan\//, "")).join(", ")));
+      this.append(h("div", { class: "notice" }, inProject || /^\.neuagent\//.test(refs[0] ?? "")
+        ? "Đã lưu ảnh dán trong dự án: " + refs.join(", ")
+        : `Đã đính kèm ảnh dán: ${refs.map((r) => r.replace(/^dan\//, "")).join(", ")}. Lưu tạm ngoài dự án${dir ? " tại " + dir : ""} (giữ 30 ảnh gần nhất); agent đọc được bằng @dan/<tên>.`));
     }
   }
 

@@ -85,11 +85,27 @@ const dec = new TextDecoder();
 
 // ---------------------------------------------------------------- đường dẫn
 
+/**
+ * Ảnh dán (Ctrl+V) được lưu TẠM ngoài thư mục dự án (xem LocalController.pasteImages) và người dùng thấy nó là `@dan/<tên>`. Mô hình hay lấy
+ * nguyên `dan/<tên>` (hoặc ghép nó vào thư mục dự án, vd ".../Dự án/dan/anh-dan-….png") làm đường dẫn → "Không có tệp ảnh". Nếu tên tệp có dạng
+ * `anh-dan-…`, KHÔNG có tệp cùng đường dẫn trong dự án, và thư mục tạm có đúng tệp đó thì trỏ về tệp tạm.
+ */
+async function pastedAlias(ctx: ToolContext, raw: string, abs: string): Promise<string | null> {
+  const scratch = ctx.env.scratchDir;
+  if (!scratch) return null;
+  const m = /(?:^|[\\/])(anh-dan-[^\\/]+)$/.exec(raw.replace(/^@/, ""));
+  if (!m) return null;
+  if (await ctx.env.stat(abs)) return null;
+  const cand = join(scratch, m[1]);
+  return (await ctx.env.stat(cand)) ? cand : null;
+}
+
 /** Resolve đường dẫn, theo symlink, và bắt buộc nằm trong thư mục dự án (hoặc thư mục được thêm). */
 export async function resolveSafe(ctx: ToolContext, p: unknown): Promise<string> {
   if (typeof p !== "string" || !p.trim()) throw new ToolError("Thiếu đường dẫn.", "bad_args");
   const raw = p.startsWith("~") && ctx.env.home ? ctx.env.home + p.slice(1) : p;
   let abs = resolve(ctx.root, raw);
+  abs = (await pastedAlias(ctx, raw, abs)) ?? abs;
   if (isAbsolute(raw) && !isInside(ctx.root, abs)) {
     // Mô hình hay gõ lại đường dẫn tuyệt đối mà gộp hai dấu cách liền nhau thành một ("Slide  test" → "Slide test"): nhận lại về đúng thư mục dự án.
     const squash = (seg: string) => seg.replace(/\s+/g, " ").toLowerCase();

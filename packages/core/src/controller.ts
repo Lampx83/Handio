@@ -836,11 +836,13 @@ export class LocalController implements AgentController {
    * Ảnh dán (Ctrl+V, ảnh chụp màn hình…): lưu TẠM ngoài thư mục dự án để không làm lẫn tệp rác vào mã nguồn người dùng
    * (bị `git status` thấy, có thể lỡ commit). Tham chiếu trả về dạng `dan/<tên>`; agent đọc bằng read_image. Giữ tối đa 30 ảnh gần nhất.
    */
-  async pasteImages(files: { name: string; data: Uint8Array }[]): Promise<{ refs: string[]; errors: string[] }> {
+  async pasteImages(files: { name: string; data: Uint8Array }[]): Promise<{ refs: string[]; errors: string[]; dir?: string }> {
     const refs: string[] = [];
     const errors: string[] = [];
-    const dir = this.o.env.scratchDir;
-    if (!dir) return { refs, errors: ["Môi trường này chưa có thư mục tạm cho ảnh dán."] };
+    // môi trường không có thư mục tạm (bản web): lưu vào thư mục riêng của ứng dụng trong dự án, không để lẫn vào mã nguồn
+    const scratch = this.o.env.scratchDir;
+    const inProject = !scratch;
+    const dir = scratch ?? join(this.session.ctx.root, ".neuagent", "pasted");
     await this.o.env.mkdirp(dir);
     for (const f of files.slice(0, 5)) {
       const clean = safeFileName(f.name);
@@ -855,7 +857,7 @@ export class LocalController implements AgentController {
       let name = clean;
       for (let n = 2; await this.o.env.stat(join(dir, name)); n++) name = clean.replace(/(\.[^./]+)?$/, ` (${n})$1`);
       await this.o.env.writeBytes(join(dir, name), f.data);
-      refs.push("dan/" + name);
+      refs.push(inProject ? ".neuagent/pasted/" + name : "dan/" + name);
     }
     // dọn: chỉ giữ 30 ảnh mới nhất
     try {
@@ -864,7 +866,7 @@ export class LocalController implements AgentController {
     } catch {
       /* dọn không được thì thôi */
     }
-    return { refs, errors };
+    return { refs, errors, dir };
   }
 
   async downloadFile(path: string): Promise<{ name: string; data: Uint8Array } | { error: string }> {
