@@ -68,6 +68,14 @@ export function cleanProjectName(name: string): string {
   return name.replace(/[\u0000-\u001f<>:"/\\|?*]/g, " ").replace(/\s+/g, " ").replace(/^\.+/, "").trim().slice(0, 60);
 }
 
+/** Tên hiển thị không trùng tên dự án đang có (không phân biệt hoa/thường): "Bài 2" → "Bài 2 (2)" khi đã có "Bài 2" TRONG DANH SÁCH. */
+export function uniqueProjectName(existing: readonly string[], name: string): string {
+  const taken = new Set(existing.map((n) => n.toLowerCase()));
+  let out = name;
+  for (let n = 2; taken.has(out.toLowerCase()); n++) out = `${name} (${n})`;
+  return out;
+}
+
 export const isInternalUser = (t: string): boolean => /^\[(Tôi vừa tự chạy lệnh|Hook |Hệ thống)/.test(t) || t.startsWith("Hãy tiếp tục công việc đang làm dở") || t.startsWith("[Tóm tắt") || /^(Kế hoạch được duyệt|Người dùng chưa duyệt|Không ở chế độ plan)/.test(t);
 
 /** Tiêu đề cuộc trò chuyện = câu hỏi đầu tiên của người dùng. */

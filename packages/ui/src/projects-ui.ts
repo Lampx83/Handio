@@ -56,6 +56,34 @@ export function openNewProject(ctl: AgentController, st: UiState, done: () => vo
   name.focus();
 }
 
+/** Đổi tên một dự án (hộp thoại riêng; `window.prompt` không dùng được trong Electron). */
+export function openRenameProject(ctl: AgentController, p: { id: string; name: string }, done: () => void): void {
+  const dlg = h("dialog", { class: "proj-dlg" });
+  const name = h("input", { type: "text", maxlength: "60", "aria-label": "Tên dự án" });
+  name.value = p.name;
+  const err = h("div", { class: "res bad", role: "alert" });
+  const save = async () => {
+    const n = name.value.trim();
+    if (!n) {
+      err.textContent = "Hãy nhập tên.";
+      return;
+    }
+    if (n !== p.name) await ctl.projectRename!(p.id, n);
+    dlg.close();
+    done();
+  };
+  dlg.append(
+    h("div", { class: "dh" }, "Đổi tên dự án", h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")),
+    h("div", { class: "db" }, h("label", {}, "Tên mới", name), err),
+    h("div", { class: "df" }, h("button", { class: "btn primary", type: "button", onclick: () => void save() }, "Lưu")));
+  name.addEventListener("keydown", (e) => e.key === "Enter" && (e.preventDefault(), void save()));
+  dlg.addEventListener("close", () => dlg.remove());
+  document.body.append(dlg);
+  dlg.showModal();
+  name.focus();
+  name.select();
+}
+
 /** Sửa hướng dẫn riêng của dự án đang mở (tệp AGENTS.md ở thư mục gốc dự án). */
 export async function openInstructions(ctl: AgentController, st: UiState, done: () => void): Promise<void> {
   const cur = await ctl.instructionsGet!();
@@ -106,12 +134,9 @@ export async function toggleProjectMenu(anchor: HTMLElement, ctl: AgentControlle
         } }, p.name, p.path ? h("small", {}, p.path) : null),
         h("button", { type: "button", class: "pm-b", title: "Đổi tên", "aria-label": "Đổi tên " + p.name, onclick: async (ev: Event) => {
           ev.stopPropagation();
-          const n = prompt("Tên mới cho dự án:", p.name);
-          if (n && n.trim()) {
-            await ctl.projectRename!(p.id, n.trim());
-            close();
-            hooks.changed();
-          }
+          close();
+          // không dùng window.prompt(): Electron không hỗ trợ nên nút này từng không làm gì cả
+          openRenameProject(ctl, p, () => hooks.changed());
         } }, "✎"),
         list.length > 1 ? h("button", { type: "button", class: "pm-b", title: "Bỏ khỏi danh sách (không xoá tệp)", "aria-label": "Bỏ " + p.name + " khỏi danh sách", onclick: async (ev: Event) => {
           ev.stopPropagation();

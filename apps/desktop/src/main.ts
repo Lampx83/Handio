@@ -4,7 +4,7 @@ import os from "node:os";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
-import { brandName, buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
+import { brandName, buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
 import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, readPackDirs, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
@@ -228,7 +228,11 @@ function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<st
     await write(r);
     return r;
   };
-  const uniqueDir = async (parent: string, name: string): Promise<string> => {
+  /**
+   * Thư mục cho dự án mới tên `name`. Bỏ một dự án khỏi danh sách KHÔNG xoá thư mục trên đĩa, nên tạo lại cùng tên sẽ gặp thư mục cũ:
+   * nếu nó TRỐNG và không thuộc dự án nào thì dùng lại (không đẻ ra "Bài 2 (2)" trên đĩa); còn lại thì thêm hậu tố.
+   */
+  const uniqueDir = async (parent: string, name: string, used: string[]): Promise<string> => {
     await fs.mkdir(parent, { recursive: true });
     for (let n = 1; ; n++) {
       const dir = path.join(parent, n === 1 ? name : `${name} (${n})`);
@@ -237,13 +241,10 @@ function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<st
         return dir;
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+        const empty = (await fs.readdir(dir).catch(() => ["?"])).length === 0;
+        if (empty && !used.includes(dir)) return dir;
       }
     }
-  };
-  const uniqueName = (r: Registry, name: string): string => {
-    let out = name;
-    for (let n = 2; r.projects.some((p) => p.name.toLowerCase() === out.toLowerCase()); n++) out = `${name} (${n})`;
-    return out;
   };
   return {
     async list(): Promise<ProjectsState> {
@@ -268,9 +269,10 @@ function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<st
       const r = await read();
       const clean = cleanProjectName(name);
       if (!clean) throw new Error("Hãy đặt tên cho dự án.");
-      const dir = await uniqueDir(projectsParent(profile), clean);
+      const dir = await uniqueDir(projectsParent(profile), clean, r.projects.map((p) => p.path ?? ""));
       const now = Date.now();
-      const info: ProjectInfo = { id: newId(), name: uniqueName(r, path.basename(dir)), path: dir, created: now, lastUsed: now };
+      // tên hiển thị là đúng tên người dùng gõ (chỉ thêm "(2)" khi trùng với dự án ĐANG CÓ trong danh sách), không lấy theo tên thư mục
+      const info: ProjectInfo = { id: newId(), name: uniqueProjectName(r.projects.map((p) => p.name), clean), path: dir, created: now, lastUsed: now };
       r.projects.push(info);
       r.active = info.id;
       await write(r);
@@ -286,7 +288,7 @@ function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<st
       let info = r.projects.find((p) => p.path === dir);
       if (!info) {
         const now = Date.now();
-        info = { id: newId(), name: uniqueName(r, cleanProjectName(path.basename(dir)) || "Dự án"), path: dir, created: now, lastUsed: now };
+        info = { id: newId(), name: uniqueProjectName(r.projects.map((p) => p.name), cleanProjectName(path.basename(dir)) || "Dự án"), path: dir, created: now, lastUsed: now };
         r.projects.push(info);
       }
       info.lastUsed = Date.now();

@@ -220,3 +220,13 @@ describe("làm tiếp việc đang dở sau khi cập nhật", () => {
     expect(await c.resumeAfterRestart({ projectId, chatId: "khong-co" }, "x")).toBe(false);
   });
 });
+
+describe("uniqueProjectName", () => {
+  it("giữ nguyên tên khi không trùng dự án đang có; trùng thì thêm (2), (3); không phân biệt hoa/thường", async () => {
+    const { uniqueProjectName } = await import("../src/projects");
+    expect(uniqueProjectName([], "Bài 2")).toBe("Bài 2");
+    expect(uniqueProjectName(["Bài 1"], "Bài 2")).toBe("Bài 2"); // "Bài 2" đã bỏ khỏi danh sách: tên lại là "Bài 2", không phải "(2)"
+    expect(uniqueProjectName(["Bài 2"], "Bài 2")).toBe("Bài 2 (2)");
+    expect(uniqueProjectName(["Bài 2", "bài 2 (2)"], "Bài 2")).toBe("Bài 2 (3)");
+  });
+});

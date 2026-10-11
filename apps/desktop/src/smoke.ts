@@ -168,6 +168,12 @@ export async function runSmoke(c: Ctx): Promise<number> {
     check("Work: quay lại dự án mẫu, tệp và lịch sử cũ còn nguyên", (await work.listDir(".")).some((e) => e.name === "diem-hoc-phan.xlsx") && (await work.chatList()).length >= 2);
     const removed = await work.projectRemove(stNew.projectId);
     check("Work: bỏ dự án khỏi danh sách KHÔNG xoá thư mục trên đĩa", "ok" in removed && !!(await fs.stat(path.join(stNew.workspace, "AGENTS.md")).catch(() => null)));
+    // tạo lại đúng tên vừa bỏ: giữ nguyên tên người dùng gõ (không thành "… (2)"), dùng lại thư mục trống cũ
+    const again = await work.projectCreate({ name: "Hồ sơ smoke" });
+    const stAgain = await work.getState();
+    check("Work: tạo lại dự án trùng tên đã bỏ khỏi danh sách giữ đúng tên, không thành \"(2)\"", "ok" in again && stAgain.projectName === "Hồ sơ smoke", stAgain.projectName);
+    await work.projectOpen("default");
+    await work.projectRemove(stAgain.projectId);
     const reopen = await work.chatOpen(chats[0].id);
     check("Work: mở lại cuộc trò chuyện cũ để làm tiếp", !("error" in reopen) && reopen.history.some((h) => h.kind === "user"));
 
