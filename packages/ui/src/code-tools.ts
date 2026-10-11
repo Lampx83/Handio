@@ -11,6 +11,11 @@ export interface CodeToolsHost {
   renderDiff(diff: DiffLine[]): HTMLElement;
 }
 
+/** Chỉ hiện nút chọn mô hình khi máy chủ có từ 2 mô hình trở lên (một mô hình thì không có gì để chọn). */
+export function shouldShowModelPicker(models: string[], current: string): boolean {
+  return new Set([...models, current].filter((m) => typeof m === "string" && m.trim())).size > 1;
+}
+
 const STATUS: Record<ChangeFile["status"], { ic: string; title: string }> = {
   new: { ic: "＋", title: "Tệp mới" },
   modified: { ic: "✎", title: "Đã sửa" },
@@ -34,6 +39,9 @@ export class CodeTools {
   /** Nút chọn mô hình: đặt dưới ô nhập prompt (do app.ts gắn), menu mở lên phía trên. */
   readonly modelEl = h("span", { class: "ct-model", style: { position: "relative", display: "inline-flex" } });
   private pop: HTMLElement | null = null;
+  /** Danh sách mô hình máy chủ cung cấp (null = chưa hỏi); hỏi lại sau 5 phút. */
+  private modelList: string[] | null = null;
+  private modelListAt = 0;
   private files: ChangeFile[] = [];
   private on = false;
   private exec = false;
@@ -54,10 +62,11 @@ export class CodeTools {
 
   /** Gọi mỗi khi trạng thái giao diện được nạp lại. */
   update(state: UiState): void {
-    // chọn mô hình có ở mọi tab (nằm dưới ô nhập prompt); phần còn lại (thay đổi, quay lại, chạy) chỉ ở tab Code
-    this.modelBtn.hidden = !state.model;
+    // chọn mô hình (nằm dưới ô nhập prompt): ẩn khi máy chủ chỉ có một mô hình; hiện lại khi có từ hai trở lên
+    this.modelBtn.hidden = true;
     this.modelBtn.textContent = state.model.length > 24 ? state.model.slice(0, 23) + "…" : state.model;
     this.modelBtn.title = "Mô hình: " + state.model + " (bấm để đổi)";
+    void this.refreshModelPicker(state.model);
     this.on = state.profile === "code" && !!this.ctl.changesList;
     this.exec = !!state.capabilities.exec;
     this.wrap.hidden = !this.on;
@@ -234,6 +243,18 @@ export class CodeTools {
   private closePop(): void {
     this.pop?.remove();
     this.pop = null;
+  }
+
+  private async refreshModelPicker(current: string): Promise<void> {
+    if (this.modelList === null || Date.now() - this.modelListAt > 300_000) {
+      try {
+        this.modelList = (await this.ctl.listModels?.()) ?? [];
+      } catch {
+        this.modelList = [];
+      }
+      this.modelListAt = Date.now();
+    }
+    this.modelBtn.hidden = !shouldShowModelPicker(this.modelList, current);
   }
 
   private showPop(items: { label: string; title?: string; sel?: boolean; on: () => void }[], cls = "", anchor: HTMLElement = this.wrap): void {

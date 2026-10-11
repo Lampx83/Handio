@@ -23,6 +23,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Đọc PowerPoint đã sắp xếp lại slide** nay đúng thứ tự trình chiếu (trước đây theo tên tệp). **Hoàn tác** khôi phục đúng tệp kể cả khi thư mục chứa đã bị xoá. Sửa lỗi đọc tệp Word có phím Tab/mục lục.
 - **Tỷ lệ lỗi công cụ không còn bị thổi phồng** bởi các bản ứng dụng cũ chưa phân loại lỗi (trước đây hiện như "chưa rõ" chiếm gần hết biểu đồ); phần đó nay ghi riêng.
 
+### Thay đổi
+- **Ẩn nút chọn mô hình ở khung chat khi máy chủ chỉ có một mô hình** (hiện lại tự động khi có từ hai mô hình trở lên).
+
 ## [0.8.3] - 2026-10-11
 
 ### Thêm
