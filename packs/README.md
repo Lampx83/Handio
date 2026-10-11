@@ -15,3 +15,4 @@ Thư mục này là **bộ gói của NEU**. Triển khai cho tổ chức khác:
 | `chat-luong-web` | Code, Design | kiểm tra giao diện (a11y, responsive, hiệu năng), subagent soát giao diện |
 | `sinh-vien` | Code, Work | làm đồ án/khoá luận, giải thích lỗi, ôn tập |
 | `van-phong-tu-dong` | Work | gộp, đối chiếu, tổng hợp hàng loạt tệp; đọc ảnh/scan thành Word, bảng trong ảnh thành Excel |
+| `nang-suat` | Work | việc cần làm trong `VIEC-CAN-LAM.md` (`/viec-can-lam`), bộ nhớ thuật ngữ và người-việc (`/ghi-nho`, `/don-bo-nho`), bản tin đầu ngày từ thư mục dự án (`/ban-tin-ngay`) |

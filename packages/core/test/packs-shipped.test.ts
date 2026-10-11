@@ -28,7 +28,7 @@ describe("bộ gói đi kèm (packs/)", () => {
   env.exec = async () => ({ code: 0, output: "", timedOut: false });
   env.spawn = () => ({ stop() {} });
   env.runJs = async () => ({ ok: true, logs: [] });
-  const toolNames = new Set<string>([visionTool(env, () => ({ vision: async () => "" })).name, ...packs.flatMap((p) => Object.keys(p.httpTools)), ...builtinTools(env).map((t) => t.name), ...office.officeTools(env).map((t) => t.name), ...office.workTools(env).map((t) => t.name), "task", "skill", "todo_write"]);
+  const toolNames = new Set<string>([visionTool(env, () => ({ vision: async () => "" })).name, ...packs.flatMap((p) => Object.keys(p.httpTools)), ...builtinTools(env).map((t) => t.name), ...office.officeTools(env).map((t) => t.name), ...office.workTools(env).map((t) => t.name), "task", "skill", "todo_write", "ask_user"]);
 
   it("có gói và không có cảnh báo nào", () => {
     expect(packs.length).toBeGreaterThan(0);
