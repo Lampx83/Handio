@@ -15,3 +15,4 @@ Thư mục này là **bộ gói của NEU**. Triển khai cho tổ chức khác:
 | `chat-luong-web` | Code, Design | kiểm tra giao diện (a11y, responsive, hiệu năng), subagent soát giao diện |
 | `sinh-vien` | Code, Work | làm đồ án/khoá luận, giải thích lỗi, ôn tập |
 | `van-phong-tu-dong` | Work | gộp, đối chiếu, tổng hợp hàng loạt tệp; đọc ảnh/scan thành Word, bảng trong ảnh thành Excel |
+| `khoa-cntt` | Work | hồ sơ hoạt động của Khoa CNTT: kế hoạch + dự toán + email + bài website, phân bổ tiền theo người, bài đăng website, giáo trình; dữ liệu người thật đọc từ `du-lieu/` của dự án |
