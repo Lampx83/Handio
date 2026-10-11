@@ -227,6 +227,11 @@ export interface AgentController {
   feedback?(v: "up" | "down", reason?: string): void;
   /** Gửi góp ý/báo lỗi do người dùng viết tới nhóm phát triển (lưu ở máy chủ cho quản trị viên). Không bao giờ ném lỗi. */
   sendFeedback?(f: import("./feedback").FeedbackInput): Promise<import("./feedback").FeedbackResult>;
+  /** Chia sẻ cuộc trò chuyện: xem trước (đã che nhạy cảm), tạo liên kết, danh sách đã chia sẻ, thu hồi. Không bao giờ ném lỗi. */
+  sharePreview?(chatId?: string): Promise<import("./share").SharePreview>;
+  shareChat?(f: { chatId?: string; title?: string }): Promise<import("./share").ShareResult>;
+  sharedChats?(): Promise<import("./share").SharedChatInfo[]>;
+  unshareChat?(id: string): Promise<{ ok: boolean; message: string }>;
   diagnosticsStatus?(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }>;
   diagnosticsPreview?(note: string): Promise<string | null>;
   diagnosticsSend?(): Promise<{ ok: boolean }>;

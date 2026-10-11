@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Cuộc trò chuyện được chia sẻ · NEU Agent</title>
+<style>
+:root{--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--line:#dedcd3;--accent:#0b4a9e;--accent-fg:#fff;--soft:#e4edfa;--err:#c0302b;--ok:#1a7f4b;--warn-bg:#fff7e0}
+@media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--line:#34363b;--accent:#5b9bff;--accent-fg:#0b1220;--soft:#1b2a45;--err:#ff7b72;--ok:#4cc38a;--warn-bg:#33290f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+a{color:var(--accent)}
+h1{font-size:22px;margin:6px 0 4px}
+h2{font-size:15px;margin:0 0 10px;letter-spacing:.2px}
+.muted{color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);min-width:0}
+input:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
+button.sm{padding:4px 10px;font-size:13px}
+button[disabled]{opacity:.55;cursor:default}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
+th{font-weight:600;color:var(--muted);font-size:12.5px}
+td.num,th.num{text-align:right;white-space:nowrap}
+td.act{min-width:220px}
+.fb{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--bg)}
+.fb .meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--muted)}
+.fb .txt{white-space:pre-wrap;word-break:break-word;margin:8px 0}
+.fb textarea{width:100%;min-height:54px;font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
+.tag.bug{color:var(--err);border:1px solid var(--err);background:transparent}
+.tag.idea{background:var(--soft)}
+.tag.praise{color:var(--ok)}
+.conv{margin-top:10px;border-top:1px dashed var(--line);padding-top:8px}
+.conv .m{border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin:6px 0;background:var(--panel)}
+.conv .m.u{background:var(--soft)}
+.conv .m.c{font-size:12.5px;color:var(--muted)}
+.conv .r{font-size:12px;color:var(--muted);font-weight:600}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.msg{padding:10px 12px;border-radius:8px;margin:10px 0;border:1px solid var(--line);background:var(--soft)}
+.msg.err{border-color:var(--err);color:var(--err);background:transparent}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;background:var(--soft);white-space:nowrap}
+.tag.over{color:var(--err);background:transparent;border:1px solid var(--err);font-weight:600}
+.tag.near{background:var(--warn-bg)}
+.tag.ok{color:var(--ok)}
+.empty{padding:14px 6px;color:var(--muted)}
+.bar{height:6px;border-radius:99px;background:var(--line);overflow:hidden;min-width:70px;margin-top:3px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bar i.over{background:var(--err)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:10px 0 14px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg)}
+.tile b{display:block;font-size:26px;line-height:1.1}
+.tile span{display:block;color:var(--muted);font-size:12.5px}
+.scroll{overflow-x:auto}
+nav{font-size:14px}
+</style>
+</head>
+<body>
+<main>
+  <nav><a href="./">← Báo cáo chất lượng</a> · <a href="accounts">Tài khoản</a> · <a href="quota">Hạn mức token</a> · <a href="feedback">Góp ý</a></nav>
+  <h1>Cuộc trò chuyện được chia sẻ</h1>
+  <p class="muted">Các cuộc trò chuyện người dùng <b>chủ động chia sẻ</b> (nút 🔗 trong ứng dụng): họ đã biết nhóm phát triển đọc được để cải thiện hệ thống. Thông tin nhạy cảm đã được ứng dụng che trước khi gửi. Dùng để hiểu người dùng gặp gì; <b>tải JSONL</b> để phân tích (tên người chia sẻ được thay bằng mã giả danh).</p>
+
+  <div id="status" role="status" aria-live="polite"></div>
+  <div id="stats" class="stats"></div>
+
+  <section class="card" aria-labelledby="h-list">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="h-list" style="margin:0">Danh sách <span class="muted" id="count"></span></h2>
+      <span class="row">
+        <button id="reload" class="sm" type="button">Tải lại</button>
+        <button id="jsonl" class="sm" type="button">Tải JSONL</button>
+      </span>
+    </div>
+    <input id="q" type="search" placeholder="Tìm trong tiêu đề, nội dung, người chia sẻ" autocomplete="off" spellcheck="false" aria-label="Tìm" style="width:100%;margin:10px 0 6px">
+    <div id="list"></div>
+    <div id="none" class="empty" hidden>Chưa có cuộc trò chuyện nào được chia sẻ.</div>
+    <div class="row" style="justify-content:center;margin-top:8px"><button id="more" class="sm" type="button" hidden>Xem thêm</button></div>
+  </section>
+</main>
+<script src="shares.js"></script>
+</body>
+</html>

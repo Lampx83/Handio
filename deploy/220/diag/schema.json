@@ -310,6 +310,7 @@
           "stop_click",
           "point_edit",
           "feedback_send",
+          "share_create",
           "guide_open"
         ],
         "req": true

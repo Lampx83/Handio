@@ -54,6 +54,10 @@ class IpcController implements AgentController {
   listModels = () => this.call<string[]>("listModels");
   track = (act: string) => void this.call("track", act).catch(() => undefined);
   feedback = (v: "up" | "down", reason?: string) => void this.call("feedback", ...(reason ? [v, reason] : [v])).catch(() => undefined);
+  sharePreview = (id?: string) => this.call<any>("sharePreview", ...(id ? [id] : [])).catch(() => ({ ok: false, message: "Không xem trước được.", title: "", items: 0, redactions: 0 }));
+  shareChat = (f: { chatId?: string; title?: string }) => this.call<any>("shareChat", f).catch(() => ({ ok: false, message: "Không chia sẻ được." }));
+  sharedChats = () => this.call<any>("sharedChats").catch(() => []);
+  unshareChat = (id: string) => this.call<any>("unshareChat", id).catch(() => ({ ok: false, message: "Không thu hồi được." }));
   sendFeedback = (f: { kind: string; text: string; tech: boolean }) => this.call<any>("sendFeedback", f).catch(() => ({ ok: false, message: "Không gửi được góp ý." }));
   diagnosticsStatus = () => this.call<any>("diagnosticsStatus");
   diagnosticsPreview = (n: string) => this.call<string | null>("diagnosticsPreview", n);

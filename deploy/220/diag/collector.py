@@ -33,6 +33,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import feedback as FB
+import shares as SH
 import quota_admin as QA
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -50,7 +51,9 @@ DAY_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.jsonl$")
 MAX_ADMIN_BODY = 1024
 ADMIN_PAGES = {"accounts": ("accounts.html", "text/html; charset=utf-8"), "accounts.js": ("accounts.js", "text/javascript; charset=utf-8"),
                "quota": ("quota.html", "text/html; charset=utf-8"), "quota.js": ("quota.js", "text/javascript; charset=utf-8"),
-               "feedback": ("feedback.html", "text/html; charset=utf-8"), "feedback.js": ("feedback.js", "text/javascript; charset=utf-8")}
+               "feedback": ("feedback.html", "text/html; charset=utf-8"), "feedback.js": ("feedback.js", "text/javascript; charset=utf-8"),
+               "shares": ("shares.html", "text/html; charset=utf-8"), "shares.js": ("shares.js", "text/javascript; charset=utf-8")}
+MAX_SHARE_BODY = 400 * 1024         # bản chụp cuộc trò chuyện (≤ 300 KB chữ + JSON)
 MAX_FEEDBACK_BODY = 8 * 1024        # góp ý của người dùng (chữ ≤ 3000 ký tự, có dấu tiếng Việt → tối đa ~9 KB UTF-8, cắt ở 8 KB)
 MAX_ADMIN_FEEDBACK_BODY = 4096
 ADMIN_POSTS_PER_MIN = 30
@@ -349,6 +352,7 @@ class Config:
         self.public_host = kw.get("public_host", "ai.neu.edu.vn")  # để kiểm tra Origin của POST quản trị
         self.registry = kw.get("registry")                        # sổ "ai đã dùng" (None = tắt)
         self.feedback = kw.get("feedback")                        # FeedbackDB (None = tắt góp ý)
+        self.shares = kw.get("shares")                            # ShareDB (None = tắt chia sẻ cuộc trò chuyện)
         self.feedback_hits = kw.get("feedback_hits") or {}
         self.quota_db = kw.get("quota_db", "")                    # CSDL đếm token của cổng hạn mức (rỗng = tắt trang quản lý hạn mức)
         self.grants_file = kw.get("grants_file", "")              # tệp "cấp thêm hôm nay" mà cổng hạn mức đọc
@@ -442,6 +446,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._admin_feedback_post()
         if self.path == "/feedback" and self._local():
             return self._feedback_submit()
+        if self.path.split("?", 1)[0] == "/admin/api/shares" and self._local():
+            return self._admin_shares_post()
+        if self.path in ("/share", "/share/revoke") and self._local():
+            return self._share_post()
         if self.path != "/diag" or not self._local():
             return self._send(404, {"ok": False})
         email = self._ident()
@@ -502,6 +510,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200 if ok else 503, {"ok": ok})
         if (p == "/admin" or p.startswith("/admin/")) and self._local():
             return self._admin(p)
+        if (p == "/shares" or p.startswith("/share/")) and self._local():
+            return self._share_get(p)
         return self._send(404, {"ok": False})
 
     do_HEAD = do_GET
@@ -527,6 +537,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._admin_quota_get()
         if name == "api/feedback":
             return self._admin_feedback_get()
+        if name == "api/shares":
+            return self._admin_shares_get()
         if name in ADMIN_PAGES:
             return self._admin_static(name)
         if name in ("", "latest"):
@@ -761,6 +773,112 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, {"ok": False, "error": "bad_request", "message": "Yêu cầu không hợp lệ."})
         return self._send(200 if res.get("ok") else 404 if res.get("error") == "not_found" else 400, res)
 
+    # -- chia sẻ cuộc trò chuyện
+    def _read_json_body(self, limit):
+        """Đọc thân JSON có giới hạn. Trả (dict|None); đã tự trả lời lỗi khi None."""
+        if self.headers.get("Transfer-Encoding"):
+            self._send(411, {"ok": False, "error": "length_required"})
+            return None
+        try:
+            n = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self._send(411, {"ok": False, "error": "length_required"})
+            return None
+        if n > limit:
+            self._send(413, {"ok": False, "error": "size", "message": "Cuộc trò chuyện quá dài để chia sẻ."})
+            return None
+        if n < 2:
+            self._send(400, {"ok": False, "error": "size"})
+            return None
+        try:
+            return json.loads(self.rfile.read(n).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            self._send(400, {"ok": False, "error": "json"})
+            return None
+
+    def _share_post(self):
+        """POST /share (tạo) và /share/revoke (thu hồi của chính mình). Danh tính do nginx gắn."""
+        c = self.cfg
+        ident = self._ident()
+        if not ident:
+            return self._send(401, {"ok": False, "error": "no_identity"})
+        if c.shares is None:
+            return self._send(503, {"ok": False, "error": "unavailable", "message": "Chưa bật chia sẻ cuộc trò chuyện trên máy chủ."})
+        raw = self._read_json_body(MAX_SHARE_BODY)
+        if raw is None:
+            return
+        if self.path == "/share/revoke":
+            res = c.shares.revoke(raw.get("id") if isinstance(raw, dict) else None, ident)
+            return self._send(200 if res.get("ok") else 404, res)
+        p, err = SH.clean_payload(raw)
+        if p is None:
+            msg = {"empty": "Cuộc trò chuyện chưa có nội dung để chia sẻ.", "too_many": "Cuộc trò chuyện quá dài (tối đa %d mục)." % SH.MAX_ITEMS,
+                   "too_big": "Cuộc trò chuyện quá dài để chia sẻ."}.get(err, "Dữ liệu chia sẻ không hợp lệ.")
+            return self._send(400, {"ok": False, "error": err, "message": msg})
+        res = c.shares.create(ident, p)
+        if not res.get("ok"):
+            msg = "Bạn đã chia sẻ khá nhiều trong hôm nay. Hãy thu hồi bớt hoặc thử lại ngày mai." if res["error"] == "rate" else "Bạn đang có quá nhiều liên kết chia sẻ. Hãy thu hồi bớt."
+            return self._send(429, {"ok": False, "error": res["error"], "message": msg})
+        return self._send(200, {"ok": True, "id": res["id"], "path": "share/" + res["id"]})
+
+    def _share_get(self, p):
+        c = self.cfg
+        if not self._ident():
+            return self._send(401, {"ok": False, "error": "no_identity"})
+        if c.shares is None:
+            return self._send(503, {"ok": False, "error": "unavailable"})
+        if p == "/shares":
+            return self._send(200, {"ok": True, "items": c.shares.mine(self._ident())})
+        d = c.shares.get(p[len("/share/"):])
+        if d is None:
+            body = "<!doctype html><meta charset=utf-8><title>Không có</title><p style='font:16px system-ui;padding:24px'>Liên kết này không còn hiệu lực (đã bị thu hồi hoặc không đúng).</p>".encode("utf-8")
+            return self._send(404, body, "text/html; charset=utf-8", {"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'", "Referrer-Policy": "no-referrer"})
+        csp = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        return self._send(200, SH.render_page(d).encode("utf-8"), "text/html; charset=utf-8", {"Content-Security-Policy": csp, "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY"})
+
+    def _admin_shares_get(self):
+        c = self.cfg
+        email = self._admin_email()
+        if not email:
+            return
+        if c.shares is None:
+            return self._send(503, {"ok": False, "error": "unavailable", "message": "Kho chia sẻ chưa chạy (cài: sudo ./diag/install-diag.sh)."})
+        from urllib.parse import parse_qs
+        qs = parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        arg = lambda k, d="": (qs.get(k) or [d])[0][:100]
+        if arg("id"):
+            d = c.shares.get(arg("id"), count_view=False)
+            if d is None:
+                return self._send(404, {"ok": False, "error": "not_found"})
+            return self._send(200, {"ok": True, "item": d})
+        if arg("format") == "jsonl":
+            rows = c.shares.export()
+            lines = []
+            for r in rows:
+                r["owner"] = pseudonym(c.secret, r["owner"])      # xuất để phân tích: KHÔNG kèm email thật
+                lines.append(json.dumps(r, ensure_ascii=False, separators=(",", ":")))
+            return self._send(200, "\n".join(lines).encode("utf-8"), "application/x-ndjson; charset=utf-8", {"Content-Disposition": 'attachment; filename="neu-agent-shared-chats.jsonl"'})
+        try:
+            limit, offset = int(arg("limit") or 50), int(arg("offset") or 0)
+        except ValueError:
+            limit, offset = 50, 0
+        res = c.shares.admin_list(arg("q"), limit, offset)
+        res.update({"ok": True, "me": email})
+        return self._send(200, res)
+
+    def _admin_shares_post(self):
+        c = self.cfg
+        got = self._admin_post_json(1024)
+        if got is None:
+            return
+        _email, raw = got
+        if c.shares is None:
+            return self._send(503, {"ok": False, "error": "unavailable"})
+        if not isinstance(raw, dict) or raw.get("op") != "delete":
+            return self._send(400, {"ok": False, "error": "bad_request", "message": "Yêu cầu không hợp lệ."})
+        res = c.shares.revoke(raw.get("id"), None)
+        return self._send(200 if res.get("ok") else 404, res)
+
     def _nope(self):
         self._send(405, {"ok": False}, extra={"Allow": "GET, HEAD, POST"})
 
@@ -807,6 +925,12 @@ def main():
             cfg.feedback = FB.FeedbackDB(fb_path)
     except Exception as e:  # noqa: BLE001 (kho góp ý hỏng không được làm chết bộ thu chẩn đoán)
         print("Không mở được kho góp ý (%s): %s" % (fb_path, e), file=sys.stderr, flush=True)
+    sh_path = os.environ.get("NEU_SHARES_DB", "/var/lib/neu-agent/feedback/shares.db")
+    try:
+        if sh_path:
+            cfg.shares = SH.ShareDB(sh_path)
+    except Exception as e:  # noqa: BLE001
+        print("Không mở được kho chia sẻ (%s): %s" % (sh_path, e), file=sys.stderr, flush=True)
     if os.environ.get("NEU_DIAG_KEEP_IDENTITIES", "1") != "0":
         cfg.registry = Registry(os.path.join(cfg.diag_dir, "users-seen.json"))
     cfg.store.prune()

@@ -26,6 +26,7 @@ export * from "./packs";
 export * from "./http-tools";
 export * from "./vision";
 export * from "./feedback";
+export * from "./share";
 export * from "./repeat";
 export * from "./learning";
 export * from "./design-templates";

@@ -72,6 +72,16 @@ describe("kiểm tra yêu cầu IPC", () => {
     expect(ok("pasteImages", Array.from({ length: 6 }, () => ({ name: "a.png", data: new Uint8Array([1]) })))).toBe(false);
     expect(ok("pasteImages", [{ name: "a.png", data: "not-bytes" }])).toBe(false);
     expect(ok("pasteImages", [{ name: "a.png", data: new Uint8Array(21 * 1024 * 1024) }])).toBe(false);
+    expect(ok("sharePreview")).toBe(true);
+    expect(ok("sharePreview", "abc123")).toBe(true);
+    expect(ok("sharePreview", "../x")).toBe(false);
+    expect(ok("shareChat", { title: "Bảng điểm" })).toBe(true);
+    expect(ok("shareChat", { chatId: "abc1", title: "x" })).toBe(true);
+    expect(ok("shareChat", { chatId: "../x" })).toBe(false);
+    expect(ok("shareChat", { title: "x", url: "https://evil.test" })).toBe(false);
+    expect(ok("sharedChats")).toBe(true);
+    expect(ok("unshareChat", "AbCdEfGhIjKlMnOpQrStUv")).toBe(true);
+    expect(ok("unshareChat", "short")).toBe(false);
     expect(ok("listDir", "src")).toBe(true);
     expect(ok("listDir", { path: "x" })).toBe(false);
   });

@@ -146,3 +146,21 @@ Ngoài `invalid_tool_args`, `truncated`, `loop`…, bộ chẩn đoán ghi thêm
 | `text_repeat` | mô hình cứ lặp một đoạn văn; bị ngắt giữa chừng | như trên |
 
 Khi cả hai cùng tăng: kiểm tra `maxOutputTokens`, mô tả công cụ và lời nhắc chia nhỏ nội dung dài.
+
+## Cuộc trò chuyện được chia sẻ (dữ liệu để cải tiến, có đồng ý)
+
+Đây là nguồn **nội dung hội thoại** duy nhất đến máy chủ, và chỉ khi người dùng **chủ động bấm 🔗 Chia sẻ**, đọc cảnh báo và tick đồng ý. Nó đồng thời là cách lấy hội thoại thật để rà lỗi và dựng bộ ca kiểm thử (backlog B-09) mà không thu nội dung ngầm.
+
+| Điều | Cách làm |
+|---|---|
+| Đường đi | ứng dụng → `POST /agent/share` (SSO, ≤ 512 KB) → `shares.py` → SQLite `/var/lib/neu-agent/feedback/shares.db` (0700, `neu-diag`) |
+| Người dùng được báo | người có liên kết (đã đăng nhập) VÀ nhóm phát triển đều đọc được; che tự động; thu hồi bất cứ lúc nào |
+| Gồm | tiêu đề, các lượt hỏi/đáp, tên công cụ + tóm tắt ngắn thao tác (≤ 400 ký tự); tab, phiên bản, nền tảng |
+| Không gồm | nội dung tệp, kết quả công cụ dài, đường dẫn đầy đủ của máy, khoá/mật khẩu (che ở máy người dùng và che lần nữa ở máy chủ) |
+| Liên kết | mã ngẫu nhiên 22 ký tự; trang đọc là HTML tĩnh, không script, CSP chặt, `noindex`; chưa đăng nhập thì chuyển tới đăng nhập |
+| Giới hạn | 20 liên kết/ngày và tối đa 200 liên kết đang hoạt động mỗi người; ≤ 400 mục, ≤ 300 KB |
+| Ai quản lý | chỉ quản trị viên ở `/agent/admin/shares`: xem, tìm, xoá; **tải JSONL** (tên người chia sẻ thay bằng mã giả danh) để phân tích |
+| Thu hồi | người chia sẻ thu hồi ở hộp 🔗 (xoá hẳn bản chụp); quản trị xoá bất kỳ |
+
+Khi dùng JSONL để cải tiến: đừng đưa nội dung ra ngoài hệ thống; ưu tiên mẫu lỗi (công cụ thất bại, hiểu sai yêu cầu) và chuyển thành ca kiểm thử đã ẩn danh.
+

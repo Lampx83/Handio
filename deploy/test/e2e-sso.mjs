@@ -161,6 +161,16 @@ try {
   const fbGet = await req("/agent/feedback", { headers: { Cookie: cookie } });
   const fbBig = await req("/agent/feedback", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: "x".repeat(20000) });
   check("góp ý: GET bị chặn (403), thân > 16 KB bị từ chối (413)", fbGet.status === 403 && fbBig.status === 413, `${fbGet.status}/${fbBig.status}`);
+  // chia sẻ cuộc trò chuyện: tạo/thu hồi chỉ POST, danh sách chỉ GET; trang đọc phải đăng nhập (chuyển tới đăng nhập, không phải JSON)
+  const shId = "A".repeat(22);
+  const sh0 = await req("/agent/share/" + shId);
+  check("chia sẻ: chưa đăng nhập mở liên kết → chuyển tới đăng nhập (302)", sh0.status === 302 && /sign_in/.test(sh0.headers.location ?? ""), String(sh0.status));
+  const shPost0 = await req("/agent/share", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  check("chia sẻ: chưa đăng nhập tạo liên kết → 401 JSON", shPost0.status === 401 && /login_required/.test(shPost0.body), String(shPost0.status));
+  const shGet = await req("/agent/share", { headers: { Cookie: cookie } });
+  const shBig = await req("/agent/share", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: "x".repeat(600 * 1024) });
+  const shBad = await req("/agent/share/not-a-valid-id", { headers: { Cookie: cookie } });
+  check("chia sẻ: GET lên /share bị chặn (403), thân > 512 KB bị từ chối (413), mã liên kết sai dạng không tới dịch vụ", shGet.status === 403 && shBig.status === 413 && shBad.status !== 200, `${shGet.status}/${shBig.status}/${shBad.status}`);
   const fbDown = await req("/agent/feedback", { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ kind: "bug", text: "thử góp ý" }) });
   check("góp ý: bộ thu chưa chạy thì trả 503 JSON có lời nhắn, không phải trang lỗi nginx", fbDown.status === 503 && /Chưa gửi được góp ý/.test(fbDown.body) && /json/.test(fbDown.headers["content-type"]), `${fbDown.status} ${fbDown.body.slice(0, 80)}`);
   check("đường dẫn lạ / embeddings bị chặn", (await req("/agent/vllm/v1/embeddings", { headers: { Cookie: cookie } })).status !== 200 && (await req("/agent/vllm/v1/models", { headers: { Cookie: cookie }, method: "DELETE" })).status !== 200);

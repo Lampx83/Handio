@@ -18,6 +18,7 @@ import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import type { HttpToolRuntime } from "./http-tools";
 import { feedbackProblem, type FeedbackInput, type FeedbackResult } from "./feedback";
+import { buildSharePayload, type SharedChatInfo, type SharePayload, type SharePreview, type ShareResult } from "./share";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
 import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk } from "./tools";
 import type { AgentController, PermissionRequest, PermissionResponse, QuotaInfo, RewindPoint, SessionEvent, Settings, UiState } from "./types";
@@ -975,6 +976,86 @@ export class LocalController implements AgentController {
       clearTimeout(timer);
     }
   }
+  // ---------------------------------------------------------------- chia sẻ cuộc trò chuyện
+  private shareBase(): string | null {
+    const e = this.o.diagnostics?.endpoint;
+    return e && /\/diag\/?$/.test(e) ? e.replace(/\/diag\/?$/, "/") : null;
+  }
+
+  private async sharePayloadFor(chatId?: string, title?: string): Promise<{ payload: SharePayload } | { error: string }> {
+    let messages = this.session.main.messages;
+    let inputs: string[] | undefined = this.rawInputs.length === countTurns(messages) ? this.rawInputs : undefined;
+    let t = "";
+    if (chatId && chatId !== this.chatId) {
+      if (!this.o.chats || !ID_RE.test(chatId)) return { error: "Không tìm thấy cuộc trò chuyện." };
+      const saved = await this.o.chats.load(this.projectId, chatId);
+      if (!saved) return { error: "Cuộc trò chuyện đã bị xoá." };
+      messages = saved.messages;
+      inputs = saved.inputs && saved.inputs.length === countTurns(saved.messages) ? saved.inputs : undefined;
+      t = saved.title;
+    }
+    if (!countTurns(messages)) return { error: "Cuộc trò chuyện chưa có nội dung để chia sẻ." };
+    const d = this.o.diagnostics;
+    const payload = buildSharePayload(messagesToHistory(messages, inputs), { title: (title ?? "").trim() || t || chatTitle(messages), profile: this.o.profile ?? "code", version: d?.version ?? "", platform: d?.platform ?? "" });
+    return { payload };
+  }
+
+  async sharePreview(chatId?: string): Promise<SharePreview> {
+    const r = await this.sharePayloadFor(chatId);
+    if ("error" in r) return { ok: false, message: r.error, title: "", items: 0, redactions: 0 };
+    return { ok: true, title: r.payload.title, items: r.payload.items.length, redactions: r.payload.redactions };
+  }
+
+  private async shareCall(path: string, init?: { method: string; body?: unknown }): Promise<{ status: number; json: any } | null> {
+    const base = this.shareBase();
+    const d = this.o.diagnostics;
+    if (!base || !d) return null;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 30_000);
+    try {
+      const r = await (d.fetch ?? this.o.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a)))(base + path, {
+        method: init?.method ?? "GET",
+        headers: { Accept: "application/json", ...(init?.body ? { "Content-Type": "application/json" } : {}), ...(d.headers?.() ?? {}) },
+        body: init?.body ? JSON.stringify(init.body) : undefined,
+        signal: ac.signal,
+        redirect: "error",
+      });
+      return { status: r.status, json: await r.json().catch(() => ({})) };
+    } catch {
+      return { status: 0, json: {} };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async shareChat(f: { chatId?: string; title?: string }): Promise<ShareResult> {
+    const base = this.shareBase();
+    if (!base) return { ok: false, message: "Bản này chưa nối được máy chủ để chia sẻ." };
+    const p = await this.sharePayloadFor(f?.chatId, f?.title);
+    if ("error" in p) return { ok: false, message: p.error };
+    const r = await this.shareCall("share", { method: "POST", body: p.payload });
+    if (!r || r.status === 0) return { ok: false, message: "Không kết nối được máy chủ để chia sẻ. Hãy thử lại sau." };
+    if (r.status === 401) return { ok: false, message: "Bạn chưa đăng nhập hoặc phiên đã hết hạn. Hãy đăng nhập lại rồi chia sẻ." };
+    if (r.status === 200 && r.json?.ok && typeof r.json.id === "string") return { ok: true, message: "Đã tạo liên kết chia sẻ.", id: r.json.id, url: base + "share/" + r.json.id };
+    return { ok: false, message: r.json?.message || `Chưa chia sẻ được (mã ${r.status}). Hãy thử lại sau.` };
+  }
+
+  async sharedChats(): Promise<SharedChatInfo[]> {
+    const base = this.shareBase();
+    const r = await this.shareCall("shares");
+    if (!base || !r || r.status !== 200 || !Array.isArray(r.json?.items)) return [];
+    return r.json.items
+      .filter((x: any) => x && typeof x.id === "string" && /^[A-Za-z0-9_-]{22}$/.test(x.id))
+      .map((x: any) => ({ id: x.id, title: String(x.title ?? "").slice(0, 120), url: base + "share/" + x.id, ts: Number(x.ts) || 0, views: Number(x.views) || 0, items: Number(x.nitems) || 0, redactions: Number(x.redactions) || 0 }));
+  }
+
+  async unshareChat(id: string): Promise<{ ok: boolean; message: string }> {
+    if (!/^[A-Za-z0-9_-]{22}$/.test(String(id))) return { ok: false, message: "Mã liên kết không hợp lệ." };
+    const r = await this.shareCall("share/revoke", { method: "POST", body: { id } });
+    if (r?.status === 200 && r.json?.ok) return { ok: true, message: "Đã thu hồi: liên kết không còn dùng được." };
+    return { ok: false, message: r?.json?.message || "Chưa thu hồi được. Hãy thử lại sau." };
+  }
+
   async diagnosticsStatus(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }> {
     return { available: !!this.diag, enabled: !!this.diag && this.diagEnabled(), lockedByPolicy: this.o.policy?.diagnostics === false };
   }

@@ -564,3 +564,23 @@ dialog.fbk { width: min(560px, 96vw); padding: 0; }
 .fbk-status.ok { color: var(--ok, #1a7f4b); }
 .fbk-status.err { color: var(--err); }
 .fbk-actions { display: flex; justify-content: flex-end; }
+
+/* hộp chia sẻ cuộc trò chuyện */
+dialog.shr { width: min(600px, 96vw); padding: 0; }
+.shr-body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; max-height: 80vh; overflow: auto; }
+.shr-body p { margin: 0; }
+.shr-lab { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.shr-title, .shr-url { width: 100%; box-sizing: border-box; font: inherit; }
+.shr-prev { font-size: 13px; }
+.shr-warn { border: 1px solid var(--border); background: var(--panel2); border-radius: 10px; padding: 8px 12px; font-size: 13px; }
+.shr-warn ul { margin: 6px 0 0; padding-left: 18px; }
+.shr-chk { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; }
+.shr-status { min-height: 20px; font-size: 13.5px; }
+.shr-status.ok { color: var(--ok, #1a7f4b); }
+.shr-status.err { color: var(--err); }
+.shr-actions { display: flex; justify-content: flex-end; }
+.shr-h { font-weight: 600; font-size: 13px; margin-top: 4px; }
+.shr-copy { display: flex; gap: 6px; }
+.shr-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.shr-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.shr-acts { display: flex; gap: 6px; flex: none; }
