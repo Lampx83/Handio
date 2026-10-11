@@ -12,6 +12,7 @@
 #   sudo ./quota.sh capture list                               tài khoản đang được ghi + số dòng đã ghi
 #   sudo ./quota.sh capture export [tài-khoản] [ngày]          xuất JSON Lines ra màn hình (> tep.jsonl); ngày = số ngày gần nhất
 #   sudo ./quota.sh capture purge <tên-đăng-nhập|email>        XOÁ mọi nội dung đã ghi của tài khoản đó
+#   sudo ./quota.sh capture grant <user-linux>                 cho user Linux đó ĐỌC THẲNG captures.db (thêm vào nhóm neu-diag); revoke = thu lại
 # Mỗi lệnh đổi cấu hình kiểm tra hợp lệ rồi khởi động lại dịch vụ (cấu hình được nạp lúc khởi động). Bậc theo tên miền: xem "domains" trong /etc/neu-agent/quota.json.
 set -euo pipefail
 CONF=/etc/neu-agent/quota.json
@@ -76,7 +77,7 @@ PY
   capture)
     case "${2:-}" in
       add)    [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }; edit capture_add "$3"; restart
-              echo "ĐÃ BẬT ghi nội dung hội thoại của '$3' vào $CAPDB (quyền 600, giữ 90 ngày). Hãy báo cho người dùng tài khoản này." ;;
+              echo "ĐÃ BẬT ghi nội dung hội thoại của '$3' vào $CAPDB (quyền 640 nhóm neu-diag, giữ 90 ngày; cho user Linux đọc: capture grant <user>). Hãy báo cho người dùng tài khoản này." ;;
       remove) [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }; edit capture_remove "$3"; restart ;;
       list)
         python3 - "$CONF" "$CAPDB" <<'PY'
@@ -116,6 +117,11 @@ for r in db.execute(q + " order by ts, id", args):
     print(json.dumps(d, ensure_ascii=False))
 PY
         ;;
+      grant)  [ "${3:-}" ] || { sed -n 2,19p "$0"; exit 1; }
+              id -u "$3" >/dev/null 2>&1 || { echo "Không có user Linux '$3'."; exit 1; }
+              usermod -aG neu-diag "$3" && echo "Đã thêm '$3' vào nhóm neu-diag: từ phiên SSH MỚI, user này đọc được $CAPDB (chỉ đọc). Hãy báo người dùng tài khoản được ghi." ;;
+      revoke) [ "${3:-}" ] || { sed -n 2,19p "$0"; exit 1; }
+              gpasswd -d "$3" neu-diag && echo "Đã thu quyền đọc của '$3'." ;;
       purge)  [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }
               python3 -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); n=db.execute("delete from captures where user=?",(sys.argv[2].strip().lower(),)).rowcount; db.commit(); print("Đã xoá",n,"dòng")' "$CAPDB" "$3" ;;
       *) sed -n 2,18p "$0" | sed 's/^# \{0,1\}//'; exit 1;;

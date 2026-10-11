@@ -209,7 +209,8 @@ class Store:
 
 
 class CaptureStore:
-    """Ghi NỘI DUNG yêu cầu + câu trả lời của các tài khoản được liệt kê trong cấu hình (`capture.users`). Tệp riêng, quyền 600, chỉ root/dịch vụ đọc.
+    """Ghi NỘI DUNG yêu cầu + câu trả lời của các tài khoản được liệt kê trong cấu hình (`capture.users`). Tệp riêng, quyền 640: chỉ người dùng dịch vụ và nhóm của nó đọc được (nhóm đó chỉ có người được `quota.sh capture grant` thêm vào).
+    Dùng chế độ nhật ký DELETE (không WAL) để người đọc trong nhóm mở thẳng tệp .db mà không cần quyền ghi thư mục.
 
     Mỗi dòng = một lần gọi mô hình: phần MỚI của yêu cầu (các tin sau lần trả lời gần nhất của trợ lý), lời trả lời (chữ + lệnh công cụ),
     cùng token và thời gian. `conv` nhóm các lượt của một cuộc trò chuyện. Không ghi IP, không ghi khoá."""
@@ -223,12 +224,16 @@ class CaptureStore:
     def _open(self):
         if self.db is None:
             os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
-            old = os.umask(0o077)
+            old = os.umask(0o027)
             try:
                 self.db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
             finally:
                 os.umask(old)
-            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA journal_mode=DELETE")
+            try:
+                os.chmod(self.path, 0o640)
+            except OSError:
+                pass
             self.db.execute("""CREATE TABLE IF NOT EXISTS captures(
                 id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, day TEXT NOT NULL, user TEXT NOT NULL, conv TEXT NOT NULL,
                 model TEXT NOT NULL DEFAULT '', n_messages INTEGER NOT NULL DEFAULT 0, new_messages TEXT NOT NULL, reply TEXT NOT NULL DEFAULT '',

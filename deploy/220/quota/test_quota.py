@@ -173,6 +173,15 @@ class CaptureTests(GatewayCase):
         self.assertEqual((r[0]["prompt_tokens"], r[0]["completion_tokens"]), (10, 5))
         self.assertEqual(len(r[0]["conv"]), 12)
 
+    def test_capture_db_is_group_readable_not_world_and_not_wal(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "capture": {"users": ["test01"]}})
+        self.post(ident="test01", body=self.BODY)
+        self.assertEqual(os.stat(self.cap_path).st_mode & 0o777, 0o640)   # nhóm đọc được (để người được grant xem), người lạ thì không
+        db = sqlite3.connect(self.cap_path)
+        self.assertEqual(db.execute("PRAGMA journal_mode").fetchone()[0], "delete")
+        db.close()
+        self.assertFalse(os.path.exists(self.cap_path + "-wal"))
+
     def test_prefix_pattern_captures_named_accounts_but_never_emails(self):
         self.write_cfg({"tiers": {"student": 1_000_000}, "capture": {"users": ["test0*", "ab*", "*", "x*", "tes*t"]}})
         self.assertEqual(Q.load_config(self.cfg_path)["capture"]["users"], ["test0*"])   # mẫu quá ngắn / có * giữa bị bỏ

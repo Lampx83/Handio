@@ -60,7 +60,7 @@ sudo ~/neu-agent-220/quota/quota.sh capture remove test01     # tắt (dữ li�
 sudo ~/neu-agent-220/quota/quota.sh capture purge test01      # xoá hết nội dung đã ghi của tài khoản đó
 ```
 
-- **Chỗ lưu:** `/var/lib/neu-agent/quota/captures.db` (SQLite, quyền 600, chỉ root/dịch vụ đọc), bảng `captures`; tự xoá dòng cũ hơn `capture.keep_days` (mặc định 90 ngày).
+- **Chỗ lưu:** `/var/lib/neu-agent/quota/captures.db` (SQLite, quyền 640: người dùng dịch vụ + nhóm `neu-diag`; chế độ nhật ký DELETE để đọc thẳng được). Cho một user Linux đọc trực tiếp: `sudo quota.sh capture grant <user>` (thêm vào nhóm `neu-diag`, chỉ đọc; `revoke` để thu lại), rồi đọc bằng `sqlite3 -readonly` hoặc Python qua SSH — không cần xuất tệp, bảng `captures`; tự xoá dòng cũ hơn `capture.keep_days` (mặc định 90 ngày).
 - **Mỗi dòng** = một lần gọi mô hình: tên tài khoản, nhóm cuộc trò chuyện (`conv`), phần **mới** của yêu cầu (các tin sau lần trả lời trước của trợ lý), **lời trả lời** (chữ và lệnh công cụ), lý do kết thúc, số token, thời gian, mã trạng thái. Không ghi IP, không ghi key.
 - **Lấy dữ liệu:** dùng `capture export` (JSON Lines, chọn được `test0*`). Nếu chép thẳng `captures.db` phải chép kèm `captures.db-wal` (SQLite chế độ WAL), nếu không tệp trông như rỗng.
 - **Phạm vi:** chỉ đúng các tài khoản trong `capture.users` (cấu hình `quota.json`); người khác không bao giờ bị ghi. Lỗi ghi không làm hỏng yêu cầu của người dùng.
