@@ -47,6 +47,8 @@ export interface MountOptions {
   account?: AccountInfo;
   /** Gọi khi người dùng bấm "Đăng nhập lại" (phiên hết hạn). Không đặt: tải lại trang (web tự chuyển tới đăng nhập). null: bản này không có đăng nhập. */
   onLogin?: (() => void) | null;
+  /** Bản Desktop: kiểm tra bản mới theo yêu cầu người dùng; trả câu ngắn báo kết quả (hiện ngay trên nút). Không đặt: không hiện nút. */
+  checkUpdate?: () => Promise<string>;
 }
 
 export function saveBlob(name: string, data: Uint8Array): void {
@@ -217,6 +219,7 @@ class App {
       this.todosEl,
       this.opts.account ? accountChip(this.opts.account, () => this.openSettings()) : null,
       versionLink(),
+      this.opts.checkUpdate ? this.updateLink(this.opts.checkUpdate) : null,
     );
     const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.input,
       // dưới ô nhập (giống Claude): trái = chế độ chạy + mẫu prompt; phải = mức ngữ cảnh, mô hình, Gửi
@@ -408,6 +411,30 @@ class App {
     await this.openChat(id);
     this.state = await this.ctl.getState();
     if (this.state.chatId === id && !this.busy) await this.submit(text);
+  }
+
+  /** Nút "Kiểm tra cập nhật" dưới nhật ký thay đổi: bấm khi đang dùng để hỏi ngay, kết quả hiện ngay trên nút vài giây. */
+  private updateLink(check: () => Promise<string>): HTMLElement {
+    const label = "Kiểm tra cập nhật";
+    const b = h("button", { class: "ver-link", type: "button", title: "Hỏi máy chủ xem có bản mới không", "aria-live": "polite" }, label) as HTMLButtonElement;
+    b.addEventListener("click", async () => {
+      if (b.disabled) return;
+      b.disabled = true;
+      b.textContent = "Đang kiểm tra…";
+      let msg = "Không kiểm tra được lúc này.";
+      try {
+        msg = await check();
+      } catch {
+        /* giữ câu mặc định */
+      }
+      b.textContent = msg;
+      b.title = msg;
+      setTimeout(() => {
+        b.textContent = label;
+        b.disabled = false;
+      }, 6000);
+    });
+    return b;
   }
 
   /** Dựng lại khung chat từ lịch sử đã lưu (mở lại cuộc trò chuyện, hoặc sau /rewind). */

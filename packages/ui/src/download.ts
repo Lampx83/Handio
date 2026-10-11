@@ -58,6 +58,11 @@ function fit(os: Item["os"], me: Platform): "yes" | "maybe" | "no" {
   return "no";
 }
 
+/** "NEU-Agent-0.8.3-mac-arm64.dmg" → "0.8.3" (hỗ trợ cả hậu tố -beta.1). */
+export function fileVersion(name: string): string | undefined {
+  return /-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+?)?)-(?:mac|win)/i.exec(name)?.[1];
+}
+
 const mb = (n: number): string => (n >= 1e8 ? Math.round(n / 1e6) : (n / 1e6).toFixed(1)) + " MB";
 
 function parseSums(text: string): Map<string, string> {
@@ -90,12 +95,14 @@ export async function openDownload(base: string, install?: { available(): boolea
   }
   let signed: { mac?: boolean; win?: boolean } = {};
   let signer: { mac?: string; win?: string } = {};
+  let latestInfo: { version?: string; released?: string } = {};
   try {
     const r = await fetch(new URL("latest.json", base).href, { cache: "no-store" });
     if (r.ok && !/html/i.test(r.headers.get("content-type") ?? "")) {
-      const j = (await r.json()) as { signed?: { mac?: boolean; win?: boolean }; signer?: { mac?: string; win?: string } };
+      const j = (await r.json()) as { version?: string; released?: string; signed?: { mac?: boolean; win?: boolean }; signer?: { mac?: string; win?: string } };
       signed = j.signed ?? {};
       signer = j.signer ?? {};
+      latestInfo = { version: j.version, released: j.released };
     }
   } catch {
     /* không có latest.json: coi như chưa ký */
@@ -109,6 +116,13 @@ export async function openDownload(base: string, install?: { available(): boolea
   const files = ITEMS.map((it) => ({ it, name: newest(it.re) })).filter((x): x is { it: Item; name: string } => !!x.name);
   const url = (n: string) => new URL(n, base).href;
   const sizeOf = (n: string, into: HTMLElement) => void fetch(url(n), { method: "HEAD" }).then((r) => { const len = Number(r.headers.get("content-length")); if (r.ok && len > 0) into.textContent = mb(len); }).catch(() => undefined);
+  /** "Phiên bản 0.8.3 · phát hành 11/10/2026" (ngày phát hành chỉ khi tệp đúng là bản latest.json nói tới). */
+  const verText = (name: string): string => {
+    const v = fileVersion(name);
+    if (!v) return "";
+    const d = latestInfo.version === v && /^\d{4}-\d{2}-\d{2}$/.test(latestInfo.released ?? "") ? " · phát hành " + latestInfo.released!.split("-").reverse().join("/") : "";
+    return "Phiên bản " + v + d;
+  };
   const dlBtn = (f: { it: Item; name: string }, label: string, big = false) => h("a", { class: "btn primary" + (big ? " lg" : ""), href: url(f.name), download: f.name, rel: "noopener" }, label);
 
   const yes = files.filter((f) => fit(f.it.os, me) === "yes");
@@ -123,9 +137,9 @@ export async function openDownload(base: string, install?: { available(): boolea
     const f = yes[0];
     const size = h("span", {});
     sizeOf(f.name, size);
-    hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, f.it.os === "win" ? "🪟" : "🍎"), h("h3", {}, "Tải cho " + SHORT[f.it.os]), h("p", { class: "muted" }, "Phù hợp với máy của bạn · ", size), dlBtn(f, "⬇ Tải xuống", true), ...(trust(f.it.os) ? [trust(f.it.os)!] : []));
+    hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, f.it.os === "win" ? "🪟" : "🍎"), h("h3", {}, "Tải cho " + SHORT[f.it.os]), h("p", { class: "muted" }, verText(f.name), verText(f.name) ? " · " : "", "Phù hợp với máy của bạn · ", size), dlBtn(f, "⬇ Tải xuống", true), ...(trust(f.it.os) ? [trust(f.it.os)!] : []));
   } else if (maybe.length) {
-    hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, "🍎"), h("h3", {}, "Tải cho máy Mac"), h("p", { class: "muted" }, "Chọn đúng chip của máy (menu  → Giới thiệu về máy Mac)."),
+    hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, "🍎"), h("h3", {}, "Tải cho máy Mac"), h("p", { class: "muted" }, (maybe[0] && verText(maybe[0].name) ? verText(maybe[0].name) + " · " : "") + "Chọn đúng chip của máy (menu  → Giới thiệu về máy Mac)."),
       h("div", { class: "dl-duo" }, ...maybe.map((f) => h("div", {}, dlBtn(f, "⬇ " + (f.it.os === "mac-arm64" ? "Chip Apple (M1–M4)" : "Chip Intel"), true)))));
   } else hero.append(h("h3", {}, "Chọn bản đúng với máy của bạn"));
   body.append(hero);
@@ -135,7 +149,7 @@ export async function openDownload(base: string, install?: { available(): boolea
   const rest = me.os === "mobile" || me.os === "linux" || !(yes.length || maybe.length) ? files : others;
   if (rest.length)
     body.append(h("details", { class: "dl-more" }, h("summary", {}, "Bản cho máy khác"),
-      ...rest.map((f) => { const size = h("span", { class: "muted" }); sizeOf(f.name, size); return h("div", { class: "dl-row2" }, h("span", {}, SHORT[f.it.os], " ", size), dlBtn(f, "Tải")); })));
+      ...rest.map((f) => { const size = h("span", { class: "muted" }); sizeOf(f.name, size); return h("div", { class: "dl-row2" }, h("span", {}, SHORT[f.it.os], fileVersion(f.name) ? " · v" + fileVersion(f.name) : "", " ", size), dlBtn(f, "Tải")); })));
 
   const verify = me.os === "win" ? "Get-FileHash .\\NEU-Agent-*-win-x64.exe -Algorithm SHA256" : "shasum -a 256 NEU-Agent-*.dmg";
   body.append(

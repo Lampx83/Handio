@@ -8,6 +8,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [0.8.3] - 2026-10-11
 
 ### Thêm
+- **Hộp “Tải ứng dụng” hiện phiên bản** (và ngày phát hành) của bản cài, cả ở nút tải chính lẫn danh sách “Bản cho máy khác”.
+- **Nút “Kiểm tra cập nhật” ngay trong ứng dụng** (thanh bên, dưới “Nhật ký thay đổi”): bấm bất cứ lúc nào đang dùng để hỏi có bản mới không; kết quả hiện ngay trên nút (có bản mới thì ứng dụng tải nền như thường). Vẫn có ở menu Tệp.
 - **Tự cập nhật ngay trong ứng dụng (Windows và macOS)**: ứng dụng tự tải nền bản mới, kiểm mã băm, rồi tự cài khi bạn đóng ứng dụng, hoặc bấm “Cài đặt và khởi động lại” để cài ngay. Không cần mở tệp tải về nữa. Tắt được ở menu **Tệp → Tự động cập nhật**. Lần đầu lên bản này vẫn cần cập nhật theo cách cũ một lần.
 - **Cập nhật xong tự làm tiếp việc đang dở**: nếu agent đang làm việc lúc cập nhật, ứng dụng dừng gọn, lưu lại và sau khi mở lại tự mở đúng cuộc trò chuyện rồi nhắn agent làm tiếp.
 - **PowerPoint đẹp hơn, có bố cục thật**: bài trình chiếu do AI tạo không còn là chữ trên nền trắng. Có bìa đậm có hình trang trí, slide mở đầu phần có số lớn, thẻ số liệu lớn (“92%: …”), thẻ đánh số (“**Nhãn**: mô tả”), lộ trình các bước (danh sách đánh số), trích dẫn, biểu đồ cạnh gạch đầu dòng, bảng có sọc, slide kết thúc. Bố cục tự chọn theo nội dung, tiêu đề là tiêu đề thật của slide (hiện trong dàn ý và trình đọc màn hình).

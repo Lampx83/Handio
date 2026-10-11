@@ -195,6 +195,15 @@ async function start(): Promise<void> {
   mountShell(root, { work: new IpcController("work"), code: new IpcController("code"), design: new IpcController("design") }, {
     productName: brandName(),
     macInset: bridge.platform === "darwin",
+    checkUpdate: async () => {
+      const u = await bridge.update.check();
+      if (u.phase === "error") return u.error ?? "Không kiểm tra được lúc này.";
+      if (u.phase === "installing") return "Đang cài bản mới…";
+      if (u.phase === "ready") return `Đã tải ${u.latest}: xem thanh ở góc dưới`;
+      if (u.phase === "downloading") return `Có bản mới ${u.latest}, đang tải…`;
+      if (u.phase === "available") return u.auto === false || !u.canInstall ? `Có bản mới ${u.latest}: xem thanh ở góc dưới` : `Có bản mới ${u.latest}, đang tải…`;
+      return `Bạn đang dùng bản mới nhất (${u.current})`;
+    },
     account: st.enabled && st.email ? { email: st.email, name: st.name, kind: st.kind, logout: () => void bridge.auth.logout() } : undefined,
     // phiên hết hạn giữa chừng: đăng xuất cục bộ → tiến trình chính tải lại cửa sổ về màn hình đăng nhập (kèm lời giải thích)
     onLogin: st.enabled ? () => {

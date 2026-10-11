@@ -21,6 +21,8 @@ export interface ShellOptions {
   account?: AccountInfo;
   /** Xem MountOptions.onLogin. */
   onLogin?: (() => void) | null;
+  /** Xem MountOptions.checkUpdate (chỉ bản Desktop). */
+  checkUpdate?: () => Promise<string>;
 }
 
 /** Khung chứa hai tab (Code/Work), mỗi tab là một phiên agent độc lập vẫn chạy khi bạn chuyển tab. */
@@ -64,6 +66,7 @@ export function mountShell(root: HTMLElement, controllers: Partial<Record<Profil
       bar: { left, right },
       account: opts.account,
       onLogin: opts.onLogin,
+      checkUpdate: opts.checkUpdate,
       onAttention: (kind) => {
         const t = tabs.get(id)!;
         if (kind === "clear") delete t.dataset.attn;
