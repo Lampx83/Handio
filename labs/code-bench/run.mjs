@@ -166,6 +166,13 @@ async function grade(task, appDir) {
 let runAgent = null;
 let cookie = "", cookieAt = 0, authHeaders = null;
 if (!regrade) {
+  // biến môi trường còn sót chữ mẫu (export từ hướng dẫn cũ, giữ nguyên trong cửa sổ terminal): bỏ qua và hỏi lại / dùng mặc định
+  for (const n of ["HANDIO_BENCH_BASE_URL", "HANDIO_BENCH_KEY", "HANDIO_BENCH_USER", "HANDIO_BENCH_PASSWORD"]) {
+    if (process.env[n] && /[^\x20-\x7e]/.test(process.env[n])) {
+      console.log(`(Bỏ qua ${n}: còn là chữ mẫu, không phải giá trị thật.)`);
+      delete process.env[n];
+    }
+  }
   // mặc định là máy chủ của Handio; chỉ cần đặt biến khi dùng máy chủ khác
   const baseUrl = process.env.HANDIO_BENCH_BASE_URL || "https://ai.neu.edu.vn/agent/vllm/v1";
   process.env.HANDIO_BENCH_BASE_URL = baseUrl;
