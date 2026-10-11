@@ -16,6 +16,7 @@
     "fast-formula-parser": "^1.0.19",
     "image-size": "^2.0.4",
     "jszip": "^3.10.2",
+    "pdf-lib": "1.17.1",
     "pptxgenjs": "^4.0.1",
     "unpdf": "^1.7.0",
     "uuid": "^11.1.1"
