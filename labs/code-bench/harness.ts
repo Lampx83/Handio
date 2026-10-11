@@ -71,6 +71,8 @@ export async function runAgent(o: { dir: string; prompt: string; baseUrl: string
   } finally {
     clearTimeout(timer);
     run.seconds = Math.round((Date.now() - t0) / 1000);
+    // lượt kết thúc mà không gọi được công cụ nào và có thông báo lỗi (sai địa chỉ, khoá, hạn mức…) = lỗi, không phải "xong"
+    if (run.endedBy === "done" && run.steps === 0 && run.notices.some((n) => n.startsWith("error:"))) run.endedBy = "error";
     try {
       c.dispose();
     } catch {

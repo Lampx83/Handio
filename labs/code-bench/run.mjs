@@ -166,6 +166,21 @@ if (!regrade) {
     console.error("Thiếu HANDIO_BENCH_BASE_URL (địa chỉ API tương thích OpenAI, vd https://…/v1). Xem labs/code-bench/README.md.\nChỉ muốn xem đề: node labs/code-bench/run.mjs --list");
     process.exit(2);
   }
+  // kiểm tra cấu hình TRƯỚC khi tốn thời gian: địa chỉ hợp lệ, máy chủ trả lời, khoá được nhận
+  let u;
+  try { u = new URL(baseUrl); } catch { /* bên dưới */ }
+  if (!u || !/^https?:$/.test(u.protocol) || /[…<>]|\.\.\./.test(baseUrl)) {
+    console.error(`HANDIO_BENCH_BASE_URL không hợp lệ: "${baseUrl}"\nĐặt địa chỉ THẬT của API (dạng https://máy-chủ/…/v1), không dùng dấu … làm ví dụ.`);
+    process.exit(2);
+  }
+  {
+    const h = {};
+    if (process.env.HANDIO_BENCH_KEY) h[process.env.HANDIO_BENCH_KEY_HEADER || "x-ollama-seckey"] = process.env.HANDIO_BENCH_KEY;
+    const r = await fetch(baseUrl.replace(/\/+$/, "") + "/models", { headers: h, signal: AbortSignal.timeout(20_000) }).catch((e) => ({ err: e }));
+    if (r.err) { console.error(`Không kết nối được ${u.host}: ${r.err.cause?.code || r.err.message}`); process.exit(2); }
+    if (r.status === 401 || r.status === 403) { console.error(`Máy chủ từ chối khoá (HTTP ${r.status}). Kiểm HANDIO_BENCH_KEY và HANDIO_BENCH_KEY_HEADER (ví dụ "Authorization" hoặc "x-ollama-seckey").`); process.exit(2); }
+    console.log(`Kết nối ${u.host}: HTTP ${r.status}, mô hình ${process.env.HANDIO_BENCH_MODEL || "(mặc định)"}`);
+  }
   const bundle = path.join(outDir, ".harness.mjs");
   await build({ entryPoints: [path.join(here, "harness.ts")], outfile: bundle, bundle: true, platform: "node", format: "esm", target: "node22", logLevel: "error", external: ["electron"], banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
   ({ runAgent } = await import(pathToFileURL(bundle).href));
@@ -188,6 +203,10 @@ for (const task of tasks) {
     fs.writeFileSync(path.join(tdir, "agent.json"), JSON.stringify(agent, null, 2));
     fs.writeFileSync(path.join(tdir, "agent.log"), [`# ${task.id} · ${agent.endedBy} · ${agent.seconds}s · ${agent.steps} bước · ${agent.toolErrors} lỗi công cụ`, "", ...agent.trace, "", "## Lời cuối", agent.final, "", "## Thông báo", ...agent.notices].join("\n"));
     console.log(`  agent: ${agent.endedBy}, ${agent.seconds}s, ${agent.steps} bước, ${agent.toolErrors} lỗi công cụ, ${agent.calls} lượt gọi mô hình`);
+    if (agent.endedBy === "error" && agent.steps === 0) {
+      console.error(`\nAgent không làm được bước nào: ${agent.notices.concat(agent.errors).join(" | ") || "không rõ lý do"}\nDừng cả lượt chạy (lỗi cấu hình/kết nối, không phải lỗi ứng dụng).`);
+      process.exit(2);
+    }
   } else if (fs.existsSync(path.join(tdir, "agent.json"))) agent = JSON.parse(fs.readFileSync(path.join(tdir, "agent.json"), "utf8"));
   if (!fs.existsSync(appDir)) { console.log("  (không có thư mục app, bỏ qua)"); continue; }
   const checks = await grade(task, appDir);

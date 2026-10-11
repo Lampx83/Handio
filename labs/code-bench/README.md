@@ -20,7 +20,7 @@
 Cần một mô hình thật (API kiểu OpenAI) và `npm ci` ở gốc kho. Thông tin kết nối đặt qua biến môi trường, **không** ghi vào kho:
 
 ```bash
-export HANDIO_BENCH_BASE_URL="https://…/v1"   # bắt buộc
+export HANDIO_BENCH_BASE_URL="https://ĐỊA-CHỈ-API/v1"   # bắt buộc, địa chỉ thật
 export HANDIO_BENCH_KEY="…"                    # nếu máy chủ cần key
 export HANDIO_BENCH_MODEL="…"                  # mặc định qwen3.5-35b-a3b-int4
 export HANDIO_BENCH_KEY_HEADER="Authorization" # mặc định x-ollama-seckey
