@@ -39,7 +39,7 @@ describe("pptx_edit", () => {
     expect(back).toContain("Cơ sở vật chất đã nâng cấp");
     expect(back).toContain("nhắc Cơ sở vật chất");
     expect(r).toContain("Không tìm thấy");
-    await expect(run("pptx_edit", { path: "bc.pptx", replacements: [{ find: "không bao giờ có", replace: "x" }] })).rejects.toThrow(/Không có gì thay đổi/);
+    await expect(run("pptx_edit", { path: "bc.pptx", replacements: [{ find: "không bao giờ có", replace: "x" }] })).rejects.toThrow(/Không tìm thấy/);
   });
 
   it("đổi màu chữ/cỡ/đậm của tiêu đề, màu nền slide và màu nền hình", async () => {

@@ -15,7 +15,7 @@ export interface ListItem {
 }
 export type Block =
   | { t: "heading"; level: number; runs: Run[] }
-  | { t: "para"; runs: Run[]; align?: Align }
+  | { t: "para"; runs: Run[]; align?: Align; /** Các dòng gốc khi đoạn gồm nhiều dòng liền nhau (không có dòng trống). */ lines?: string[] }
   | { t: "list"; items: ListItem[] }
   | { t: "table"; header: Run[][]; rows: Run[][][]; align: Align[] }
   | { t: "code"; text: string; lang?: string; info?: string }
@@ -127,7 +127,7 @@ export function parseBlocks(md: string): Block[] {
     const para: string[] = [line.trim()];
     i++;
     while (i < lines.length && lines[i].trim() && !/^\s*(```|#{1,6}\s|>|([-*+•]|\d+[.)])\s|<(center|right|left|justify)>)/.test(lines[i]) && !/^\s*([-*_])(\s*\1){2,}\s*$/.test(lines[i]) && !(lines[i].includes("|") && lines[i + 1] && isSep(lines[i + 1]))) para.push(lines[i++].trim());
-    out.push({ t: "para", runs: parseInline(para.join(" ")) });
+    out.push({ t: "para", runs: parseInline(para.join(" ")), ...(para.length > 1 ? { lines: para } : {}) });
   }
   return out;
 }
