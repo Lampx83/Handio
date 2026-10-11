@@ -18,15 +18,38 @@ export interface RewindPoint {
   files: number;
 }
 
+/** Một lựa chọn trong câu hỏi của công cụ `ask_user`. */
+export interface AskOption {
+  label: string;
+  description?: string;
+}
+
+/** Một câu hỏi có cấu trúc của agent (đã được lõi kiểm tra: 2–4 lựa chọn). */
+export interface AskQuestion {
+  question: string;
+  /** Nhãn ngắn (≤ 12 ký tự). */
+  header?: string;
+  options: AskOption[];
+  multiSelect: boolean;
+}
+
+/** Trả lời một câu hỏi: chỉ số lựa chọn đã chọn (theo `options`) và/hoặc chữ tự gõ ở ô "Khác". Cả hai trống = bỏ qua câu này. */
+export interface QuestionAnswer {
+  picked: number[];
+  other?: string;
+}
+
 export interface PermissionRequest {
   id: string;
-  /** "tool": xin chạy một công cụ; "plan": xin duyệt kế hoạch. */
-  kind: "tool" | "plan";
+  /** "tool": xin chạy một công cụ; "plan": xin duyệt kế hoạch; "question": agent hỏi người dùng (`ask_user`), không cấp quyền gì cho công cụ khác. */
+  kind: "tool" | "plan" | "question";
   tool: string;
   summary: string;
   args: Record<string, unknown>;
   preview?: DiffPreview | null;
   plan?: string;
+  /** Với kind "question": các câu hỏi (1–4). */
+  questions?: AskQuestion[];
   /** Lý do cần hỏi (vd file cấu hình dự án). */
   note?: string;
   depth: number;
@@ -42,6 +65,8 @@ export interface PermissionResponse {
   mode?: Mode;
   /** Với kế hoạch: bản kế hoạch người dùng đã tự sửa trước khi duyệt (agent làm theo bản này). */
   plan?: string;
+  /** Với câu hỏi (`kind: "question"`): trả lời theo thứ tự câu hỏi. `allow: true` + mảng rỗng/không có = người dùng bấm "Để agent tự quyết". */
+  answers?: QuestionAnswer[];
 }
 
 export type SessionEvent =

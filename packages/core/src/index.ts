@@ -9,6 +9,7 @@ export * from "./tools";
 export * from "./settings";
 export * from "./memory";
 export * from "./types";
+export * from "./ask";
 export * from "./session";
 export * from "./controller";
 export * from "./sample";

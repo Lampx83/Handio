@@ -35,6 +35,14 @@ function planWork(messages, tools) {
   const toolTexts = turn.filter((m) => m.role === "tool").map((m) => String(m.content ?? ""));
   const last = toolTexts.at(-1) ?? "";
 
+  // hỏi người dùng có cấu trúc (ask_user): gõ "hỏi lại" để xem thẻ câu hỏi
+  if (/hỏi lại|ask_user/i.test(user)) {
+    if (step === 0) return { text: "Tôi cần biết thêm hai điều trước khi soạn.", calls: [{ name: "ask_user", args: { questions: [
+      { question: "Văn bản này gửi cho ai?", header: "Đối tượng", options: [{ label: "Lãnh đạo khoa", description: "Ngắn gọn, nêu quyết định và đề xuất" }, { label: "Toàn thể giảng viên", description: "Đầy đủ, có hướng dẫn thực hiện" }, { label: "Sinh viên" }] },
+      { question: "Cần những phần nào?", header: "Nội dung", multi_select: true, options: [{ label: "Tóm tắt" }, { label: "Số liệu" }, { label: "Kiến nghị" }] },
+    ] } }] };
+    return { text: "Đã nhận câu trả lời của bạn:\n\n" + (last || "(không có)") };
+  }
   const invite = /giấy mời|giay moi/i.test(user);
   if (!invite && /điểm|tổng kết|xếp loại|diem/i.test(user)) {
     if (step === 0) return { text: "Tôi sẽ đọc file điểm trước để xem cấu trúc.", calls: [{ name: "todo_write", args: { todos: [{ content: "Đọc file điểm và quy chế", status: "in_progress" }, { content: "Tính tổng kết và xếp loại bằng công thức", status: "pending" }, { content: "Thống kê theo xếp loại", status: "pending" }, { content: "Kiểm tra lại kết quả", status: "pending" }] } }, { name: "read_document", args: { path: "diem-hoc-phan.xlsx" } }] };

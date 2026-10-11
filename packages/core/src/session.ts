@@ -21,10 +21,15 @@ import { mergePackParts, packsFor, type LoadedPack } from "./packs";
 import { buildHttpTools, type HttpToolRuntime } from "./http-tools";
 import { findRepetition } from "./repeat";
 import { visionTool } from "./vision";
-import type { PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
+import { ASK_LIMITS, cleanAnswers, formatAnswers, parseAskQuestions } from "./ask";
+import type { AskQuestion, PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
 
 const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
 const MAX_TOOL_CHARS = 12000;
+/** Hạn chờ người dùng trả lời một câu hỏi của `ask_user` (không ai trả lời thì agent tự quyết, không treo phiên). */
+const QUESTION_TIMEOUT_MS = 15 * 60_000;
+/** Số lần `ask_user` tối đa cho một lượt hỏi của người dùng (lời nhắc dặn chỉ hỏi một lần). */
+const MAX_ASKS_PER_TURN = 3;
 
 const SUMMARY_SYSTEM = `You compress a conversation between a user and a coding agent into a short working summary (Vietnamese if the user wrote Vietnamese). Keep: the user's goal, decisions made, files read/changed (with paths), commands run and results, open problems and the next step. Drop pleasantries and raw file dumps. Max ~350 words, bullet points.`;
 
@@ -63,7 +68,12 @@ export interface SessionOptions {
   packs?: LoadedPack[];
   /** Nơi gọi các công cụ HTTP do gói khai báo (tools.json): địa chỉ gốc của tổ chức + cách gọi có đăng nhập. Không đặt = các công cụ đó không bật. */
   httpTools?: HttpToolRuntime;
+  /** Hạn chờ trả lời câu hỏi của `ask_user` (ms); mặc định 15 phút. */
+  questionTimeoutMs?: number;
 }
+
+/** Kết quả đặc biệt của `Session.ask` khi hết hạn chờ. `allow: true` để chẩn đoán không đếm là người dùng từ chối. */
+const QUESTION_TIMED_OUT: PermissionResponse = { allow: true };
 
 let idCounter = 0;
 const nextId = (p: string) => `${p}${Date.now().toString(36)}${(idCounter++).toString(36)}`;
@@ -101,6 +111,8 @@ export class Session {
   readonly turnMarks = new WeakMap<ChatMessage, number>();
   /** Việc đã làm trong lượt hiện tại: để biết đã chạy kiểm tra sau lần sửa cuối chưa. */
   turnLog = { seq: 0, lastEdit: 0, checks: [] as { seq: number; ok: boolean }[], reads: [] as number[] };
+  /** Số lần đã gọi `ask_user` trong lượt hiện tại. */
+  private asked = 0;
   readonly main: Agent;
 
   private constructor(readonly o: SessionOptions, root: string) {
@@ -219,7 +231,55 @@ export class Session {
       summarize: () => "kế hoạch",
       run: async (_ctx, a) => this.exitPlanMode(String(a.plan ?? ""), 0),
     };
-    return [task, exitPlan];
+    const askUser: Tool = {
+      name: "ask_user", kind: "meta", readonly: true,
+      description: "Ask the user 1-4 structured multiple-choice questions when you are MISSING information that you truly cannot decide yourself (e.g. which of several files, which audience, an irreversible choice). Do not use it for things you can reasonably decide: short requests are complete briefs. Ask at most once per request, at most 3 questions; each question has 2-4 options (put your recommended option FIRST); do not add an 'Other' option because the user can always type their own answer. Returns the user's choices, or tells you the user left it to you: then decide yourself and state your assumption.",
+      parameters: {
+        type: "object",
+        properties: {
+          questions: {
+            type: "array", minItems: 1, maxItems: ASK_LIMITS.questions,
+            description: "1-4 questions",
+            items: {
+              type: "object",
+              properties: {
+                question: { type: "string", description: "the full question, ending with a question mark" },
+                header: { type: "string", description: "very short label (max 12 characters), e.g. 'Đối tượng'" },
+                options: {
+                  type: "array", minItems: 2, maxItems: ASK_LIMITS.options, description: "2-4 mutually informative options; the first is your recommendation",
+                  items: { type: "object", properties: { label: { type: "string", description: "short choice text (1-5 words)" }, description: { type: "string", description: "one short sentence on what this choice means" } }, required: ["label"] },
+                },
+                multi_select: { type: "boolean", description: "true if several options may be chosen together; default false" },
+              },
+              required: ["question", "options"],
+            },
+          },
+        },
+        required: ["questions"],
+      },
+      summarize: (a) => {
+        const n = Array.isArray(a.questions) ? a.questions.length : 0;
+        const q = Array.isArray(a.questions) && a.questions[0] && typeof (a.questions[0] as { question?: unknown }).question === "string" ? String((a.questions[0] as { question: string }).question).slice(0, 60) : "";
+        return n > 1 ? `${n} câu hỏi` : q;
+      },
+      run: async (_ctx, a) => this.askQuestions(parseAskQuestions(a.questions)),
+    };
+    return [task, exitPlan, askUser];
+  }
+
+  /** `ask_user`: hỏi người dùng rồi trả câu trả lời thành chữ cho mô hình. Không cấp quyền gì cho công cụ khác (bỏ qua `always`/`mode`). */
+  async askQuestions(questions: AskQuestion[]): Promise<string> {
+    if (this.asked >= MAX_ASKS_PER_TURN) return `Đã hỏi người dùng ${MAX_ASKS_PER_TURN} lần trong yêu cầu này. Đừng hỏi thêm: hãy tự chọn phương án hợp lý nhất, làm tiếp và nêu rõ giả định trong báo cáo.`;
+    this.asked++;
+    const req: PermissionRequest = { id: nextId("q"), kind: "question", tool: "ask_user", summary: questions.length > 1 ? `${questions.length} câu hỏi cho bạn` : "Câu hỏi cho bạn", args: {}, questions, depth: 0 };
+    const res = await this.ask(req, this.o.questionTimeoutMs ?? QUESTION_TIMEOUT_MS);
+    if (res === QUESTION_TIMED_OUT) {
+      this.emit({ type: "notice", level: "info", text: "Hết thời gian chờ trả lời; agent sẽ tự quyết." });
+      return "Người dùng không trả lời kịp (hết thời gian chờ). Hãy tự chọn phương án hợp lý nhất (ưu tiên lựa chọn đầu tiên), làm tiếp và nêu rõ giả định trong báo cáo. Đừng hỏi lại cùng câu hỏi.";
+    }
+    const { answered, text } = formatAnswers(questions, res.allow ? cleanAnswers(res.answers, questions) : []);
+    if (!answered) return "Người dùng không chọn gì và để bạn tự quyết. Hãy tự chọn phương án hợp lý nhất (ưu tiên lựa chọn đầu tiên), làm tiếp và nêu rõ giả định trong báo cáo. Đừng hỏi lại cùng câu hỏi.";
+    return `Người dùng đã trả lời:\n${text}${answered < questions.length ? "\nVới câu không trả lời: hãy tự quyết và nêu giả định." : ""}`;
   }
 
   async exitPlanMode(plan: string, depth: number): Promise<string> {
@@ -245,10 +305,13 @@ export class Session {
     return text || "(subagent không trả về nội dung)";
   }
 
-  async ask(req: PermissionRequest): Promise<PermissionResponse> {
+  /** Với `timeoutMs`: hết hạn mà chưa ai trả lời thì trả QUESTION_TIMED_OUT (giao diện được báo đóng thẻ; không tính là từ chối). */
+  async ask(req: PermissionRequest, timeoutMs?: number): Promise<PermissionResponse> {
     const answer = this.o.askPermission(req); // đăng ký chờ TRƯỚC khi phát sự kiện, để người nghe trả lời ngay cũng không bị mất
     this.emit({ type: "permission", request: req });
-    const res = await answer;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const res = timeoutMs ? await Promise.race([answer, new Promise<PermissionResponse>((r) => (timer = setTimeout(() => r(QUESTION_TIMED_OUT), timeoutMs)))]) : await answer;
+    if (timer) clearTimeout(timer);
     this.emit({ type: "permission_resolved", id: req.id, allowed: res.allow });
     return res;
   }
@@ -257,7 +320,7 @@ export class Session {
   toolsFor(def: AgentDef | null, depth: number): Tool[] {
     const out: Tool[] = [];
     for (const t of this.tools.values()) {
-      if (depth > 0 && (t.name === "task" || t.name === "exit_plan_mode")) continue;
+      if (depth > 0 && (t.name === "task" || t.name === "exit_plan_mode" || t.name === "ask_user")) continue;
       if (t.name === "exit_plan_mode" && this.perms.mode !== "plan") continue;
       if (def?.tools && !def.tools.includes(t.name)) continue;
       out.push(t);
@@ -565,6 +628,7 @@ export class Session {
     this.ctx.turn = ++this.turnNo;
     this.turnMarks.set(userMsg, this.ctx.turn);
     this.turnLog = { seq: 0, lastEdit: 0, checks: [], reads: [] };
+    this.asked = 0;
   }
 
   /** Ghi nhận một công cụ vừa chạy xong (để biết đã kiểm chứng sau lần sửa cuối chưa). */

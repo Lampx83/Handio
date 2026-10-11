@@ -62,6 +62,15 @@ describe("kiểm tra yêu cầu IPC", () => {
     expect(ok("respondPermission", "id1", { allow: true, mode: "auto", plan: "1. làm A" })).toBe(true);
     expect(ok("respondPermission", "id1", { allow: true, plan: 5 })).toBe(false);
     expect(ok("respondPermission", "id1", { allow: true, plan: "x".repeat(20001) })).toBe(false);
+    // câu trả lời cho ask_user
+    expect(ok("respondPermission", "id1", { allow: true, answers: [{ picked: [0], other: "Bản tóm tắt cho lãnh đạo" }, { picked: [1, 2] }, { picked: [] }] })).toBe(true);
+    expect(ok("respondPermission", "id1", { allow: true, answers: [] })).toBe(true);
+    for (const bad of [
+      "yes", {}, [1], [null], [{}], [{ picked: "0" }], [{ picked: [-1] }], [{ picked: [4] }], [{ picked: [1.5] }], [{ picked: ["0"] }], [{ picked: [0, 0] }], [{ picked: [0, 1, 2, 3, 3] }],
+      [{ picked: [0], other: 5 }], [{ picked: [0], other: "x".repeat(501) }], [{ picked: [0], other: "a\0b" }], [{ picked: [0], extra: "x" }], [{ picked: [0], allow: true }],
+      Array.from({ length: 5 }, () => ({ picked: [0] })),
+    ])
+      expect(ok("respondPermission", "id1", { allow: true, answers: bad }), JSON.stringify(bad)).toBe(false);
     expect(ok("sendFeedback", { kind: "bug", text: "Nút gửi không bấm được", tech: true })).toBe(true);
     expect(ok("sendFeedback", { kind: "hack", text: "xin chào các bạn", tech: true })).toBe(false);
     expect(ok("sendFeedback", { kind: "bug", text: "x".repeat(3001), tech: false })).toBe(false);

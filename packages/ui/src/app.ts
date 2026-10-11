@@ -1,5 +1,5 @@
 import type { AgentController, DiffLine, HistoryItem, DiffPreview, Mode, PermissionRequest, PublicSettings, SessionEvent, SlashCommandInfo, Todo, UiState } from "@neu/agent-core";
-import { brandText } from "@neu/agent-core";
+import { brandText, formatAnswers } from "@neu/agent-core";
 import { clear, h, store } from "./dom";
 import { escapeHtml, renderMarkdown } from "./markdown";
 import { treeIcon } from "./icons";
@@ -18,6 +18,7 @@ import { CodeTools } from "./code-tools";
 import { DocPane } from "./docview";
 import { WorkTools } from "./work-tools";
 import { PROMPT_TEMPLATE } from "./prompt-tips";
+import { buildQuestionCard } from "./question-card";
 
 const MODE_INFO: Record<Mode, { label: string; desc: string }> = {
   default: { label: "Hỏi trước", desc: "Đọc tự do. Sửa file và chạy lệnh phải được bạn duyệt." },
@@ -26,7 +27,7 @@ const MODE_INFO: Record<Mode, { label: string; desc: string }> = {
   plan: { label: "Lập kế hoạch", desc: "Chỉ đọc. Agent đề xuất kế hoạch để bạn duyệt trước khi làm." },
   bypass: { label: "Toàn quyền", desc: "Không hỏi gì (vẫn chặn lệnh phá hoại nặng và hỏi khi đụng tệp bí mật). Chỉ dùng trong thư mục thử nghiệm." },
 };
-const TOOL_LABEL: Record<string, string> = { read_document: "Đọc tài liệu", find_in_documents: "Tìm trong tài liệu", create_docx: "Tạo Word", docx_replace: "Sửa Word", merge_check: "Kiểm tra trộn", merge_documents: "Trộn hàng loạt", scan_pii: "Quét dữ liệu cá nhân", redact_pii: "Che dữ liệu cá nhân", xlsx_pivot: "Bảng tổng hợp", create_xlsx: "Tạo Excel", xlsx_edit: "Sửa Excel", create_pptx: "Tạo PowerPoint", convert_to_pdf: "Xuất PDF", read_file: "Đọc", list_dir: "Liệt kê", glob: "Tìm file", grep: "Tìm nội dung", edit_file: "Sửa", write_file: "Ghi", bash: "Lệnh", todo_write: "Việc cần làm", task: "Subagent", run_javascript: "Chạy JS", web_fetch: "Tải web", exit_plan_mode: "Kế hoạch" };
+const TOOL_LABEL: Record<string, string> = { read_document: "Đọc tài liệu", find_in_documents: "Tìm trong tài liệu", create_docx: "Tạo Word", docx_replace: "Sửa Word", merge_check: "Kiểm tra trộn", merge_documents: "Trộn hàng loạt", scan_pii: "Quét dữ liệu cá nhân", redact_pii: "Che dữ liệu cá nhân", xlsx_pivot: "Bảng tổng hợp", create_xlsx: "Tạo Excel", xlsx_edit: "Sửa Excel", create_pptx: "Tạo PowerPoint", convert_to_pdf: "Xuất PDF", read_file: "Đọc", list_dir: "Liệt kê", glob: "Tìm file", grep: "Tìm nội dung", edit_file: "Sửa", write_file: "Ghi", bash: "Lệnh", todo_write: "Việc cần làm", task: "Subagent", run_javascript: "Chạy JS", web_fetch: "Tải web", exit_plan_mode: "Kế hoạch", ask_user: "Hỏi bạn" };
 
 interface ToolCard {
   id: string;
@@ -647,11 +648,12 @@ class App {
       else if (["grep", "glob", "list_dir"].includes(e.name)) sum = `${n} kết quả`;
       else if (e.name === "bash") sum = lines.at(-1)?.startsWith("[mã thoát") ? lines.at(-1)!.replace(/[[\]]/g, "") : "xong";
       else if (e.name === "todo_write") sum = e.output.replace(/^Đã cập nhật danh sách việc /, "");
+      else if (e.name === "ask_user") sum = e.output.startsWith("Người dùng đã trả lời") ? "đã trả lời" : "agent tự quyết";
       else sum = lines[0].slice(0, 80);
     }
     c.res.textContent = sum;
     if (!c.el.querySelector(".verdict") || !e.ok) c.body.querySelector(".out")?.remove();
-    const showOut = !["edit_file", "write_file", "todo_write"].includes(e.name) || !e.ok;
+    const showOut = !["edit_file", "write_file", "todo_write", "ask_user"].includes(e.name) || !e.ok;
     if (showOut && e.output.trim()) {
       const long = lines.length > 14;
       const pre = h("pre", { class: "out" }, long && !this.expanded.has(e.id) ? lines.slice(0, 14).join("\n") + `\n… (${lines.length - 14} dòng nữa — bấm để xem hết)` : e.output);
@@ -681,6 +683,10 @@ class App {
     } else {
       host = h("div", { class: "tool wait" }, h("div", { class: "tool-h" }, h("span", { class: "dot" }), h("span", { class: "nm" }, req.kind === "plan" ? "Kế hoạch" : (TOOL_LABEL[req.tool] ?? req.tool)), h("span", { class: "sm" }, req.summary)));
       this.append(host);
+    }
+    if (req.kind === "question") {
+      this.addQuestion(req, host);
+      return;
     }
     const ask = h("div", { class: "ask", role: "group", "aria-label": "Xin quyền" });
     const note = h("input", { type: "text", placeholder: req.kind === "plan" ? "Góp ý để chỉnh kế hoạch…" : "Lý do từ chối (không bắt buộc)…", "aria-label": "Ghi chú" });
@@ -733,11 +739,38 @@ class App {
     (ask.querySelector("button.primary") as HTMLElement | null)?.focus({ preventScroll: true });
   }
 
+  /** Câu hỏi của agent (`ask_user`): thẻ chọn đáp án. Gửi/bỏ qua: thẻ đóng ngay; agent bị dừng hay hết hạn chờ: đóng khi nhận `permission_resolved`. */
+  private addQuestion(req: PermissionRequest, host: HTMLElement): void {
+    const questions = req.questions ?? [];
+    if (!questions.length) {
+      this.ctl.respondPermission(req.id, { allow: true, answers: [] });
+      return;
+    }
+    const card = buildQuestionCard(req.id, questions, (answers) => {
+      this.ctl.respondPermission(req.id, { allow: true, answers: answers ?? [] });
+      const lines = answers ? formatAnswers(questions, answers).text.split("\n") : [];
+      this.closePending(h("div", { class: "verdict yes" }, answers ? "✓ Bạn đã trả lời" : "Đã để agent tự quyết", ...lines.map((l) => h("div", { class: "va" }, l))));
+    });
+    host.append(card.el);
+    this.pending = { req, el: card.el, allow: card.submit, deny: card.skip };
+    if (!this.visible) this.opts.onAttention?.("permission");
+    this.paintBusy();
+    this.scroll();
+    card.focus();
+  }
+
   private resolvePermission(allowed: boolean): void {
     const p = this.pending;
     if (!p) return;
+    if (p.req.kind === "question") return this.closePending(h("div", { class: "verdict" }, "Câu hỏi đã đóng"));
+    this.closePending(h("div", { class: "verdict " + (allowed ? "yes" : "no") }, allowed ? "✓ Đã cho phép" : "✗ Đã từ chối"));
+  }
+
+  private closePending(verdict: HTMLElement): void {
+    const p = this.pending;
+    if (!p) return;
     const host = p.el.parentElement;
-    p.el.replaceWith(h("div", { class: "verdict " + (allowed ? "yes" : "no") }, allowed ? "✓ Đã cho phép" : "✗ Đã từ chối"));
+    p.el.replaceWith(verdict);
     host?.classList.remove("wait");
     if (host && !host.classList.contains("ok") && !host.classList.contains("err")) host.classList.add("running");
     this.pending = null;
@@ -758,7 +791,7 @@ class App {
       const t = h("span", {}, "Đang làm việc… 0s");
       this.working = h("div", { class: "working", role: "status" }, h("span", { class: "spin" }), t, h("span", {}, "· Esc để dừng"));
       this.feedInner.append(this.working);
-      this.workTimer = window.setInterval(() => (t.textContent = (this.pending ? "Đang chờ bạn duyệt… " : "Đang làm việc… ") + Math.round((Date.now() - this.workStart) / 1000) + "s"), 500);
+      this.workTimer = window.setInterval(() => (t.textContent = (this.pending ? (this.pending.req.kind === "question" ? "Đang chờ bạn trả lời… " : "Đang chờ bạn duyệt… ") : "Đang làm việc… ") + Math.round((Date.now() - this.workStart) / 1000) + "s"), 500);
       this.scroll();
     } else if (!this.busy && this.working) {
       clearInterval(this.workTimer);
