@@ -6,11 +6,19 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Sửa tệp có sẵn như người dùng Office thật (tab Work)**: PowerPoint (`pptx_edit`: sửa chữ, đổi hoa/thường tiêu đề, màu chữ/cỡ/phông/căn lề, màu nền hình và slide, xoá/nhân đôi/chuyển slide), Word (`docx_edit`: thay cả đoạn, chèn tiêu đề/danh sách/bảng, xoá, định dạng, sửa bảng), Excel (xoá/chèn hàng-cột và công thức tự điều chỉnh, đổi tên/xoá sheet, sắp xếp, định dạng ô, gộp ô, cố định hàng, bộ lọc). Trước đây PowerPoint chỉ tạo mới được, không sửa được.
+- **Biểu đồ thật trong Excel** (cột, ngang, đường, tròn, vành, vùng): lấy số liệu từ ô nên sửa dữ liệu là biểu đồ đổi theo; bảng Excel tự định dạng đẹp (tiêu đề đậm, hàng so le, hàng Tổng nổi bật, số/ngày/% đúng kiểu, đóng băng tiêu đề, in ngang vừa khổ) và chọn được màu chủ đề.
+- **Word đẹp hơn** (kiểu “hiện đại”): khối tiêu đề có vạch nhấn, màu chủ đạo chọn được, bảng hàng tiêu đề màu và hàng so le, hộp Lưu ý/Mẹo/Cảnh báo, khối mã, mục lục tự cập nhật, đầu trang và “Trang X / Y”, biểu đồ thanh màu. Kiểu hành chính (công văn) giữ nguyên thể thức.
+- **Tạo PDF đẹp trực tiếp từ nội dung** (`create_pdf`, bản Desktop; không cần LibreOffice): khổ A4, tiêu đề, mục lục, bảng, hộp lưu ý, biểu đồ thật, số trang.
+- **Công cụ PDF**: xem thông tin, lấy chữ theo trang, tách trang/cắt theo số trang, gộp nhiều PDF, xoay trang, ghép ảnh thành PDF; luôn lưu ra tệp mới.
+- **Quản lý tệp ngay trong trò chuyện**: sao chép, di chuyển/đổi tên, xoá, tạo thư mục, nén .zip, giải nén .zip, xem thông tin tệp/thư mục; hoàn tác được bằng một lần “Hoàn tác”, không ghi đè khi bạn chưa đồng ý.
+- **Agent hỏi lại bằng thẻ chọn đáp án** khi thật sự thiếu thông tin: chọn một hoặc nhiều lựa chọn, tự gõ ở ô “Khác…”, hoặc “Để agent tự quyết”.
 - **Trang quản trị nâng cấp**: chất lượng theo **phiên bản/tab/mô hình/nền tảng** (thấy ngay bản mới có tệ hơn không), so sánh với kỳ trước ngay trên biểu đồ, vạch đánh dấu ngày ra phiên bản mới, cột bất thường, công cụ × lý do lỗi, công cụ chạy chậm, ngữ cảnh gần đầy, hỏi quyền, mức tập trung token. Bảng bấm tiêu đề để sắp xếp và có ô lọc; tải CSV theo khoảng đang xem; số trên trục dễ đọc (5.3 s, 15.7 triệu); cột *Hoạt động* ở trang Tài khoản dẫn tới trang của từng người.
 - **Cảnh báo chủ động tuỳ chọn**: đặt URL webhook (Teams/Slack…) để nhận tin khi lỗi tăng, cổng mô hình 5xx, hết hạn mức hàng loạt hoặc hệ thống không khoẻ. Chỉ gửi số liệu tổng hợp.
 - **Trang quản trị chọn được khoảng thời gian**: 1 ngày, 3 ngày (chia theo giờ), 7, 30 (mặc định) và 90 ngày. Nút chọn nằm ở thanh trên cùng; mỗi khoảng là một trang tạo sẵn (`index-1d.html`, `index-3d.html`, `index-7d.html`, `index-90d.html`) nên mở nhanh như trang cũ.
 
 ### Sửa
+- **Đọc PowerPoint đã sắp xếp lại slide** nay đúng thứ tự trình chiếu (trước đây theo tên tệp). **Hoàn tác** khôi phục đúng tệp kể cả khi thư mục chứa đã bị xoá. Sửa lỗi đọc tệp Word có phím Tab/mục lục.
 - **Tỷ lệ lỗi công cụ không còn bị thổi phồng** bởi các bản ứng dụng cũ chưa phân loại lỗi (trước đây hiện như "chưa rõ" chiếm gần hết biểu đồ); phần đó nay ghi riêng.
 
 ## [0.8.3] - 2026-10-11
