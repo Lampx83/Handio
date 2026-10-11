@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Tiện ích văn phòng chính xác (tab Work)**: đọc số thành chữ chuẩn văn bản hành chính, tính ngày/ngày làm việc/ngày nghỉ lễ, đổi dương lịch ↔ âm lịch kèm Can Chi, máy tính (hiểu số kiểu Việt Nam và “15% của 2.500.000”), xử lý họ tên/số điện thoại và sắp xếp tên theo bảng chữ cái tiếng Việt, tạo thư nháp `.eml` và lời mời lịch `.ics`, đổi Excel ↔ CSV (mở đúng tiếng Việt), so sánh hai văn bản, thống kê tài liệu. Ngày lễ và âm lịch luôn kèm lời nhắc đối chiếu với thông báo chính thức.
 - **Sửa tệp có sẵn như người dùng Office thật (tab Work)**: PowerPoint (`pptx_edit`: sửa chữ, đổi hoa/thường tiêu đề, màu chữ/cỡ/phông/căn lề, màu nền hình và slide, xoá/nhân đôi/chuyển slide), Word (`docx_edit`: thay cả đoạn, chèn tiêu đề/danh sách/bảng, xoá, định dạng, sửa bảng), Excel (xoá/chèn hàng-cột và công thức tự điều chỉnh, đổi tên/xoá sheet, sắp xếp, định dạng ô, gộp ô, cố định hàng, bộ lọc). Trước đây PowerPoint chỉ tạo mới được, không sửa được.
 - **Biểu đồ thật trong Excel** (cột, ngang, đường, tròn, vành, vùng): lấy số liệu từ ô nên sửa dữ liệu là biểu đồ đổi theo; bảng Excel tự định dạng đẹp (tiêu đề đậm, hàng so le, hàng Tổng nổi bật, số/ngày/% đúng kiểu, đóng băng tiêu đề, in ngang vừa khổ) và chọn được màu chủ đề.
 - **Word đẹp hơn** (kiểu “hiện đại”): khối tiêu đề có vạch nhấn, màu chủ đạo chọn được, bảng hàng tiêu đề màu và hàng so le, hộp Lưu ý/Mẹo/Cảnh báo, khối mã, mục lục tự cập nhật, đầu trang và “Trang X / Y”, biểu đồ thanh màu. Kiểu hành chính (công văn) giữ nguyên thể thức.
@@ -18,6 +19,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Trang quản trị chọn được khoảng thời gian**: 1 ngày, 3 ngày (chia theo giờ), 7, 30 (mặc định) và 90 ngày. Nút chọn nằm ở thanh trên cùng; mỗi khoảng là một trang tạo sẵn (`index-1d.html`, `index-3d.html`, `index-7d.html`, `index-90d.html`) nên mở nhanh như trang cũ.
 
 ### Sửa
+- Ô Excel có chữ bắt đầu bằng “=” nhưng được đánh dấu là chữ không còn bị biến thành công thức.
 - **Đọc PowerPoint đã sắp xếp lại slide** nay đúng thứ tự trình chiếu (trước đây theo tên tệp). **Hoàn tác** khôi phục đúng tệp kể cả khi thư mục chứa đã bị xoá. Sửa lỗi đọc tệp Word có phím Tab/mục lục.
 - **Tỷ lệ lỗi công cụ không còn bị thổi phồng** bởi các bản ứng dụng cũ chưa phân loại lỗi (trước đây hiện như "chưa rõ" chiếm gần hết biểu đồ); phần đó nay ghi riêng.
 
