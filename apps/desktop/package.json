@@ -1,6 +1,6 @@
 {
   "name": "@neu/agent-desktop",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Handio — trợ lý AI giúp học lập trình và xử lý công việc văn phòng",
   "main": "dist/main.js",

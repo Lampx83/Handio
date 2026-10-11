@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.1] - 2026-10-11
+
 ### Thay đổi
 - **Trang giới thiệu công khai thiết kế lại** theo bộ nhận diện Handio: nền navy, chữ “handio” và dấu “h”, hai tay rô-bốt gõ phím và cầm chuột có chuyển động, các thẻ “Viết code nhanh hơn / Tạo slide chỉ với 1 câu lệnh / Thiết kế dễ dàng hơn / Xử lý dữ liệu tự động”, lưới sáu khả năng, demo, ba chế độ, hỏi đáp. Hai bàn tay là ảnh PNG tách nền, chuyển động riêng khỏi bàn phím; phím sáng nhấp nháy, vòng sáng ở ngón trỏ khi bấm chuột, và bấm vào hình thì cả bàn phím sáng lên. Vẫn tĩnh, không script, dùng được trên điện thoại và tự tắt chuyển động khi hệ điều hành bật “giảm chuyển động”.
 - **Tên sản phẩm đổi từ Hando thành Handio** (đọc *han-đi-ô*: *hand* + *io*, giao việc vào và nhận kết quả ra). Chữ Handio được vẽ lại: “Hand” màu xanh, “io” màu cam; biểu tượng bàn tay và các chuyển động giữ nguyên. Tên mới có ở giao diện, trang giới thiệu/đăng nhập/quản trị, lời nhắc của agent, tài liệu, ảnh bìa và biểu tượng ứng dụng.
