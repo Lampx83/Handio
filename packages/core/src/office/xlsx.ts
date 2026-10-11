@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { applyFormatOps, applyStructureOps, type XlsxOps } from "./xlsx-ops";
 import { brandName } from "../brand";
 import { loadZip } from "./docx-read";
 import { customFunctions } from "./formulas";
@@ -340,6 +341,8 @@ export interface XlsxEdit {
   append_rows?: CellInput[][];
   /** Thêm sheet mới (có thể kèm tiêu đề đậm, định dạng số, tô màu điều kiện như create_xlsx). */
   add_sheet?: { name: string; rows: CellInput[][] } & Partial<Pick<SheetSpec, "header" | "widths" | "freeze_header" | "autofilter" | "number_formats" | "conditional">>;
+  /** Thao tác cấu trúc/định dạng: xoá-chèn hàng/cột, đổi tên/xoá sheet, sắp xếp, định dạng… (xem xlsx-ops.ts). */
+  ops?: XlsxOps;
 }
 
 export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes: Uint8Array; changed: string[]; report: BuildReport }> {
@@ -368,6 +371,7 @@ export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes:
     else cell.value = raw;
   };
   const changed: string[] = [];
+  if (e.ops) changed.push(...applyStructureOps(wb, e.ops, e.sheet)); // trước: để địa chỉ ô trong `set` theo bố cục MỚI
   for (const [key, raw] of Object.entries(e.set ?? {})) {
     const bang = key.lastIndexOf("!");
     const ws = findSheet(bang >= 0 ? key.slice(0, bang).replace(/^'|'$/g, "") : e.sheet);
@@ -393,6 +397,7 @@ export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes:
       styleSheet(ws, sp, sp.rows, Math.max(1, ...sp.rows.map((r) => r.length)), sp.header !== false && sp.rows.length > 0);
     changed.push(`(sheet mới) ${ws.name}`);
   }
+  if (e.ops) changed.push(...applyFormatOps(wb, e.ops, e.sheet));
   // dựng lưới để tính lại mọi công thức
   const grid: Grid = new Map();
   for (const ws of wb.worksheets) {
