@@ -654,7 +654,7 @@ def _read_secret():
 
 def main():
     cred = os.environ.get("CREDENTIALS_DIRECTORY", "")
-    up = os.environ.get("NEU_QUOTA_UPSTREAM", "192.0.2.10:8037").rsplit(":", 1)
+    up = os.environ.get("NEU_QUOTA_UPSTREAM", "127.0.0.1:8037").rsplit(":", 1)
     ctx = Config(
         secret=_read_secret(),
         store=Store(os.environ.get("NEU_QUOTA_DB", "/var/lib/neu-agent/quota/usage.db")),

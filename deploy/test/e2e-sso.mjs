@@ -8,8 +8,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startMockIdp } from "./mock-idp.mjs";
+import { renderedDeploy, SITE } from "./site.mjs";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const root = renderedDeploy();   // deploy/ đã điền địa chỉ ví dụ (tệp mẫu chỉ có dấu giữ chỗ @@SITE_…@@)
 const NET = "neu-e2e";
 const PORT = 18081;
 const CLIENT = "client-e2e";
@@ -47,7 +48,7 @@ try {
   fs.mkdirSync(path.join(t, "guide"), { recursive: true });
   const rd = (f) => fs.readFileSync(path.join(d220, f), "utf8");
   fs.writeFileSync(path.join(t, "conf.d/neu-agent.conf"), rd("neu-agent.http.conf").replace("__NEU_AGENT_KEY__", "testkey").replace("default        0;", "default        0;\n    172.16.0.0/12  1;"));
-  const fix = (s) => s.replaceAll("http://127.0.0.1:4192", "http://e2e-gw").replaceAll("/etc/nginx/snippets/", "/t/snippets/").replaceAll("/var/www/neu-agent-dl/", "/t/dl/").replaceAll("/var/www/neu-agent-guide/", "/t/guide/").replaceAll("/var/www/neu-agent/", "/t/web/").replaceAll("127.0.0.1:4180", "e2e-oauth:4180").replaceAll("http://192.0.2.10:8037", "http://e2e-gw:80");
+  const fix = (s) => s.replaceAll("http://127.0.0.1:4192", "http://e2e-gw").replaceAll("/etc/nginx/snippets/", "/t/snippets/").replaceAll("/var/www/neu-agent-dl/", "/t/dl/").replaceAll("/var/www/neu-agent-guide/", "/t/guide/").replaceAll("/var/www/neu-agent/", "/t/web/").replaceAll("127.0.0.1:4180", "e2e-oauth:4180").replaceAll(`http://${SITE.SITE_GATEWAY_HOSTPORT}`, "http://e2e-gw:80");
   fs.writeFileSync(path.join(t, "snippets/neu-agent-locations.conf"), fix(rd("neu-agent.locations.conf")));
   fs.writeFileSync(path.join(t, "snippets/neu-agent-auth.conf"), fix(rd("neu-agent-auth.conf")));
   fs.writeFileSync(path.join(t, "server.conf"), fix(rd("neu-agent.server.conf")));
@@ -64,7 +65,7 @@ try {
   // "222": chuyển tiếp /agent/ tới 220
   const f222 = path.join(tmp, "f");
   fs.mkdirSync(f222);
-  fs.writeFileSync(path.join(f222, "loc.conf"), fs.readFileSync(path.join(root, "222/neu-agent-locations.conf"), "utf8").replace("http://192.0.2.21:80", "http://e2e-220:80"));
+  fs.writeFileSync(path.join(f222, "loc.conf"), fs.readFileSync(path.join(root, "222/neu-agent-locations.conf"), "utf8").replace(`http://${SITE.SITE_220_INTERNAL_IP}:80`, "http://e2e-220:80"));
   fs.writeFileSync(path.join(f222, "nginx.conf"), `pid /tmp/f.pid; error_log /dev/stderr info;\nevents {}\nhttp { access_log off; resolver 127.0.0.11; server { listen 80; server_name ai.neu.edu.vn; include /f/loc.conf; location /apps/ { return 200 'app-khac'; } } }\n`);
 
   // tài khoản tên + mật khẩu: một băm kiểu máy chủ Ubuntu tạo ($2b$, python crypt) và một băm kiểu htpasswd -B ($2y$)

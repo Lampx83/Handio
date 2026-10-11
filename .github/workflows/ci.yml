@@ -22,6 +22,8 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run version:check          # mọi gói cùng phiên bản và CHANGELOG.md có mục cho phiên bản đó
+      - name: Không có thông tin hạ tầng/định danh/bí mật trong kho (chuẩn bị công khai)
+        run: node scripts/public-audit.mjs
       - run: npm run typecheck
       - run: npx vitest run
       - name: Dựng bản web (bản phát hành)

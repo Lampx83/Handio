@@ -19,11 +19,11 @@ Người dùng ──HTTPS──▶ 222 (ai.neu.edu.vn, giữ chứng chỉ)  �
 ```
 
 - **Máy 220** (`deploy/220/`): web tĩnh, bản cài Desktop, proxy mô hình (gắn key ở phía máy chủ), và **đăng nhập SSO Microsoft 365** (`oauth2-proxy`). Mọi đường dẫn đều yêu cầu đăng nhập; chỉ nhận kết nối từ máy 222.
-- **Máy 222** (`deploy/222/`): giữ tên miền + HTTPS, chuyển `/agent/` sang 220 **qua địa chỉ nội bộ** (222 `192.0.2.23` → 220 `192.0.2.21:80`; 222 không tới được IP công khai của 220, giống 232). Các ứng dụng khác trên 222 (như `/apps`) không bị đụng tới.
+- **Máy 222** (`deploy/222/`): giữ tên miền + HTTPS, chuyển `/agent/` sang 220 **qua địa chỉ nội bộ** (222 → địa chỉ nội bộ của 220, cổng 80; 222 không tới được IP công khai của 220, giống gateway mô hình). Địa chỉ cụ thể nằm ở cấu hình riêng của nơi triển khai (`SITE_CONF`, xem docs/PUBLIC.md), không nằm trong mã nguồn. Các ứng dụng khác trên 222 (như `/apps`) không bị đụng tới.
 - Trang đăng nhập/chuyển hướng dùng đường dẫn tương đối nên người dùng luôn ở HTTPS.
 
 ### Khai báo SSO trên Microsoft Entra (một lần, bởi người quản trị ứng dụng)
-Ứng dụng có Application (client) ID `00000000-0000-0000-0000-000000000002`, tenant `00000000-0000-0000-0000-000000000001`.
+Application (client) ID và tenant ID của ứng dụng nằm ở cấu hình riêng của nơi triển khai (biến repo `NEU_AUTH_TENANT`, `NEU_AUTH_CLIENT_ID` cho bản Desktop; `SITE_SSO_TENANT`, `SITE_SSO_CLIENT_ID` trong `SITE_CONF` cho máy chủ — xem docs/PUBLIC.md).
 - Authentication → thêm nền tảng **Web**: `https://ai.neu.edu.vn/agent/oauth2/callback` (dùng cho bản web và `oauth2-proxy`).
 - Thêm nền tảng **Mobile and desktop applications**: `http://localhost` và bật **Allow public client flows = Yes** (dùng cho bản Desktop).
 - Quyền (delegated): `openid`, `profile`, `email`, `offline_access`.
@@ -88,7 +88,7 @@ NEU_MOCK=1 npm run desktop       # thêm mẫu "Demo giả lập" trong Cài đ�
 ```
 
 - Lần đầu tạo hai thư mục `~/Documents/NEU Agent` (dự án mẫu) và `~/Documents/NEU Agent` (dữ liệu mẫu). Đổi bằng menu **Tệp → Mở thư mục Code…/Work…**.
-- **Key tích hợp sẵn** (`apps/desktop/src/main.ts`): ứng dụng tự dùng key `Handio` của Khoa, **chỉ gửi tới `192.0.2.11:8037`** và chỉ khi người dùng chưa tự nhập key (đổi địa chỉ sang máy chủ khác thì không gửi). Là key dùng chung đặt trong mã nguồn nên ai có ứng dụng đều lấy được: đặt giới hạn và thu hồi/đổi tại Kong; ghi đè bằng biến môi trường `NEU_BUILTIN_KEY`.
+- **Key tích hợp sẵn** (`apps/desktop/src/main.ts`): ứng dụng tự dùng key `Handio` của Khoa, **chỉ gửi tới máy chủ mô hình đã khai báo lúc dựng (`NEU_DEFAULT_BASE_URL`, và `NEU_LAN_GATEWAY` nếu có)** và chỉ khi người dùng chưa tự nhập key (đổi địa chỉ sang máy chủ khác thì không gửi). Là key dùng chung đặt trong mã nguồn nên ai có ứng dụng đều lấy được: đặt giới hạn và thu hồi/đổi tại Kong; ghi đè bằng biến môi trường `NEU_BUILTIN_KEY`.
 - Cài đặt nằm ở thư mục dữ liệu ứng dụng; **key người dùng tự nhập được mã hoá bằng kho khoá của hệ điều hành** (Keychain/DPAPI/libsecret qua `safeStorage`). Nếu hệ điều hành không có kho khoá, key lưu dạng tệp chỉ chủ sở hữu đọc được.
 - Tab Code chạy lệnh thật (có hỏi quyền). Tab Work **không** có công cụ chạy lệnh. Xuất PDF cần LibreOffice.
 - Giao diện chạy trong cửa sổ cách ly (`sandbox`, `contextIsolation`, CSP `connect-src 'none'`); chỉ tiến trình chính mới có mạng/ổ đĩa, qua một danh sách lệnh IPC cố định.

@@ -1,7 +1,7 @@
 # Hướng dẫn giảng viên triển khai FIT Code
 
 ## 1. Chuẩn bị máy chủ
-- Máy chủ mô hình: `http://192.0.2.11:8037/vllm/v1` (vLLM sau Kong, Qwen3.5-35B-A3B-GPTQ-Int4, tool calling bật sẵn).
+- Máy chủ mô hình: địa chỉ gateway do Khoa cung cấp, dạng `http://<máy-chủ>:8037/vllm/v1` (đặt bằng `FITCODE_BASE_URL`) (vLLM sau Kong, Qwen3.5-35B-A3B-GPTQ-Int4, tool calling bật sẵn).
 - Mỗi sinh viên **một key riêng** (consumer riêng trong Kong, nhóm quyền chat, giới hạn lệnh/phút). Quản lý và theo dõi tại SIM → server 232 → tab **API Gateway → Quản lý key** (số lệnh, lỗi, token theo từng key).
 - Gợi ý giới hạn: 30–60 lệnh/phút mỗi key. Một lượt agent thường gọi mô hình 5–15 lần.
 

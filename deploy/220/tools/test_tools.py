@@ -23,7 +23,7 @@ class UrlSafety(unittest.TestCase):
             self.blocked(u)
 
     def test_rejects_private_resolutions(self):
-        for ip in ["127.0.0.1", "192.0.2.10", "192.0.2.21", "192.168.1.1", "172.16.0.5", "169.254.169.254", "100.64.0.1", "0.0.0.0",
+        for ip in ["127.0.0.1", "10.0.0.58", "10.0.0.51", "192.168.1.1", "172.16.0.5", "169.254.169.254", "100.64.0.1", "0.0.0.0",
                    "::1", "fe80::1", "fc00::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "224.0.0.1"]:
             self.blocked("http://example.com/", lambda h, ip=ip: [ip])
 
@@ -68,7 +68,7 @@ class FakeConn:
         pass
 
 
-PUBLIC = {"a.example": "93.184.216.34", "b.example": "93.184.216.35", "evil.example": "192.0.2.10"}
+PUBLIC = {"a.example": "93.184.216.34", "b.example": "93.184.216.35", "evil.example": "10.0.0.58"}
 resolve = lambda h: [PUBLIC[h]]
 
 
@@ -220,7 +220,7 @@ class Server(unittest.TestCase):
         self.assertEqual(self.call("/tools/other")[0], 404)
 
     def test_fetch_refuses_internal_targets(self):
-        for target in ["http://127.0.0.1:4191/healthz", "http://192.0.2.10:8037/", "http://169.254.169.254/latest/meta-data/", "file:///etc/passwd", "http://localhost/"]:
+        for target in ["http://127.0.0.1:4191/healthz", "http://10.0.0.58:8037/", "http://169.254.169.254/latest/meta-data/", "file:///etc/passwd", "http://localhost/"]:
             st, body, _ = self.call("/tools/fetch?url=" + urllib.parse.quote(target, safe=""))
             self.assertEqual(st, 400, target)
             self.assertIn("error", json.loads(body))

@@ -10,11 +10,11 @@ LoadCredential=diag-secret:/etc/neu-agent/diag-secret
 LoadCredential=admins:/etc/neu-agent/admins.txt
 LoadCredential=quota-config:/etc/neu-agent/quota.json
 Environment=NEU_QUOTA_DB=/var/lib/neu-agent/quota/usage.db
-Environment=NEU_QUOTA_UPSTREAM=192.0.2.10:8037
+Environment=NEU_QUOTA_UPSTREAM=@@SITE_GATEWAY_HOSTPORT@@
 ExecStart=/usr/bin/python3 /usr/local/lib/neu-agent-quota/quota.py
 Restart=always
 RestartSec=3
-# cô lập như dịch vụ đăng nhập: không quyền ghi ngoài thư mục dữ liệu, không quyền đặc biệt; chỉ nói chuyện qua loopback và tới cổng mô hình 192.0.2.10
+# cô lập như dịch vụ đăng nhập: không quyền ghi ngoài thư mục dữ liệu, không quyền đặc biệt; chỉ nói chuyện qua loopback và tới cổng mô hình @@SITE_GATEWAY_IP@@
 NoNewPrivileges=yes
 ProtectSystem=strict
 ReadWritePaths=/var/lib/neu-agent/quota
@@ -41,7 +41,7 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 IPAddressDeny=any
-IPAddressAllow=localhost 192.0.2.10
+IPAddressAllow=localhost @@SITE_GATEWAY_IP@@
 UMask=0077
 MemoryMax=384M
 TasksMax=256

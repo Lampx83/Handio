@@ -6,7 +6,7 @@ import type { PublicSettings, Settings } from "./types";
 
 /**
  * Key tích hợp sẵn do ỨNG DỤNG cung cấp (Desktop). Chỉ được gửi tới các máy chủ trong `hosts` và chỉ khi người dùng chưa tự nhập key.
- * Bản web KHÔNG mang key: nginx phía máy chủ gắn key vào header (xem deploy/ai-neu).
+ * Bản web KHÔNG mang key: nginx phía máy chủ gắn key vào header (xem deploy/220).
  */
 export interface BuiltinKey {
   key: string;
@@ -25,7 +25,7 @@ export function effectiveKey(s: { key?: string; baseUrl: string }, builtin: Buil
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  baseUrl: "http://192.0.2.11:8037/vllm/v1",
+  baseUrl: "https://ai.neu.edu.vn/agent/vllm/v1",
   model: "qwen3.5-35b-a3b-int4",
   keyHeader: "x-ollama-seckey",
   thinking: false,

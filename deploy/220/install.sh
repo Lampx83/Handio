@@ -16,6 +16,10 @@ WEBROOT=/var/www/neu-agent
 DLROOT=/var/www/neu-agent-dl
 GUIDEROOT=/var/www/neu-agent-guide
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# Dấu giữ chỗ @@SITE_…@@ phải đã được điền (CD điền khi đóng gói; tay: node deploy/render-site.mjs). Chưa điền thì dừng, chưa đụng gì tới máy.
+if grep -rIlE '@@SITE_[A-Z0-9_]+@@' "$HERE" >/dev/null 2>&1; then
+  echo "Chưa điền cấu hình site: còn dấu giữ chỗ @@SITE_…@@ trong $HERE. Chạy: node deploy/render-site.mjs <thư mục> --env site.env (xem docs/PUBLIC.md)."; exit 1
+fi
 TS=$(date +%Y%m%d%H%M%S)
 
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
@@ -35,7 +39,7 @@ for f in web.tar.gz neu-agent.http.conf neu-agent.server.conf neu-agent.location
 systemctl is-active --quiet neu-agent-oauth2 || { echo "Dịch vụ đăng nhập chưa chạy. Chạy trước: sudo ./auth/install-auth.sh"; exit 1; }
 
 # trạng thái các site khác trước khi cài (để chắc chắn không bị ảnh hưởng)
-other_before=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: 192.0.2.20" http://127.0.0.1/ || true)
+other_before=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: @@SITE_220_PUBLIC_IP@@" http://127.0.0.1/ || true)
 
 bak() { [ -e "$1" ] && cp -a "$1" "$1.bak-$TS" || true; }
 for f in "$SITE" "$CONFD" "$SNIP" "$SNIPA"; do bak "$f"; done
@@ -94,7 +98,7 @@ r_api=$(code http://127.0.0.1/agent/vllm/v1/models)
 r_apibody=$(curl -s -H "$H" http://127.0.0.1/agent/vllm/v1/models | head -c 60)
 r_dl=$(code http://127.0.0.1/agent/download/SHA256SUMS.txt)
 r_embed=$(code http://127.0.0.1/agent/vllm/v1/embeddings)
-r_other=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: 192.0.2.20" http://127.0.0.1/ || true)
+r_other=$(curl -s -o /dev/null -w "%{http_code}" -H "Host: @@SITE_220_PUBLIC_IP@@" http://127.0.0.1/ || true)
 echo "Kiểm tra: trang=$r_page(302: chuyển tới đăng nhập) | đăng nhập=${r_start%% *}→${r_start#* } | API chưa đăng nhập=$r_api $r_apibody | tải về=$r_dl | embeddings=$r_embed | site khác=$other_before→$r_other"
 [ "$r_page" = 302 ] && [ "${r_start%% *}" = 302 ] && [[ "${r_start#* }" == https://login.microsoftonline.com/* ]] && [ "$r_api" = 401 ] && [[ "$r_apibody" == *login_required* ]] && [ "$r_dl" = 302 ] && [ "$r_embed" != 200 ] && [ "$r_other" = "$other_before" ] || { echo "Kiểm tra sau cài THẤT BẠI"; exit 1; }
 rm -rf "$WEBROOT.prev"

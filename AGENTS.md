@@ -16,7 +16,6 @@ Handio: trợ lý AI dạng *agent* của Trường ĐH Kinh tế Quốc dân (w
 | `apps/web` | Bản web (trình duyệt, thư mục ảo trong IndexedDB) + máy chủ dev có mô hình giả |
 | `apps/desktop` | Electron: tiến trình chính, preload, renderer, đăng nhập OIDC, cập nhật, đóng gói |
 | `deploy/` | Triển khai máy 220 (nginx, SSO oauth2-proxy, chẩn đoán, tài khoản) + 222 (tên miền/HTTPS) + bài thử Docker |
-| `server/gateway-232` | Ghi chú vận hành gateway mô hình |
 | `docs/` | Tài liệu (DEPLOY, SECURITY, RELEASE, CICD, DIAGNOSTICS…) |
 | `packs/`, `labs/`, `legacy/`, `apps/playground` | Gói mẫu, thử nghiệm, mã cũ: không phải đường chính |
 

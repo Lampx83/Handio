@@ -64,12 +64,18 @@ jobs:
       - name: Đóng gói bản triển khai
         id: pack
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.action == 'rollback') }}
+        env:
+          SITE_CONF: ${{ secrets.SITE_CONF }}   # SECRET (không phải biến): nhật ký Actions công khai nếu repo công khai
         run: |
           set -euo pipefail
           rm -rf stage && mkdir stage
           # mọi thứ của deploy/220 trừ tệp nặng/sinh ra: downloads/ (bản cài Desktop do release.yml lo), gói oauth2-proxy
           tar -C deploy/220 --exclude='./downloads' --exclude='./auth/*.tar.gz' --exclude='./web.tar.gz' --exclude='__pycache__' --exclude='.unittest.log' -cf - . | tar -C stage -xf -
           tar -C apps/web/dist -czf stage/web.tar.gz .
+          # Mã công khai chỉ có dấu giữ chỗ @@SITE_…@@; giá trị thật của nơi triển khai nằm ở secret SITE_CONF (docs/PUBLIC.md).
+          # Thiếu biến thì dừng TẠI ĐÂY, trước khi gửi gì lên máy chủ.
+          node deploy/render-site.mjs stage --mask     # che từng giá trị (IP…) trong mọi nhật ký sau đó
+          node deploy/render-site.mjs stage --check
           printf 'commit=%s\nrun=%s\nactor=%s\ntime=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_ACTOR" "$(date -u +%FT%TZ)" > stage/MANIFEST
           tar -C stage --owner=0 --group=0 --numeric-owner -czf bundle.tgz .
           SHA=$(sha256sum bundle.tgz | cut -d' ' -f1)

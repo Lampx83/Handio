@@ -18,6 +18,10 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# Dấu giữ chỗ @@SITE_…@@ phải đã được điền (CD điền khi đóng gói; tay: node deploy/render-site.mjs). Chưa điền thì dừng, chưa đụng gì tới máy.
+if grep -rIlE '@@SITE_[A-Z0-9_]+@@' "$HERE" >/dev/null 2>&1; then
+  echo "Chưa điền cấu hình site: còn dấu giữ chỗ @@SITE_…@@ trong $HERE. Chạy: node deploy/render-site.mjs <thư mục> --env site.env (xem docs/PUBLIC.md)."; exit 1
+fi
 LIB=/usr/local/lib/neu-agent-diag
 UNITDIR=/etc/systemd/system
 LROT=/etc/logrotate.d/neu-agent-diag
@@ -142,7 +146,8 @@ if [ -s "$LLMKEY" ]; then
 LoadCredential=llm-key:$LLMKEY
 PrivateNetwork=no
 IPAddressDeny=any
-IPAddressAllow=192.0.2.10
+IPAddressAllow=@@SITE_GATEWAY_IP@@
+Environment=NEU_AGENT_LLM_URL=http://@@SITE_GATEWAY_HOSTPORT@@/vllm/v1/chat/completions
 ExecStart=
 ExecStart=/usr/bin/python3 $LIB/report.py --llm
 EOT

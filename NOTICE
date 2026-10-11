@@ -1,0 +1,8 @@
+Handio (NEU Agent)
+Copyright 2026 các tác giả của Handio
+
+Phần mềm này được cấp phép theo Apache License, Version 2.0 (xem tệp LICENSE).
+
+Các phụ thuộc bên thứ ba giữ giấy phép riêng của chúng (xem package-lock.json và SBOM đi kèm bản phát hành).
+Tên "NEU", logo và nhận diện của Trường Đại học Kinh tế Quốc dân không nằm trong giấy phép này
+(Apache-2.0 mục 6: không cấp quyền dùng nhãn hiệu).

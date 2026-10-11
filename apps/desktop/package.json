@@ -1,6 +1,7 @@
 {
   "name": "@neu/agent-desktop",
   "version": "0.8.5",
+  "license": "Apache-2.0",
   "private": true,
   "description": "NEU Agent — trợ lý AI giúp học lập trình và xử lý công việc văn phòng",
   "main": "dist/main.js",

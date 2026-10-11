@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { mockHandler } from "./mock-llm.mjs";
 
 const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../dist");
-const UPSTREAM = new URL(process.env.UPSTREAM || "http://192.0.2.11:8037");
+const UPSTREAM = new URL(process.env.UPSTREAM || "http://127.0.0.1:8037");
 const PORT = Number(process.env.PORT || 5173);
 // NEU_DEV_KEY: gắn key vào yêu cầu tới gateway, giả lập việc nginx trên máy chủ thật làm (key không nằm trong JS của trang)
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".map": "application/json", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json" };

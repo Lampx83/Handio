@@ -17,7 +17,7 @@ import urllib.parse
 E = os.environ.get
 CHECKS = {
     "oauth2": E("NEU_HEALTH_OAUTH2", "http://127.0.0.1:4180/ping"),
-    "gateway": E("NEU_HEALTH_GATEWAY", "http://192.0.2.10:8037/"),
+    "gateway": E("NEU_HEALTH_GATEWAY", "http://127.0.0.1:8037/"),
     "collector": E("NEU_HEALTH_COLLECTOR", "http://127.0.0.1:4190/healthz"),
     "quota": E("NEU_HEALTH_QUOTA", "http://127.0.0.1:4191/healthz"),
 }

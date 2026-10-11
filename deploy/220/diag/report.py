@@ -226,7 +226,7 @@ def rule_gateway_5xx(S, T, B=None):
     v = S["nginx"]["vllm"]
     if v["n"] >= T["vllm_min_requests"] and v["rate_5xx"] >= T["vllm_5xx_rate"]:
         return finding("gateway_5xx", "cao", "Cổng mô hình trả lỗi 5xx nhiều", "%s trên %d lệnh gọi (%s)" % (_p(v["rate_5xx"]), v["n"], ", ".join("%s=%d" % kv for kv in sorted(v["status"].items()) if int(kv[0]) >= 500)),
-                       "Kiểm tra Kong/vLLM (đang khởi động lại? hết VRAM? hàng đợi dài?), cân nhắc tăng số bản sao hoặc giảm max_tokens/ngữ cảnh. 502/504 từ nginx: kiểm tra proxy_read_timeout và máy 192.0.2.10.")
+                       "Kiểm tra Kong/vLLM (đang khởi động lại? hết VRAM? hàng đợi dài?), cân nhắc tăng số bản sao hoặc giảm max_tokens/ngữ cảnh. 502/504 từ nginx: kiểm tra proxy_read_timeout và máy chạy gateway mô hình.")
 
 
 def rule_rate_limit(S, T, B=None):
@@ -590,7 +590,7 @@ def main(argv=None):
     ap.add_argument("--now", help="mốc kết thúc cửa sổ (ISO hoặc epoch); mặc định: bây giờ")
     ap.add_argument("--thresholds", help="JSON ghi đè ngưỡng")
     ap.add_argument("--llm", action="store_true", help="nhờ mô hình nháp gợi ý (chỉ gửi số liệu tổng hợp)")
-    ap.add_argument("--llm-url", default=os.environ.get("NEU_AGENT_LLM_URL", "http://192.0.2.10:8037/vllm/v1/chat/completions"))
+    ap.add_argument("--llm-url", default=os.environ.get("NEU_AGENT_LLM_URL", "http://127.0.0.1:8037/vllm/v1/chat/completions"))
     ap.add_argument("--llm-model", default=os.environ.get("NEU_AGENT_LLM_MODEL", "qwen3.5-35b-a3b-int4"))
     ap.add_argument("--llm-key-file", default=None)
     ap.add_argument("--print", action="store_true", help="in báo cáo Markdown ra màn hình")

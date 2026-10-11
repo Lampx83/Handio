@@ -17,6 +17,7 @@ declare const __SMOKE__: boolean;
 declare const __DEV__: boolean;
 declare const __DEFAULT_BASE_URL__: string;
 declare const __BUILTIN_KEY__: string;
+declare const __LAN_GATEWAY__: string; // http://địa-chỉ:cổng/vllm/v1 trong mạng nội bộ, hoặc "" (không có)
 declare const __AUTH__: AuthConfig | null;
 
 const PROFILES_LIST: Profile[] = PROFILE_ORDER;
@@ -24,14 +25,14 @@ const DEFAULT_DIR: Record<Profile, string> = { work: "NEU Work", code: "NEU Code
 // Dự án đầu tiên luôn TRỐNG (không nạp dữ liệu mẫu). Tên cũ "Dự án mẫu"/"Mẫu thiết kế" chỉ còn để nhận ra và dọn ở bản đã cài trước đây.
 const DEFAULT_NAME: Record<Profile, string> = { work: "Dự án của tôi", code: "Dự án của tôi", design: "Thiết kế của tôi" };
 const LEGACY_NAME: Record<Profile, string> = { work: "Dự án mẫu", code: "Dự án mẫu", design: "Mẫu thiết kế" };
-const LAN_GATEWAY = "http://192.0.2.11:8037/vllm/v1";
+const LAN_GATEWAY = __LAN_GATEWAY__;
 const SMOKE = __SMOKE__ ? process.env.NEU_SMOKE_DIR || "" : "";
 // Đăng nhập SSO bắt buộc ở bản phát hành. Riêng chế độ kiểm thử đầu-cuối (SMOKE, không có trong bản phát hành) bỏ qua.
 const AUTH_CFG: AuthConfig | null = SMOKE ? null : __AUTH__;
 let auth: Auth | null = null;
 let remember = false; // có lưu phiên đăng nhập trên máy không (mặc định không; xem codec())
 let setRemember: (v: boolean) => Promise<void> = async () => undefined;
-const BUILTIN = __BUILTIN_KEY__ ? { key: __BUILTIN_KEY__, hosts: [new URL(__DEFAULT_BASE_URL__).host, "192.0.2.11:8037"] } : undefined;
+const BUILTIN = __BUILTIN_KEY__ ? { key: __BUILTIN_KEY__, hosts: [new URL(__DEFAULT_BASE_URL__).host, ...(LAN_GATEWAY ? [new URL(LAN_GATEWAY).host] : [])] } : undefined;
 const RENDERER_ROOT = path.join(__dirname, "renderer");
 
 let win: BrowserWindow | null = null;
@@ -376,7 +377,7 @@ async function buildController(profile: Profile): Promise<LocalController> {
     trust: new JsonTrustStore(path.join(userData(), "trusted-folders.json")),
     presets: [
       { label: "Máy chủ chính (HTTPS)", baseUrl: __DEFAULT_BASE_URL__, model: "qwen3.5-35b-a3b-int4", needsKey: !BUILTIN && !auth }, // đã đăng nhập SSO thì máy chủ tự gắn key: người dùng không cần nhập
-      { label: "Mạng nội bộ (HTTP, cần bật “Cho phép HTTP”)", baseUrl: LAN_GATEWAY, model: "qwen3.5-35b-a3b-int4", needsKey: true },
+      ...(LAN_GATEWAY ? [{ label: "Mạng nội bộ (HTTP, cần bật “Cho phép HTTP”)", baseUrl: LAN_GATEWAY, model: "qwen3.5-35b-a3b-int4", needsKey: true }] : []),
       ...(mockUrl ? [{ label: "Demo giả lập (không cần key)", baseUrl: mockUrl, model: "mock-agent", needsKey: false }] : []),
     ],
     openFolder: async () => void (await ctl.projectPick()),

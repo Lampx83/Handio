@@ -7,9 +7,13 @@ set -euo pipefail
 
 SITE=/etc/nginx/sites-available/ai.neu.edu.vn
 SNIP=/etc/nginx/snippets/neu-agent-locations.conf
-UPSTREAM="${NEU_UPSTREAM:-192.0.2.21}"   # chỉ đổi khi kiểm thử
+UPSTREAM="${NEU_UPSTREAM:-@@SITE_220_INTERNAL_IP@@}"   # chỉ đổi khi kiểm thử
 INCLUDE_LINE="    include /etc/nginx/snippets/neu-agent-locations.conf;   # NEU Agent (chuyển tiếp sang máy 220)"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# Dấu giữ chỗ @@SITE_…@@ phải đã được điền (CD điền khi đóng gói; tay: node deploy/render-site.mjs). Chưa điền thì dừng, chưa đụng gì tới máy.
+if grep -rIlE '@@SITE_[A-Z0-9_]+@@' "$HERE" >/dev/null 2>&1; then
+  echo "Chưa điền cấu hình site: còn dấu giữ chỗ @@SITE_…@@ trong $HERE. Chạy: node deploy/render-site.mjs <thư mục> --env site.env (xem docs/PUBLIC.md)."; exit 1
+fi
 TS=$(date +%Y%m%d%H%M%S)
 
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
@@ -39,7 +43,7 @@ rollback() {
 trap 'rc=$?; [ $rc -ne 0 ] && rollback; exit $rc' EXIT
 
 mkdir -p /etc/nginx/snippets
-sed "s#http://192.0.2.21:80#http://$UPSTREAM:80#" "$HERE/neu-agent-locations.conf" > "$SNIP"; chmod 644 "$SNIP"
+sed "s#http://@@SITE_220_INTERNAL_IP@@:80#http://$UPSTREAM:80#" "$HERE/neu-agent-locations.conf" > "$SNIP"; chmod 644 "$SNIP"
 if ! grep -q "neu-agent-locations.conf" "$SITE"; then
   # chèn ngay sau dòng server_name của khối server nghe cổng 443 và có ai.neu.edu.vn
   awk -v inc="$INCLUDE_LINE" '

@@ -1,5 +1,5 @@
 import http.server, http.client, os, sys
-KEY=os.environ['LLM_KEY']; UP=('192.0.2.11',8037)
+KEY=os.environ['LLM_KEY']; UP=(os.environ.get('LLM_HOST','127.0.0.1'),int(os.environ.get('LLM_PORT','8037')))
 class H(http.server.BaseHTTPRequestHandler):
     protocol_version='HTTP/1.1'
     def do_GET(self):

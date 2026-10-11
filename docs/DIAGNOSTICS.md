@@ -58,7 +58,7 @@ sudo ./diag/install-diag.sh --admin ban@neu.edu.vn           # người dùng ne
 - Quản trị viên xem báo cáo: danh sách ở `/etc/neu-agent/admins.txt` (mỗi dòng một email, hoặc tên đăng nhập của tài khoản mật khẩu — xem `docs/SECURITY.md`); sửa xong `sudo systemctl restart neu-agent-diag`. Xem tại `https://ai.neu.edu.vn/agent/admin/` (nginx xác thực SSO, bộ thu đối chiếu email, CSP chặt, không tài nguyên ngoài). Không phải quản trị viên → 403.
 - Chạy báo cáo ngay: `sudo systemctl start neu-agent-diag-report.service`; xem `latest.md` trong `/var/lib/neu-agent/reports/`.
 - Sức khoẻ: `cat /var/lib/neu-agent/health.json`, `tail /var/log/neu-agent/health.log`, `curl https://ai.neu.edu.vn/agent/healthz`. Công cụ giám sát ngoài chỉ cần gọi `/agent/healthz` (200 `{"ok":true}`; 503 `{"ok":false}` khi có kiểm tra lỗi hoặc dữ liệu sức khoẻ cũ hơn 15 phút).
-- Gợi ý bằng mô hình (tuỳ chọn): đặt key vào `/etc/neu-agent/llm-key` (600) rồi chạy lại `install-diag.sh`. Chỉ gửi **số liệu tổng hợp** (không sự kiện thô, không chuỗi tự do) tới `http://192.0.2.10:8037`; kết quả là *bản nháp* ghi rõ cần người kiểm tra.
+- Gợi ý bằng mô hình (tuỳ chọn): đặt key vào `/etc/neu-agent/llm-key` (600) rồi chạy lại `install-diag.sh`. Chỉ gửi **số liệu tổng hợp** (không sự kiện thô, không chuỗi tự do) tới cổng mô hình (gateway) của nơi triển khai; kết quả là *bản nháp* ghi rõ cần người kiểm tra.
 - Lưu ý: `access_log` của máy chủ ảo này nay chỉ ghi JSON ở tệp trên (không còn ghi vào `access.log` chung).
 
 ## 4b. Trang quản trị tổng quan — `https://ai.neu.edu.vn/agent/admin/`

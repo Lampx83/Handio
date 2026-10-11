@@ -37,9 +37,20 @@ env:
   NEU_DEFAULT_BASE_URL: https://ai.neu.edu.vn/agent/vllm/v1
   NEU_AUTH_TENANT: ${{ vars.NEU_AUTH_TENANT }}
   NEU_AUTH_CLIENT_ID: ${{ vars.NEU_AUTH_CLIENT_ID }}
+  NEU_LAN_GATEWAY: ${{ vars.NEU_LAN_GATEWAY }}   # tuỳ chọn: http://địa-chỉ:cổng/vllm/v1 (lựa chọn "Mạng nội bộ" ở cài đặt)
   NEU_REQUIRE_SIGNED: ${{ (vars.RELEASE_REQUIRE_SIGNED == 'true' || inputs.require_signed == true) && '1' || '0' }}
 
 jobs:
+  config:
+    name: Kiểm tra biến cấu hình bản phát hành
+    runs-on: ubuntu-latest
+    steps:
+      - name: NEU_AUTH_TENANT / NEU_AUTH_CLIENT_ID phải là GUID (mã công khai không còn giữ giá trị mặc định)
+        run: |
+          for v in NEU_AUTH_TENANT NEU_AUTH_CLIENT_ID; do
+            val="${!v:-}"
+            echo "$val" | grep -Eq '^[0-9a-fA-F-]{36}$' || { echo "::error::Thiếu biến repo $v (GUID Entra). Đặt: gh variable set $v --body <GUID>  — xem docs/PUBLIC.md"; exit 1; }
+          done
   test:
     if: ${{ inputs.tested != true }}     # gọi từ deploy.yml thì CI đã chạy đúng mã này rồi (tag/chạy tay vẫn kiểm thử)
     runs-on: ubuntu-latest
@@ -56,8 +67,8 @@ jobs:
       - run: npx vitest run
 
   mac:
-    needs: test
-    if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    needs: [config, test]
+    if: ${{ !cancelled() && needs.config.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -92,8 +103,8 @@ jobs:
         with: { name: mac, path: "apps/desktop/release/*.dmg\napps/desktop/release/*.zip\napps/desktop/release/signing.json" }
 
   win:
-    needs: test
-    if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
+    needs: [config, test]
+    if: ${{ !cancelled() && needs.config.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4

@@ -2,6 +2,7 @@
   "name": "neu-agent",
   "private": true,
   "version": "0.8.5",
+  "license": "Apache-2.0",
   "description": "NEU Agent — trợ lý agent (lập trình + văn phòng) của Trường Đại học Kinh tế Quốc dân. Chạy trên terminal, máy tính (Electron) và web.",
   "workspaces": [
     "packages/core",

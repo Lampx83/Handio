@@ -16,3 +16,5 @@ deploy/ai-neu/web.tar.gz
 deploy/220/auth/*.tar.gz
 deploy/220/downloads/
 deploy/220/web.tar.gz
+deploy/site.env
+site.env

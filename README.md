@@ -65,8 +65,7 @@ Như Claude Code/ChatGPT Projects: **mỗi tab có nhiều dự án**. Nút tên
 | `packages/ui` | Giao diện dùng chung cho web và Desktop (thanh hai tab, thẻ công cụ, diff, xin quyền, kéo thả tệp) |
 | `apps/web` | Bản web (tệp tĩnh), thư mục ảo lưu trong trình duyệt, hộp cát chạy JS; máy chủ dev + LLM giả |
 | `apps/desktop` | Bản Electron: hai phiên trên thư mục thật, IPC cách ly, kiểm thử đầu-cuối `smoke` |
-| `apps/playground` | Trang thử mô hình `http://192.0.2.11:8037/docs/` (một file HTML) |
-| `server/gateway-232` | Bản sao script vận hành gateway LLM ở 232 (vLLM, kong-usage, sao lưu, nginx); không chứa khóa bí mật |
+| `apps/playground` | Trang thử mô hình của gateway (một file HTML) |
 | `legacy/fitcode-python` | FIT Code bản Python gốc (chỉ dùng thư viện chuẩn): giữ để tham khảo; lõi TypeScript đã thay thế và sửa các lỗ hổng quyền của bản này |
 
 Phần giám sát gateway trong ứng dụng SIM nằm trong repo SIM, không chép vào đây.
@@ -81,3 +80,7 @@ Phần giám sát gateway trong ứng dụng SIM nằm trong repo SIM, không ch
 ## Trạng thái
 
 Chạy được và đã kiểm thử: lõi (~100 test), Office, bản web, bản Desktop (kiểm thử đầu-cuối trên Electron thật). Đã có: hook, subagent, skill, MCP, tiến trình nền, bài học và bài tập chấm tự động, sandbox macOS, gói cài Windows/macOS (chưa ký số). Chưa làm: ký số gói cài, sandbox Windows, OCR cho PDF scan, trình soạn thảo/terminal tương tác trong bản web, mở thư mục thật trong trình duyệt (File System Access API), tệp chính sách cấp trường. Xem mục "Hạn chế đã biết" trong [docs/DEPLOY.md](docs/DEPLOY.md).
+
+## Giấy phép
+
+Apache License 2.0 (`LICENSE`, `NOTICE`). Tên, logo và nhận diện của Trường Đại học Kinh tế Quốc dân không nằm trong giấy phép. Cấu hình riêng của nơi triển khai và cách giữ kho sạch: [docs/PUBLIC.md](docs/PUBLIC.md). Báo lỗ hổng: [SECURITY.md](SECURITY.md).

@@ -7,11 +7,15 @@ set -euo pipefail
 
 VERSION=v7.15.5
 SHA256=f63f94bf72c5f46ab002a0a275aa8b3cf19b4d828aed08a13978cb9a62c3a1fd
-TENANT="${NEU_SSO_TENANT:-00000000-0000-0000-0000-000000000001}"
-CLIENT_ID="${NEU_SSO_CLIENT_ID:-00000000-0000-0000-0000-000000000002}"
+TENANT="${NEU_SSO_TENANT:-@@SITE_SSO_TENANT@@}"
+CLIENT_ID="${NEU_SSO_CLIENT_ID:-@@SITE_SSO_CLIENT_ID@@}"
 PUBLIC_URL="${NEU_PUBLIC_URL:-https://ai.neu.edu.vn}"
 DOMAINS="${NEU_SSO_DOMAINS:-neu.edu.vn,st.neu.edu.vn}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# Dấu giữ chỗ @@SITE_…@@ phải đã được điền (CD điền khi đóng gói; tay: node deploy/render-site.mjs). Chưa điền thì dừng, chưa đụng gì tới máy.
+if grep -rIlE '@@SITE_[A-Z0-9_]+@@' "$HERE" >/dev/null 2>&1; then
+  echo "Chưa điền cấu hình site: còn dấu giữ chỗ @@SITE_…@@ trong $HERE. Chạy: node deploy/render-site.mjs <thư mục> --env site.env (xem docs/PUBLIC.md)."; exit 1
+fi
 ENVF=/etc/neu-agent/oauth2-proxy.env
 BIN=/usr/local/bin/oauth2-proxy
 

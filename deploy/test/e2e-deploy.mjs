@@ -6,8 +6,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { renderedDeploy } from "./site.mjs";
 
-const deploy = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const deploy = renderedDeploy();   // deploy/ đã điền địa chỉ ví dụ: install.sh từ chối chạy nếu còn @@SITE_…@@
 const results = [];
 const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "✔" : "✘"} ${name}${detail ? " — " + String(detail).slice(-420) : ""}`); };
 const sh = (cmd, a, o = {}) => spawnSync(cmd, a, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, ...o });

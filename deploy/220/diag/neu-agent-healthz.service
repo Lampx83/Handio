@@ -6,6 +6,7 @@ After=neu-agent-diag.service
 Type=oneshot
 User=neu-diag
 Group=neu-diag
+Environment=NEU_HEALTH_GATEWAY=http://@@SITE_GATEWAY_HOSTPORT@@/
 ExecStart=/usr/bin/python3 /usr/local/lib/neu-agent-diag/healthz.py
 LogsDirectory=neu-agent
 LogsDirectoryMode=0750
@@ -35,7 +36,7 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 # chỉ nói chuyện với loopback và cổng mô hình
 IPAddressDeny=any
-IPAddressAllow=localhost 192.0.2.10
+IPAddressAllow=localhost @@SITE_GATEWAY_IP@@
 UMask=0027
 MemoryMax=128M
 TasksMax=16

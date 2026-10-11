@@ -3,9 +3,9 @@
 //   node deploy/test/e2e-install.mjs        (cần Docker, mạng để apt-get)
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { renderedDeploy, SITE } from "./site.mjs";
 
-const deploy = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const deploy = renderedDeploy();   // deploy/ đã điền địa chỉ ví dụ (script cài từ chối chạy nếu còn @@SITE_…@@)
 const results = [];
 const check = (name, ok, detail = "") => { results.push(ok); console.log(`${ok ? "✔" : "✘"} ${name}${detail ? " — " + detail : ""}`); };
 const sh = (cmd, a) => spawnSync(cmd, a, { encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
@@ -49,7 +49,7 @@ try {
   // ================================================================ máy 220
   ex("neu-220", `cat > /usr/local/bin/systemctl <<'EOF'\n${STUB_SYSTEMCTL}\nEOF\nchmod +x /usr/local/bin/systemctl; cat > /tmp/oauth.py <<'EOF'\n${STUB_OAUTH}\nEOF\n(nohup python3 /tmp/oauth.py >/dev/null 2>&1 &)`);
   // site "khác" có sẵn trên 220: mặc định (cổng 80) và kiểu OJ Judge (cổng 8017)
-  ex("neu-220", `rm -f /etc/nginx/sites-enabled/default; cat > /etc/nginx/sites-available/default <<'EOF'\nserver { listen 80 default_server; server_name _; location / { return 200 'OJ-DEFAULT'; } }\nEOF\ncat > /etc/nginx/sites-available/judge_servers_public <<'EOF'\nserver { listen 8017; server_name 192.0.2.20; location / { return 200 'JUDGE'; } }\nEOF\nln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default; ln -sf /etc/nginx/sites-available/judge_servers_public /etc/nginx/sites-enabled/judge_servers_public; nginx -t 2>&1 && nginx`);
+  ex("neu-220", `rm -f /etc/nginx/sites-enabled/default; cat > /etc/nginx/sites-available/default <<'EOF'\nserver { listen 80 default_server; server_name _; location / { return 200 'OJ-DEFAULT'; } }\nEOF\ncat > /etc/nginx/sites-available/judge_servers_public <<'EOF'\nserver { listen 8017; server_name ${SITE.SITE_220_PUBLIC_IP}; location / { return 200 'JUDGE'; } }\nEOF\nln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default; ln -sf /etc/nginx/sites-available/judge_servers_public /etc/nginx/sites-enabled/judge_servers_public; nginx -t 2>&1 && nginx`);
   const c220 = (p, h = "ai.neu.edu.vn") => ex("neu-220", `curl -s -m 5 -o /dev/null -w '%{http_code}' -H 'Host: ${h}' http://127.0.0.1${p}`).out;
   check("220 trước khi cài: site khác chạy bình thường", ex("neu-220", "curl -s -m 5 http://127.0.0.1/").out === "OJ-DEFAULT" && ex("neu-220", "curl -s -m 5 http://127.0.0.1:8017/").out === "JUDGE");
 
@@ -72,9 +72,9 @@ try {
   // kiểm soát nguồn: container 222 (IP docker, KHÔNG nằm trong danh sách) phải bị từ chối — kể cả khi giả mạo X-Forwarded-For bằng IP của 222 thật
   const ip220x = sh("docker", ["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "neu-220"]).stdout.trim();
   const from222 = (xff) => ex("neu-222", `curl -s -m 5 -o /dev/null -w '%{http_code}' -H 'Host: ai.neu.edu.vn' ${xff ? "-H 'X-Forwarded-For: " + xff + "'" : ""} http://${ip220x}/agent/vllm/v1/models`).out;
-  check("220: máy lạ gọi vào bị 403; giả mạo X-Forwarded-For bằng IP của 222 cũng KHÔNG qua được", from222("") === "403" && from222("192.0.2.23") === "403" && from222("192.0.2.22") === "403", `${from222("")} ${from222("192.0.2.23")}`);
+  check("220: máy lạ gọi vào bị 403; giả mạo X-Forwarded-For bằng IP của 222 cũng KHÔNG qua được", from222("") === "403" && from222(SITE.SITE_222_INTERNAL_IP) === "403" && from222(SITE.SITE_222_PUBLIC_IP) === "403", `${from222("")} ${from222(SITE.SITE_222_INTERNAL_IP)}`);
   // thêm dải docker làm "máy 222" như ngoài đời, rồi X-Forwarded-For của máy 222 phải được dùng làm IP người dùng
-  ex("neu-220", "sed -i 's#default        0;#default        0;\\n    172.16.0.0/12  1;#' /etc/nginx/conf.d/neu-agent.conf && sed -i 's#set_real_ip_from 192.0.2.23;#set_real_ip_from 192.0.2.23;\\n    set_real_ip_from 172.16.0.0/12;#' /etc/nginx/sites-available/neu-agent && nginx -t 2>&1 && nginx -s reload; sleep 1");
+  ex("neu-220", `sed -i 's#default        0;#default        0;\\n    172.16.0.0/12  1;#' /etc/nginx/conf.d/neu-agent.conf && sed -i 's#set_real_ip_from ${SITE.SITE_222_INTERNAL_IP};#set_real_ip_from ${SITE.SITE_222_INTERNAL_IP};\\n    set_real_ip_from 172.16.0.0/12;#' /etc/nginx/sites-available/neu-agent && nginx -t 2>&1 && nginx -s reload; sleep 1`);
   const viaFront = ex("neu-222", `curl -s -m 5 -w ' %{http_code}' -H 'Host: ai.neu.edu.vn' -H 'X-Forwarded-For: 203.0.113.7' http://${ip220x}/agent/vllm/v1/models`);
   check("220: máy 222 hợp lệ gọi được (dù X-Forwarded-For là IP người dùng khác) — đúng lỗi đã gặp ngoài đời", /login_required/.test(viaFront.out) && /401$/.test(viaFront.out), viaFront.out.slice(-60));
   check("220: cấu hình có kiểm soát nguồn", ex("neu-220", "grep -c 'neu_from_front' /etc/nginx/sites-available/neu-agent /etc/nginx/conf.d/neu-agent.conf").out.includes(":1"));

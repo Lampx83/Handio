@@ -111,18 +111,18 @@ describe("an toàn kết nối", () => {
   it("bắt buộc https (trừ máy cục bộ), cấm tài khoản trong URL; bật allowInsecure mới cho http", async () => {
     const { assertSecureEndpoint } = await import("../src");
     for (const ok of ["https://ai.example/agent/vllm/v1", "http://localhost:8037/v1", "http://127.0.0.1:5173/mock/v1", "http://[::1]:1/v1"]) expect(() => assertSecureEndpoint(ok), ok).not.toThrow();
-    for (const bad of ["http://192.0.2.11:8037/vllm/v1", "http://example.com/v1", "ftp://x/v1", "https://user:pw@example.com/v1", "không phải url"]) expect(() => assertSecureEndpoint(bad), bad).toThrow();
-    expect(() => assertSecureEndpoint("http://192.0.2.11:8037/vllm/v1", true)).not.toThrow();
+    for (const bad of ["http://192.0.2.10:8037/vllm/v1", "http://example.com/v1", "ftp://x/v1", "https://user:pw@example.com/v1", "không phải url"]) expect(() => assertSecureEndpoint(bad), bad).toThrow();
+    expect(() => assertSecureEndpoint("http://192.0.2.10:8037/vllm/v1", true)).not.toThrow();
     expect(() => assertSecureEndpoint("https://user:pw@example.com/v1", true)).toThrow(/tên đăng nhập/);
   });
   it("LlmClient từ chối gửi key tới http không mã hoá và không gọi mạng", async () => {
     let called = 0;
     const f = (async () => (called++, new Response("{}", { status: 200 }))) as unknown as typeof fetch;
-    const c = new LlmClient(() => ({ baseUrl: "http://192.0.2.11:8037/vllm/v1", model: "m", key: "K" }), f);
+    const c = new LlmClient(() => ({ baseUrl: "http://192.0.2.10:8037/vllm/v1", model: "m", key: "K" }), f);
     await expect(c.chat([])).rejects.toMatchObject({ kind: "insecure" });
     await expect(c.models()).rejects.toMatchObject({ kind: "insecure" });
     expect(called).toBe(0);
-    const ok = new LlmClient(() => ({ baseUrl: "http://192.0.2.11:8037/vllm/v1", model: "m", key: "K", allowInsecure: true }), (async () => sse({ choices: [{ delta: { content: "ok" } }] })) as unknown as typeof fetch);
+    const ok = new LlmClient(() => ({ baseUrl: "http://192.0.2.10:8037/vllm/v1", model: "m", key: "K", allowInsecure: true }), (async () => sse({ choices: [{ delta: { content: "ok" } }] })) as unknown as typeof fetch);
     expect((await ok.chat([])).content).toBe("ok");
   });
   it("không theo chuyển hướng (key không bị gửi sang máy khác)", async () => {

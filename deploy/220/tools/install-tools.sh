@@ -7,6 +7,10 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# Dấu giữ chỗ @@SITE_…@@ phải đã được điền (CD điền khi đóng gói; tay: node deploy/render-site.mjs). Chưa điền thì dừng, chưa đụng gì tới máy.
+if grep -rIlE '@@SITE_[A-Z0-9_]+@@' "$HERE" >/dev/null 2>&1; then
+  echo "Chưa điền cấu hình site: còn dấu giữ chỗ @@SITE_…@@ trong $HERE. Chạy: node deploy/render-site.mjs <thư mục> --env site.env (xem docs/PUBLIC.md)."; exit 1
+fi
 LIB=/usr/local/lib/neu-agent-tools
 UNITDIR=/etc/systemd/system
 SVC_TOOLS=neu-agent-tools.service
@@ -91,7 +95,7 @@ c_health=$(curl -s --max-time 5 http://127.0.0.1:4192/healthz || true)
 c_noid=$(code 'http://127.0.0.1:4192/tools/search?q=neu' || true)                                                                   # thiếu danh tính: 401
 c_search=$(curl -s --max-time 30 -H 'X-User-Email: install-check@st.neu.edu.vn' 'http://127.0.0.1:4192/tools/search?q=Dai+hoc+Kinh+te+Quoc+dan&n=3' || true)
 c_ssrf=$(code -H 'X-User-Email: install-check@st.neu.edu.vn' 'http://127.0.0.1:4192/tools/fetch?url=http%3A%2F%2F127.0.0.1%3A4191%2Fhealthz' || true)   # địa chỉ nội bộ: 400
-c_ssrf2=$(code -H 'X-User-Email: install-check@st.neu.edu.vn' 'http://127.0.0.1:4192/tools/fetch?url=http%3A%2F%2F192.0.2.10%3A8037%2F' || true)
+c_ssrf2=$(code -H 'X-User-Email: install-check@st.neu.edu.vn' 'http://127.0.0.1:4192/tools/fetch?url=http%3A%2F%2F@@SITE_GATEWAY_IP@@%3A8037%2F' || true)
 c_fetch=$(curl -s --max-time 30 -H 'X-User-Email: install-check@st.neu.edu.vn' 'http://127.0.0.1:4192/tools/fetch?url=https%3A%2F%2Fexample.com%2F&max_chars=500' || true)
 echo "Kiểm tra: healthz=${c_health:0:40} | thiếu danh tính=$c_noid(401) | nội bộ=$c_ssrf/$c_ssrf2(400/400)"
 echo "          tìm kiếm: $(echo "$c_search" | head -1 | cut -c1-90)"

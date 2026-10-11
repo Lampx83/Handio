@@ -9,7 +9,7 @@ import stat
 from pathlib import Path
 
 DEFAULTS = {
-    "base_url": "http://192.0.2.11:8037/vllm/v1",
+    "base_url": "http://127.0.0.1:8037/vllm/v1",   # đặt địa chỉ gateway thật bằng FITCODE_BASE_URL hoặc config.json
     "model": "qwen3.5-35b-a3b-int4",
     "key_header": "x-ollama-seckey",
     "context_tokens": 32768,        # cửa sổ ngữ cảnh của máy chủ
