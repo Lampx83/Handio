@@ -1,5 +1,6 @@
 import { brandName } from "../brand";
 import { parseBlocks, parseInline, runsText, type Align, type Block, type Run } from "./mdblocks";
+import * as modern from "./docx-modern";
 
 export interface Letterhead {
   /** Cơ quan chủ quản (vd "ĐẠI HỌC KINH TẾ QUỐC DÂN"). */
@@ -34,6 +35,10 @@ export interface DocxOptions {
   recipients?: string[];
   /** Đánh số trang ở chân trang (mặc định true). */
   page_numbers?: boolean;
+  /** Màu chủ đạo của kiểu "modern": #RRGGBB hoặc tên màu (mặc định xanh đậm). */
+  accent?: string;
+  /** Chèn mục lục tự cập nhật sau khối tiêu đề (tài liệu dài, từ ~4 mục). */
+  toc?: boolean;
 }
 
 const CM = 567; // twip / cm
@@ -52,6 +57,7 @@ export async function createDocx(o: DocxOptions): Promise<Uint8Array> {
   const landscape = o.orientation === "landscape";
   const algn = (a?: Align) => (a === "center" ? d.AlignmentType.CENTER : a === "right" ? d.AlignmentType.RIGHT : a === "justify" ? d.AlignmentType.JUSTIFIED : a === "left" ? d.AlignmentType.LEFT : undefined);
   const bodyAlign = formal ? d.AlignmentType.JUSTIFIED : d.AlignmentType.LEFT;
+  const th = modern.makeTheme(o.accent); // ném lỗi tiếng Việt nếu màu không hợp lệ
 
   const mkRuns = (runs: Run[], extra: { bold?: boolean; italics?: boolean; size?: number } = {}) =>
     runs.map((r) => {
@@ -60,21 +66,24 @@ export async function createDocx(o: DocxOptions): Promise<Uint8Array> {
     });
 
   const numbering: { reference: string; levels: object[] }[] = [
-    { reference: "bullets", levels: [0, 1, 2, 3].map((level) => ({ level, format: d.LevelFormat.BULLET, text: ["•", "–", "▪", "·"][level], alignment: d.AlignmentType.LEFT, style: { paragraph: { indent: { left: 567 + level * 425, hanging: 283 } } } })) },
+    { reference: "bullets", levels: !formal ? modern.bulletLevels(d, th) : [0, 1, 2, 3].map((level) => ({ level, format: d.LevelFormat.BULLET, text: ["•", "–", "▪", "·"][level], alignment: d.AlignmentType.LEFT, style: { paragraph: { indent: { left: 567 + level * 425, hanging: 283 } } } })) },
   ];
   let orderedCount = 0;
   const makeOrderedRef = () => {
     const ref = `num${orderedCount++}`;
-    numbering.push({ reference: ref, levels: [0, 1, 2, 3].map((level) => ({ level, format: [d.LevelFormat.DECIMAL, d.LevelFormat.LOWER_LETTER, d.LevelFormat.LOWER_ROMAN, d.LevelFormat.DECIMAL][level], text: `%${level + 1}.`, alignment: d.AlignmentType.LEFT, style: { paragraph: { indent: { left: 567 + level * 425, hanging: 340 } } } })) });
+    numbering.push({ reference: ref, levels: !formal ? modern.orderedLevels(d, th) : [0, 1, 2, 3].map((level) => ({ level, format: [d.LevelFormat.DECIMAL, d.LevelFormat.LOWER_LETTER, d.LevelFormat.LOWER_ROMAN, d.LevelFormat.DECIMAL][level], text: `%${level + 1}.`, alignment: d.AlignmentType.LEFT, style: { paragraph: { indent: { left: 567 + level * 425, hanging: 340 } } } })) });
     return ref;
   };
+
+  const textW = (landscape ? 16838 : 11906) - (formal ? 5 * CM : 2268); // bề rộng vùng chữ (twip)
+  const mc: modern.Ctx = { d, th, font, width: textW, orderedRef: makeOrderedRef, formal };
 
   const border = { style: d.BorderStyle.SINGLE, size: 4, color: "808080" };
   const borders = { top: border, bottom: border, left: border, right: border };
   const noBorder = { style: d.BorderStyle.NONE, size: 0, color: "FFFFFF" };
   const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
 
-  const children: (InstanceType<typeof d.Paragraph> | InstanceType<typeof d.Table>)[] = [];
+  const children: (InstanceType<typeof d.Paragraph> | InstanceType<typeof d.Table> | InstanceType<typeof d.TableOfContents>)[] = [];
 
   const para = (runs: Run[], opts: { align?: Align; indentFirst?: boolean; bold?: boolean; italics?: boolean; size?: number; before?: number; after?: number; keepNext?: boolean } = {}) =>
     new d.Paragraph({
@@ -126,13 +135,39 @@ export async function createDocx(o: DocxOptions): Promise<Uint8Array> {
   }
 
   // ---- tiêu đề ----
-  if (o.title) children.push(new d.Paragraph({ alignment: d.AlignmentType.CENTER, spacing: { before: 120, after: o.subtitle ? 40 : 200 }, keepNext: true, children: [new d.TextRun({ text: o.title, bold: true, size: formal ? 28 : 32 })] }));
-  if (o.subtitle) children.push(new d.Paragraph({ alignment: d.AlignmentType.CENTER, spacing: { after: 240 }, children: [new d.TextRun({ text: o.subtitle, bold: formal, size: formal ? 26 : 24 })] }));
+  if (!formal) children.push(...modern.titleBlock(mc, o.title, o.subtitle));
+  if (formal && o.title) children.push(new d.Paragraph({ alignment: d.AlignmentType.CENTER, spacing: { before: 120, after: o.subtitle ? 40 : 200 }, keepNext: true, children: [new d.TextRun({ text: o.title, bold: true, size: formal ? 28 : 32 })] }));
+  if (formal && o.subtitle) children.push(new d.Paragraph({ alignment: d.AlignmentType.CENTER, spacing: { after: 240 }, children: [new d.TextRun({ text: o.subtitle, bold: formal, size: formal ? 26 : 24 })] }));
 
   // ---- thân văn bản ----
   const blocks = parseBlocks(o.content);
+  // kiểu modern đã vẽ tiêu đề lớn: bỏ "# Tiêu đề" đầu nội dung nếu trùng, tránh in hai lần
+  const sameText = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
+  const first = blocks[0];
+  const dupTitle = !formal && !!o.title && first?.t === "heading" && first.level === 1 && sameText(runsText(first.runs), o.title);
+  if (dupTitle) blocks.shift();
+  if (o.toc && blocks.some((b) => b.t === "heading" && b.level <= 3)) {
+    children.push(
+      formal ? new d.Paragraph({ alignment: d.AlignmentType.CENTER, keepNext: true, spacing: { before: 120, after: 120 }, children: [new d.TextRun({ text: "MỤC LỤC", bold: true })] }) : modern.tocLabel(mc),
+      new d.TableOfContents("Mục lục", { hyperlink: true, headingStyleRange: "1-3" }),
+      new d.Paragraph({ spacing: { after: formal ? 120 : 200 }, children: [] }),
+    );
+  }
   let h1Seen = false;
+  let bi = -1;
   for (const b of blocks) {
+    bi++;
+    if (b.t === "code" && b.lang === "chart") {
+      children.push(...modern.chartBars(mc, b.text, b.info ?? ""));
+      continue;
+    }
+    if (!formal) {
+      const m = modern.block(mc, b, { first: bi === 0 && !o.title && !o.subtitle && !o.letterhead });
+      if (m) {
+        children.push(...m);
+        continue;
+      }
+    }
     if (b.t === "heading") {
       const lvl = Math.min(b.level, 3);
       const heading = [d.HeadingLevel.HEADING_1, d.HeadingLevel.HEADING_2, d.HeadingLevel.HEADING_3][lvl - 1];
@@ -176,22 +211,43 @@ export async function createDocx(o: DocxOptions): Promise<Uint8Array> {
   }
 
   const margin = formal ? { top: 2 * CM, bottom: 2 * CM, left: 3 * CM, right: 2 * CM } : { top: 1134, bottom: 1134, left: 1134, right: 1134 };
-  const doc = new d.Document({
+  const firstHeading = blocks.find((b): b is Extract<Block, { t: "heading" }> => b.t === "heading");
+  const hf = formal ? {} : modern.headerFooter(mc, o.title || (firstHeading ? runsText(firstHeading.runs) : undefined), o.page_numbers !== false);
+  const formalToc = [0, 1, 2].map((i) => ({ id: `TOC${i + 1}`, name: `toc ${i + 1}`, basedOn: "Normal", next: "Normal", run: { font, size: 26 }, paragraph: { indent: { left: i * 284 }, spacing: { before: 40, after: 40 } } }));
+  // mục lục: ước lượng số trang bằng bộ dàn trang của thư viện; không được thì Word tự điền khi mở
+  let pageNumbers: unknown;
+  if (o.toc) {
+    try {
+      pageNumbers = ((await import("docx/layout")) as { estimatePageNumbersWith: (x: { guess: boolean }) => unknown }).estimatePageNumbersWith({ guess: true });
+    } catch {
+      pageNumbers = undefined;
+    }
+  }
+  const makeDoc = (pn?: unknown) => new d.Document({
     creator: brandName(),
-    title: o.title || runsText(blocks.find((b): b is Extract<Block, { t: "heading" }> => b.t === "heading")?.runs ?? [{ text: "Tài liệu" }]),
+    title: o.title || runsText(firstHeading?.runs ?? [{ text: "Tài liệu" }]),
+    ...(pn ? { pageNumbers: pn as never } : {}),
     styles: {
-      default: { document: { run: { font, size }, paragraph: { spacing: { line: formal ? 312 : 276 } } } },
-      paragraphStyles: [1, 2, 3].map((n) => ({ id: `Heading${n}`, name: `Heading ${n}`, basedOn: "Normal", next: "Normal", quickFormat: true, run: { font, bold: true, size: formal ? [28, 27, 26][n - 1] : [34, 28, 24][n - 1], color: formal ? "000000" : "1F3864", italics: formal && n === 3 }, paragraph: { outlineLevel: n - 1, alignment: formal && n === 1 ? d.AlignmentType.LEFT : d.AlignmentType.LEFT } })),
-      characterStyles: [{ id: "Hyperlink", name: "Hyperlink", run: { color: "0563C1", underline: { type: d.UnderlineType.SINGLE } } }],
+      default: { document: { run: { font, size }, paragraph: { spacing: { line: formal ? 312 : 288 } } } },
+      paragraphStyles: !formal ? modern.paragraphStyles(mc, !!o.toc) as never : [...(o.toc ? formalToc : []), ...[1, 2, 3].map((n) => ({ id: `Heading${n}`, name: `Heading ${n}`, basedOn: "Normal", next: "Normal", quickFormat: true, run: { font, bold: true, size: formal ? [28, 27, 26][n - 1] : [34, 28, 24][n - 1], color: formal ? "000000" : "1F3864", italics: formal && n === 3 }, paragraph: { outlineLevel: n - 1, alignment: formal && n === 1 ? d.AlignmentType.LEFT : d.AlignmentType.LEFT } }))],
+      characterStyles: [{ id: "Hyperlink", name: "Hyperlink", run: { color: "0563C1", underline: { type: d.UnderlineType.SINGLE } } }, ...(o.toc ? [{ id: "IndexLink", name: "Index Link", run: {} }] : [])],
     },
     numbering: { config: numbering as never },
     sections: [{
-      properties: { page: { size: { width: 11906, height: 16838, orientation: landscape ? d.PageOrientation.LANDSCAPE : d.PageOrientation.PORTRAIT }, margin } },
-      footers: o.page_numbers === false ? undefined : { default: new d.Footer({ children: [new d.Paragraph({ alignment: d.AlignmentType.CENTER, children: [new d.TextRun({ children: [d.PageNumber.CURRENT], size: 22 })] })] }) },
+      properties: { ...("headers" in hf && hf.headers ? { titlePage: true } : {}), page: { size: { width: 11906, height: 16838, orientation: landscape ? d.PageOrientation.LANDSCAPE : d.PageOrientation.PORTRAIT }, margin } },
+      ...("headers" in hf && hf.headers ? { headers: hf.headers } : {}),
+      footers: !formal ? ("footers" in hf ? hf.footers : undefined) : o.page_numbers === false ? undefined : { default: new d.Footer({ children: [new d.Paragraph({ alignment: d.AlignmentType.CENTER, children: [new d.TextRun({ children: [d.PageNumber.CURRENT], size: 22 })] })] }) },
       children,
     }],
   });
-  return bytesFromBase64(await d.Packer.toBase64String(doc));
+  let b64: string;
+  try {
+    b64 = await d.Packer.toBase64String(makeDoc(pageNumbers));
+  } catch (e) {
+    if (!pageNumbers) throw e;
+    b64 = await d.Packer.toBase64String(makeDoc()); // bộ dàn trang lỗi: bỏ ước lượng, Word tự điền số trang mục lục
+  }
+  return bytesFromBase64(b64);
 }
 
 export function describeDocx(o: Pick<DocxOptions, "content" | "title" | "letterhead" | "signature">): string {

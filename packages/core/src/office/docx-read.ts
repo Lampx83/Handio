@@ -35,7 +35,7 @@ export const encodeXml = (s: string): string => s.replace(/&/g, "&amp;").replace
 /** Văn bản của một đoạn <w:p>: chỉ lấy <w:t>, <w:tab/>, <w:br/>. */
 export function paragraphText(p: string): string {
   let out = "";
-  for (const m of p.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:tab\/>|<w:br\b[^>]*\/>|<w:noBreakHyphen\/>/g)) out += m[0].startsWith("<w:t") ? decodeXml(m[1]) : m[0].startsWith("<w:tab") ? "\t" : m[0].startsWith("<w:br") ? "\n" : "-";
+  for (const m of p.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:tab\/>|<w:br\b[^>]*\/>|<w:noBreakHyphen\/>/g)) out += m[1] !== undefined ? decodeXml(m[1]) : m[0].startsWith("<w:tab") ? "\t" : m[0].startsWith("<w:br") ? "\n" : "-";
   return out;
 }
 
