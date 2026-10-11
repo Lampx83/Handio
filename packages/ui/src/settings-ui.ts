@@ -1,5 +1,6 @@
 import type { AgentController, Mode, UiState } from "@neu/agent-core";
 import { clear, h, store } from "./dom";
+import { detailSteps, setDetailSteps } from "./activity";
 
 export interface AccountInfo {
   email: string;
@@ -55,7 +56,13 @@ export function openSettings(ctl: AgentController, st: UiState, account: Account
   };
 
   // ---- Giao diện
+  const stepsRow = (): HTMLElement => {
+    const on = h("input", { type: "checkbox", checked: detailSteps() });
+    on.addEventListener("change", () => setDetailSteps(on.checked));
+    return row("Các bước", h("label", { class: "chk", title: "Tắt: gọn, chỉ thấy kết quả và tệp. Bật: hiện từng bước công cụ như tab Code." }, on, "Hiện từng bước chi tiết"));
+  };
   const general = (): HTMLElement => h("div", {},
+    st.profile === "work" ? stepsRow() : null,
     row("Giao diện", seg([["auto", "Tự động"], ["light", "Sáng"], ["dark", "Tối"]], THEME.get() ?? "auto", (v) => { THEME.set(v); applyAppearance(); })),
     row("Cỡ chữ", seg([["s", "Nhỏ"], ["m", "Vừa"], ["l", "Lớn"]], ZOOM.get() ?? "m", (v) => { ZOOM.set(v); applyAppearance(); })),
     ctl.diagnosticsStatus ? diagRow() : null,
