@@ -15,6 +15,14 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ### Sửa
 - **Sửa slide không còn báo “không tìm thấy”** khi chép cả nhãn “Slide 9:” hoặc khác dấu/hoa thường; thêm đặt lại tiêu đề theo số slide, và khi không thấy chữ thì gợi ý các đoạn gần giống.
 
+### Thêm
+- **Bộ kỹ năng thiết kế và UX** (gói `thiet-ke-ux`, tab Design/Work): `/phe-binh-thiet-ke`, `/kiem-tra-tiep-can` (WCAG 2.1 AA, tính tương phản từ mã màu, dẫn số dòng), `/ban-giao-thiet-ke` (đặc tả bàn giao ra Word), `/ra-soat-he-thong-thiet-ke`, `/viet-loi-giao-dien` (lời giao diện tiếng Việt).
+- **Nghiên cứu người dùng** (gói `nghien-cuu-nguoi-dung`): `/ke-hoach-nghien-cuu` và `/tong-hop-nghien-cuu` — biến ghi chú phỏng vấn/khảo sát thành Word có chủ đề, trích dẫn nguyên văn có nguồn và khuyến nghị xếp ưu tiên.
+- **Tự tạo lệnh và kỹ năng riêng cho dự án** (gói `tao-ky-nang`): `/tao-ky-nang` hướng dẫn viết tệp lệnh/kỹ năng đúng cấu trúc, có checklist và cách chạy thử.
+- **Năng suất cá nhân** (gói `nang-suat`, tab Work): `/viec-can-lam` (việc cần làm trong `VIEC-CAN-LAM.md`), `/ghi-nho` và `/don-bo-nho` (nhớ thuật ngữ, người, dự án của đơn vị), `/ban-tin-ngay` (tóm tắt đầu ngày từ chính thư mục dự án).
+- **Nghiên cứu sâu**: gói `research` có thêm quy trình nghiên cứu nhiều khía cạnh bằng subagent và `/tong-quan-tai-lieu`.
+- Tài liệu `docs/KHOANG-TRONG-OFFICE.md`: những việc Word/Excel/PowerPoint/PDF của Handio chưa làm được so với bộ kỹ năng Office của Claude và thứ tự nên làm tiếp.
+
 ## [0.8.4] - 2026-10-11
 
 ### Thêm

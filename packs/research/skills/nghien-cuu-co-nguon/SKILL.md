@@ -11,4 +11,14 @@ description: Quy trình nghiên cứu một chủ đề có nguồn rõ ràng v�
 5. **Viết báo cáo** theo khung: Kết luận chính (2–4 câu) → Bằng chứng (gạch đầu dòng, mỗi ý kèm nguồn) → Chỗ chưa chắc / còn thiếu → Gợi ý bước tiếp theo → Danh mục nguồn.
 6. **Gắn mức chắc chắn** cho từng kết luận: Cao (nhiều nguồn gốc khớp nhau) · Vừa (một nguồn tốt) · Thấp (suy luận hoặc nguồn yếu).
 
+## Đánh giá nguồn trước khi dùng
+- Suy đoán hay sự thật đã xác nhận? Từ như "có thể", "dự kiến", văn kể kiểu tương lai là suy đoán: đừng ghi như dữ kiện.
+- Nguồn gốc hay bản tổng hợp lại? Ưu tiên nguồn gốc.
+- Dấu hiệu nguồn kém: viện dẫn "chuyên gia" không tên, câu bị động giấu chủ thể, nhắc lại tin chưa xác nhận, nhận định chung chung không số liệu.
+- Nguồn mâu thuẫn: nêu cả hai và nói thẳng; không âm thầm chọn một.
+- Chủ đề mới gần đây: tin kết quả tìm kiếm hơn trí nhớ của bạn.
+
+## Cách tìm và khi nào dừng
+Từ khoá ngắn (dưới 5 từ), không lặp đúng một truy vấn (đổi cách diễn đạt); đọc trang đầy đủ chứ không dựa vào đoạn trích; thường khoảng 10 lượt gọi công cụ, tối đa 15. Dừng khi đã trả lời đủ các câu hỏi có nguồn, không còn thông tin mới, hoặc gần hết lượt: ghi "chưa tìm thấy nguồn đáng tin về X" thay vì lấp chỗ trống. Câu hỏi rộng, nhiều khía cạnh độc lập: chuyển sang skill `nghien-cuu-sau`; cần tổng quan học thuật: `tong-quan-tai-lieu`.
+
 Đừng: dán nguyên văn dài (tóm tắt và trích ngắn), tin một nguồn không rõ tác giả, hay trình bày điều đoán như điều chắc.

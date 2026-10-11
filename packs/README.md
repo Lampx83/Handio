@@ -18,5 +18,4 @@ Thư mục này là **bộ gói của NEU**. Triển khai cho tổ chức khác:
 | `thiet-ke-ux` | Design, Work | phê bình thiết kế, kiểm tra tiếp cận WCAG 2.1 AA (tính tương phản từ mã), đặc tả bàn giao, rà soát hệ thống thiết kế, lời giao diện tiếng Việt; subagent soát thiết kế chỉ đọc |
 | `nghien-cuu-nguoi-dung` | Work | kế hoạch nghiên cứu người dùng; tổng hợp ghi chú phỏng vấn/khảo sát thành chủ đề, trích dẫn nguyên văn có nguồn, khuyến nghị ưu tiên (Word) |
 | `tao-ky-nang` | mọi tab | viết lệnh `/tên` và kỹ năng riêng cho dự án: cấu trúc tệp, checklist chất lượng, chạy thử và cải thiện |
-| `khoa-cntt` | Work | hồ sơ hoạt động của Khoa CNTT: kế hoạch + dự toán + email + bài website, phân bổ tiền theo người, bài đăng website, giáo trình; dữ liệu người thật đọc từ `du-lieu/` của dự án |
 | `nang-suat` | Work | việc cần làm trong `VIEC-CAN-LAM.md` (`/viec-can-lam`), bộ nhớ thuật ngữ và người-việc (`/ghi-nho`, `/don-bo-nho`), bản tin đầu ngày từ thư mục dự án (`/ban-tin-ngay`) |

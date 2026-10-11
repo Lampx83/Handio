@@ -1,1 +1,1 @@
-{ "id": "research", "name": "Nghiên cứu có nguồn", "version": "1.0.0", "description": "Tìm hiểu một chủ đề, so sánh phương án, phản biện kết luận — luôn nêu nguồn và mức chắc chắn.", "profiles": ["work", "code", "design"] }
+{ "id": "research", "name": "Nghiên cứu có nguồn", "version": "1.1.0", "description": "Tìm hiểu một chủ đề (nhanh hoặc sâu), tổng quan tài liệu, so sánh phương án, phản biện kết luận — luôn nêu nguồn và mức chắc chắn.", "profiles": ["work", "code", "design"] }
