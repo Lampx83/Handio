@@ -1,3 +1,4 @@
+import { brandName } from "@neu/agent-core";
 import { clear, h } from "./dom";
 
 interface Item {
@@ -75,7 +76,7 @@ const SHORT: Record<Item["os"], string> = { "mac-arm64": "macOS · chip Apple", 
 export async function openDownload(base: string, install?: { available(): boolean; run(): void }): Promise<void> {
   const dlg = h("dialog", { class: "dl" });
   const body = h("div", { class: "dl-body" }, h("p", { class: "muted" }, "Đang tải…"));
-  dlg.append(h("div", { class: "dh" }, h("span", {}, "Tải Handio cho máy tính"), h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")), body);
+  dlg.append(h("div", { class: "dh" }, h("span", {}, `Tải ${brandName()} cho máy tính`), h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")), body);
   dlg.addEventListener("close", () => dlg.remove());
   document.body.append(dlg);
   dlg.showModal();

@@ -91,3 +91,14 @@ Máy chủ MCP chạy cục bộ trên máy người dùng (chỉ Desktop; bản
 node scripts/packs.mjs          # liệt kê gói và số tệp
 npx vitest run packages/core/test/packs.test.ts packages/core/test/packs-shipped.test.ts
 ```
+
+## Tên hiển thị của nơi triển khai (`brand.json`)
+
+Mã nguồn gọi sản phẩm là **Handio**; mỗi nơi triển khai tự đặt tên hiển thị, **không sửa mã**. Bản của Trường ĐH Kinh tế Quốc dân dùng **NEU Agent**; khi có bản công khai dưới tên Handio thì đổi bằng một tệp:
+
+| Nền tảng | Cách đặt tên |
+|---|---|
+| Web | tệp `brand.json` cạnh ứng dụng, ví dụ `/agent/brand.json` chứa `{"name":"Handio"}` (nginx phục vụ tĩnh; không có tệp thì dùng tên mặc định) |
+| Desktop | tên mặc định lấy từ `setBrandName` trong lõi; bản dựng riêng cho nơi khác đổi `productName`/`copyright` trong `apps/desktop/electron-builder.yml` |
+
+Tên áp dụng cho: giao diện, hướng dẫn và bài học, lời nhắc của agent, thông tin tác giả trong tệp Word/Excel/PowerPoint do agent tạo, hộp thoại và thư mục dự án mặc định của bản Desktop. Quy ước khi viết nội dung: dùng chữ "Handio" làm tên sản phẩm, hiển thị tự đổi qua `brandText()`/`brandify()`; chuỗi mới trong mã nên gọi `brandName()`. Trang giới thiệu và quản trị của máy NEU (`deploy/220`) viết thẳng "NEU Agent" vì chỉ dành cho nơi đó.

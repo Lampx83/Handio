@@ -1,5 +1,5 @@
 import "@neu/agent-ui/style.css";
-import { buildWorkSamples, KvChatStore, KvProjectHost, LocalController, MemoryEnv, SAMPLE_DESIGN, SAMPLE_PROJECT, type AgentController, type Env, type Profile, type ProjectInfo, type RawPack, type Settings, type SettingsStore, type TrustStore } from "@neu/agent-core";
+import { brandName, buildWorkSamples, KvChatStore, setBrandName, KvProjectHost, LocalController, MemoryEnv, SAMPLE_DESIGN, SAMPLE_PROJECT, type AgentController, type Env, type Profile, type ProjectInfo, type RawPack, type Settings, type SettingsStore, type TrustStore } from "@neu/agent-core";
 import { mountShell } from "@neu/agent-ui";
 import { autosave, restore, wipe } from "./persist";
 import { runJsSandbox } from "./sandbox";
@@ -161,7 +161,19 @@ async function fetchOrgPacks(): Promise<RawPack[]> {
   }
 }
 
+/** Tên hiển thị của nơi triển khai: tệp `brand.json` ({"name":"..."}) đặt cạnh ứng dụng; không có thì dùng tên mặc định. */
+async function loadBrand(): Promise<void> {
+  try {
+    const r = await fetch(new URL("brand.json", document.baseURI), { cache: "no-store" });
+    if (r.ok) setBrandName(((await r.json()) as { name?: unknown }).name);
+  } catch {
+    /* không có tệp: giữ tên mặc định */
+  }
+  document.title = brandName();
+}
+
 async function main(): Promise<void> {
+  await loadBrand();
   const hasMock = await mockAvailable();
   // Đường dẫn tương đối theo trang (…/agent/ → …/agent/vllm/v1): nginx cùng nguồn chuyển tới gateway và tự gắn key
   const gateway = new URL("vllm/v1", document.baseURI).href;
@@ -192,7 +204,7 @@ async function main(): Promise<void> {
     design: await make("design", "/design", async () => SAMPLE_DESIGN, "Mẫu thiết kế", "Thiết kế của tôi"),
   };
   ls.set("neu.nosample.v1", "1");
-  mountShell(document.getElementById("root")!, controllers, { productName: "Handio", downloadsBase: new URL("download/", document.baseURI).href, account: await currentAccount(), install: { available: () => !!installEvent, run: () => void installEvent?.prompt() } });
+  mountShell(document.getElementById("root")!, controllers, { productName: brandName(), downloadsBase: new URL("download/", document.baseURI).href, account: await currentAccount(), install: { available: () => !!installEvent, run: () => void installEvent?.prompt() } });
   (window as unknown as { __neu: unknown }).__neu = { controllers };
 }
 

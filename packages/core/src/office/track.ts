@@ -2,6 +2,7 @@
  * Sửa Word dưới dạng ĐỀ XUẤT (Track Changes thật: <w:del>/<w:ins>) để người dùng bấm Chấp nhận/Từ chối trong Word.
  * Chỉ tách được các run đơn giản (một <w:t>); chỗ khớp rơi vào run phức tạp (tab, ngắt dòng, trường…) được báo là "bỏ qua".
  */
+import { brandName } from "../brand";
 import { decodeXml, loadZip } from "./docx-read";
 import { xmlText } from "./xmlfill";
 
@@ -33,7 +34,7 @@ interface Seg {
   simple: boolean;
 }
 
-export async function docxSuggest(bytes: Uint8Array, rules: SuggestRule[], author = "Handio", date = new Date().toISOString().replace(/\.\d+Z$/, "Z")): Promise<SuggestResult> {
+export async function docxSuggest(bytes: Uint8Array, rules: SuggestRule[], author = brandName(), date = new Date().toISOString().replace(/\.\d+Z$/, "Z")): Promise<SuggestResult> {
   const zip = await loadZip(bytes);
   const counts = rules.map(() => 0);
   const skipped = rules.map(() => 0);

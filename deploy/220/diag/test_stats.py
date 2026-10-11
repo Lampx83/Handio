@@ -283,7 +283,7 @@ class StatsTest(unittest.TestCase):
     def test_empty_data_still_renders(self):
         S.run(self.diag, self.log, self.out, os.path.join(self.tmp.name, "none.json"), NOW)
         h = slurp(os.path.join(self.out, "index.html"))
-        self.assertIn("Quản trị Handio", h)
+        self.assertIn("Quản trị NEU Agent", h)
         self.assertIn("chưa có dữ liệu kiểm tra sức khoẻ", h)
 
     def test_health_states(self):

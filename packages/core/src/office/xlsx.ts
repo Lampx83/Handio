@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { brandName } from "../brand";
 import { loadZip } from "./docx-read";
 import { customFunctions } from "./formulas";
 
@@ -199,7 +200,7 @@ export async function createXlsx(sheets: SheetSpec[]): Promise<{ bytes: Uint8Arr
   if (!sheets.length) throw new Error("Cần ít nhất một sheet.");
   const ExcelJS = await excel();
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Handio";
+  wb.creator = brandName();
   wb.created = new Date();
   const grid: Grid = new Map();
   const dims: string[] = [];

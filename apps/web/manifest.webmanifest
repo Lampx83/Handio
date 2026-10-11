@@ -1,6 +1,6 @@
 {
-  "name": "Handio",
-  "short_name": "Handio",
+  "name": "NEU Agent",
+  "short_name": "NEU Agent",
   "description": "Trợ lý AI cho học lập trình, công việc văn phòng và thiết kế",
   "start_url": "./",
   "scope": "./",

@@ -340,7 +340,7 @@ describe("Word: đề xuất sửa (Track Changes)", () => {
     expect((xml.match(/<w:del /g) ?? []).length).toBe(3);
     expect((xml.match(/<w:ins /g) ?? []).length).toBe(3);
     expect(xml).toContain("<w:delText");
-    expect(xml).toMatch(/w:author="Handio" w:date="\d{4}-\d\d-\d\dT/);
+    expect(xml).toMatch(/w:author="NEU Agent" w:date="\d{4}-\d\d-\d\dT/);
     const ids = [...xml.matchAll(/<w:(?:ins|del) w:id="(\d+)"/g)].map((m) => m[1]);
     expect(new Set(ids).size).toBe(ids.length);
     const md = await docxToMarkdown(bytes);

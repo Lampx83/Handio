@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Tài khoản · Handio</title>
+<title>Tài khoản · NEU Agent</title>
 <style>
 :root{--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--line:#dedcd3;--accent:#0b4a9e;--accent-fg:#fff;--soft:#e4edfa;--err:#c0302b;--ok:#1a7f4b;--warn-bg:#fff7e0}
 @media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--line:#34363b;--accent:#5b9bff;--accent-fg:#0b1220;--soft:#1b2a45;--err:#ff7b72;--ok:#4cc38a;--warn-bg:#33290f}}
@@ -58,12 +58,12 @@ nav{font-size:14px}
 <main>
   <nav><a href="./">← Báo cáo chất lượng</a> · <a href="quota">Hạn mức token</a> · <a href="feedback">Góp ý</a> · <a href="shares">Chia sẻ</a></nav>
   <h1>Tài khoản và người dùng</h1>
-  <p class="muted">Phần đầu thống kê <b>ai đang dùng Handio</b> (cả Microsoft 365 lẫn tên + mật khẩu; web và Desktop). Bên dưới là nơi <b>tạo và quản lý tài khoản tên + mật khẩu</b> cho người không dùng được Microsoft 365 (khách mời, tài khoản thử). Tài khoản <code>@neu.edu.vn</code> / <code>@st.neu.edu.vn</code> do nhà trường cấp nên chỉ xem được, không quản lý ở đây.</p>
+  <p class="muted">Phần đầu thống kê <b>ai đang dùng NEU Agent</b> (cả Microsoft 365 lẫn tên + mật khẩu; web và Desktop). Bên dưới là nơi <b>tạo và quản lý tài khoản tên + mật khẩu</b> cho người không dùng được Microsoft 365 (khách mời, tài khoản thử). Tài khoản <code>@neu.edu.vn</code> / <code>@st.neu.edu.vn</code> do nhà trường cấp nên chỉ xem được, không quản lý ở đây.</p>
 
   <div id="status" role="status" aria-live="polite"></div>
 
   <section class="card" id="seen-card" aria-labelledby="h-seen" hidden>
-    <div class="row" style="justify-content:space-between"><h2 id="h-seen" style="margin:0">Người đã dùng Handio <span class="muted" id="seen-count"></span></h2><button id="csv" class="sm" type="button">Tải CSV</button></div>
+    <div class="row" style="justify-content:space-between"><h2 id="h-seen" style="margin:0">Người đã dùng NEU Agent <span class="muted" id="seen-count"></span></h2><button id="csv" class="sm" type="button">Tải CSV</button></div>
     <p class="muted" style="margin:6px 0 0">Gồm cả tài khoản Microsoft (@neu.edu.vn, @st.neu.edu.vn) và tài khoản tên + mật khẩu, tính theo số liệu ứng dụng gửi về (bản web và bản Desktop). Chỉ hiện người đã làm việc ít nhất một lượt. Không có nội dung hội thoại.</p>
     <div id="stats" class="stats"></div>
     <label for="filter" class="muted" style="margin-top:6px">Lọc theo tên hoặc email</label>

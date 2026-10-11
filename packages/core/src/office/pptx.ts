@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { brandName } from "../brand";
 import { loadZip, decodeXml } from "./docx-read";
 import { parseChart, type ChartSpec } from "./chart";
 import { parseBlocks, runsText, type Block, type Run } from "./mdblocks";
@@ -56,7 +57,7 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
   const PptxGenJS = mod.default ?? mod;
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 in
-  pptx.author = "Handio";
+  pptx.author = brandName();
   pptx.defineSlideMaster({
     title: "MASTER",
     background: { color: "FFFFFF" },

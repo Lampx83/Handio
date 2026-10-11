@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Handio - bộ thu chẩn đoán (máy 220). Chỉ dùng thư viện chuẩn của Python 3.
+"""NEU Agent - bộ thu chẩn đoán (máy 220). Chỉ dùng thư viện chuẩn của Python 3.
 
 Nghe 127.0.0.1:4190 (chỉ nginx gọi tới). Nhận gói chẩn đoán KHÔNG CHỨA NỘI DUNG từ ứng dụng (POST /diag, qua nginx + SSO),
 kiểm tra chặt theo lược đồ (schema.json, dùng chung với mã TypeScript), gắn mã người dùng GIẢ DANH rồi ghi JSONL theo ngày.
@@ -245,7 +245,7 @@ def ident_kind(ident):
 
 
 class Registry:
-    """Ghi nhớ MỖI TÀI KHOẢN đã dùng Handio: lần đầu, gần nhất, số lượt làm việc, nền tảng (web/mac/win).
+    """Ghi nhớ MỖI TÀI KHOẢN đã dùng NEU Agent: lần đầu, gần nhất, số lượt làm việc, nền tảng (web/mac/win).
 
     KHÁC các tệp chẩn đoán (chỉ có mã giả danh): sổ này giữ email/tên đăng nhập THẬT để quản trị viên biết ai đang dùng và dùng ở đâu.
     Chỉ đọc được qua /admin/api/accounts (quản trị viên). Không chứa nội dung hội thoại. Tắt bằng NEU_DIAG_KEEP_IDENTITIES=0.

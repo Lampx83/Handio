@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Handio - trang tổng quan quản trị (máy 220). Chỉ dùng thư viện chuẩn của Python 3.
+"""NEU Agent - trang tổng quan quản trị (máy 220). Chỉ dùng thư viện chuẩn của Python 3.
 
 Đọc JSONL chẩn đoán (giữ 90 ngày) + nhật ký nginx (giữ 14 ngày, số liệu theo ngày được cộng dồn sang nginx-daily.json) rồi viết:
   <out>/index.html   trang tổng quan (một tệp tĩnh, biểu đồ SVG, không script, không tài nguyên ngoài) — là trang mặc định của /agent/admin/
@@ -467,9 +467,9 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
         hs = '<span class="bad">có sự cố: %s</span>' % _e(", ".join(failed) or "kiểm tra đã cũ")
     ret, e7, p = k["returning_7d"], k["error_rate_7d"], k["prev"]
     dur_all = [x["dur_p95"] for x in ser[-7:] if x["dur_p95"] is not None]
-    o = ['<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị Handio</title><style>%s</style></head><body><main>' % CSS]
-    o.append('<h1>Quản trị Handio</h1><p class="sub">Cập nhật %s (giờ Việt Nam), tự làm mới mỗi 10 phút. Người dùng chỉ hiện dưới <b>mã giả danh</b>; không có email hay nội dung hội thoại.</p>' % _e(S["generated"]))
-    o.append('<nav class="top"><b>Handio</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a><a href="#he-thong">Hệ thống</a>'
+    o = ['<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị NEU Agent</title><style>%s</style></head><body><main>' % CSS]
+    o.append('<h1>Quản trị NEU Agent</h1><p class="sub">Cập nhật %s (giờ Việt Nam), tự làm mới mỗi 10 phút. Người dùng chỉ hiện dưới <b>mã giả danh</b>; không có email hay nội dung hội thoại.</p>' % _e(S["generated"]))
+    o.append('<nav class="top"><b>NEU Agent</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a><a href="#he-thong">Hệ thống</a>'
              '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="accounts">Tài khoản</a><a href="quota">Hạn mức</a><a href="feedback">Góp ý</a><a href="shares">Chia sẻ</a><a href="data.html">Dữ liệu &amp; CSV</a><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a></nav>' % hs)
 
     # ---- tổng quan

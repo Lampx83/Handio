@@ -1,4 +1,5 @@
 import type { AgentController, DiffLine, HistoryItem, DiffPreview, Mode, PermissionRequest, PublicSettings, SessionEvent, SlashCommandInfo, Todo, UiState } from "@neu/agent-core";
+import { brandText } from "@neu/agent-core";
 import { clear, h, store } from "./dom";
 import { escapeHtml, renderMarkdown } from "./markdown";
 import { treeIcon } from "./icons";
@@ -358,7 +359,7 @@ class App {
   /** Mẹo ngắn luân phiên trên màn hình chào + lối vào Hướng dẫn. */
   private tipEl(profile: GuideTab): HTMLElement {
     const tips = TIPS[profile] ?? [];
-    const tip = tips.length ? tips[Math.floor(Date.now() / 60000) % tips.length] : "";
+    const tip = tips.length ? brandText(tips[Math.floor(Date.now() / 60000) % tips.length]) : "";
     return h("div", { class: "tip-row" }, tip ? h("span", { class: "tip-t" }, "💡 " + tip) : null, h("button", { class: "tip-b", type: "button", onclick: () => this.openGuideDlg() }, "Xem hướng dẫn"));
   }
 

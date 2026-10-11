@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Đăng nhập Handio</title>
+<title>Đăng nhập NEU Agent</title>
 <style>
 :root{color-scheme:light dark;--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--border:#dedcd3;--accent:#0b4a9e;--err:#c0302b}
 @media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--border:#34363b;--accent:#5b9bff}}
@@ -23,7 +23,7 @@ form{display:grid;gap:10px;margin:0}.note{text-align:center;color:var(--muted);f
 <body>
 <div class="card">
   <img class="logo" src="/agent/guide/img/handio-mark.svg" width="76" height="76" alt="">
-  <h1>Handio</h1>
+  <h1>NEU Agent</h1>
   <p class="tag">Giúp bạn một tay</p>
   <form method="GET" action="{{.ProxyPrefix}}/start">
     <input type="hidden" name="rd" value="{{if or (eq .Redirect "/") (eq .Redirect "")}}/agent/{{else}}{{.Redirect}}{{end}}">

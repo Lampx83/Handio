@@ -1,3 +1,4 @@
+import { brandify, brandText } from "./brand";
 import { EXERCISES, LESSONS, PROJECT_TEMPLATES } from "./curriculum";
 import type { Env } from "./env";
 import type { Exercise, Lesson, ProjectTemplate } from "./learning-types";
@@ -37,7 +38,7 @@ export interface TemplateSummary {
   startPrompts: string[];
 }
 
-export const listLessons = (): Lesson[] => LESSONS;
+export const listLessons = (): Lesson[] => brandify(LESSONS);
 export const getExercise = (id: string): Exercise | undefined => EXERCISES.find((e) => e.id === id);
 const exDir = (id: string) => `bai-tap/${id}`;
 const metaFile = (id: string) => `.neuagent/exercises/${id}/result.json`;
@@ -72,7 +73,7 @@ export async function startExercise(env: Env, root: string, id: string): Promise
     await env.writeText(abs, text);
     created.push(`${dir}/${rel}`);
   };
-  await write("DE-BAI.md", `# ${ex.title}\n\n*Mục tiêu: ${ex.goal}*\n\n${ex.instructions}\n`);
+  await write("DE-BAI.md", brandText(`# ${ex.title}\n\n*Mục tiêu: ${ex.goal}*\n\n${ex.instructions}\n`));
   for (const [rel, text] of Object.entries(ex.files)) await write(rel, text);
   return { dir, created };
 }
@@ -123,7 +124,7 @@ export async function gradeExercise(env: Env, root: string, id: string): Promise
   return result;
 }
 
-export const listTemplates = (): TemplateSummary[] => PROJECT_TEMPLATES.map((t) => ({ id: t.id, name: t.name, description: t.description, lang: t.lang, startPrompts: t.startPrompts }));
+export const listTemplates = (): TemplateSummary[] => brandify(PROJECT_TEMPLATES.map((t) => ({ id: t.id, name: t.name, description: t.description, lang: t.lang, startPrompts: t.startPrompts })));
 
 export async function createFromTemplate(env: Env, root: string, id: string): Promise<{ dir: string; files: number }> {
   const t = PROJECT_TEMPLATES.find((x) => x.id === id);
@@ -133,7 +134,7 @@ export async function createFromTemplate(env: Env, root: string, id: string): Pr
   for (const [rel, text] of Object.entries(t.files)) {
     const abs = join(root, dir, rel);
     await env.mkdirp(dirname(abs));
-    await env.writeText(abs, text);
+    await env.writeText(abs, brandText(text));
   }
   return { dir, files: Object.keys(t.files).length };
 }

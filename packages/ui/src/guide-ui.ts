@@ -1,3 +1,4 @@
+import { brandify } from "@neu/agent-core";
 import { appVersion, changelogEntries, changelogEntryEl, openChangelog } from "./changelog-ui";
 import { h, clear } from "./dom";
 import { GUIDE, GUIDE_COMMON, searchGuide, type GuideItem, type GuideSection, type GuideTab } from "./guide-content";
@@ -22,7 +23,7 @@ function itemEl(it: GuideItem, onTry: (t: string) => void, close: () => void): H
 /** Hộp "Hướng dẫn" cho người đã đăng nhập: mẹo, thủ thuật, tình huống mẫu theo tab, tìm kiếm, và "Có gì mới". */
 export function openGuide(o: GuideOpts): void {
   const dlg = h("dialog", { class: "guide" });
-  const sections: GuideSection[] = [...GUIDE[o.profile], ...GUIDE_COMMON];
+  const sections: GuideSection[] = brandify([...GUIDE[o.profile], ...GUIDE_COMMON]);
   const nav = h("nav", { class: "gd-nav", "aria-label": "Mục hướng dẫn" });
   const body = h("div", { class: "gd-body" });
   const search = h("input", { type: "search", class: "gd-search", placeholder: "Tìm: lỗi, hạn mức, Excel, màu…", "aria-label": "Tìm trong hướng dẫn" }) as HTMLInputElement;

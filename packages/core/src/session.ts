@@ -1,3 +1,4 @@
+import { brandText } from "./brand";
 import type { Env } from "./env";
 import { LlmClient, LlmError, type ChatMessage, type ChatResult, type ToolSchema } from "./llm";
 import { expandCommand, loadAgents, loadCommands, loadDirMemory, loadMemory, loadRules, loadSkills, ruleMatches, type CustomCommand, type CustomSkill, type Rule } from "./memory";
@@ -266,7 +267,7 @@ export class Session {
 
   systemPrompt(def: AgentDef | null, depth: number): string {
     const caps = [this.tools.has("bash") ? "bash (real shell)" : "no shell", this.tools.has("run_javascript") ? "run_javascript (sandbox)" : "", this.tools.has("web_fetch") ? "web_fetch" : ""].filter(Boolean).join(", ");
-    const parts = [PROFILES[this.profile].systemBase];
+    const parts = [brandText(PROFILES[this.profile].systemBase)];
     if (def) parts.push(`\nYou are the subagent '${def.name}'. ${def.prompt}\nYou cannot see the main conversation; work only from the task you are given and finish with a compact report.`);
     parts.push(`\nEnvironment:\n- Working directory: ${this.ctx.root}\n- Platform: ${this.o.env.platform}\n- Date: ${new Date().toISOString().slice(0, 10)}\n- Capabilities: ${caps}${this.o.env.sandbox ? `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${this.o.env.sandbox.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.` : ""}`);
     if (this.perms.mode === "plan" && depth === 0)
@@ -633,7 +634,7 @@ export class Session {
   private contextReport(): string {
     const limit = this.o.getSettings().contextTokens;
     const sysAll = this.systemPrompt(null, 0).length;
-    const base = PROFILES[this.profile].systemBase.length;
+    const base = brandText(PROFILES[this.profile].systemBase).length;
     const mem = this.memory.reduce((n, m) => n + m.text.length, 0);
     const tools = JSON.stringify(this.toolsFor(null, 0).map((t) => ({ name: t.name, description: t.description, parameters: t.parameters }))).length;
     const msgs = this.main.messages;

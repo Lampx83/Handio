@@ -1,4 +1,4 @@
-"""Handio - kho GÓP Ý / BÁO LỖI của người dùng (SQLite, chỉ thư viện chuẩn).
+"""NEU Agent - kho GÓP Ý / BÁO LỖI của người dùng (SQLite, chỉ thư viện chuẩn).
 
 Khác chẩn đoán (không chứa nội dung): đây là nội dung do CHÍNH NGƯỜI DÙNG viết và chủ động gửi để nhóm phát triển đọc, nên được lưu
 kèm tên đăng nhập (để liên hệ lại). Ứng dụng nói rõ điều này ở hộp góp ý. Chỉ quản trị viên xem được (trang /agent/admin/feedback).

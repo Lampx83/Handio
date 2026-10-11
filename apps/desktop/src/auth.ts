@@ -1,5 +1,6 @@
 // Đăng nhập SSO (OpenID Connect, luồng Authorization Code + PKCE, ứng dụng "public client") bằng TRÌNH DUYỆT HỆ THỐNG.
 // Mô-đun thuần Node (không import electron) để kiểm thử được. Token chỉ nằm trong bộ nhớ và trong kho mã hoá của hệ điều hành.
+import { brandName } from "@neu/agent-core";
 import crypto from "node:crypto";
 import http from "node:http";
 import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
@@ -183,7 +184,7 @@ export class Auth {
       }
       const ok = !!u.searchParams.get("code") && u.searchParams.get("state") === state;
       res.writeHead(ok ? 200 : 400, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer" });
-      res.end(`<!doctype html><meta charset="utf-8"><title>Handio</title><body style="font:16px system-ui;text-align:center;margin-top:20vh">${ok ? "✔ Đã đăng nhập. Bạn có thể đóng cửa sổ này và quay lại Handio." : "Đăng nhập không thành công. Hãy quay lại Handio và thử lại."}</body>`);
+      res.end(`<!doctype html><meta charset="utf-8"><title>${brandName()}</title><body style="font:16px system-ui;text-align:center;margin-top:20vh">${ok ? "✔ Đã đăng nhập. Bạn có thể đóng cửa sổ này và quay lại Handio." : "Đăng nhập không thành công. Hãy quay lại Handio và thử lại."}</body>`);
       if (u.searchParams.get("state") !== state) return settle({ error: "Phiên đăng nhập không khớp (state)." });
       settle(ok ? { code: u.searchParams.get("code")! } : { error: u.searchParams.get("error_description") || u.searchParams.get("error") || "Đăng nhập bị từ chối." });
     });

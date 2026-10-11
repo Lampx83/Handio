@@ -7,12 +7,14 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [0.8.1] - 2026-10-11
 
+### Thêm
+- **Trang giới thiệu công khai thiết kế lại** theo bộ nhận diện mới: nền navy, hai tay rô-bốt gõ phím và cầm chuột có chuyển động (ảnh PNG tách nền; phím sáng nhấp nháy, vòng sáng ở ngón trỏ khi bấm chuột, bấm vào hình thì cả bàn phím sáng lên), các thẻ “Viết code nhanh hơn / Tạo slide chỉ với 1 câu lệnh / Thiết kế dễ dàng hơn / Xử lý dữ liệu tự động”, lưới sáu khả năng, demo, ba chế độ, hỏi đáp. Vẫn tĩnh, không script, dùng được trên điện thoại và tự tắt chuyển động khi hệ điều hành bật “giảm chuyển động”.
+- **Tên hiển thị cấu hình được theo từng nơi triển khai**: bản của trường giữ tên **NEU Agent**; nơi khác (hoặc bản công khai dưới tên Handio sau này) chỉ cần đặt `brand.json` (`{"name":"…"}`) cạnh ứng dụng web, không phải sửa mã. Tên áp dụng cho giao diện, hướng dẫn, bài học, lời nhắc của agent, thông tin tệp Word/Excel/PowerPoint do agent tạo và các hộp thoại của bản Desktop.
+
 ### Thay đổi
-- **Trang giới thiệu công khai thiết kế lại** theo bộ nhận diện Handio: nền navy, chữ “handio” và dấu “h”, hai tay rô-bốt gõ phím và cầm chuột có chuyển động, các thẻ “Viết code nhanh hơn / Tạo slide chỉ với 1 câu lệnh / Thiết kế dễ dàng hơn / Xử lý dữ liệu tự động”, lưới sáu khả năng, demo, ba chế độ, hỏi đáp. Hai bàn tay là ảnh PNG tách nền, chuyển động riêng khỏi bàn phím; phím sáng nhấp nháy, vòng sáng ở ngón trỏ khi bấm chuột, và bấm vào hình thì cả bàn phím sáng lên. Vẫn tĩnh, không script, dùng được trên điện thoại và tự tắt chuyển động khi hệ điều hành bật “giảm chuyển động”.
-- **Tên sản phẩm đổi từ Hando thành Handio** (đọc *han-đi-ô*: *hand* + *io*, giao việc vào và nhận kết quả ra). Chữ Handio được vẽ lại: “Hand” màu xanh, “io” màu cam; biểu tượng bàn tay và các chuyển động giữ nguyên. Tên mới có ở giao diện, trang giới thiệu/đăng nhập/quản trị, lời nhắc của agent, tài liệu, ảnh bìa và biểu tượng ứng dụng.
-- Dữ liệu, cài đặt, lịch sử và phiên đăng nhập của bạn **không bị ảnh hưởng**. Thư mục dự án có sẵn ở Tài liệu/Hando (bản 0.8.0) hoặc Tài liệu/NEU Agent vẫn được dùng tiếp; chính sách và gói mở rộng đặt ở thư mục tên “Hando” hoặc “NEU Agent” vẫn có hiệu lực.
+- Bộ nhận diện mới: bàn tay rô-bốt, biểu tượng, hình minh hoạ “đang làm việc” (PNG/SVG tách nền trong `docs/brand/`). Tên sản phẩm là **Handio**; bản triển khai ở NEU vẫn hiển thị là NEU Agent.
+- Thư mục dự án có sẵn ở Tài liệu/NEU Agent (hoặc Hando, Handio của các bản thử) vẫn được dùng tiếp; chính sách và gói mở rộng đặt ở thư mục tên cũ vẫn có hiệu lực. Dữ liệu, cài đặt, lịch sử và phiên đăng nhập không đổi.
 - Mã nguồn chuyển sang kho GitHub mới `Lampx83/Handio` (địa chỉ cũ tự chuyển hướng).
-- Trên macOS, bản cài mới tạo ứng dụng **Handio**; bạn có thể xoá “Hando” hoặc “NEU Agent” cũ trong Applications.
 
 ## [0.8.0] - 2026-10-11
 

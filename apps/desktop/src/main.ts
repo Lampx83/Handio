@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
-import { buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
+import { brandName, buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
 import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, readPackDirs, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
@@ -45,8 +45,10 @@ app.enableSandbox();
 if (!SMOKE && !app.requestSingleInstanceLock()) app.quit();
 if (SMOKE) app.setPath("userData", path.join(SMOKE, "userData"));
 
-// Đổi tên hiển thị thành Handio KHÔNG được đổi nơi lưu cài đặt/lịch sử/phiên đăng nhập: ghim đúng thư mục của bản cũ (@neu/agent-desktop).
+// Đổi tên hiển thị (NEU Agent / Hando / Handio) KHÔNG được đổi nơi lưu cài đặt/lịch sử/phiên đăng nhập: ghim đúng thư mục của bản cũ (@neu/agent-desktop).
 if (!SMOKE) app.setPath("userData", path.join(app.getPath("appData"), "@neu", "agent-desktop"));
+/** Tên thư mục dự án đã dùng qua các bản (ưu tiên giữ thư mục đang có): tên hiển thị hiện tại, NEU Agent, Hando, Handio. */
+const BRAND_DIRS = [...new Set([brandName(), "NEU Agent", "Hando", "Handio"])];
 const userData = () => app.getPath("userData");
 const cfgFile = () => path.join(userData(), "folders.json");
 
@@ -136,11 +138,11 @@ async function folderFor(profile: Profile): Promise<string> {
       /* thư mục đã bị xoá: dùng mặc định */
     }
   }
-  // người dùng đã có thư mục từ bản cũ ("NEU Work"…) thì giữ nguyên; cài mới dùng Tài liệu/Handio/<Work|Code|Design>
+  // người dùng đã có thư mục từ bản cũ ("NEU Work"…) thì giữ nguyên; cài mới dùng Tài liệu/<tên hiển thị>/<Work|Code|Design>
   const legacy = path.join(app.getPath("documents"), DEFAULT_DIR[profile]);
   const sub = profile === "work" ? "Work" : profile === "code" ? "Code" : "Design";
-  const hando = path.join(app.getPath("documents"), "Hando", sub); // tên 0.8.0
-  const dir = SMOKE ? path.join(SMOKE, profile) : existsSync(legacy) ? legacy : existsSync(hando) ? hando : path.join(app.getPath("documents"), "Handio", sub);
+  const named = BRAND_DIRS.map((n) => path.join(app.getPath("documents"), n, sub)).find((p) => existsSync(p));
+  const dir = SMOKE ? path.join(SMOKE, profile) : existsSync(legacy) ? legacy : named ?? path.join(app.getPath("documents"), brandName(), sub);
   let fresh = false;
   try {
     await fs.access(dir);
@@ -181,11 +183,11 @@ const makeEnv = (profile: Profile, dir: string) => {
   return env;
 };
 
-/** Thư mục chứa các dự án do ứng dụng tạo: Tài liệu/Handio/<Work|Code|Design>/<tên> (bản cài cũ có sẵn "NEU Agent" hoặc "Hando" thì giữ để các dự án nằm cùng nơi). */
+/** Thư mục chứa các dự án do ứng dụng tạo: Tài liệu/<tên hiển thị>/<Work|Code|Design>/<tên> (đã có sẵn thư mục tên cũ thì giữ để các dự án nằm cùng nơi). */
 function projectsParent(profile: Profile): string {
   if (SMOKE) return path.join(SMOKE, "projects", profile);
   const docs = app.getPath("documents");
-  const brand = ["NEU Agent", "Hando"].find((n) => existsSync(path.join(docs, n))) ?? "Handio";
+  const brand = BRAND_DIRS.find((n) => existsSync(path.join(docs, n))) ?? brandName();
   return path.join(docs, brand, profile === "work" ? "Work" : profile === "code" ? "Code" : "Design");
 }
 
@@ -431,11 +433,11 @@ function startUpdater(): void {
 /** Menu "Kiểm tra bản cập nhật…": người dùng chủ động, nên hiện cả bản từng chọn "Để sau" và báo rõ khi đã mới nhất. */
 async function manualUpdateCheck(): Promise<void> {
   if (!updater) {
-    await dialog.showMessageBox({ type: "info", message: "Kiểm tra bản cập nhật", detail: `Bạn đang dùng Handio ${app.getVersion()}. Việc tự kiểm tra bản mới chỉ có trong bản cài đặt chính thức.` });
+    await dialog.showMessageBox({ type: "info", message: "Kiểm tra bản cập nhật", detail: `Bạn đang dùng ${brandName()} ${app.getVersion()}. Việc tự kiểm tra bản mới chỉ có trong bản cài đặt chính thức.` });
     return;
   }
   const st = await updater.check(true);
-  if (st.phase === "idle") await dialog.showMessageBox({ type: "info", message: "Bạn đang dùng bản mới nhất", detail: `Handio ${st.current}.` });
+  if (st.phase === "idle") await dialog.showMessageBox({ type: "info", message: "Bạn đang dùng bản mới nhất", detail: `${brandName()} ${st.current}.` });
   else if (st.phase === "error") await dialog.showMessageBox({ type: "warning", message: "Kiểm tra bản cập nhật", detail: st.error ?? "Không kiểm tra được." });
 }
 
@@ -531,7 +533,7 @@ function hardenSession(): void {
 
 async function createWindow(): Promise<void> {
   win = new BrowserWindow({
-    width: 1280, height: 860, minWidth: 900, minHeight: 600, show: !SMOKE, backgroundColor: "#f6f6f3", title: "Handio",
+    width: 1280, height: 860, minWidth: 900, minHeight: 600, show: !SMOKE, backgroundColor: "#f6f6f3", title: brandName(),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),

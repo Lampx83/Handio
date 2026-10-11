@@ -79,7 +79,7 @@
     });
   }
 
-  // ---------------------------------------------------------------- người đã dùng Handio (web / Desktop)
+  // ---------------------------------------------------------------- người đã dùng NEU Agent (web / Desktop)
   var KIND = { gv: "Giảng viên / cán bộ", sv: "Sinh viên", mk: "Tên + mật khẩu", khac: "Khác" };
   var PLAT = { web: ["Web", "web"], mac: ["Mac", "desk"], win: ["Windows", "desk"], linux: ["Linux", "desk"], khac: ["Khác", "desk"] };
   var seenAll = [];
