@@ -131,9 +131,10 @@ async function recalc(wb: any, grid: Grid): Promise<BuildReport> {
     rows.forEach((line, r) =>
       line.forEach((raw, c) => {
         if (typeof raw !== "string" || !raw.startsWith("=") || raw.length < 2 || n++ > 50000) return;
+        const cell = ws.getCell(r + 1, c + 1);
+        if (!(cell.value && typeof cell.value === "object" && "formula" in cell.value)) return; // chữ thường bắt đầu bằng "=" (đã rào bằng dấu ') không phải công thức
         const v = ev.cell(ws.name, r + 1, c + 1, raw.slice(1));
         const addr = `${rows.length && grid.size > 1 ? ws.name + "!" : ""}${cellAddress(r + 1, c + 1)}`;
-        const cell = ws.getCell(r + 1, c + 1);
         if (ev.isError(v)) {
           if ((v as any).unverified) report.unverified.push(`${addr} (${raw})`);
           else report.errors.push(`${addr} ${raw} → ${(v as any).error}`);
