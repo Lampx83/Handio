@@ -921,7 +921,10 @@ export class LocalController implements AgentController {
     const next = normalizeSettings({ ...this.settings, ...rest }, this.o.defaults);
     next.key = key === undefined ? this.settings.key : key || undefined;
     this.settings = next;
-    await this.o.store.save(next);
+    // không ghi `mode` khi trùng mặc định sản phẩm: đổi mặc định ở bản sau mới có hiệu lực với người đã từng lưu cài đặt
+    const persisted = { ...next } as Partial<Settings>;
+    if (persisted.mode === this.o.defaults?.mode) delete persisted.mode;
+    await this.o.store.save(persisted as Settings);
   }
 
   // ---------------------------------------------------------------- chẩn đoán (không chứa nội dung)

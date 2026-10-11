@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Chế độ mặc định là "Tự động"** cho cả người đã dùng bản cũ: trước đây cài đặt cũ trên máy lưu sẵn "Hỏi trước" và đè lên mặc định nên ứng dụng cứ mở ở chế độ Hỏi trước. Từ nay chế độ chọn ở thanh dưới ô nhập chỉ áp dụng cho phiên đang mở; mở lại ứng dụng là "Tự động".
+
 ## [0.8.6] - 2026-10-11
 
 ### Thay đổi
