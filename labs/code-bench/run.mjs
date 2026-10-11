@@ -97,6 +97,13 @@ function probe(cfg) {
   });
 }
 
+/** check_page cho agent trong lúc làm (như bản Desktop): cùng trình duyệt ẩn với bộ chấm. HANDIO_BENCH_NO_CHECK_PAGE=1 để mô phỏng bản web. */
+async function benchCheckPage(url, o) {
+  const r = await probe({ url, steps: [], settleMs: o.waitMs, root: o.root });
+  if (r.error) return { url, title: "", loaded: false, error: r.error, errors: [], failedRequests: [], text: "", blank: false };
+  return { url, title: r.title || "", loaded: r.loaded, errors: r.errors || [], failedRequests: r.failedRequests || [], text: r.text || "", blank: !!r.blank, overlay: r.overlay || undefined };
+}
+
 /** Chấm một bài: trả [{name, ok, detail}] */
 async function grade(task, appDir) {
   const res = [];
@@ -252,7 +259,7 @@ for (const task of tasks) {
       fs.mkdirSync(path.dirname(path.join(appDir, f)), { recursive: true });
       fs.writeFileSync(path.join(appDir, f), text);
     }
-    agent = await runAgent({ dir: appDir, prompt: task.prompt, baseUrl: process.env.HANDIO_BENCH_BASE_URL, model: process.env.HANDIO_BENCH_MODEL || "qwen3.5-35b-a3b-int4", key: process.env.HANDIO_BENCH_KEY, keyHeader: process.env.HANDIO_BENCH_KEY_HEADER, authHeaders, timeoutMs });
+    agent = await runAgent({ dir: appDir, prompt: task.prompt, baseUrl: process.env.HANDIO_BENCH_BASE_URL, model: process.env.HANDIO_BENCH_MODEL || "qwen3.5-35b-a3b-int4", key: process.env.HANDIO_BENCH_KEY, keyHeader: process.env.HANDIO_BENCH_KEY_HEADER, authHeaders, timeoutMs, checkPage: process.env.HANDIO_BENCH_NO_CHECK_PAGE === "1" ? undefined : benchCheckPage });
     fs.writeFileSync(path.join(tdir, "agent.json"), JSON.stringify(agent, null, 2));
     fs.writeFileSync(path.join(tdir, "agent.log"), [`# ${task.id} · ${agent.endedBy} · ${agent.seconds}s · ${agent.steps} bước · ${agent.toolErrors} lỗi công cụ`, "", ...agent.trace, "", "## Lời cuối", agent.final, "", "## Thông báo", ...agent.notices].join("\n"));
     console.log(`  agent: ${agent.endedBy}, ${agent.seconds}s, ${agent.steps} bước, ${agent.toolErrors} lỗi công cụ, ${agent.calls} lượt gọi mô hình`);

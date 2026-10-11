@@ -78,3 +78,52 @@ describe("lịch sử: nội dung tệp đã ghi không nằm mãi trong đối 
     expect(parsed.every((a) => /^f\d\.txt$/.test(a.path))).toBe(true);
   });
 });
+
+describe("tự kiểm tra trang trước khi báo xong (tab Code, Desktop)", () => {
+  const html = (t: string) => `<!doctype html><body><h1>${t}</h1><script>new Grid()</script>`;
+  const mk = (reports: PageReport[]) => {
+    const seen: string[] = [];
+    let i = 0;
+    const env = new MemoryEnv("/ws", {});
+    (env as { checkPage?: unknown }).checkPage = async (url: string) => (seen.push(url), reports[Math.min(i++, reports.length - 1)]);
+    return { env, seen };
+  };
+  const lastUserMsgs = (llm: { calls: { messages: { role: string; content?: unknown }[] }[] }) =>
+    llm.calls.flatMap((c) => c.messages).filter((m) => m.role === "user").map((m) => String(m.content));
+
+  it("agent báo xong mà chưa tự kiểm tra: hệ thống mở thử trang, thấy lỗi thì bắt sửa rồi mới cho kết thúc", async () => {
+    const { env, seen } = mk([base({ url: "file:///ws/index.html", blank: true, errors: ["Uncaught ReferenceError: Grid is not defined"] }), base({ url: "file:///ws/index.html", text: "Xin chào" })]);
+    const { c, llm, events } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "index.html", content: html("a") } }] },
+      { text: "Xong rồi" }, // báo xong khi chưa kiểm tra
+      { calls: [{ name: "write_file", args: { path: "index.html", content: "<!doctype html><h1>Xin chào</h1>" } }] },
+      { text: "Đã sửa lỗi Grid" },
+    ], { profile: "code", env });
+    await c.send("làm trang web");
+    expect(seen).toHaveLength(2); // lần 1 thấy lỗi, lần 2 sạch
+    expect(lastUserMsgs(llm).some((m) => m.includes("Bạn chưa tự kiểm tra trang") && m.includes("Grid is not defined"))).toBe(true);
+    const end = events.filter((e) => e.type === "turn_end").at(-1) as { final: string };
+    expect(end.final).toContain("Đã sửa lỗi Grid"); // không kết thúc ở "Xong rồi"
+  });
+
+  it("agent đã tự gọi check_page và sạch: không mở thêm lần nữa", async () => {
+    const { env, seen } = mk([base({ text: "Xin chào" })]);
+    const { c } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "index.html", content: "<h1>Xin chào</h1>" } }] },
+      { calls: [{ name: "check_page", args: { url: "index.html" } }] },
+      { text: "Xong" },
+    ], { profile: "code", env });
+    await c.send("làm trang web");
+    expect(seen).toHaveLength(1);
+  });
+
+  it("không đụng tệp web (README, .py): không tự mở trang", async () => {
+    const { env, seen } = mk([base({})]);
+    const { c } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "notes.txt", content: "x" } }] },
+      { text: "Xong" },
+    ], { profile: "code", env });
+    await c.send("ghi chú");
+    expect(seen).toHaveLength(0);
+  });
+});

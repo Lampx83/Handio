@@ -124,7 +124,7 @@ export class Session {
   turnNo = 0;
   readonly turnMarks = new WeakMap<ChatMessage, number>();
   /** Việc đã làm trong lượt hiện tại: để biết đã chạy kiểm tra sau lần sửa cuối chưa. */
-  turnLog = { seq: 0, lastEdit: 0, checks: [] as { seq: number; ok: boolean }[], reads: [] as number[] };
+  turnLog = { seq: 0, lastEdit: 0, checks: [] as { seq: number; ok: boolean; bg?: boolean }[], reads: [] as number[], webEdit: 0, htmlFile: "", pageOk: 0 };
   /** Số lần đã gọi `ask_user` trong lượt hiện tại. */
   private asked = 0;
   readonly main: Agent;
@@ -388,7 +388,7 @@ export class Session {
     const caps = [this.tools.has("bash") ? "bash (real shell)" : "no shell", this.tools.has("run_javascript") ? "run_javascript (sandbox)" : "", this.tools.has("web_fetch") ? "web_fetch" : ""].filter(Boolean).join(", ");
     let base = brandText(PROFILES[this.profile].systemBase);
     // check_page chỉ có ở Desktop: không nhắc công cụ không tồn tại (mô hình sẽ gọi nó và lỡ một bước)
-    if (!this.tools.has("check_page")) base = base.replace(/but check_page can \(when available\):[\s\S]*?(?=Also run the build)/, "after starting the dev server (bash background=true) read its output with bash_output for compile errors and check the page responds with curl. ").replace(/\bcheck_page\b/g, "a browser check");
+    if (!this.tools.has("check_page")) base = base.replace(/but check_page can \(when available\):[\s\S]*?(?=Also run the build)/, "after starting the dev server (bash background=true) a dev server does NOT report missing imports or broken CSS until the page loads, so ALSO run the linter (npm run lint: no-undef / jsx-no-undef catch a component that is used but never imported) and the build, and fix every error. ").replace(/\bcheck_page\b/g, "a browser check");
     const parts = [base];
     if (def) parts.push(`\nYou are the subagent '${def.name}'. ${def.prompt}\nYou cannot see the main conversation; work only from the task you are given and finish with a compact report.`);
     parts.push(`\nEnvironment:\n- Working directory: ${this.ctx.root} (give file paths RELATIVE to it, e.g. report.docx or notes/a.md; never type the full path)\n- Platform: ${this.o.env.platform}\n- Date: ${new Date().toISOString().slice(0, 10)}\n- Capabilities: ${caps}${this.o.env.sandbox ? `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${this.o.env.sandbox.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.` : ""}`);
@@ -687,14 +687,20 @@ export class Session {
   beginTurn(userMsg: ChatMessage): void {
     this.ctx.turn = ++this.turnNo;
     this.turnMarks.set(userMsg, this.ctx.turn);
-    this.turnLog = { seq: 0, lastEdit: 0, checks: [], reads: [] };
+    this.turnLog = { seq: 0, lastEdit: 0, checks: [], reads: [], webEdit: 0, htmlFile: "", pageOk: 0 };
     this.asked = 0;
   }
 
   /** Ghi nhận một công cụ vừa chạy xong (để biết đã kiểm chứng sau lần sửa cuối chưa). */
-  noteTool(name: string, passed: boolean, wrote: boolean): void {
+  noteTool(name: string, passed: boolean, wrote: boolean, background = false, extra: { file?: string; pageClean?: boolean } = {}): void {
     const L = this.turnLog;
-    if (name === "bash" || name === "run_javascript") L.checks.push({ seq: ++L.seq, ok: passed });
+    if (wrote && extra.file && /\.(html?|jsx?|tsx?|mjs|vue|svelte|astro|css|scss)$/i.test(extra.file)) {
+      L.webEdit = L.seq + 1; // vừa sửa mã/giao diện web: trang có thể đã vỡ
+      if (/\.html?$/i.test(extra.file)) L.htmlFile = extra.file;
+    }
+    if (name === "check_page" && passed && extra.pageClean) L.pageOk = L.seq + 1;
+    // bg: chỉ KHỞI ĐỘNG một máy chủ nền. Máy chủ dev không báo lỗi CSS/import cho đến khi trang được tải, nên không phải là kiểm chứng
+    if (name === "bash" || name === "run_javascript") L.checks.push({ seq: ++L.seq, ok: passed, bg: background });
     if (passed && (name === "read_document" || name === "read_file")) L.reads.push(++L.seq); // đọc lại để kiểm tra
     if (wrote) {
       L.lastEdit = ++L.seq;
@@ -833,6 +839,7 @@ export class Agent {
   private failRun = { tool: "", sig: "", n: 0 };
   private stopWhy = "";
   private nudges = 0;
+  private pageChecks = 0;
 
   constructor(private s: Session, private def: AgentDef | null = null, private depth = 0) {}
 
@@ -899,6 +906,32 @@ export class Agent {
    * Cổng tự kiểm tra (một lần mỗi lượt): agent sắp báo cáo xong nhưng vừa tạo/sửa tệp mà chưa kiểm chứng → nhắc làm ngay.
    * Code: chưa chạy thử / lần chạy cuối bị lỗi. Work/Design: chưa đọc lại tệp vừa tạo. Không làm gì nếu môi trường không có công cụ để kiểm chứng.
    */
+  /**
+   * Tab Code (Desktop): agent sắp báo "xong" mà vừa sửa mã/giao diện web. Đừng trông chờ mô hình tự nhớ gọi check_page (dữ liệu thật: 0 lần gọi
+   * trong cả phiên dựng ứng dụng, người dùng phải chép lỗi console 6 lần): hệ thống TỰ mở thử trang; có lỗi/trang trắng thì trả báo cáo cho mô hình sửa.
+   * Tối đa 3 lần mỗi lượt. Trang sạch thì ghi nhận để không nhắc thêm.
+   */
+  private async autoPageCheck(signal?: AbortSignal): Promise<string | null> {
+    const s = this.s;
+    const L = s.turnLog;
+    const tool = s.tools.get("check_page");
+    if (s.profile !== "code" || !tool || this.pageChecks >= 3 || !L.webEdit || L.pageOk > L.webEdit) return null;
+    const server = s.ctx.procs?.list().filter((p) => p.alive && p.url).pop();
+    const url = server?.url ?? (L.htmlFile ? relPath(s.ctx, L.htmlFile) : "");
+    if (!url) return null;
+    let text: string;
+    try {
+      text = await tool.run({ ...s.ctx, signal }, { url, wait_ms: 1500 });
+    } catch {
+      return null; // không kiểm tra được (cửa sổ ẩn lỗi…): không chặn việc báo cáo
+    }
+    if (/KẾT QUẢ: ổn/.test(text)) {
+      L.pageOk = ++L.seq;
+      return null;
+    }
+    return "[Hệ thống] Bạn chưa tự kiểm tra trang, nên hệ thống đã mở thử giúp và THẤY LỖI. Đừng báo xong khi trang còn lỗi.\n" + text;
+  }
+
   private verifyNudge(): string | null {
     const s = this.s;
     const L = s.turnLog;
@@ -907,6 +940,8 @@ export class Agent {
       if (!s.tools.has("bash") && !s.tools.has("run_javascript")) return null;
       const after = L.checks.filter((c) => c.seq > L.lastEdit);
       if (!after.length) return "[Hệ thống] Bạn vừa tạo hoặc sửa tệp nhưng CHƯA chạy thử. Hãy chạy chương trình hoặc bộ kiểm thử ngay bây giờ (bash hoặc run_javascript; máy chủ web thì chạy nền), đọc kết quả thật, sửa lỗi nếu có, rồi mới báo cáo. Nếu thật sự không chạy được thì nói rõ lý do cho người dùng.";
+      // chỉ mới KHỞI ĐỘNG máy chủ nền (chưa build/lint/gọi trang): máy chủ dev không báo lỗi thiếu import hay CSS hỏng cho đến khi có người tải trang
+      if (after.every((c) => c.bg) && !(L.pageOk > L.lastEdit)) return "[Hệ thống] Bạn mới khởi động máy chủ nền, chưa kiểm chứng gì: máy chủ dev không báo lỗi thiếu import, CSS hỏng hay API sai cho đến khi trang được tải. " + (s.tools.has("check_page") ? "Hãy gọi check_page rồi sửa mọi lỗi nó báo." : "Hãy chạy `npm run build` và `npm run lint` (nếu dự án có; no-undef / jsx-no-undef bắt lỗi thiếu import) rồi sửa mọi lỗi.") + " Chỉ báo xong khi sạch lỗi.";
       if (!after[after.length - 1].ok) return "[Hệ thống] Lần chạy kiểm tra gần nhất của bạn bị LỖI. Hãy đọc lỗi, tìm nguyên nhân gốc, sửa rồi chạy lại cho đến khi qua; đừng báo là đã xong khi chưa qua.";
       return null;
     }
@@ -1033,6 +1068,7 @@ export class Agent {
     this.failRun = { tool: "", sig: "", n: 0 };
     this.stopWhy = "";
     this.nudges = 0;
+    this.pageChecks = 0;
     this.repeats = 0;
     try {
       for (let step = 0; step < maxSteps; step++) {
@@ -1076,6 +1112,13 @@ export class Agent {
               this.messages.push({ role: "user", content: "[Hook Stop phản hồi]\n" + hr.message });
               continue;
             }
+          }
+          const auto = this.depth === 0 && !signal?.aborted ? await this.autoPageCheck(signal) : null;
+          if (auto) {
+            this.pageChecks++;
+            s.emit({ type: "notice", level: "info", text: "Trang web có lỗi, đang sửa tiếp…" });
+            this.messages.push({ role: "user", content: auto });
+            continue;
           }
           const nudge = this.depth === 0 && !signal?.aborted ? this.verifyNudge() : null;
           if (nudge) {
@@ -1369,7 +1412,7 @@ export class Agent {
     result = String(result);
     if (result.length > MAX_TOOL_CHARS) result = result.slice(0, MAX_TOOL_CHARS) + `\n… (đã cắt bớt ${result.length - MAX_TOOL_CHARS} ký tự)`;
     this.done(tc, name, ok, result, ok ? undefined : errKind);
-    s.noteTool(name, ok && !(name === "bash" && /\[(mã thoát [1-9]\d*|Hết thời gian)/.test(result.slice(-80))), s.ctx.undoStack.length > undoBefore);
+    s.noteTool(name, ok && !(name === "bash" && /\[(mã thoát [1-9]\d*|Hết thời gian)/.test(result.slice(-80))), s.ctx.undoStack.length > undoBefore, name === "bash" && !!(args as { background?: unknown }).background, { file: target.abs, pageClean: name === "check_page" && /KẾT QUẢ: ổn/.test(result) });
     if (ok && (tool.kind === "net" || tool.kind === "mcp") && !s.perms.tainted) {
       s.perms.tainted = true;
       if (s.perms.mode !== "bypass") s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${tool.kind === "mcp" ? "công cụ ngoài (MCP)" : "web/dịch vụ ngoài"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });

@@ -17,8 +17,12 @@ export interface AgentRun {
   trace: string[];
 }
 
-export async function runAgent(o: { dir: string; prompt: string; baseUrl: string; model: string; key?: string; keyHeader?: string; maxSteps?: number; timeoutMs: number; /** Đăng nhập tên + mật khẩu: tiêu đề Cookie (gửi tới đúng máy chủ mô hình) */ authHeaders?: (() => Promise<Record<string, string> | null>) | null }): Promise<AgentRun> {
+export async function runAgent(o: { dir: string; prompt: string; baseUrl: string; model: string; key?: string; keyHeader?: string; maxSteps?: number; timeoutMs: number; /** Đăng nhập tên + mật khẩu: tiêu đề Cookie (gửi tới đúng máy chủ mô hình) */ authHeaders?: (() => Promise<Record<string, string> | null>) | null; /** Trình duyệt ẩn cho check_page (như bản Desktop). Không có = agent không có check_page (như bản web). */ checkPage?: (url: string, o: { waitMs: number; root: string }) => Promise<import("@neu/agent-core").PageReport> }): Promise<AgentRun> {
   const env = new NodeEnv(o.dir, { allowExec: true, sandbox: process.platform === "darwin" ? { network: true } : false });
+  if (o.checkPage) {
+    const cp = o.checkPage;
+    env.checkPage = (url, opts) => cp(url, { waitMs: opts.waitMs, root: o.dir });
+  }
   let saved: Partial<Settings> = {
     baseUrl: o.baseUrl, model: o.model, key: o.key, mode: "auto", allowInsecureHttp: o.baseUrl.startsWith("http://"),
     ...(o.keyHeader ? { keyHeader: o.keyHeader } : {}), ...(o.maxSteps ? { maxSteps: o.maxSteps } : {}),

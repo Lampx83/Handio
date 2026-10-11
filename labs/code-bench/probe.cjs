@@ -6,6 +6,15 @@ const fs = require("node:fs");
 const cfg = JSON.parse(fs.readFileSync(process.argv[process.argv.length - 1], "utf8"));
 const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/|$)/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const path = require("node:path");
+const { fileURLToPath } = require("node:url");
+const allowed = (u) => {
+  if (LOOPBACK.test(u) || /^(data|blob|about|devtools):/.test(u)) return true;
+  if (/^file:/i.test(u) && cfg.root) {
+    try { const p = path.resolve(fileURLToPath(u)); const r = path.resolve(cfg.root); return p === r || p.startsWith(r + path.sep); } catch { return false; }
+  }
+  return false;
+};
 
 const FILL = (sel, value) => `(() => {
   const s = ${JSON.stringify(sel)};
@@ -43,7 +52,7 @@ app.whenReady().then(async () => {
   const out = { loaded: false, errors: [], failedRequests: [], blank: false, overlay: "", steps: [] };
   const part = "bench-" + Date.now();
   const ses = session.fromPartition(part);
-  ses.webRequest.onBeforeRequest((d, cb) => cb(LOOPBACK.test(d.url) || /^(data|blob|about|devtools):/.test(d.url) ? {} : { cancel: true }));
+  ses.webRequest.onBeforeRequest((d, cb) => cb(allowed(d.url) ? {} : { cancel: true }));
   ses.webRequest.onCompleted((d) => { if (d.statusCode >= 400 && out.failedRequests.length < 12) out.failedRequests.push(`${d.statusCode} ${new URL(d.url).pathname}`); });
   ses.setPermissionRequestHandler((_w, _p, cb) => cb(false));
   const w = new BrowserWindow({ show: false, width: 1280, height: 800, webPreferences: { partition: part, sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false } });
@@ -83,10 +92,12 @@ app.whenReady().then(async () => {
     const dom = await wc.executeJavaScript(`(() => {
       const t = ((document.body && document.body.innerText) || "").trim();
       const o = document.querySelector("vite-error-overlay");
-      return { textLen: t.length, overlay: o && o.shadowRoot ? o.shadowRoot.textContent.replace(/\\s+/g, " ").slice(0, 400) : "", shown: [...document.body.querySelectorAll("img,canvas,svg,input,button")].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1; }).length };
+      return { title: document.title || "", text: t.replace(/\\s+/g, " ").slice(0, 400), textLen: t.length, overlay: o && o.shadowRoot ? o.shadowRoot.textContent.replace(/\\s+/g, " ").slice(0, 400) : "", shown: [...document.body.querySelectorAll("img,canvas,svg,input,button")].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1; }).length };
     })()`, true);
     out.blank = dom.textLen === 0 && dom.shown === 0;
     out.overlay = dom.overlay;
+    out.title = dom.title;
+    out.text = dom.text;
   } catch (e) {
     out.errors.push("không tải được: " + String(e.message || e).slice(0, 200));
   }
