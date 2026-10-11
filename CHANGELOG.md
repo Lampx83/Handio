@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.4] - 2026-10-11
+
 ### Thêm
 - **Tiện ích văn phòng chính xác (tab Work)**: đọc số thành chữ chuẩn văn bản hành chính, tính ngày/ngày làm việc/ngày nghỉ lễ, đổi dương lịch ↔ âm lịch kèm Can Chi, máy tính (hiểu số kiểu Việt Nam và “15% của 2.500.000”), xử lý họ tên/số điện thoại và sắp xếp tên theo bảng chữ cái tiếng Việt, tạo thư nháp `.eml` và lời mời lịch `.ics`, đổi Excel ↔ CSV (mở đúng tiếng Việt), so sánh hai văn bản, thống kê tài liệu. Ngày lễ và âm lịch luôn kèm lời nhắc đối chiếu với thông báo chính thức.
 - **Sửa tệp có sẵn như người dùng Office thật (tab Work)**: PowerPoint (`pptx_edit`: sửa chữ, đổi hoa/thường tiêu đề, màu chữ/cỡ/phông/căn lề, màu nền hình và slide, xoá/nhân đôi/chuyển slide), Word (`docx_edit`: thay cả đoạn, chèn tiêu đề/danh sách/bảng, xoá, định dạng, sửa bảng), Excel (xoá/chèn hàng-cột và công thức tự điều chỉnh, đổi tên/xoá sheet, sắp xếp, định dạng ô, gộp ô, cố định hàng, bộ lọc). Trước đây PowerPoint chỉ tạo mới được, không sửa được.
