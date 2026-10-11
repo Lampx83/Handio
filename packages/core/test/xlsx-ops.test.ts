@@ -11,7 +11,7 @@ const mk = async (rows: unknown[][], extra: { name: string; rows: unknown[][] }[
   await run("read_document", { path: "d.xlsx" });
   const sheet = async (name = "Điểm", p = "d.xlsx") => {
     const wb = new (await import("exceljs")).Workbook();
-    await wb.xlsx.load(await env.readBytes("/ws/" + p));
+    await wb.xlsx.load((await env.readBytes("/ws/" + p)) as never);
     return wb.getWorksheet(name)!;
   };
   return { run, sheet, env };

@@ -8,6 +8,7 @@ import { docxSuggest } from "./track";
 import { documentUnits } from "./locate";
 import { countsLine, isNotable, scanDocumentPii } from "./pii";
 import { createPptx, describePptx, pptxImageRefs, PPTX_THEMES } from "./pptx";
+import { editDocx, type DocxEditOptions } from "./docx-edit";
 import { editPptx, type PptxEditOptions } from "./pptx-edit";
 import { filesTools } from "./tools-files";
 import { pdfTools } from "./tools-pdf";
@@ -227,6 +228,53 @@ export function officeTools(env: Env): Tool[] {
         const { content, ...rest } = opts as { content: string } & Record<string, unknown>;
         buildingOf(ctx.env).set(abs, { content, opts: rest, size: bytes.length });
         return `Đã ${append ? "nối thêm vào" : existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(bytes.length)}).\n${describeDocx(opts)}\n` + (append ? "Nếu còn phần nữa, gọi tiếp create_docx với append=true. " : "Nếu còn phần nữa, gọi tiếp create_docx với cùng path và append=true (mỗi lần dưới ~2.000 ký tự). ") + "Khi đủ, hãy dùng read_document để kiểm tra lại nội dung trước khi báo cáo.";
+      },
+    },
+    {
+      name: "docx_edit", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || a.path,
+      description: "Edit an EXISTING Word file paragraph by paragraph, keeping everything else. Paragraph numbers are the ¶N shown by read_document (numbered before this call). replace_paragraph [{para,text}] rewrites a whole paragraph (keeps its style); delete [para…] removes paragraphs or whole tables; insert_after [{para,text,style:'normal'|'heading1'|'heading2'|'heading3'|'bullet'|'numbered',bold,italic,align}] adds paragraphs after ¶N (text may have several lines; lines starting with | become a table); format [{para: N|[N…]|'all'|'headings', match?, bold, italic, underline, color, shade, size, font, align}] changes look (colors: #RRGGBB or names like đỏ, xanh dương, vàng); table [{table: n, op:'set_cell'|'add_row'|'delete_row', row, col?, text?, cells?[]}] edits tables (row/col are 1-based; add_row inserts after row). For small word-level fixes inside a paragraph prefer docx_replace (keeps run formatting). Read the file first; use save_as to keep the original (recommended).",
+      parameters: { type: "object", properties: {
+        path: S, save_as: { type: "string", description: "new .docx path; the original stays unchanged" },
+        replace_paragraph: { type: "array", items: { type: "object", properties: { para: { type: "integer" }, text: S }, required: ["para", "text"] } },
+        delete: { type: "array", items: { type: "integer" } },
+        insert_after: { type: "array", items: { type: "object", properties: { para: { type: "integer" }, text: S, style: { type: "string", enum: ["normal", "heading1", "heading2", "heading3", "bullet", "numbered"] }, bold: { type: "boolean" }, italic: { type: "boolean" }, align: { type: "string", enum: ["left", "center", "right", "justify"] } }, required: ["para", "text"] } },
+        format: { type: "array", items: { type: "object", properties: { para: {}, match: S, bold: { type: "boolean" }, italic: { type: "boolean" }, underline: { type: "boolean" }, color: S, shade: S, size: { type: "number" }, font: S, align: { type: "string", enum: ["left", "center", "right", "justify"] } } } },
+        table: { type: "array", items: { type: "object", properties: { table: { type: "integer" }, op: { type: "string", enum: ["set_cell", "add_row", "delete_row"] }, row: { type: "integer" }, col: { type: "integer" }, text: S, cells: { type: "array", items: S } }, required: ["table", "op", "row"] } },
+      }, required: ["path"] },
+      summarize: (a) => `${a.path ?? ""}${a.save_as ? " → " + a.save_as : ""}`,
+      async preview(ctx, a) {
+        const bits: string[] = [];
+        if (a.replace_paragraph) bits.push("sửa đoạn");
+        if (a.insert_after) bits.push("chèn");
+        if (a.delete) bits.push("xoá");
+        if (a.format) bits.push("định dạng");
+        if (a.table) bits.push("sửa bảng");
+        return outlinePreview(ctx, a.save_as || a.path, `Sửa Word ${a.path}: ${bits.join(", ") || "(chưa rõ)"}${a.save_as ? ` (lưu thành ${a.save_as})` : " (ghi đè bản gốc)"}`);
+      },
+      async run(ctx, a) {
+        const opts: DocxEditOptions = {};
+        for (const k of ["replace_paragraph", "delete", "insert_after", "format", "table"] as const) {
+          const v = jsonArg<unknown>(a[k], k);
+          if (v === undefined || v === null) continue;
+          if (!Array.isArray(v)) throw new ToolError(`${k} phải là danh sách.`, "bad_args");
+          (opts as Record<string, unknown>)[k] = v;
+        }
+        if (!Object.keys(opts).length) throw new ToolError("Chưa nói cần sửa gì: dùng replace_paragraph, delete, insert_after, format hoặc table.", "bad_args");
+        const src = await resolveSafe(ctx, a.path);
+        if (!ctx.readFiles.has(src)) throw new ToolError(`Hãy đọc ${a.path} bằng read_document trước khi sửa (để biết số đoạn ¶N).`, "read_first");
+        await checkFresh(ctx, src, a.path);
+        const { bytes } = await loadBinary(ctx, a.path, [".docx"]);
+        let res;
+        try {
+          res = await editDocx(bytes, opts);
+        } catch (e) {
+          throw new ToolError((e as Error).message);
+        }
+        let abs = src;
+        let existed = true;
+        if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, ".docx"));
+        await commit(ctx, abs, res.bytes, existed);
+        return `Đã lưu ${relPath(ctx, abs)}.\n` + res.changes.slice(0, 25).join("\n") + "\nSố đoạn ¶ đã thay đổi sau khi chèn/xoá: hãy read_document lại trước lần sửa tiếp theo.";
       },
     },
     {

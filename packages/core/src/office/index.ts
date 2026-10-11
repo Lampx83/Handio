@@ -4,6 +4,8 @@ export * from "./docx-read";
 export * from "./xlsx";
 export * from "./pptx";
 export * from "./pptx-edit";
+export * from "./docx-edit";
+export * from "./xlsx-ops";
 export * from "./readdoc";
 export * from "./tools";
 export * from "./locate";
