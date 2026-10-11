@@ -611,6 +611,7 @@ export class Session {
       const real = await resolveSafe(this.ctx, e.path); // luôn nằm trong thư mục dự án
       if (e.old === null) await this.o.env.remove(real);
       else {
+        await this.o.env.mkdirp(dirname(real)); // thư mục chứa có thể đã bị xoá (di chuyển thư mục, rm -r)
         if (typeof e.old === "string") await this.o.env.writeText(real, e.old);
         else await this.o.env.writeBytes(real, e.old);
         const st = await this.o.env.stat(real);

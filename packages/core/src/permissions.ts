@@ -29,7 +29,7 @@ export interface PermissionRules {
 export type Decision = { decision: "allow" | "deny" | "ask"; reason: string };
 
 /** Đường dẫn có thể làm agent tự cấp quyền cho chính nó hoặc phá lịch sử git → luôn hỏi (trừ bypass). */
-const PROTECTED = [".git/**", ".neuagent/**", ".agents/rules/**", ".claude/rules/**", "NEUAGENT.md", "NEUAGENT.local.md", "AGENTS.md", "CLAUDE.md", "**/NEUAGENT.md", "**/AGENTS.md", "**/CLAUDE.md"];
+export const PROTECTED = [".git/**", ".neuagent/**", ".agents/rules/**", ".claude/rules/**", "NEUAGENT.md", "NEUAGENT.local.md", "AGENTS.md", "CLAUDE.md", "**/NEUAGENT.md", "**/AGENTS.md", "**/CLAUDE.md"];
 
 function parseRule(rule: string): { tool: string; arg?: string } | null {
   const m = /^([^()]+?)(?:\((.*)\))?$/s.exec(rule.trim());
