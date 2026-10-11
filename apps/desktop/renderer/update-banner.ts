@@ -7,6 +7,7 @@ export interface UpdateBridge {
   check(): Promise<UpdateState>;
   download(): Promise<UpdateState>;
   dismiss(): Promise<UpdateState>;
+  install(): Promise<UpdateState>;
   openFolder(): Promise<UpdateState>;
   onChange(cb: (s: UpdateState) => void): () => void;
 }
@@ -24,8 +25,8 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 };
 
 /** Dựng thanh thông báo từ trạng thái (hàm thuần theo DOM, dễ kiểm thử). Trả null khi không cần hiện. */
-export function buildBanner(s: UpdateState, api: Pick<UpdateBridge, "download" | "dismiss" | "openFolder" | "check">, state: { showNotes: boolean; closed: boolean }, rerender: () => void): HTMLElement | null {
-  const visible = s.phase === "available" || s.phase === "downloading" || s.phase === "ready" || (s.phase === "error" && !!s.latest);
+export function buildBanner(s: UpdateState, api: Pick<UpdateBridge, "download" | "dismiss" | "openFolder" | "check" | "install">, state: { showNotes: boolean; closed: boolean }, rerender: () => void): HTMLElement | null {
+  const visible = s.phase === "available" || s.phase === "downloading" || s.phase === "ready" || s.phase === "installing" || (s.phase === "error" && !!s.latest);
   if (!visible || (state.closed && s.phase === "ready")) return null;
   const box = el("div", "neu-upd" + (s.required ? " nu-required" : ""));
   box.setAttribute("role", s.required ? "alertdialog" : "status");
@@ -55,11 +56,23 @@ export function buildBanner(s: UpdateState, api: Pick<UpdateBridge, "download" |
     fill.style.width = `${Math.round((s.progress ?? 0) * 100)}%`;
     bar.append(fill);
     box.append(bar, el("p", "", "Sau khi tải xong, ứng dụng sẽ kiểm tra mã băm SHA-256 của tệp."));
+  } else if (s.phase === "installing") {
+    box.append(el("h3", "", `Đang cài ${brandName()} ${s.latest}…`));
+    box.append(el("p", "", `${brandName()} sẽ tự đóng và mở lại sau vài giây. Dữ liệu và cài đặt của bạn được giữ nguyên.`));
   } else {
     box.append(el("h3", "", `Đã tải ${brandName()} ${s.latest}`));
-    box.append(el("p", "", `Đã kiểm tra mã băm SHA-256 khớp với máy chủ. Hãy đóng ${brandName()} rồi mở tệp vừa tải để cài (chưa có gì bị thay đổi cho tới lúc bạn mở nó).`));
-    row.append(btn("Mở thư mục chứa tệp", () => void api.openFolder(), true));
-    if (!s.required) row.append(btn("Đóng", () => { state.closed = true; rerender(); }));
+    if (s.error) box.append(el("p", "nu-err", s.error));
+    if (s.canInstall) {
+      box.append(el("p", "", s.auto
+        ? `Đã tải ngầm và kiểm tra mã băm SHA-256 khớp với máy chủ. ${brandName()} sẽ tự cài khi bạn đóng ứng dụng; hoặc bấm để cài ngay (ứng dụng khởi động lại, dữ liệu giữ nguyên).`
+        : `Đã kiểm tra mã băm SHA-256 khớp với máy chủ. Bấm cài đặt: ${brandName()} sẽ đóng, cập nhật và tự mở lại (dữ liệu giữ nguyên). Chưa có gì thay đổi cho tới lúc bạn bấm.`));
+      row.append(btn("Cài đặt và khởi động lại", () => void api.install(), true));
+      if (!s.auto) row.append(btn("Mở thư mục chứa tệp", () => void api.openFolder()));
+    } else {
+      box.append(el("p", "", `Đã kiểm tra mã băm SHA-256 khớp với máy chủ. Hãy đóng ${brandName()} rồi mở tệp vừa tải để cài (chưa có gì bị thay đổi cho tới lúc bạn mở nó).`));
+      row.append(btn("Mở thư mục chứa tệp", () => void api.openFolder(), true));
+    }
+    if (!s.required) row.append(btn(s.auto ? "Để khi đóng ứng dụng" : "Đóng", () => { state.closed = true; rerender(); }));
   }
   box.append(row);
   return box;

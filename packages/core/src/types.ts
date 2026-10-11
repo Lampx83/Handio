@@ -62,7 +62,9 @@ export type SessionEvent =
   | { type: "summary"; turn: number; files: ChangeFile[]; /** Đã chạy kiểm tra sau lần sửa cuối chưa */ verify: "ok" | "fail" | "none" }
   | { type: "turn_end"; interrupted: boolean; final: string }
   | { type: "proc"; id: string; command: string; state: "start" | "data" | "exit"; text?: string; code?: number; url?: string }
-  | { type: "reset" };
+  | { type: "reset" }
+  /** Sau khi cập nhật/khởi động lại: giao diện mở lại cuộc trò chuyện `chatId` rồi gửi `text` để agent làm tiếp việc đang dở. */
+  | { type: "resume"; chatId: string; text: string };
 
 export interface SlashCommandInfo {
   name: string;

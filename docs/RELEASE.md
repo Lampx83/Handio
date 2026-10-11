@@ -11,7 +11,7 @@ Tài liệu này trả lời ba câu hỏi: **phiên bản được đánh số 
 | Nhật ký thay đổi | [CHANGELOG.md](../CHANGELOG.md), viết cho **người dùng**. **Bắt buộc: mỗi phiên bản phải ghi đủ đã sửa/thêm/thay đổi gì** (`npm run version:check` và CI từ chối mục rỗng). Người dùng xem được ở: nút **“vX.Y.Z · Nhật ký thay đổi”** cuối thanh bên (nhúng sẵn lúc dựng, xem được cả khi ngoại tuyến), thanh thông báo cập nhật (“Có gì mới”) và trang công khai `/agent/guide/changelog.html` (tạo lúc `prepare.sh`). Ghi dần vào mục “Chưa phát hành” khi làm xong từng việc; lúc phát hành nó thành mục của phiên bản và là nội dung “Có gì mới” trong ứng dụng. |
 | Tag | `vX.Y.Z` trên đúng commit phát hành. CI từ chối tag không khớp phiên bản trong `package.json`. |
 | Web và Desktop | **Bản web luôn là bản mới nhất** (người dùng mở trang là được bản đang chạy trên máy chủ). **Desktop** là bản cài trên máy người dùng nên cần cơ chế cập nhật (mục 4). |
-| Không cập nhật ngầm | Ứng dụng chỉ **báo** có bản mới; chỉ tải khi người dùng bấm; kiểm tra SHA-256; không tự cài, không tự chạy. Lý do: xem [RELEASE-SIGNING.md](RELEASE-SIGNING.md) (giảm nghi ngờ phần mềm lạ) và [SECURITY.md](SECURITY.md). |
+| Tự cập nhật (có thể tắt) | Mặc định BẬT: ứng dụng tự **tải nền** bản mới, kiểm SHA-256 (và kiểm lại ngay trước khi cài), rồi **cài khi người dùng đóng ứng dụng** (không ngắt giữa lúc đang làm việc) hoặc ngay khi bấm “Cài đặt và khởi động lại”. Tắt ở menu **Tệp → Tự động cập nhật**; khi tắt, ứng dụng chỉ báo và tải khi người dùng bấm. Việc agent đang làm dở được dừng gọn, lưu lại và **tự làm tiếp sau khi mở lại**. Rủi ro và lý do: xem [RELEASE-SIGNING.md](RELEASE-SIGNING.md) (giảm nghi ngờ phần mềm lạ) và [SECURITY.md](SECURITY.md). |
 
 Công cụ: `scripts/version.mjs` (Node thuần).
 
@@ -68,6 +68,14 @@ npm run version:bump -- minor         # patch | minor | major | X.Y.Z[-beta.1]; 
 Không có cập nhật khi chạy từ mã nguồn (`npm run desktop`) hay trong kiểm thử (`npm run smoke`).
 
 Khi chưa ký số, macOS/Windows vẫn cảnh báo “nhà phát hành không xác định” ở lần mở bản mới; xem [RELEASE-SIGNING.md](RELEASE-SIGNING.md) để loại bỏ cảnh báo đó. Trong lúc chờ ký, mã băm hiển thị trong ứng dụng/trang tải là cách xác minh.
+
+### Tự cập nhật (từ 0.8.3)
+
+- **Bật mặc định**, nhớ lựa chọn ở `update.json` trong thư mục dữ liệu. Chỉ chạy được khi ứng dụng cài ở nơi ghi được: Windows (bản `.exe` cho người dùng hiện tại, không cần quản trị) và macOS (`.app` ở `/Applications` hoặc `~/Applications`, không chạy trực tiếp từ ổ đĩa ảnh). Máy không đủ điều kiện thì rơi về cách cũ (tải rồi mở tệp).
+- **Tải nền** vào `<dữ liệu>/updates`, kiểm kích thước và SHA-256 theo `latest.json`; bản cũ bị xoá. **Cài khi đóng ứng dụng** (không mở lại) hoặc khi bấm **Cài đặt và khởi động lại** (mở lại).
+- **Windows:** chạy `Setup.exe /S --updated [--force-run]` (NSIS im lặng, giống `electron-updater`). **macOS:** một đoạn shell chờ ứng dụng thoát, gắn `.dmg`, thay `.app`, mở lại; lỗi thì mở `.dmg` để kéo-thả (nhật ký ở `$TMPDIR/neu-update.log`).
+- **Làm tiếp việc dở:** nếu agent đang chạy lúc cập nhật, ứng dụng dừng gọn, lưu hội thoại và ghi `resume.json` (hiệu lực 24 giờ, dùng một lần, chỉ khi đã lên phiên bản mới). Mở lại và đã đăng nhập thì tự mở đúng cuộc trò chuyện và nhắn agent làm tiếp.
+- Người dùng bản **trước 0.8.3** vẫn cập nhật theo cách cũ (tải về rồi mở tệp) một lần; từ đó trở đi tự động.
 
 ### Định dạng `latest.json`
 ```json

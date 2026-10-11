@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld("neu", {
     check: () => ipcRenderer.invoke("neu:update", "check"),
     download: () => ipcRenderer.invoke("neu:update", "download"),
     dismiss: () => ipcRenderer.invoke("neu:update", "dismiss"),
+    install: () => ipcRenderer.invoke("neu:update", "install"),
     openFolder: () => ipcRenderer.invoke("neu:update", "openFolder"),
     onChange: (cb: (s: unknown) => void) => {
       const h = (_e: unknown, s: unknown) => cb(s);

@@ -341,6 +341,28 @@ export class LocalController implements AgentController {
     }
   }
 
+  /**
+   * Chuẩn bị khởi động lại ứng dụng (cập nhật): nếu agent đang làm việc thì dừng gọn, đợi lưu hội thoại, trả vị trí để làm tiếp sau khi mở lại.
+   * Không có việc đang dở (hoặc chưa lưu được) thì trả null.
+   */
+  async suspendForRestart(): Promise<{ projectId: string; chatId: string } | null> {
+    if (!this.busy) return null;
+    const at = { projectId: this.projectId, chatId: this.chatId };
+    this.interrupt();
+    for (let i = 0; i < 100 && this.busy; i++) await new Promise((r) => setTimeout(r, 100));
+    if (!at.projectId || !at.chatId || !this.o.chats) return null;
+    return (await this.o.chats.load(at.projectId, at.chatId)) ? at : null;
+  }
+
+  /** Sau khi mở lại: báo giao diện mở đúng cuộc trò chuyện đã dừng và gửi tin nối tiếp (mở dự án đó trước nếu đang ở dự án khác). */
+  async resumeAfterRestart(at: { projectId: string; chatId: string }, text: string): Promise<boolean> {
+    if (this.busy || !this.o.chats || !ID_RE.test(at.projectId) || !ID_RE.test(at.chatId)) return false;
+    if (!(await this.o.chats.load(at.projectId, at.chatId))) return false;
+    if (this.projectId !== at.projectId) await this.projectOpen(at.projectId);
+    this.fire({ type: "resume", chatId: at.chatId, text: String(text).slice(0, 500) });
+    return true;
+  }
+
   /** Lưu cuộc trò chuyện sau mỗi lượt (dùng giá trị chụp lúc bắt đầu lượt, phòng khi người dùng đã chuyển dự án). */
   private async persistChat(t: { projectId: string; chatId: string; session: Session }): Promise<void> {
     const store = this.o.chats;

@@ -45,7 +45,7 @@ Rồi gắn tag `v0.2.0` (hoặc chạy tay workflow **Release**). Workflow dự
 Kiểm tra bản đã dựng: `npm run verify:signature -w @neu/agent-desktop` (macOS: `codesign`, `spctl` phải báo *Notarized Developer ID*, `stapler validate`; Windows: Authenticode hợp lệ). Kết quả ghi vào `release/signing.json` và `latest.json`; trang tải chỉ hiện “Đã ký bởi …” khi **thật sự** đã ký, ngược lại vẫn nhắc cách mở bản chưa ký.
 
 ## Giảm nghi ngờ virus (làm được ngay, không cần chứng chỉ)
-- Không làm rối mã (không obfuscate), không tự cập nhật ngầm, không nhúng key; có SBOM (`SBOM.cdx.json`) và mã băm công khai.
+- Không làm rối mã (không obfuscate), không nhúng key; tự cập nhật có thể tắt, tải từ đúng máy chủ ứng dụng và kiểm SHA-256 (xem mục “Tự cập nhật” trong RELEASE.md; ký số là cách duy nhất chống được trường hợp máy chủ bị chiếm quyền); có SBOM (`SBOM.cdx.json`) và mã băm công khai.
 - Tải qua HTTPS từ tên miền của trường, sau đăng nhập SSO; mã băm hiển thị trên trang và qua kênh khác.
 - Nếu một trình diệt virus báo nhầm: gửi tệp tới [Microsoft Security Intelligence](https://www.microsoft.com/en-us/wdsi/filesubmission) (đánh dấu *false positive*) và tới nhà sản xuất AV đó. Quét trước bằng VirusTotal và chỉ phát hành khi sạch.
 - Chia nhỏ rủi ro: cho phép người dùng kiểm `SHA256SUMS.txt` (hộp tải có hướng dẫn một lệnh).

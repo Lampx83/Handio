@@ -56,7 +56,7 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
   - **Cách tắt:** công tắc trong Cài đặt (khi giao diện đã nối), hoặc quản trị viên ép tắt bằng `diagnostics:false` trong `policy.json`.
   - **“Báo lỗi”:** người dùng có thể thêm một ghi chú ngắn và xem **đúng** gói sẽ gửi trước khi gửi. Ghi chú là văn bản tự do do chính người dùng gõ — đừng dán dữ liệu nhạy cảm vào đó.
   - Chi tiết, ngưỡng phát hiện, cách đọc báo cáo: `docs/DIAGNOSTICS.md`.
-- **Báo có bản cập nhật (Desktop):** ứng dụng chỉ *hỏi* tệp `latest.json` (phiên bản + mã băm) để báo có bản mới; không tự tải, không tự cài (người dùng vẫn so mã băm). Bản web cập nhật khi máy chủ triển khai.
+- **Cập nhật (Desktop):** ứng dụng hỏi tệp `latest.json` (phiên bản + mã băm), mặc định tự tải nền bản mới từ đúng thư mục tải về của máy chủ ứng dụng (https, kèm đăng nhập, không theo chuyển hướng), kiểm kích thước + SHA-256 và kiểm lại ngay trước khi cài; cài khi người dùng đóng ứng dụng hoặc bấm nút. **Rủi ro đã chấp nhận:** mã băm lấy từ cùng máy chủ nên không chống được trường hợp máy chủ bị chiếm quyền (cần ký số, xem RELEASE-SIGNING.md); tắt được ở menu Tệp → Tự động cập nhật. Bản web cập nhật khi máy chủ triển khai.
 - Không có quảng cáo hay phân tích của bên thứ ba.
 
 **Đăng nhập (SSO Microsoft 365)**

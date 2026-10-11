@@ -402,6 +402,14 @@ class App {
     void this.paintChats();
   }
 
+  /** Sau khi cập nhật xong: mở lại cuộc trò chuyện đang dở và nhắn agent làm tiếp. */
+  private async resumeChat(id: string, text: string): Promise<void> {
+    if (this.busy) return;
+    await this.openChat(id);
+    this.state = await this.ctl.getState();
+    if (this.state.chatId === id && !this.busy) await this.submit(text);
+  }
+
   /** Dựng lại khung chat từ lịch sử đã lưu (mở lại cuộc trò chuyện, hoặc sau /rewind). */
   private paintHistory(history: HistoryItem[]): void {
     this.cards.clear();
@@ -532,6 +540,9 @@ class App {
         this.cur = null;
         this.pending = null;
         void this.refresh(true);
+        break;
+      case "resume":
+        void this.resumeChat(e.chatId, e.text);
         break;
     }
   }

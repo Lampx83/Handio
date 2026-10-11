@@ -176,3 +176,47 @@ describe("/branch: tách nhánh hội thoại", () => {
     expect(events.some((e: any) => e.type === "notice" && /Chưa có gì để tách nhánh/.test(e.text))).toBe(true);
   });
 });
+
+describe("làm tiếp việc đang dở sau khi cập nhật", () => {
+  /** Mô hình chậm: chờ cho tới khi bị ngắt (giống agent đang chạy lúc người dùng cập nhật). */
+  const slow = () => ({
+    async models() { return ["m"]; },
+    chat(_m: unknown, o: { signal?: AbortSignal } = {}) {
+      return new Promise((_res, rej) => {
+        o.signal?.addEventListener("abort", () => rej(Object.assign(new Error("abort"), { kind: "abort" })));
+      });
+    },
+  });
+  const useLlm = (c: LocalController, llm: unknown) => {
+    (c as unknown as { llm: unknown }).llm = llm;
+    (c.currentSession.o as { llm: unknown }).llm = llm;
+  };
+
+  it("đang làm việc: dừng gọn, hội thoại được lưu, trả đúng chỗ để làm tiếp; rảnh thì trả null", async () => {
+    const { c, chats } = await setup();
+    expect(await c.suspendForRestart()).toBeNull();
+    useLlm(c, slow());
+    const st = await c.getState();
+    const running = c.send("Soạn báo cáo năm học");
+    await new Promise((r) => setTimeout(r, 30));
+    const at = await c.suspendForRestart();
+    await running;
+    expect(at).toMatchObject({ chatId: st.chatId });
+    expect(at!.projectId).toBeTruthy();
+    expect((await c.getState()).busy).toBe(false);
+    const saved = await chats.load(at!.projectId, at!.chatId);
+    expect(JSON.stringify(saved?.messages)).toContain("Soạn báo cáo năm học");
+  });
+
+  it("sau khi mở lại: phát sự kiện resume cho đúng cuộc trò chuyện; từ chối id lạ hoặc cuộc đã bị xoá", async () => {
+    const { c, events } = await setup();
+    await c.send("Việc dở");
+    const [m] = await c.chatList();
+    const projectId = (await c.getState()).projectId;
+    await c.newSession();
+    expect(await c.resumeAfterRestart({ projectId, chatId: m.id }, "Tiếp tục nhé")).toBe(true);
+    expect(events.at(-1)).toEqual({ type: "resume", chatId: m.id, text: "Tiếp tục nhé" });
+    expect(await c.resumeAfterRestart({ projectId, chatId: "../x" }, "x")).toBe(false);
+    expect(await c.resumeAfterRestart({ projectId, chatId: "khong-co" }, "x")).toBe(false);
+  });
+});

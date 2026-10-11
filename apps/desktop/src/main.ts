@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, safeStorage, session, shell, type MenuItemConstructorOptions } from "electron";
-import { existsSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, readFileSync } from "node:fs";
+import os from "node:os";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
@@ -7,6 +8,7 @@ import { brandName, buildWorkSamples, cleanProjectName, ID_RE, LocalController, 
 import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, readPackDirs, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
+import { canInstallHere, launchInstaller } from "./installer";
 import { Updater, UPDATE_METHODS } from "./updater";
 import { APP_ORIGIN, AUTH_METHODS, authArgsOk, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
 
@@ -405,6 +407,11 @@ function startUpdater(): void {
   const base = __DEFAULT_BASE_URL__.replace(/vllm\/v1\/?$/, "download/");
   if (!/^https:\/\/[^/]+\/.*\/$/.test(base)) return; // chỉ khi máy chủ chính là https
   const file = path.join(userData(), "update.json");
+  try {
+    autoUpdate = JSON.parse(readFileSync(file, "utf8")).auto !== false; // mặc định BẬT
+  } catch {
+    autoUpdate = true;
+  }
   updater = new Updater({
     version: app.getVersion(),
     platform: process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : "linux",
@@ -414,6 +421,23 @@ function startUpdater(): void {
     fetch: (...a) => fetch(...a),
     downloadsDir: () => app.getPath("downloads"),
     reveal: (p) => shell.showItemInFolder(p),
+    canInstall: (name) =>
+      canInstallHere(process.platform, name, process.execPath, (d) => {
+        try {
+          accessSync(d, fsConstants.W_OK);
+          return true;
+        } catch {
+          return false;
+        }
+      }),
+    install: async (file, relaunch) => {
+      await suspendForUpdate(); // việc đang dở được dừng gọn, lưu và ghi lại để làm tiếp sau khi mở lại
+      const ok = launchInstaller({ platform: process.platform, file, execPath: process.execPath, pid: process.pid, tmpDir: os.tmpdir(), relaunch });
+      if (ok && relaunch) setTimeout(() => app.quit(), 500); // trình cài chờ ứng dụng thoát rồi mới thay
+      return ok;
+    },
+    auto: () => autoUpdate,
+    updatesDir: () => path.join(userData(), "updates"),
     onState: (st) => win?.webContents.send("neu:update-changed", st),
     loadDismissed: async () => {
       try {
@@ -423,11 +447,75 @@ function startUpdater(): void {
       }
     },
     saveDismissed: async (v) => {
-      await fs.mkdir(userData(), { recursive: true });
-      await fs.writeFile(file, JSON.stringify({ dismissed: v }), { mode: 0o600 });
+      await saveUpdatePrefs({ dismissed: v });
     },
   });
   updater.start();
+}
+
+let autoUpdate = true;
+
+// ---- làm tiếp việc đang dở sau khi cập nhật: dừng gọn + ghi resume.json trước khi thoát; mở lại thì tự nhắn agent làm tiếp
+const RESUME_TTL_MS = 24 * 3600_000;
+const resumeFile = () => path.join(userData(), "resume.json");
+let suspended = false;
+
+async function suspendForUpdate(): Promise<void> {
+  if (suspended) return;
+  suspended = true;
+  const items: { profile: Profile; projectId: string; chatId: string }[] = [];
+  for (const [profile, ctl] of controllers) {
+    try {
+      const at = await ctl.suspendForRestart();
+      if (at) items.push({ profile, ...at });
+    } catch {
+      /* không ghi được thì thôi: chỉ mất khả năng tự làm tiếp */
+    }
+  }
+  if (!items.length) return;
+  try {
+    await fs.mkdir(userData(), { recursive: true });
+    await fs.writeFile(resumeFile(), JSON.stringify({ from: app.getVersion(), ts: Date.now(), items }), { mode: 0o600 });
+  } catch {
+    /* bỏ qua */
+  }
+}
+
+/** Khởi động sau cập nhật: nếu có việc dở thì nhắn agent làm tiếp (một lần; bỏ qua khi chưa lên bản mới hoặc đã quá hạn). */
+async function resumeAfterUpdate(): Promise<void> {
+  let raw = "";
+  try {
+    raw = await fs.readFile(resumeFile(), "utf8");
+  } catch {
+    return;
+  }
+  await fs.rm(resumeFile(), { force: true }).catch(() => undefined); // chỉ chạy một lần
+  let r: { from?: unknown; ts?: unknown; items?: unknown };
+  try {
+    r = JSON.parse(raw);
+  } catch {
+    return;
+  }
+  if (typeof r.from !== "string" || r.from === app.getVersion() || typeof r.ts !== "number" || Date.now() - r.ts > RESUME_TTL_MS || !Array.isArray(r.items)) return;
+  const text = `Tiếp tục công việc đang làm dở (${brandName()} vừa cập nhật lên ${app.getVersion()}). Hãy kiểm tra các tệp hiện có trong thư mục rồi làm tiếp từ chỗ đã dừng, không làm lại phần đã xong.`;
+  for (const it of r.items.slice(0, 3)) {
+    const x = it as { profile?: unknown; projectId?: unknown; chatId?: unknown };
+    if (typeof x.profile !== "string" || typeof x.projectId !== "string" || typeof x.chatId !== "string" || !PROFILES_LIST.includes(x.profile as Profile)) continue;
+    await controllers.get(x.profile as Profile)?.resumeAfterRestart({ projectId: x.projectId, chatId: x.chatId }, text).catch(() => false);
+  }
+}
+
+/** Ghi update.json (đã chọn "Để sau" + tự cập nhật bật/tắt), giữ các khoá còn lại. */
+async function saveUpdatePrefs(patch: { dismissed?: string; auto?: boolean }): Promise<void> {
+  const file = path.join(userData(), "update.json");
+  let cur: Record<string, unknown> = {};
+  try {
+    cur = JSON.parse(await fs.readFile(file, "utf8"));
+  } catch {
+    /* chưa có */
+  }
+  await fs.mkdir(userData(), { recursive: true });
+  await fs.writeFile(file, JSON.stringify({ ...cur, ...patch }), { mode: 0o600 });
 }
 
 /** Menu "Kiểm tra bản cập nhật…": người dùng chủ động, nên hiện cả bản từng chọn "Để sau" và báo rõ khi đã mới nhất. */
@@ -470,7 +558,7 @@ function registerIpc(): void {
       return { ...auth.status(), error: err instanceof Error ? err.message.slice(0, 300) : "Đăng nhập không thành công." };
     }
   });
-  // kênh cập nhật: trạng thái / kiểm tra / tải / để sau / mở thư mục chứa bản đã tải (không có tham số)
+  // kênh cập nhật: trạng thái / kiểm tra / tải / để sau / cài đặt (chỉ sau khi người dùng bấm) / mở thư mục chứa bản đã tải (không có tham số)
   ipcMain.handle("neu:update", async (e, method: unknown) => {
     if (!trusted(e)) throw new Error("Nguồn không hợp lệ");
     if (typeof method !== "string" || !UPDATE_METHODS.has(method)) throw new Error("Yêu cầu không hợp lệ");
@@ -478,6 +566,7 @@ function registerIpc(): void {
     if (method === "check") return updater.check(true);
     if (method === "download") return updater.download();
     if (method === "dismiss") return updater.dismiss();
+    if (method === "install") return updater.install();
     if (method === "openFolder") {
       updater.openFolder();
       return updater.status();
@@ -574,6 +663,7 @@ function buildMenu(): void {
       { type: "separator" },
       { label: "Mở thư mục cài đặt", click: () => void shell.openPath(userData()) },
       { label: "Kiểm tra bản cập nhật…", click: () => void manualUpdateCheck() },
+      { label: "Tự động cập nhật (cài khi đóng ứng dụng)", type: "checkbox" as const, checked: autoUpdate, click: (item) => { autoUpdate = item.checked; void saveUpdatePrefs({ auto: autoUpdate }).catch(() => undefined); if (autoUpdate) void updater?.check(); } },
       mac ? { role: "close" as const } : { role: "quit" as const },
     ] },
     { role: "editMenu" },
@@ -648,6 +738,21 @@ app.whenReady().then(async () => {
   buildMenu();
   await createWindow();
   startUpdater();
+  if (!SMOKE && app.isPackaged) {
+    // làm tiếp việc dở sau cập nhật: đợi cửa sổ tải xong và (nếu cần) đã đăng nhập
+    const go = () => setTimeout(() => void resumeAfterUpdate(), 2500);
+    const ready = () => {
+      if (!auth || auth.status().signedIn) return go();
+      const off = auth.onChange((st) => {
+        if (st.signedIn) {
+          off();
+          go();
+        }
+      });
+    };
+    if (win?.webContents.isLoading()) win.webContents.once("did-finish-load", ready);
+    else ready();
+  }
   if (__SMOKE__ && SMOKE) {
     const { runSmoke } = await import("./smoke");
     const code = await runSmoke({ win: win!, dir: SMOKE, mockUrl, controllers, codeDir: await folderFor("code"), workDir: await folderFor("work") });
@@ -659,6 +764,21 @@ app.on("second-instance", () => {
   if (win) {
     if (win.isMinimized()) win.restore();
     win.focus();
+  }
+});
+// tự cập nhật: bản đã tải nền và kiểm mã băm sẽ được cài khi người dùng đóng ứng dụng (không mở lại)
+app.on("before-quit", (e) => {
+  // sắp cài bản mới khi đóng: dừng gọn việc đang chạy (và ghi chỗ làm tiếp) rồi mới thoát
+  if (!suspended && updater?.willInstallOnQuit()) {
+    e.preventDefault();
+    void suspendForUpdate().finally(() => app.quit());
+  }
+});
+app.on("will-quit", () => {
+  try {
+    updater?.installOnQuit();
+  } catch {
+    /* không được làm kẹt việc thoát */
   }
 });
 app.on("window-all-closed", () => {

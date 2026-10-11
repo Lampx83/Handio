@@ -16,7 +16,7 @@ function latest(o: Record<string, unknown> = {}) {
   return { version: "0.2.0", released: "2026-10-08", notes: "• Mới", files: { "NEU-Agent-0.2.0-mac-arm64.dmg": { sha256: SHA, size: PAYLOAD.length }, "NEU-Agent-0.2.0-mac-x64.dmg": { sha256: "b".repeat(64), size: 1 }, "NEU-Agent-0.2.0-win-x64.exe": { sha256: SHA, size: PAYLOAD.length } }, ...o };
 }
 
-function setup(over: { latest?: unknown; body?: Buffer; status?: number; type?: string; headers?: Record<string, string> | null; dismissed?: string; platform?: "mac" | "win" } = {}) {
+function setup(over: { latest?: unknown; body?: Buffer; status?: number; type?: string; headers?: Record<string, string> | null; dismissed?: string; platform?: "mac" | "win"; deps?: Partial<UpdaterDeps> } = {}) {
   const dir = fs.mkdtempSync(path.join(tmp, "dl-"));
   const states: UpdateState[] = [];
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -33,6 +33,7 @@ function setup(over: { latest?: unknown; body?: Buffer; status?: number; type?: 
     headers: async () => (over.headers === undefined ? { Authorization: "Bearer tok" } : over.headers),
     fetch: fetchFn, downloadsDir: () => dir, reveal: (p) => revealed.push(p), onState: (s) => states.push(s),
     loadDismissed: async () => dismissed, saveDismissed: async (v) => void (dismissed = v),
+    ...over.deps,
   };
   return { u: new Updater(deps), dir, states, calls, revealed, getDismissed: () => dismissed };
 }
@@ -153,5 +154,86 @@ describe("Updater", () => {
     const { u } = setup({ latest: latest({ files: { "NEU-Agent-0.2.0-win-x64.exe": { sha256: SHA } } }) });
     await u.check();
     expect((await u.download()).error).toMatch(/phù hợp/);
+  });
+});
+
+describe("Updater: tự cập nhật và cài ngay", () => {
+  const mkAuto = (over: Parameters<typeof setup>[0] = {}, install: UpdaterDeps["install"] = async () => true) => {
+    const installs: { file: string; relaunch: boolean }[] = [];
+    const updates = fs.mkdtempSync(path.join(tmp, "bg-"));
+    const d = setup({
+      ...over,
+      deps: { canInstall: () => true, install: async (file, relaunch) => (installs.push({ file, relaunch }), install!(file, relaunch)), auto: () => true, updatesDir: () => updates, ...over.deps },
+    });
+    return { ...d, installs, updates };
+  };
+  const settle = async (u: Updater) => {
+    for (let i = 0; i < 200 && u.status().phase !== "ready" && u.status().phase !== "error"; i++) await new Promise((r) => setTimeout(r, 10));
+  };
+
+  it("bật tự cập nhật: tải nền vào thư mục riêng, kiểm mã băm, không mở thư mục Tải xuống", async () => {
+    const { u, updates, revealed, dir } = mkAuto();
+    await u.check();
+    await settle(u);
+    const s = u.status();
+    expect(s).toMatchObject({ phase: "ready", auto: true, canInstall: true });
+    expect(s.savedPath && path.dirname(s.savedPath)).toBe(updates);
+    expect(fs.readdirSync(dir)).toEqual([]);
+    expect(revealed).toEqual([]);
+  });
+
+  it("tắt tự cập nhật hoặc máy không cài thẳng được: chỉ báo 'có bản mới', không tự tải", async () => {
+    const off = mkAuto({ deps: { auto: () => false } });
+    expect((await off.u.check()).phase).toBe("available");
+    expect(off.calls.some((c) => !c.url.endsWith("latest.json"))).toBe(false);
+    const noInstall = mkAuto({ deps: { canInstall: () => false } });
+    expect((await noInstall.u.check()).phase).toBe("available");
+    expect(noInstall.calls.some((c) => !c.url.endsWith("latest.json"))).toBe(false);
+  });
+
+  it("đóng ứng dụng: cài bản đã tải nền, KHÔNG mở lại; chỉ một lần", async () => {
+    const { u, installs } = mkAuto();
+    await u.check();
+    await settle(u);
+    expect(u.installOnQuit()).toBe(true);
+    expect(installs).toEqual([{ file: u.status().savedPath, relaunch: false }]);
+    expect(u.installOnQuit()).toBe(false); // đang cài: không chạy lần hai (will-quit có thể gọi lại sau khi tự thoát)
+  });
+
+  it("tệp đã tải bị thay đổi trước khi cài: không chạy trình cài (cả lúc đóng lẫn bấm cài ngay)", async () => {
+    const a = mkAuto();
+    await a.u.check();
+    await settle(a.u);
+    fs.appendFileSync(a.u.status().savedPath!, "x");
+    expect(a.u.installOnQuit()).toBe(false);
+    expect((await a.u.install()).phase).toBe("error");
+    expect(a.installs).toEqual([]);
+    expect(fs.existsSync(a.u.status().savedPath ?? "/khong-co")).toBe(false);
+  });
+
+  it("bấm 'Cài đặt và khởi động lại': chạy trình cài với mở lại; thất bại thì rơi về mở thư mục", async () => {
+    const ok = mkAuto();
+    await ok.u.check();
+    await settle(ok.u);
+    expect((await ok.u.install()).phase).toBe("installing");
+    expect(ok.installs).toEqual([{ file: ok.u.status().savedPath, relaunch: true }]);
+
+    const bad = mkAuto({}, async () => false);
+    await bad.u.check();
+    await settle(bad.u);
+    const s = await bad.u.install();
+    expect(s).toMatchObject({ phase: "ready", canInstall: false });
+    expect(s.error).toContain("mở tệp vừa tải");
+    expect(bad.revealed).toEqual([s.savedPath]);
+  });
+
+  it("tải thủ công (tự cập nhật tắt) với máy cài thẳng được: sẵn sàng cài, không tự mở thư mục", async () => {
+    const m = mkAuto({ deps: { auto: () => false } });
+    await m.u.check();
+    const s = await m.u.download();
+    expect(s).toMatchObject({ phase: "ready", canInstall: true });
+    expect(s.auto).toBeFalsy();
+    expect(m.revealed).toEqual([]);
+    expect(m.u.installOnQuit()).toBe(false); // thủ công: chỉ cài khi người dùng bấm
   });
 });

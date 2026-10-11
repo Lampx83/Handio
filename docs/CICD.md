@@ -25,7 +25,7 @@ Bản Desktop **chứa sẵn giao diện và lõi**, nên một thay đổi ch�
 1. Làm xong, ghi vào mục **[Chưa phát hành]** của `CHANGELOG.md` (CI bắt buộc với PR).
 2. Khi muốn phát hành: `npm run version:bump -- <patch|minor|major>` (chuyển mục trên thành mục phiên bản mới), commit, gộp vào `main`.
 3. Tự động: web lên máy chủ → `release-check` thấy `vX.Y.Z` chưa có tag → dựng Desktop trên GitHub (≈ 15–25 phút) → `publish-desktop` trên máy chủ kiểm mã băm từng tệp, **không cho hạ phiên bản**, chép tệp cài trước và `latest.json` sau cùng → GitHub Release + tag.
-4. Ứng dụng đang chạy kiểm tra `latest.json` mỗi 6 giờ, hiện "Có bản mới X.Y.Z" kèm ghi chú; người dùng bấm **Tải về** (kiểm SHA-256) rồi mở tệp để cài đè. **Không cập nhật ngầm** (bản chưa ký số không thể làm an toàn, xem `docs/RELEASE.md`). Muốn buộc người dùng cập nhật: `NEU_MIN_VERSION`.
+4. Ứng dụng đang chạy kiểm tra `latest.json` mỗi 6 giờ, hiện "Có bản mới X.Y.Z" kèm ghi chú; ứng dụng tự **tải nền** (kiểm SHA-256) rồi cài khi người dùng đóng ứng dụng hoặc bấm **Cài đặt và khởi động lại**; tắt được ở menu Tệp. Việc dở được làm tiếp sau khi mở lại (xem mục “Tự cập nhật” trong `docs/RELEASE.md`). Muốn buộc người dùng cập nhật: `NEU_MIN_VERSION`.
 5. Phiên bản không đổi thì **không** dựng lại Desktop (tiết kiệm phút chạy), dù web vẫn tự lên máy chủ.
 
 Bản chưa có chứng chỉ ký sẽ được macOS/Windows cảnh báo lần đầu mở (trang tải nói rõ). Có chứng chỉ rồi: đặt biến repo `RELEASE_REQUIRE_SIGNED=true` để bản không ký bị chặn (`docs/RELEASE-SIGNING.md`).

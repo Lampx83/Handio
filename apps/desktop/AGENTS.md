@@ -6,5 +6,5 @@
 - **Keychain/`safeStorage`:** chỉ chạm khi thật sự cần (`codec()` lười). Mặc định KHÔNG lưu phiên đăng nhập (tránh hộp thoại Keychain lặp lại ở bản chưa ký); chỉ lưu khi người dùng tích "Ghi nhớ". Đừng gọi `safeStorage` lúc khởi động.
 - Không bao giờ nhúng key mô hình vào bản phát hành (`NEU_BUILTIN_KEY` mặc định rỗng); máy chủ tự gắn key sau khi đăng nhập.
 - Kiểm tra: `npm run smoke` (58 kiểm tra thật trên Electron) + `npx vitest run apps/desktop`. Đóng gói: `npm run dist -w @neu/agent-desktop` (~10 phút; mac arm64/x64 + Windows). Bản chưa ký sẽ bị macOS/Windows cảnh báo lần đầu; **không** hứa với người dùng là "không cảnh báo" khi chưa có Developer ID/chứng chỉ ký.
-- Cập nhật: ứng dụng chỉ **báo** bản mới (`src/updater.ts`), tải khi người dùng bấm và kiểm SHA-256; không tự cài. Xem `docs/RELEASE.md`.
+- Cập nhật (`src/updater.ts`, `src/installer.ts`): mặc định tự tải nền, kiểm SHA-256 (kiểm lại trước khi cài), cài khi đóng ứng dụng hoặc khi người dùng bấm; tắt được. Đổi luồng này là đổi bảo mật: cập nhật `docs/SECURITY.md` + kiểm thử. Việc dở được làm tiếp qua `resume.json`. Xem `docs/RELEASE.md`.
 - Số phiên bản/ghi chú phát hành: `docs/RELEASE.md`; đừng sửa tay `latest.json`.
