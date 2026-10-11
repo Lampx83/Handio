@@ -7,7 +7,7 @@ import { docxReplace } from "./docx-read";
 import { docxSuggest } from "./track";
 import { documentUnits } from "./locate";
 import { countsLine, isNotable, scanDocumentPii } from "./pii";
-import { createPptx, describePptx } from "./pptx";
+import { createPptx, describePptx, pptxImageRefs, PPTX_THEMES } from "./pptx";
 import { citeToken } from "./locate";
 import { extOf, fold, formatSections, isReadableDocument, readDocumentSections } from "./readdoc";
 import { createXlsx, describeXlsx, editXlsx, sheetRowCount, type SheetSpec } from "./xlsx";
@@ -308,8 +308,8 @@ export function officeTools(env: Env): Tool[] {
     },
     {
       name: "create_pptx", kind: "edit", readonly: false, pathArg: "path",
-      description: "Create a PowerPoint (.pptx) from Markdown. Slides are separated by a line containing only ---. Each slide: a '# Title' (or ##) line, then bullets (- item, nested by 2 spaces), paragraphs, tables or code. The first slide with '# Title' and a short subtitle paragraph becomes the cover. A paragraph starting 'Ghi chú:' becomes the presenter notes. A real chart: a fenced block ```chart cột (or ngang, đường, tròn, vành, vùng) with an optional 'title: ...' line and a Markdown table (first column = labels, other columns = numeric series, e.g. 7,5 or 1.200). Keep 3-6 short bullets per slide; split long content across slides.",
-      parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, footer: { type: "string" } }, required: ["path", "content"] },
+      description: "Create a PowerPoint (.pptx) from Markdown. Slides are separated by a line containing only ---. Each slide: a '# Title' (or ##) line, then bullets (- item, nested by 2 spaces), paragraphs, tables or code. The first slide with '# Title' and a short subtitle paragraph becomes the cover. A paragraph starting 'Ghi chú:' becomes the presenter notes. A real chart: a fenced block ```chart cột (or ngang, đường, tròn, vành, vùng) with an optional 'title: ...' line and a Markdown table (first column = labels, other columns = numeric series, e.g. 7,5 or 1.200). Keep 3-6 short bullets per slide; split long content across slides. LAYOUTS are chosen automatically from the content, so write it to fit: a title-only slide (or '## 1. Name' + one line) = section divider; the LAST slide with a short title (e.g. 'Cảm ơn') = closing; 2-4 bullets like '92%: sinh viên dùng…' or '**1.200** bài giảng' = big-number cards; 3-6 bullets like '**Hạ tầng**: mô tả…' or 'Hạ tầng: mô tả…' = numbered cards; an ORDERED list (1. 2. 3.) of 3-5 steps = process timeline; a single '> quote' (+ optional attribution line) = quote slide; bullets plus ONE chart, small table or image = two columns. An image: a line '![mô tả](hinh/anh.png)' with a png/jpg/gif file in the project folder. theme chooses the colors: xanh (default), ngoc, xanhla, cam, tim, do, den; pick one that fits the topic or the user's wish.",
+      parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, footer: { type: "string" }, theme: { type: "string", enum: Object.keys(PPTX_THEMES), description: "color theme (default xanh)" } }, required: ["path", "content"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
         return outlinePreview(ctx, a.path, describePptx(String(a.content ?? "")));
@@ -319,7 +319,17 @@ export function officeTools(env: Env): Tool[] {
         if (typeof a.content !== "string" || !a.content.trim()) throw new ToolError("Thiếu content (Markdown).");
         let r;
         try {
-          r = await createPptx({ content: a.content, footer: a.footer });
+          const images: Record<string, Uint8Array> = {};
+          for (const src of pptxImageRefs(a.content).slice(0, 20)) {
+            try {
+              const abs = await resolveSafe(ctx, src);
+              const st = await ctx.env.stat(abs);
+              if (st?.isFile && st.size <= 8_000_000) images[src] = await ctx.env.readBytes(abs);
+            } catch {
+              /* ảnh thiếu: createPptx đặt khung chữ thay thế và cảnh báo */
+            }
+          }
+          r = await createPptx({ content: a.content, footer: a.footer, theme: typeof a.theme === "string" ? a.theme : undefined, images });
         } catch (e) {
           throw new ToolError((e as Error).message);
         }

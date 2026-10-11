@@ -5,6 +5,14 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **PowerPoint đẹp hơn, có bố cục thật**: bài trình chiếu do AI tạo không còn là chữ trên nền trắng. Có bìa đậm có hình trang trí, slide mở đầu phần có số lớn, thẻ số liệu lớn (“92%: …”), thẻ đánh số (“**Nhãn**: mô tả”), lộ trình các bước (danh sách đánh số), trích dẫn, biểu đồ cạnh gạch đầu dòng, bảng có sọc, slide kết thúc. Bố cục tự chọn theo nội dung, tiêu đề là tiêu đề thật của slide (hiện trong dàn ý và trình đọc màn hình).
+- **Chọn chủ đề màu cho bài trình chiếu**: xanh (mặc định), ngọc, xanh lá, cam, tím, đỏ, đen; chỉ cần nói “dùng tông cam”.
+- **Chèn ảnh có sẵn trong thư mục dự án** (png, jpg, gif) vào slide; ảnh thiếu thì giữ khung chữ và báo rõ.
+
+### Thay đổi
+- **Làm trang web/thiết kế đẹp hơn mặc định**: hướng dẫn của AI ở tab Design và Code nay có công thức thiết kế cụ thể (bảng màu, cỡ chữ, khoảng cách, thẻ có bóng, nút, hình minh hoạ bằng SVG, bố cục landing page đầy đủ) để kết quả đầu tiên đã trông chuyên nghiệp.
+
 ## [0.8.2] - 2026-10-11
 
 ### Thêm
