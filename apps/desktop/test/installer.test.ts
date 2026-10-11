@@ -85,5 +85,5 @@ describe("installer", () => {
     expect(fs.existsSync(installed + ".update-old")).toBe(false);
     expect(fs.existsSync(installed + ".update-new")).toBe(false);
     expect(execFileSync("hdiutil", ["info"]).toString()).not.toContain("DemoUpd");
-  });
+  }, 90_000); // hdiutil chậm khi máy đang bận (chạy cả bộ kiểm thử song song)
 });
