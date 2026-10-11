@@ -1,6 +1,6 @@
 {
   "name": "@neu/agent-env-node",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "type": "module",
   "private": true,
   "main": "src/index.ts",

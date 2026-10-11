@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.7.0] - 2026-10-11
+
 ### Thêm
 - **Chia sẻ cuộc trò chuyện bằng liên kết**: nút 🔗 trên thanh trên tạo một liên kết để đồng nghiệp, bạn học, giảng viên (đã đăng nhập NEU Agent) đọc lại cuộc trò chuyện; có xem trước, tự che khoá/mật khẩu/CCCD/số điện thoại/email/số tài khoản, và thu hồi bất cứ lúc nào. Các cuộc trò chuyện được chia sẻ cũng giúp nhóm phát triển hiểu người dùng gặp gì để cải thiện hệ thống (hộp chia sẻ nói rõ điều này). Quản trị viên xem ở trang *Chia sẻ* và tải JSONL (đã giả danh người chia sẻ) để phân tích. Nội dung tệp không được chia sẻ.
 
