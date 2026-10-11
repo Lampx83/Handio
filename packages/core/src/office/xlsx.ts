@@ -3,6 +3,9 @@ import { applyFormatOps, applyStructureOps, type XlsxOps } from "./xlsx-ops";
 import { brandName } from "../brand";
 import { loadZip } from "./docx-read";
 import { customFunctions } from "./formulas";
+import { colorHex } from "./colors";
+import { pickTheme } from "./pptx";
+import { extractCharts, injectCharts, planCharts, type ChartRequest, type UsedMap } from "./xlsx-charts";
 
 export type CellInput = string | number | boolean | null;
 
@@ -10,7 +13,7 @@ export interface SheetSpec {
   name: string;
   /** Mảng các hàng; chuỗi bắt đầu bằng "=" là công thức (tên hàm tiếng Anh, phân tách bằng dấu phẩy). */
   rows: CellInput[][];
-  /** Hàng đầu là tiêu đề (đậm, nền xanh nhạt). Mặc định true. */
+  /** Hàng đầu là tiêu đề (đậm, chữ trắng trên nền xanh đậm). Mặc định true. */
   header?: boolean;
   /** Độ rộng cột (ký tự); bỏ trống thì tự co theo nội dung. */
   widths?: number[];
@@ -63,7 +66,7 @@ async function formulaParser(): Promise<any> {
   return mod.default ?? mod;
 }
 const toBytes = (b: any): Uint8Array => (b instanceof Uint8Array ? new Uint8Array(b) : new Uint8Array(b as ArrayBuffer));
-const safeSheetName = (n: string, i: number): string => (String(n || "").replace(/[\\/?*[\]:]/g, " ").trim().slice(0, 31) || `Sheet${i + 1}`);
+const safeSheetName = (n: string, i: number): string => (String(n || "").replace(/[\\/?*[\]:]/g, " ").replace(/^'+|'+$/g, "").trim().slice(0, 31) || `Sheet${i + 1}`);
 
 type Grid = Map<string, unknown[][]>;
 
@@ -171,49 +174,277 @@ function addConditional(ws: any, specs: ConditionalSpec[] | undefined): void {
   }
 }
 
-/** Kẻ viền, tô đậm hàng tiêu đề, định dạng số, độ rộng cột, cố định hàng đầu, lọc, tô màu điều kiện. */
-function styleSheet(ws: any, spec: Pick<SheetSpec, "widths" | "freeze_header" | "autofilter" | "number_formats" | "conditional">, rows: CellInput[][], cols: number, header: boolean): void {
-  const border = { top: { style: "thin", color: { argb: "FFBFBFBF" } }, bottom: { style: "thin", color: { argb: "FFBFBFBF" } }, left: { style: "thin", color: { argb: "FFBFBFBF" } }, right: { style: "thin", color: { argb: "FFBFBFBF" } } };
-  rows.forEach((line, r) => line.forEach((_v, c) => (ws.getCell(r + 1, c + 1).border = border)));
-  if (header) {
-    for (let c = 1; c <= cols; c++) {
-      const cell = ws.getCell(1, c);
-      cell.font = { bold: true };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD9E2F3" } };
-      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+// ---------------------------------------------------------------- giao diện (bảng màu, định dạng)
+
+export interface XlsxLook {
+  /** Nền hàng tiêu đề, đường viền hàng Tổng. */
+  main: string;
+  /** Màu nhấn: chuỗi số liệu đầu của biểu đồ, màu thẻ sheet. */
+  accent: string;
+  /** Nền hàng so le. */
+  band: string;
+  /** Nền hàng Tổng. */
+  total: string;
+  /** Đường kẻ ngang. */
+  line: string;
+  /** Bảng màu biểu đồ. */
+  palette: string[];
+}
+
+const LOOKS: Record<string, [string, string]> = {
+  xanh: ["1F4E79", "2F5597"],
+  ngoc: ["0B5F59", "0F766E"],
+  xanhla: ["1E5E21", "2F7D32"],
+  cam: ["9A3412", "D9480F"],
+  tim: ["3F2589", "5B34B8"],
+  do: ["8E1B12", "B42318"],
+  den: ["1F2937", "4B5563"],
+};
+const CHART_BASE = ["2F5597", "ED7D31", "70AD47", "5B9BD5", "BF9000", "7030A0", "C00000", "A5A5A5"];
+
+/** Trộn màu hex với trắng (amt 0..1: càng lớn càng nhạt). */
+function mixWhite(hex: string, amt: number): string {
+  const ch = [0, 2, 4].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16);
+    return Math.round(c + (255 - c) * amt).toString(16).padStart(2, "0");
+  });
+  return ch.join("").toUpperCase();
+}
+
+/** Bảng màu cho sổ Excel: `theme` (xanh mặc định, ngoc, xanhla, cam, tim, do, den) hoặc `accent` (màu hex/tên màu). */
+export function xlsxLook(theme?: string, accent?: string): { look: XlsxLook; note?: string } {
+  const picked = pickTheme(theme);
+  let [main, acc] = LOOKS[picked.key] ?? LOOKS.xanh;
+  let note: string | undefined;
+  if (theme && !picked.known) note = `Chủ đề “${theme}” không có; đã dùng “xanh”. Chủ đề có sẵn: ${Object.keys(LOOKS).join(", ")}.`;
+  if (accent) {
+    const hex = colorHex(accent);
+    if (hex) {
+      main = hex;
+      acc = hex;
+    } else note = `Màu “${accent}” không hiểu được; đã dùng chủ đề mặc định.`;
+  }
+  return { look: { main, accent: acc, band: mixWhite(acc, 0.94), total: mixWhite(acc, 0.82), line: "D9D9D9", palette: [acc, ...CHART_BASE.filter((c) => c !== acc)] }, note };
+}
+
+const PCT_TEXT = /^\s*(-?\d+(?:[.,]\d+)?)\s*%\s*$/;
+
+/** Cột toàn chuỗi dạng "85%" / "12,5%" → số thật (0.85) kèm định dạng phần trăm; các cột khác giữ nguyên. */
+function normalizePercent(rows: CellInput[][], header: boolean): { rows: CellInput[][]; pct: Map<number, string> } {
+  const pct = new Map<number, string>();
+  const cols = Math.max(0, ...rows.map((r) => r.length));
+  let out = rows;
+  for (let c = 0; c < cols; c++) {
+    let n = 0;
+    let ok = true;
+    let whole = true;
+    for (let r = header ? 1 : 0; r < rows.length && ok; r++) {
+      const v = rows[r][c];
+      if (v === null || v === undefined || v === "") continue;
+      const m = typeof v === "string" ? PCT_TEXT.exec(v) : null;
+      if (!m) ok = false;
+      else {
+        n++;
+        if (!Number.isInteger(+m[1].replace(",", "."))) whole = false;
+      }
     }
+    if (!ok || !n) continue;
+    if (out === rows) out = rows.map((r) => r.slice());
+    for (let r = header ? 1 : 0; r < out.length; r++) {
+      const v = out[r][c];
+      const m = typeof v === "string" ? PCT_TEXT.exec(v) : null;
+      if (m) out[r][c] = Math.round(+m[1].replace(",", ".") * 1e8) / 1e10;
+    }
+    pct.set(c + 1, whole ? "0%" : "0.0%");
   }
-  for (const [letter, fmt] of Object.entries(spec.number_formats ?? {})) {
-    const c = colIndex(letter);
-    if (c) for (let r = header ? 2 : 1; r <= rows.length; r++) ws.getCell(r, c).numFmt = fmt;
+  return { rows: out, pct };
+}
+
+const TOTAL_LABEL = /^(tổng|tong|total|cộng|cong|grand total|sum|trung bình|trung binh|average|tb)\b/i;
+const COLUMN_SUM = /^=\s*(?:SUM|SUBTOTAL|AVERAGE)\(\s*(?:\d+\s*,\s*)?\$?([A-Za-z]{1,3})\$?(\d+)\s*:\s*\$?([A-Za-z]{1,3})\$?(\d+)\s*\)/i;
+
+/** Hàng "Tổng" ở cuối bảng (1 = hàng đầu); 0 nếu không có. Nhận ra nhãn "Tổng"/"Total"… hoặc công thức SUM theo cột. */
+function detectTotal(rows: CellInput[][], header: boolean): number {
+  const n = rows.length;
+  if (n < (header ? 3 : 2)) return 0;
+  const last = rows[n - 1] ?? [];
+  const nonEmpty = last.filter((v) => v !== null && v !== undefined && v !== "");
+  if (!nonEmpty.length) return 0;
+  const first = nonEmpty[0];
+  if (typeof first === "string" && !first.startsWith("=") && first.trim().length <= 25 && TOTAL_LABEL.test(first.trim()) && nonEmpty.length > 1) return n;
+  const labelCell = last[0];
+  const labelOk = labelCell === null || labelCell === undefined || labelCell === "" || (typeof labelCell === "string" && !labelCell.startsWith("="));
+  if (labelOk && last.some((v) => {
+    const m = typeof v === "string" ? COLUMN_SUM.exec(v) : null;
+    return !!m && m[1].toUpperCase() === m[3].toUpperCase() && +m[2] !== +m[4];
+  })) return n;
+  return 0;
+}
+
+const ID_HEADER = /^(stt|tt|mã|ma\b|id\b|mssv|msv|năm|nam\b|year|sđt|sdt|điện thoại|dien thoai|phone|cccd|cmnd|số hiệu|so hieu|khóa|khoá|khoa\b|lớp|lop\b)/i;
+const RATIO_HEADER = /tỷ lệ|tỉ lệ|tỷ trọng|tỉ trọng|phần trăm|percent|ratio|\brate\b/i;
+const decimalsOf = (fmt: string | undefined): number => (fmt && /\.(0+)/.exec(fmt)?.[1].length) || 0;
+
+/** Chiều rộng (ký tự) của giá trị khi hiển thị. */
+function shownLen(v: unknown, fmt: string | undefined): number {
+  if (v instanceof Date) return 10;
+  if (typeof v === "number") {
+    if (fmt?.includes("%")) return String((Math.abs(v) * 100).toFixed(decimalsOf(fmt))).length + 2;
+    const dec = fmt ? decimalsOf(fmt) : Math.min(6, (String(v).split(".")[1] ?? "").length);
+    const int = String(Math.floor(Math.abs(v))).length;
+    return int + (fmt?.includes(",") ? Math.floor((int - 1) / 3) : 0) + (dec ? dec + 1 : 0) + (v < 0 ? 1 : 0);
   }
+  return Math.max(0, ...String(v ?? "").split("\n").map((s) => [...s].length));
+}
+
+/** Định dạng đẹp mặc định: tiêu đề đậm nền xanh, hàng so le, kẻ ngang mảnh, hàng Tổng, định dạng số/ngày/%, độ rộng, đóng băng, lọc, in ngang. */
+function styleSheet(ws: any, spec: Pick<SheetSpec, "widths" | "freeze_header" | "autofilter" | "number_formats" | "conditional">, rows: CellInput[][], cols: number, header: boolean, look: XlsxLook, pct: Map<number, string> = new Map()): void {
+  const n = rows.length;
+  if (!n) return;
+  const argb = (hex: string) => ({ argb: "FF" + hex });
+  const val = (r: number, c: number): unknown => plain(ws.getCell(r, c).value);
+  const rowEmpty: boolean[] = [];
+  let tables = 0;
+  let prevEmpty = true;
+  for (let r = 1; r <= n; r++) {
+    let empty = true;
+    for (let c = 1; c <= cols && empty; c++) if (val(r, c) !== "") empty = false;
+    rowEmpty[r] = empty;
+    if (!empty && prevEmpty) tables++;
+    prevEmpty = empty;
+  }
+  const total = detectTotal(rows, header);
+  const firstData = header ? 2 : 1;
+  const lastData = total ? total - 1 : n;
+  const userFmt = spec.number_formats ?? {};
+
+  // loại và định dạng từng cột
+  const kind: ("number" | "date" | "text")[] = [];
+  const fmts: (string | undefined)[] = [];
+  const center: boolean[] = [];
   for (let c = 1; c <= cols; c++) {
-    const w = spec.widths?.[c - 1];
-    const auto = Math.min(60, Math.max(8, ...rows.map((r) => (typeof r[c - 1] === "string" && !String(r[c - 1]).startsWith("=") ? [...String(r[c - 1])].length : 10)))) + 2;
-    ws.getColumn(c).width = w ?? auto;
+    const vals: unknown[] = [];
+    for (let r = firstData; r <= lastData; r++) {
+      const v = val(r, c);
+      if (v !== "") vals.push(v);
+    }
+    const k = vals.length && vals.every((v) => v instanceof Date) ? "date" : vals.length && vals.every((v) => typeof v === "number" && Number.isFinite(v)) ? "number" : "text";
+    kind[c] = k;
+    const head = header ? String(val(1, c)) : "";
+    let fmt: string | undefined;
+    if (k === "number") {
+      const nums = vals as number[];
+      if (pct.has(c)) fmt = pct.get(c);
+      else if (RATIO_HEADER.test(head) && !head.includes("%") && nums.every((v) => v >= 0 && v <= 1)) fmt = "0.0%";
+      else if (ID_HEADER.test(head.trim())) {
+        fmt = undefined;
+        center[c] = true;
+      } else if (nums.every((v) => Number.isInteger(v))) fmt = "#,##0";
+      else fmt = nums.every((v) => Math.abs(Math.round(v * 10) / 10 - v) < 1e-9) ? "#,##0.0" : "#,##0.00";
+    }
+    fmts[c] = fmt;
   }
-  if (spec.freeze_header !== false && header) ws.views = [{ state: "frozen", ySplit: 1 }];
-  if (spec.autofilter && rows.length > 1) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length, column: cols } };
+  const letters = Object.keys(userFmt).map((l) => colNumber(l));
+
+  // độ rộng cột
+  const widths: number[] = [];
+  const headerFits: boolean[] = [];
+  const filterDefault = header && lastData - firstData >= 1 && tables <= 1;
+  const filter = spec.autofilter ?? filterDefault;
+  for (let c = 1; c <= cols; c++) {
+    let w = 0;
+    for (let r = firstData; r <= n; r++) {
+      const v = val(r, c);
+      if (v !== "") w = Math.max(w, shownLen(v, userFmt[colName(c)] ?? fmts[c]));
+    }
+    const headLen = header ? Math.min(32, Math.ceil(shownLen(val(1, c), undefined) * 1.15) + (filter ? 2 : 0)) : 0;
+    const auto = Math.min(60, Math.max(10, w + 2, headLen + 2));
+    widths[c] = spec.widths?.[c - 1] ?? auto;
+    headerFits[c] = !header || shownLen(val(1, c), undefined) * 1.15 + 2 <= widths[c];
+    ws.getColumn(c).width = widths[c];
+  }
+
+  const hair = { style: "thin", color: argb(look.line) };
+  for (let r = 1; r <= n; r++) {
+    if (rowEmpty[r]) continue;
+    const isHead = header && r === 1;
+    const isTotal = r === total;
+    const band = !isHead && !isTotal && (r - firstData) % 2 === 1 && lastData - firstData >= 2;
+    let wrapped = false;
+    for (let c = 1; c <= cols; c++) {
+      const cell = ws.getCell(r, c);
+      if (isHead) {
+        cell.font = { name: "Calibri", size: 11, bold: true, color: argb("FFFFFF") };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: argb(look.main) };
+        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+        cell.border = { bottom: { style: "thin", color: argb(look.main) } };
+        continue;
+      }
+      const v = val(r, c);
+      const k = kind[c];
+      const horizontal = center[c] || k === "date" ? "center" : k === "number" ? "right" : "left";
+      const wrap = typeof v === "string" && [...v].length > widths[c];
+      const h = k === "text" && typeof v === "number" ? "right" : horizontal;
+      cell.alignment = { vertical: "middle", horizontal: h, wrapText: wrap, ...(h !== "center" ? { indent: 1 } : {}) };
+      if (wrap) wrapped = true;
+      if (typeof v === "number" && !cell.numFmt && fmts[c] && !letters.includes(c)) cell.numFmt = fmts[c];
+      if (isTotal) {
+        cell.font = { name: "Calibri", size: 11, bold: true };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: argb(look.total) };
+        cell.border = { top: { style: "medium", color: argb(look.main) }, bottom: { style: "thin", color: argb(look.main) } };
+      } else {
+        if (band) cell.fill = { type: "pattern", pattern: "solid", fgColor: argb(look.band) };
+        cell.border = { bottom: hair };
+      }
+    }
+    if (!isHead && !wrapped) ws.getRow(r).height = 20;
+  }
+  if (header && headerFits.slice(1).every(Boolean)) ws.getRow(1).height = 26;
+  for (const [letter, fmt] of Object.entries(userFmt)) {
+    const c = colNumber(letter);
+    if (c) for (let r = firstData; r <= n; r++) ws.getCell(r, c).numFmt = fmt;
+  }
+
+  const gridOff = tables <= 1;
+  const frozen = spec.freeze_header !== false && header;
+  ws.views = [frozen ? { state: "frozen", ySplit: 1, showGridLines: !gridOff } : { showGridLines: !gridOff }];
+  if (filter && n > 1) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: Math.max(2, lastData), column: cols } };
+  ws.pageSetup = { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, margins: { left: 0.5, right: 0.5, top: 0.6, bottom: 0.6, header: 0.3, footer: 0.3 }, ...(header ? { printTitlesRow: "1:1" } : {}) };
+  ws.headerFooter = { oddFooter: "&CTrang &P / &N" };
+  ws.properties.tabColor = argb(look.accent);
   addConditional(ws, spec.conditional);
 }
 
-export async function createXlsx(sheets: SheetSpec[]): Promise<{ bytes: Uint8Array; report: BuildReport; dims: string[] }> {
+export interface XlsxOptions {
+  /** Biểu đồ thật chèn vào sổ (xem ChartRequest). */
+  charts?: ChartRequest[];
+  /** Chủ đề màu: xanh (mặc định), ngoc, xanhla, cam, tim, do, den. */
+  theme?: string;
+  /** Màu nhấn tuỳ ý (hex hoặc tên màu), thay cho chủ đề. */
+  accent?: string;
+}
+
+export async function createXlsx(sheets: SheetSpec[], opts: XlsxOptions = {}): Promise<{ bytes: Uint8Array; report: BuildReport; dims: string[]; notes: string[] }> {
   if (!sheets.length) throw new Error("Cần ít nhất một sheet.");
   const ExcelJS = await excel();
   const wb = new ExcelJS.Workbook();
   wb.creator = brandName();
   wb.created = new Date();
+  const { look, note } = xlsxLook(opts.theme, opts.accent);
+  const notes: string[] = note ? [note] : [];
   const grid: Grid = new Map();
   const dims: string[] = [];
   const used = new Set<string>();
+  const usedSize: UsedMap = new Map();
+  const styling: (() => void)[] = [];
   sheets.forEach((spec, si) => {
     let name = safeSheetName(spec.name, si);
     while (used.has(name.toLowerCase())) name = (name.slice(0, 28) + "_" + (si + 1)).slice(0, 31);
     used.add(name.toLowerCase());
     const ws = wb.addWorksheet(name);
-    const rows = spec.rows ?? [];
+    const header = spec.header !== false && (spec.rows ?? []).length > 0;
+    const { rows, pct } = normalizePercent(spec.rows ?? [], header);
     const cols = Math.max(1, ...rows.map((r) => r.length));
-    const header = spec.header !== false && rows.length > 0;
     const g: unknown[][] = [];
     rows.forEach((line, r) => {
       const gl: unknown[] = [];
@@ -240,12 +471,17 @@ export async function createXlsx(sheets: SheetSpec[]): Promise<{ bytes: Uint8Arr
       g.push(gl);
     });
     grid.set(name, g);
-    styleSheet(ws, spec, rows, cols, header);
+    styling.push(() => styleSheet(ws, spec, rows, cols, header, look, pct));
+    usedSize.set(name, { rows: rows.length, cols });
     dims.push(`${name}: ${rows.length} hàng × ${cols} cột`);
   });
   const report = await recalc(wb, grid);
+  styling.forEach((f) => f());
+  const charts = planCharts(wb, opts.charts, usedSize, look.palette);
+  notes.push(...charts.lines);
   wb.calcProperties = { fullCalcOnLoad: true };
-  return { bytes: toBytes(await wb.xlsx.writeBuffer()), report, dims };
+  const bytes = toBytes(await wb.xlsx.writeBuffer());
+  return { bytes: await injectCharts(bytes, charts.inserts), report, dims, notes };
 }
 
 // ---------------------------------------------------------------- đọc
@@ -343,13 +579,40 @@ export interface XlsxEdit {
   add_sheet?: { name: string; rows: CellInput[][] } & Partial<Pick<SheetSpec, "header" | "widths" | "freeze_header" | "autofilter" | "number_formats" | "conditional">>;
   /** Thao tác cấu trúc/định dạng: xoá-chèn hàng/cột, đổi tên/xoá sheet, sắp xếp, định dạng… (xem xlsx-ops.ts). */
   ops?: XlsxOps;
+  /** Thêm biểu đồ thật (cột, ngang, đường, tròn, vành, vùng) từ vùng dữ liệu; biểu đồ có sẵn trong tệp được giữ lại. */
+  charts?: ChartRequest[];
+  /** Chủ đề màu / màu nhấn cho sheet mới và biểu đồ (như create_xlsx). */
+  theme?: string;
+  accent?: string;
 }
 
-export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes: Uint8Array; changed: string[]; report: BuildReport }> {
+/** Hàng mới nối vào cuối bảng: lấy kiểu của hàng dữ liệu trước đó (cách 2 hàng để giữ màu so le); bỏ qua nếu hàng trên là hàng Tổng hoặc tiêu đề. */
+function inheritRowStyle(ws: any, r: number, cols: number): void {
+  if (r < 3) return;
+  const isTotal = (row: number): boolean => {
+    let t = false;
+    ws.getRow(row).eachCell({ includeEmpty: false }, (cell: any) => {
+      if (cell.border?.top?.style === "medium" && cell.font?.bold) t = true;
+    });
+    return t;
+  };
+  if (isTotal(r - 1)) return;
+  const src = r - 2 >= 3 && !isTotal(r - 2) ? r - 2 : r - 1;
+  const from = ws.getRow(src);
+  for (let c = 1; c <= cols; c++) {
+    const st = from.getCell(c).style;
+    if (st && Object.keys(st).length) ws.getCell(r, c).style = JSON.parse(JSON.stringify(st));
+  }
+  if (from.height) ws.getRow(r).height = from.height;
+}
+
+export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes: Uint8Array; changed: string[]; report: BuildReport; notes: string[] }> {
   const ExcelJS = await excel();
   const wb = new ExcelJS.Workbook();
+  let kept: Awaited<ReturnType<typeof extractCharts>> = [];
   try {
     await loadZip(bytes);
+    kept = await extractCharts(bytes); // ExcelJS làm mất biểu đồ khi đọc-ghi: lấy ra để chèn lại
     await wb.xlsx.load(bytes);
   } catch (e) {
     if (/quá lớn/.test((e as Error).message)) throw e;
@@ -384,17 +647,22 @@ export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes:
     const ws = findSheet(e.sheet);
     let r = (ws.rowCount || 0) + 1;
     for (const line of e.append_rows) {
+      inheritRowStyle(ws, r, Math.max(line.length, ws.columnCount || 0));
       line.forEach((v, c) => apply(ws, r, c + 1, v));
       changed.push(`${ws.name}!A${r}:${colLetter(Math.max(1, line.length))}${r}`);
       r++;
     }
   }
+  const { look, note } = xlsxLook(e.theme, e.accent);
+  const notes: string[] = note ? [note] : [];
+  let styleNew: (() => void) | undefined;
   if (e.add_sheet) {
     const ws = wb.addWorksheet(safeSheetName(e.add_sheet.name, wb.worksheets.length));
-    e.add_sheet.rows.forEach((line, r) => line.forEach((v, c) => apply(ws, r + 1, c + 1, v)));
     const sp = e.add_sheet;
-    if (sp.header !== undefined || sp.widths || sp.number_formats || sp.conditional || sp.autofilter || sp.freeze_header !== undefined)
-      styleSheet(ws, sp, sp.rows, Math.max(1, ...sp.rows.map((r) => r.length)), sp.header !== false && sp.rows.length > 0);
+    const header = sp.header !== false && sp.rows.length > 0;
+    const { rows, pct } = normalizePercent(sp.rows, header);
+    rows.forEach((line, r) => line.forEach((v, c) => apply(ws, r + 1, c + 1, v)));
+    styleNew = () => styleSheet(ws, sp, rows, Math.max(1, ...rows.map((r) => r.length)), header, look, pct);
     changed.push(`(sheet mới) ${ws.name}`);
   }
   if (e.ops) changed.push(...applyFormatOps(wb, e.ops, e.sheet));
@@ -413,8 +681,14 @@ export async function editXlsx(bytes: Uint8Array, e: XlsxEdit): Promise<{ bytes:
     grid.set(ws.name, rows);
   }
   const report = await recalc(wb, grid);
+  styleNew?.();
+  const usedSize: UsedMap = new Map(wb.worksheets.map((w: any) => [w.name, { rows: w.rowCount || 0, cols: w.columnCount || 0 }] as const));
+  const charts = planCharts(wb, e.charts, usedSize, look.palette);
+  notes.push(...charts.lines);
   wb.calcProperties = { fullCalcOnLoad: true };
-  return { bytes: toBytes(await wb.xlsx.writeBuffer()), changed, report };
+  const names = new Set<string>(wb.worksheets.map((w: any) => w.name));
+  const out = await injectCharts(toBytes(await wb.xlsx.writeBuffer()), [...kept.filter((k) => names.has(k.sheet)), ...charts.inserts]);
+  return { bytes: out, changed, report, notes };
 }
 
 export function describeXlsx(sheets: SheetSpec[]): string {

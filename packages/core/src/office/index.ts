@@ -2,6 +2,8 @@ export * from "./mdblocks";
 export * from "./docx-write";
 export * from "./docx-read";
 export * from "./xlsx";
+export * from "./xlsx-charts";
+export * from "./chart-xml";
 export * from "./pptx";
 export * from "./pptx-edit";
 export * from "./docx-edit";
