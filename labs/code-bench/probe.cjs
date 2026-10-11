@@ -38,10 +38,13 @@ const CLICK = (sel) => `(() => {
   let el = null;
   if (s.selector) el = document.querySelector(s.selector);
   else {
-    const t = s.text.trim().toLowerCase();
-    const norm = (e) => (e.textContent || e.value || e.getAttribute("aria-label") || "").replace(/\\s+/g, " ").trim().toLowerCase();
-    const pool = [...document.querySelectorAll("button,a,[role=button],[role=tab],input[type=button],input[type=submit],label,summary,li,span,div")].filter(vis);
-    el = pool.find((e) => norm(e) === t) || pool.find((e) => norm(e).includes(t) && e.children.length <= 2);
+    const strip = (x) => (x || "").replace(/[\\p{Extended_Pictographic}\\uFE0F\\u200d]/gu, "").replace(/\\s+/g, " ").trim().toLowerCase();
+    const t = strip(s.text);
+    const labels = (e) => [e.textContent, e.value, e.getAttribute("aria-label"), e.getAttribute("title")].map(strip).filter(Boolean);
+    const inter = [...document.querySelectorAll("button,a,[role=button],[role=tab],[role=link],input[type=button],input[type=submit],summary,label")].filter(vis);
+    const generic = [...document.querySelectorAll("li,span,div,p,h1,h2,h3")].filter((e) => vis(e) && e.children.length <= 2);
+    el = inter.find((e) => labels(e).includes(t)) || inter.find((e) => labels(e).some((l) => l.includes(t))) ||
+         generic.find((e) => strip(e.textContent) === t) || generic.find((e) => strip(e.textContent).includes(t));
   }
   if (!el) return false;
   el.click();
@@ -80,6 +83,9 @@ app.whenReady().then(async () => {
         if (st.wait) await sleep(st.wait);
         else if (st.fill) rec.ok = !!(await wc.executeJavaScript(FILL(st.fill, st.value), true));
         else if (st.click) rec.ok = !!(await wc.executeJavaScript(CLICK(st.click), true));
+        else if (st.dump) {
+          rec.note = JSON.stringify(await wc.executeJavaScript(`(() => ({ path: location.pathname, buttons: [...document.querySelectorAll("button,a,[role=button],input")].filter((e) => e.getBoundingClientRect().width > 0).map((e) => (e.textContent || e.value || e.placeholder || e.getAttribute("aria-label") || e.tagName).trim().slice(0, 40)).slice(0, 25), text: document.body.innerText.replace(/\\s+/g, " ").slice(0, 500) }))()`, true));
+        }
         else if (st.eval) rec.ok = !!(await wc.executeJavaScript(`(async () => !!(${st.eval}))()`, true));
         if (!rec.ok && (st.fill || st.click)) rec.note = "không tìm thấy phần tử";
       } catch (e) {

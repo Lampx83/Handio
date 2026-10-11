@@ -127,3 +127,17 @@ describe("tự kiểm tra trang trước khi báo xong (tab Code, Desktop)", () 
     expect(seen).toHaveLength(0);
   });
 });
+
+describe("hết lượt tự sửa mà trang vẫn lỗi", () => {
+  it("báo THẲNG cho người dùng (cảnh báo), không để lời 'xong' của mô hình che mất", async () => {
+    const env = new MemoryEnv("/ws", {});
+    (env as { checkPage?: unknown }).checkPage = async () => base({ url: "file:///ws/index.html", errors: ["Uncaught ReferenceError: Grid is not defined"] });
+    const { c, events } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "index.html", content: "<script>new Grid()</script>" } }] },
+      { text: "Xong rồi" },
+    ], { profile: "code", env });
+    await c.send("làm trang");
+    const warns = events.filter((e) => e.type === "notice" && e.level === "warn") as { text: string }[];
+    expect(warns.some((w) => /vẫn còn lỗi sau 3 lần/.test(w.text) && /Grid is not defined/.test(w.text))).toBe(true);
+  });
+});

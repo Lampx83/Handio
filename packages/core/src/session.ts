@@ -840,6 +840,7 @@ export class Agent {
   private stopWhy = "";
   private nudges = 0;
   private pageChecks = 0;
+  private lastPageProblem = "";
 
   constructor(private s: Session, private def: AgentDef | null = null, private depth = 0) {}
 
@@ -915,7 +916,16 @@ export class Agent {
     const s = this.s;
     const L = s.turnLog;
     const tool = s.tools.get("check_page");
-    if (s.profile !== "code" || !tool || this.pageChecks >= 3 || !L.webEdit || L.pageOk > L.webEdit) return null;
+    if (s.profile !== "code" || !tool || !L.webEdit || L.pageOk > L.webEdit) return null;
+    if (this.pageChecks >= 3) {
+      // hết lượt tự sửa mà trang vẫn lỗi: cho kết thúc nhưng nói THẲNG với người dùng (không để lời "xong" của mô hình che mất)
+      if (this.lastPageProblem) {
+        const first = this.lastPageProblem.split("\n").find((l) => /^\s*1\.\s/.test(l))?.trim() ?? "";
+        s.emit({ type: "notice", level: "warn", text: `Trang web vẫn còn lỗi sau ${this.pageChecks} lần tự sửa${first ? ": " + first.slice(0, 200) : ""}. Hãy kiểm tra lại, hoặc nhắn agent làm tiếp.` });
+        this.lastPageProblem = "";
+      }
+      return null;
+    }
     const server = s.ctx.procs?.list().filter((p) => p.alive && p.url).pop();
     const url = server?.url ?? (L.htmlFile ? relPath(s.ctx, L.htmlFile) : "");
     if (!url) return null;
@@ -929,6 +939,7 @@ export class Agent {
       L.pageOk = ++L.seq;
       return null;
     }
+    this.lastPageProblem = text;
     return "[Hệ thống] Bạn chưa tự kiểm tra trang, nên hệ thống đã mở thử giúp và THẤY LỖI. Đừng báo xong khi trang còn lỗi.\n" + text;
   }
 
@@ -1069,6 +1080,7 @@ export class Agent {
     this.stopWhy = "";
     this.nudges = 0;
     this.pageChecks = 0;
+    this.lastPageProblem = "";
     this.repeats = 0;
     try {
       for (let step = 0; step < maxSteps; step++) {

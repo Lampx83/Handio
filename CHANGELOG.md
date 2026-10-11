@@ -9,6 +9,10 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Đổi tên dự án (nút ✎) hoạt động trên Desktop**: trước đây bấm không có gì xảy ra (Electron không hỗ trợ hộp nhập `prompt`). Nay hiện hộp "Đổi tên dự án".
 - **Tạo lại dự án trùng tên với dự án đã bỏ khỏi danh sách không còn thành "Bài 2 (2)"**: tên hiển thị là đúng tên bạn gõ (chỉ thêm "(2)" khi trùng với dự án đang có trong danh sách); thư mục cũ còn trống được dùng lại.
 
+### Thay đổi
+- **Chặn cài Chakra UI không ghi phiên bản** (tab Code): `npm install @chakra-ui/react` sẽ cài v3 có API khác hẳn v2 mà mô hình quen viết, dẫn tới hàng trăm bước loay hoay rồi trang hỏng. Agent phải chọn phiên bản có chủ ý (`@2`, hoặc `@3` kèm đọc tài liệu).
+- **Hết lượt tự sửa mà trang web vẫn lỗi thì báo thẳng cho bạn** (cảnh báo kèm lỗi đầu tiên), không để lời "xong" của agent che mất.
+
 ## [0.8.8] - 2026-10-11
 
 ### Sửa

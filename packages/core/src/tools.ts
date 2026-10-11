@@ -1,3 +1,4 @@
+import { installPitfall } from "./pitfalls";
 import { diffLines, type DiffLine } from "./diff";
 import type { DirEntry, Env } from "./env";
 import { matchGlob } from "./glob";
@@ -470,6 +471,8 @@ export function builtinTools(env: Env): Tool[] {
       summarize: (a) => (a.background ? "[nền] " : "") + short(a.command ?? "", 110),
       async run(ctx, a) {
         if (typeof a.command !== "string" || !a.command.trim()) throw new ToolError("Thiếu lệnh.", "bad_args");
+        const pitfall = installPitfall(a.command);
+        if (pitfall) throw new ToolError(pitfall, "bad_args");
         if (a.background) {
           if (!ctx.procs) throw new ToolError("Nơi chạy này không hỗ trợ chạy nền.", "unsupported");
           let info;
