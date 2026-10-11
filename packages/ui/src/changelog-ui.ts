@@ -48,6 +48,32 @@ export function changelogEntryEl(e: ChangelogView, current: string): HTMLElement
     ...e.sections.map((s) => h("div", { class: "cl-sec" }, h("div", { class: "cl-st" }, s.title), h("ul", {}, ...s.items.map((i) => h("li", {}, ...inlineSpans(i).map(spanEl)))))));
 }
 
+/** Bản Desktop đăng ký hàm kiểm tra cập nhật; hộp Nhật ký thay đổi hiện nút "Kiểm tra cập nhật" khi có. */
+let updateChecker: (() => Promise<string>) | null = null;
+export function setUpdateChecker(fn: (() => Promise<string>) | null | undefined): void {
+  updateChecker = fn ?? null;
+}
+
+/** Nút "Kiểm tra cập nhật" trong hộp: bấm để hỏi máy chủ, kết quả hiện ngay bên cạnh. */
+function updateRow(): HTMLElement | null {
+  const check = updateChecker;
+  if (!check) return null;
+  const out = h("span", { class: "muted", role: "status", "aria-live": "polite", style: { marginLeft: "10px" } });
+  const btn = h("button", { class: "btn sm", type: "button", title: "Hỏi máy chủ xem có bản mới không" }, "Kiểm tra cập nhật") as HTMLButtonElement;
+  btn.addEventListener("click", async () => {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    out.textContent = "Đang kiểm tra…";
+    try {
+      out.textContent = await check();
+    } catch {
+      out.textContent = "Không kiểm tra được lúc này.";
+    }
+    btn.disabled = false;
+  });
+  return h("div", { class: "cl-update", style: { margin: "6px 0 12px" } }, btn, out);
+}
+
 /** Hộp "Nhật ký thay đổi": mỗi phiên bản sửa gì, thêm gì (đọc từ CHANGELOG.md lúc dựng). */
 export function openChangelog(): void {
   const dlg = h("dialog", { class: "chlog" });
@@ -56,6 +82,7 @@ export function openChangelog(): void {
   dlg.append(
     h("div", { class: "dh" }, "Nhật ký thay đổi", h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")),
     h("div", { class: "cl-body" }, cur ? h("p", { class: "muted" }, "Bạn đang dùng phiên bản " + cur + ". Mỗi phiên bản sửa gì, thêm gì đều được ghi ở đây.") : null,
+      updateRow(),
       ...(list.length ? list.map((e) => changelogEntryEl(e, cur)) : [h("p", { class: "muted" }, "Chưa có nhật ký thay đổi trong bản này.")])));
   dlg.addEventListener("close", () => dlg.remove());
   document.body.append(dlg);

@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thay đổi
+- **Nút “Kiểm tra cập nhật” chuyển vào hộp Nhật ký thay đổi** (bấm “vX · Nhật ký thay đổi” ở thanh bên), bỏ nút riêng ở thanh bên cho gọn. Menu Tệp → Kiểm tra bản cập nhật… vẫn còn.
+
 ## [0.8.4] - 2026-10-11
 
 ### Thêm
