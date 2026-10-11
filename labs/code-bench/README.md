@@ -21,16 +21,18 @@ Cần một mô hình thật (API kiểu OpenAI) và `npm ci` ở gốc kho. Th�
 
 ```bash
 export HANDIO_BENCH_BASE_URL="https://ĐỊA-CHỈ-API/v1"   # bắt buộc, địa chỉ thật
-export HANDIO_BENCH_KEY="…"                    # nếu máy chủ cần key
+export HANDIO_BENCH_KEY="…"                    # nếu có khoá API
+# hoặc đăng nhập bằng tài khoản (tên + mật khẩu do quản trị cấp), giống Handio Desktop:
+export HANDIO_BENCH_USER="tên" HANDIO_BENCH_PASSWORD="mật-khẩu"
 export HANDIO_BENCH_MODEL="…"                  # mặc định qwen3.5-35b-a3b-int4
 export HANDIO_BENCH_KEY_HEADER="Authorization" # mặc định x-ollama-seckey
 
 node labs/code-bench/run.mjs                   # cả 10 bài (≈ 10–25 phút mỗi bài)
 node labs/code-bench/run.mjs --only 03,04      # vài bài
-node labs/code-bench/run.mjs --regrade labs/code-bench/out/<lần-chạy>   # chấm lại, không gọi mô hình
+node labs/code-bench/run.mjs --regrade <thư-mục-kết-quả>   # chấm lại, không gọi mô hình
 ```
 
-Mỗi bài chạy đúng như người dùng thật ở tab Code: chế độ Tự động, lệnh chạy trong sandbox (macOS), agent tự `npm install`. Kết quả nằm ở `labs/code-bench/out/<lần-chạy>/` (đã `.gitignore`):
+Mỗi bài chạy đúng như người dùng thật ở tab Code: chế độ Tự động, lệnh chạy trong sandbox (macOS), agent tự `npm install`. Kết quả nằm ở thư mục tạm `$TMPDIR/handio-code-bench/<lần-chạy>/` (in ra khi chạy; đổi bằng `--out <thư-mục>`). Để NGOÀI kho vì `npm install` của agent trong thư mục trống sẽ leo lên sửa `package.json` của kho:
 
 - `report.md`, `summary.json`: bảng đạt/không, kèm lỗi công cụ của agent ở bài hỏng;
 - `<bài>/app/`: ứng dụng agent làm ra (mở xem, chạy lại được);

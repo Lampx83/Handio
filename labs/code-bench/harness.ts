@@ -17,7 +17,7 @@ export interface AgentRun {
   trace: string[];
 }
 
-export async function runAgent(o: { dir: string; prompt: string; baseUrl: string; model: string; key?: string; keyHeader?: string; maxSteps?: number; timeoutMs: number }): Promise<AgentRun> {
+export async function runAgent(o: { dir: string; prompt: string; baseUrl: string; model: string; key?: string; keyHeader?: string; maxSteps?: number; timeoutMs: number; /** Đăng nhập tên + mật khẩu: tiêu đề Cookie (gửi tới đúng máy chủ mô hình) */ authHeaders?: (() => Promise<Record<string, string> | null>) | null }): Promise<AgentRun> {
   const env = new NodeEnv(o.dir, { allowExec: true, sandbox: process.platform === "darwin" ? { network: true } : false });
   let saved: Partial<Settings> = {
     baseUrl: o.baseUrl, model: o.model, key: o.key, mode: "auto", allowInsecureHttp: o.baseUrl.startsWith("http://"),
@@ -25,6 +25,7 @@ export async function runAgent(o: { dir: string; prompt: string; baseUrl: string
   };
   const c = await LocalController.create({
     env, profile: "code", realFs: true,
+    ...(o.authHeaders ? { authHeaders: o.authHeaders, authHosts: [new URL(o.baseUrl).host] } : {}),
     store: { load: async () => saved, save: async (s) => void (saved = s) },
     trust: { isTrusted: async () => true, setTrusted: async () => {} },
   });

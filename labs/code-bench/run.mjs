@@ -2,13 +2,14 @@
 // Bài thử 10 ứng dụng cho tab Code của Handio (xem README.md cùng thư mục).
 //   node labs/code-bench/run.mjs                 chạy cả 10 bài (cần mô hình thật, xem biến môi trường)
 //   node labs/code-bench/run.mjs --only 03,04    chỉ chạy bài có mã bắt đầu bằng 03 hoặc 04
-//   node labs/code-bench/run.mjs --regrade out/<lần-chạy>   chấm lại các thư mục đã có (không gọi mô hình)
+//   node labs/code-bench/run.mjs --regrade <thư-mục-kết-quả>   chấm lại các thư mục đã có (không gọi mô hình)
 //   node labs/code-bench/run.mjs --list          in đề bài để dán tay vào Handio
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import net from "node:net";
 import path from "node:path";
+import os from "node:os";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -28,7 +29,8 @@ if (args.includes("--list")) {
 
 const regrade = opt("--regrade", "");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-const outDir = path.resolve(regrade || path.join(here, "out", stamp));
+// Mặc định ở thư mục tạm, NGOÀI kho: `npm install` của agent trong thư mục trống sẽ leo lên tìm package.json gần nhất (sẽ sửa nhầm package.json của kho nếu để trong kho).
+const outDir = path.resolve(regrade || opt("--out", path.join(os.tmpdir(), "handio-code-bench", stamp)));
 fs.mkdirSync(outDir, { recursive: true });
 const timeoutMs = Number(opt("--timeout-min", "25")) * 60_000;
 
@@ -126,6 +128,7 @@ async function grade(task, appDir) {
           const miss = c.paths.filter((f) => !fs.existsSync(path.join(appDir, f)));
           add(`có ${c.paths.join(", ")}`, !miss.length, miss.join(", "));
         } else if (c.kind === "cmd") {
+          if (/^npm\b/.test(c.run) && !fs.existsSync(path.join(appDir, "package.json"))) { add(c.label || c.run, false, "không có package.json trong thư mục dự án"); continue; }
           const r = await sh(c.run, appDir);
           add(c.label || c.run, r.code === 0, r.code === 0 ? "" : r.out.split("\n").filter(Boolean).slice(-6).join(" ⏎ ").slice(0, 500));
         } else if (c.kind === "page") {
@@ -160,6 +163,7 @@ async function grade(task, appDir) {
 }
 
 let runAgent = null;
+let cookie = "", cookieAt = 0, authHeaders = null;
 if (!regrade) {
   const baseUrl = process.env.HANDIO_BENCH_BASE_URL;
   if (!baseUrl) {
@@ -173,8 +177,25 @@ if (!regrade) {
     console.error(`HANDIO_BENCH_BASE_URL không hợp lệ: "${baseUrl}"\nĐặt địa chỉ THẬT của API (dạng https://máy-chủ/…/v1), không dùng dấu … làm ví dụ.`);
     process.exit(2);
   }
+  if (process.env.HANDIO_BENCH_USER) {
+    // như Handio Desktop: gửi form tên + mật khẩu một lần, giữ cookie phiên (mật khẩu chỉ nằm trong biến môi trường của bạn)
+    const signIn = baseUrl.replace(/\/vllm\/v1\/?$/, "/oauth2/sign_in");
+    const login = async () => {
+      const r = await fetch(signIn, { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", accept: "text/html" }, body: new URLSearchParams({ username: process.env.HANDIO_BENCH_USER, password: process.env.HANDIO_BENCH_PASSWORD || "", rd: "/" }).toString() });
+      const jar = (r.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).filter((c) => c.startsWith("_neuagent_sso") && c.split("=")[1]);
+      if (r.status === 429) throw new Error("đăng nhập thử quá nhiều lần, đợi một phút");
+      if (![302, 303].includes(r.status) || !jar.length) throw new Error("tên hoặc mật khẩu không đúng");
+      return jar.join("; ");
+    };
+    try { cookie = await login(); cookieAt = Date.now(); } catch (e) { console.error(`Đăng nhập thất bại (${new URL(signIn).host}): ${e.message}`); process.exit(2); }
+    authHeaders = async () => {
+      if (Date.now() - cookieAt > 20 * 60_000) { cookie = await login(); cookieAt = Date.now(); } // phiên làm mới định kỳ cho bài chạy lâu
+      return { Cookie: cookie };
+    };
+    console.log(`Đã đăng nhập bằng tài khoản ${process.env.HANDIO_BENCH_USER}`);
+  }
   {
-    const h = {};
+    const h = cookie ? { Cookie: cookie } : {};
     if (process.env.HANDIO_BENCH_KEY) h[process.env.HANDIO_BENCH_KEY_HEADER || "x-ollama-seckey"] = process.env.HANDIO_BENCH_KEY;
     const r = await fetch(baseUrl.replace(/\/+$/, "") + "/models", { headers: h, signal: AbortSignal.timeout(20_000) }).catch((e) => ({ err: e }));
     if (r.err) { console.error(`Không kết nối được ${u.host}: ${r.err.cause?.code || r.err.message}`); process.exit(2); }
@@ -199,7 +220,7 @@ for (const task of tasks) {
       fs.mkdirSync(path.dirname(path.join(appDir, f)), { recursive: true });
       fs.writeFileSync(path.join(appDir, f), text);
     }
-    agent = await runAgent({ dir: appDir, prompt: task.prompt, baseUrl: process.env.HANDIO_BENCH_BASE_URL, model: process.env.HANDIO_BENCH_MODEL || "qwen3.5-35b-a3b-int4", key: process.env.HANDIO_BENCH_KEY, keyHeader: process.env.HANDIO_BENCH_KEY_HEADER, timeoutMs });
+    agent = await runAgent({ dir: appDir, prompt: task.prompt, baseUrl: process.env.HANDIO_BENCH_BASE_URL, model: process.env.HANDIO_BENCH_MODEL || "qwen3.5-35b-a3b-int4", key: process.env.HANDIO_BENCH_KEY, keyHeader: process.env.HANDIO_BENCH_KEY_HEADER, authHeaders, timeoutMs });
     fs.writeFileSync(path.join(tdir, "agent.json"), JSON.stringify(agent, null, 2));
     fs.writeFileSync(path.join(tdir, "agent.log"), [`# ${task.id} · ${agent.endedBy} · ${agent.seconds}s · ${agent.steps} bước · ${agent.toolErrors} lỗi công cụ`, "", ...agent.trace, "", "## Lời cuối", agent.final, "", "## Thông báo", ...agent.notices].join("\n"));
     console.log(`  agent: ${agent.endedBy}, ${agent.seconds}s, ${agent.steps} bước, ${agent.toolErrors} lỗi công cụ, ${agent.calls} lượt gọi mô hình`);
