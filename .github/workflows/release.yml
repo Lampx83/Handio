@@ -14,6 +14,11 @@ on:
   push:
     tags: ["v*"]
   workflow_call:
+    inputs:
+      tested:
+        description: "CI đã xanh trong cùng lần chạy (deploy.yml): bỏ qua việc chạy lại typecheck + vitest"
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       require_signed:
@@ -36,6 +41,7 @@ env:
 
 jobs:
   test:
+    if: ${{ inputs.tested != true }}     # gọi từ deploy.yml thì CI đã chạy đúng mã này rồi (tag/chạy tay vẫn kiểm thử)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,12 +57,21 @@ jobs:
 
   mac:
     needs: test
+    if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - name: Đệm tệp tải của Electron/electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
       - name: Dựng (ký + notarize nếu có chứng chỉ), kiểm tra
         working-directory: apps/desktop
         env:
@@ -78,12 +93,21 @@ jobs:
 
   win:
     needs: test
+    if: ${{ !cancelled() && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - name: Đệm tệp tải của Electron/electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
       - name: Dựng (ký nếu có chứng chỉ), kiểm tra
         working-directory: apps/desktop
         shell: bash
@@ -94,7 +118,7 @@ jobs:
           if [ -n "$WIN_CSC_LINK_S" ]; then export WIN_CSC_LINK="$WIN_CSC_LINK_S" WIN_CSC_KEY_PASSWORD="$WIN_CSC_KEY_PASSWORD_S"; fi
           node scripts/release.mjs --win
       - uses: actions/upload-artifact@v4
-        with: { name: win, path: "apps/desktop/release/*.exe\napps/desktop/release/*.zip\napps/desktop/release/signing.json" }
+        with: { name: win, path: "apps/desktop/release/*.exe\napps/desktop/release/signing.json" }
 
   publish:
     name: Gom, phát hành lên máy chủ và GitHub
@@ -117,7 +141,7 @@ jobs:
           VER=$(node -p "require('./package.json').version")
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           mkdir -p apps/desktop/release out pub
-          cp dist/mac/*.dmg dist/mac/*.zip dist/win/*.exe dist/win/*.zip apps/desktop/release/
+          cp dist/mac/*.dmg dist/mac/*.zip dist/win/*.exe apps/desktop/release/
           # signing.json của hai máy dựng gộp thành một (trang tải dựa vào đây để nói đúng: đã ký hay chưa)
           node -e 'const fs=require("fs");const m={};for(const f of ["dist/mac/signing.json","dist/win/signing.json"]){try{Object.assign(m,JSON.parse(fs.readFileSync(f,"utf8")))}catch{}}fs.writeFileSync("apps/desktop/release/signing.json",JSON.stringify(m,null,2))'
           (cd apps/desktop && node scripts/release-info.mjs)

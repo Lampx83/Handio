@@ -62,9 +62,10 @@ win:
   icon: build/icon.png
   # Bản không ký (scripts/release.mjs thêm signAndEditExecutable=false): đóng gói được từ macOS, .exe hiện "Nhà phát hành không xác định".
   # Bản ký số: dựng trên máy Windows/GitHub Actions (cần chứng chỉ code-signing), xem docs/RELEASE-SIGNING.md.
+  # KHÔNG thêm target zip: ở compression=maximum nó mất ~16 phút trên máy Windows của Actions (cả bản dựng còn ~5 phút),
+  # mà trình cập nhật chỉ dùng .exe (updater.ts chọn .exe trước .zip) và không tài liệu nào nhắc tới zip Windows.
   target:
     - { target: nsis, arch: [x64] }
-    - { target: zip, arch: [x64] }
   artifactName: "NEU-Agent-${version}-win-${arch}.${ext}"
 nsis:
   oneClick: false

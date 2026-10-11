@@ -147,4 +147,5 @@ jobs:
       id-token: write
       attestations: write
     uses: ./.github/workflows/release.yml
+    with: { tested: true }        # CI ở trên đã chạy đúng commit này: không chạy lại typecheck + vitest
     secrets: inherit

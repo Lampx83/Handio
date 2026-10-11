@@ -1,10 +1,9 @@
-# CI: chạy MỌI bộ kiểm thử cho mọi pull request và mọi lần vào main. Không dùng bí mật nào (an toàn với PR từ nhánh/fork).
-# Cũng được deploy.yml gọi lại (workflow_call) để chỉ triển khai khi CI xanh.
+# CI: chạy MỌI bộ kiểm thử cho mọi pull request. Không dùng bí mật nào (an toàn với PR từ nhánh/fork).
+# Mỗi lần vào main do deploy.yml gọi lại (workflow_call) rồi chỉ triển khai khi CI xanh — KHÔNG có trigger `push` ở đây,
+# nếu không mỗi lần vào main chạy CI hai lần (một lần ở đây, một lần trong Deploy).
 name: CI
 on:
   pull_request:
-  push:
-    branches: [main]
   workflow_call:
 permissions:
   contents: read
@@ -76,9 +75,16 @@ jobs:
           find deploy -type f \( -name '*.sh' -o -name 'neu-agent-deploy' \) -print0 | xargs -0 shellcheck --severity=error --shell=bash
 
   e2e:
-    name: Thử nginx + SSO + cài đặt + triển khai (Docker)
+    name: "Thử nginx + SSO + cài đặt + triển khai (Docker): ${{ matrix.name }}"
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false            # ba bài độc lập, chạy song song: thời gian = bài chậm nhất thay vì cộng dồn
+      matrix:
+        include:
+          - { name: "đăng nhập SSO (nginx thật + oauth2-proxy thật + máy chủ OIDC giả)", script: e2e-sso.mjs }
+          - { name: "script cài đặt 220/222 (nginx thật, có kiểm tra tự khôi phục)", script: e2e-install.mjs }
+          - { name: "máy chủ nhận bản triển khai (khoá SSH hạn chế, gói xấu, rollback)", script: e2e-deploy.mjs }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -89,9 +95,5 @@ jobs:
           docker pull nginx:1.24
           docker pull quay.io/oauth2-proxy/oauth2-proxy:v7.15.5
           docker pull ubuntu:24.04
-      - name: Đăng nhập SSO (nginx thật + oauth2-proxy thật + máy chủ OIDC giả)
-        run: node deploy/test/e2e-sso.mjs
-      - name: Script cài đặt 220/222 (nginx thật, có kiểm tra tự khôi phục)
-        run: node deploy/test/e2e-install.mjs
-      - name: Máy chủ nhận bản triển khai (khoá SSH hạn chế, gói xấu, rollback)
-        run: node deploy/test/e2e-deploy.mjs
+      - name: Chạy bài thử
+        run: node deploy/test/${{ matrix.script }}
