@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.0] - 2026-10-11
+
 ### Thêm
 - **Đổi tên thành Hando** (đọc *han-đô*, “bàn tay làm việc giúp bạn”; khẩu hiệu *Giúp bạn một tay*) kèm bộ nhận diện mới: biểu tượng **bàn tay** vector 2D/3D có chuyển động (vẫy tay, đưa tay giúp, gõ phím, đếm ngón, cầm chuột, xong việc), màu xanh Hando và cam “do”, wordmark riêng. Hiện ở thanh trên (vẫy tay khi rê chuột), màn hình chào, trang đăng nhập, trang giới thiệu, biểu tượng ứng dụng và biểu tượng web. Hướng dẫn thương hiệu ở `docs/brand/BRAND.md`.
 
