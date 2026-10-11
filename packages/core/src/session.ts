@@ -1,4 +1,5 @@
 import { TOOL_GROUPS, groupOfTool, groupsFor, matchGroups } from "./tool-groups";
+import { pageTools } from "./page-check";
 import { brandText } from "./brand";
 import type { Env } from "./env";
 import { LlmClient, LlmError, type ChatMessage, type ChatResult, type ToolSchema } from "./llm";
@@ -28,6 +29,8 @@ import type { AskQuestion, PermissionRequest, PermissionResponse, RewindPoint, S
 /** Công cụ Office có cấu trúc: kết quả đã liệt kê nội dung vừa ghi nên cổng "đọc lại" không cần thêm một lần đọc. */
 const SELF_REPORTING = new Set(["create_docx", "create_xlsx", "create_pptx", "create_pdf", "docx_edit", "xlsx_edit", "pptx_edit", "docx_replace", "xlsx_pivot"]);
 const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
+/** Công cụ ghi tệp mà đối số mang cả nội dung lớn. */
+const BULKY_ARGS = new Set(["write_file", "edit_file", "create_docx", "create_xlsx", "create_pptx", "create_pdf", "docx_edit", "xlsx_edit", "pptx_edit"]);
 const MAX_TOOL_CHARS = 12000;
 /** Hạn chờ người dùng trả lời một câu hỏi của `ask_user` (không ai trả lời thì agent tự quyết, không treo phiên). */
 const QUESTION_TIMEOUT_MS = 15 * 60_000;
@@ -151,7 +154,7 @@ export class Session {
     const base = builtinTools(o.env).filter((t) => (def.id === "code" || !["bash", "run_javascript"].includes(t.name)) && !(o.policy?.disableBash && t.name === "bash"));
     const vision = visionTool(o.env, () => this.o.llm);
     const httpTools = o.httpTools ? buildHttpTools(pp.httpTools, o.httpTools) : [];
-    for (const t of [...base, vision, ...httpTools, ...(def.id === "work" || def.id === "design" ? officeTools(o.env) : []), ...(def.id === "work" ? workTools(o.env) : []), ...this.metaTools()]) this.tools.set(t.name, t);
+    for (const t of [...base, vision, ...httpTools, ...(def.id === "work" || def.id === "design" ? officeTools(o.env) : []), ...(def.id === "work" ? workTools(o.env) : []), ...(def.id === "code" ? pageTools(o.env) : []), ...this.metaTools()]) this.tools.set(t.name, t);
     this.main = new Agent(this);
   }
 
@@ -855,6 +858,31 @@ export class Agent {
       if (c.length > 300 && !c.endsWith(PRUNE_MARK)) {
         this.messages[i].content = c.slice(0, 200) + " … " + PRUNE_MARK;
         n++;
+      }
+    }
+    // Nội dung tệp vừa ghi nằm trong ĐỐI SỐ của lời gọi (không phải kết quả): một tệp CSS 14k ký tự ≈ 5k token cứ ở lại mãi trong lịch sử dù
+    // đã nằm trên đĩa (đã gặp: phiên làm ứng dụng đồng hồ phải tóm tắt ngữ cảnh 3 lần). Thay các chuỗi lớn của lời gọi cũ bằng dấu vết ngắn.
+    const asst = this.messages.map((m, i) => (m.role === "assistant" && m.tool_calls?.length ? i : -1)).filter((i) => i >= 0);
+    for (const i of keepLast ? asst.slice(0, -keepLast) : asst) {
+      for (const tc of this.messages[i].tool_calls ?? []) {
+        if (!BULKY_ARGS.has(tc.function.name) || tc.function.arguments.length < 800) continue;
+        try {
+          const o = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+          let changed = false;
+          for (const k of Object.keys(o)) {
+            const v = o[k];
+            if (typeof v === "string" && v.length > 400) {
+              o[k] = `[${v.length} ký tự đã ghi vào tệp; lược bớt khỏi lịch sử để tiết kiệm ngữ cảnh, đọc lại bằng read_file nếu cần]`;
+              changed = true;
+            }
+          }
+          if (changed) {
+            tc.function.arguments = JSON.stringify(o);
+            n++;
+          }
+        } catch {
+          /* đối số không phải JSON (bị cắt): để nguyên */
+        }
       }
     }
     return n;

@@ -26,6 +26,7 @@ export const DIAG_TOOLS: string[] = [
   "convert_to_pdf", "pptx_edit", "docx_edit", "ask_user",
   "copy_file", "move_file", "delete_file", "make_dir", "zip_files", "unzip_file", "file_info",
   "pdf_info", "pdf_text", "pdf_split", "pdf_merge", "pdf_rotate", "images_to_pdf", "create_pdf",
+  "check_page", "use_tools",
   "vn_number_words", "date_calc", "lunar_convert", "vn_text", "calc", "create_eml", "create_ics", "csv_convert", "text_diff", "doc_stats",
   "skill", "task", "exit_plan_mode", "mcp", "other",
 ];

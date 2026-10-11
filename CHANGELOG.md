@@ -9,6 +9,14 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Dán ảnh (Ctrl+V) ở tab Code agent đọc được ngay**: trước đây agent ghép nhầm đường dẫn `dan/…` vào thư mục dự án nên báo "Không có tệp ảnh" rồi nhờ bạn tải ảnh lên. Nay `@dan/<tên>` luôn trỏ đúng ảnh vừa dán; thông báo cho biết ảnh được lưu tạm ở đâu (ngoài dự án, giữ 30 ảnh gần nhất). Bản web không có thư mục tạm thì lưu vào `.neuagent/pasted/` của dự án.
 - **Chế độ mặc định là "Tự động"** cho cả người đã dùng bản cũ: trước đây cài đặt cũ trên máy lưu sẵn "Hỏi trước" và đè lên mặc định nên ứng dụng cứ mở ở chế độ Hỏi trước. Từ nay chế độ chọn ở thanh dưới ô nhập chỉ áp dụng cho phiên đang mở; mở lại ứng dụng là "Tự động".
 
+### Thêm
+- **Tab Code tự thấy lỗi của trang web đang làm** (công cụ `check_page`, bản Desktop): sau khi chạy máy chủ dev hoặc ghi tệp HTML, agent mở thử trang trong một trình duyệt ẩn, cách ly (chỉ localhost và tệp trong dự án; chặn mọi yêu cầu ra ngoài) rồi đọc lỗi console, yêu cầu hỏng, màn hình trắng. Không còn cảnh bạn phải chép lỗi từ trình duyệt dán vào chat.
+
+### Thay đổi
+- **Agent thận trọng hơn với phiên bản thư viện** (tab Code): đọc phiên bản đã cài trước khi viết mã; nếu bản chính mới hơn API mình biết thì ghim bản quen thuộc hoặc đọc tài liệu trước (tránh tình trạng cài Chakra UI v3 nhưng viết mã v2). Khi bạn đổi hướng (HTML sang React…) agent dọn tệp bỏ dở, không để lại `.bak` hay bản ứng dụng song song.
+- **Một dự án chỉ một máy chủ dev chạy nền**: chạy lại lệnh cũ (hoặc máy chủ dev khác trong cùng thư mục) thì máy chủ cũ được dừng, không còn nhiều máy chủ chiếm các cổng 5173–5176 và trình duyệt mở nhầm bản cũ.
+- **Ngữ cảnh gọn hơn khi làm việc lâu**: nội dung tệp lớn vừa ghi không còn nằm mãi trong lịch sử (trước đây một tệp CSS dài chiếm ~5.000 token), nên ít phải tóm tắt ngữ cảnh giữa chừng.
+
 ## [0.8.6] - 2026-10-11
 
 ### Thay đổi

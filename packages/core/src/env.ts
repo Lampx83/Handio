@@ -57,6 +57,29 @@ export interface Env {
   convertToPdf?(input: string, output: string, opts: { timeoutMs: number; signal?: AbortSignal }): Promise<void>;
   /** In HTML thành PDF (Desktop: Chromium sẵn có trong Electron, không cần LibreOffice). Dùng cho create_pdf. */
   htmlToPdf?(html: string, opts: { footer?: string; landscape?: boolean }): Promise<Uint8Array>;
+  /**
+   * Mở một trang (máy chủ dev trên localhost hoặc tệp HTML trong dự án) trong trình duyệt ẩn, cách ly, và báo lại lỗi console, yêu cầu hỏng,
+   * trang trắng. Chỉ Desktop có (Chromium sẵn trong Electron). Dùng cho công cụ check_page của tab Code.
+   */
+  checkPage?(url: string, opts: { waitMs: number; signal?: AbortSignal }): Promise<PageReport>;
+}
+
+export interface PageReport {
+  url: string;
+  title: string;
+  /** Không tải được (máy chủ chưa chạy, cổng sai…): `error` có lý do. */
+  loaded: boolean;
+  error?: string;
+  /** Lỗi console + ngoại lệ chưa bắt (đã rút gọn, tối đa ~15). */
+  errors: string[];
+  /** Yêu cầu tài nguyên hỏng/bị chặn ("404 /src/x.js"). */
+  failedRequests: string[];
+  /** Chữ hiển thị trên trang (đầu trang), đã rút gọn. */
+  text: string;
+  /** Trang trắng: không có chữ và không có phần tử hiển thị nào đáng kể. */
+  blank: boolean;
+  /** Nội dung lớp phủ lỗi của Vite/webpack nếu có. */
+  overlay?: string;
 }
 
 export class EnvError extends Error {}

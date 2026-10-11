@@ -233,10 +233,26 @@ describe("tiến trình nền thật", () => {
     expect(pm.get(bad.id)!.info).toMatchObject({ alive: false, code: 3 });
     expect(pm.get(bad.id)!.log).toContain("loi-khoi-dong");
     const a = pm.start("sleep 30", tmp);
-    const b = pm.start("sleep 30", tmp);
-    expect(() => pm.start("sleep 30", tmp)).toThrow(/tiến trình nền/);
+    const b = pm.start("sleep 31", tmp);
+    expect(() => pm.start("sleep 32", tmp)).toThrow(/tiến trình nền/);
     pm.stopAll();
     expect([a, b].length).toBe(2);
+  }, 20000);
+
+  it("chạy lại đúng lệnh cũ (hoặc máy chủ dev khác trong cùng thư mục) thì dừng tiến trình cũ, không chiếm hai cổng", async () => {
+    const { ProcessManager } = await import("@neu/agent-core");
+    const pm = new ProcessManager(env, () => undefined, 5);
+    const a = pm.start("sleep 40", tmp);
+    const a2 = pm.start("sleep  40", tmp); // khác khoảng trắng vẫn là cùng lệnh
+    expect(a2.replaced).toBe(a.id);
+    expect(pm.get(a.id)!.info.alive).toBe(false);
+    const dev1 = pm.start("npm run dev", tmp);
+    const dev2 = pm.start("cd . && vite --port 5180", tmp); // máy chủ dev khác loại lệnh, cùng thư mục
+    expect(dev2.replaced).toBe(dev1.id);
+    const other = pm.start("sleep 41", tmp); // lệnh không phải máy chủ dev: giữ nguyên
+    expect(other.replaced).toBeUndefined();
+    expect(pm.list().filter((p) => p.alive).map((p) => p.id).sort()).toEqual([a2.id, dev2.id, other.id].sort());
+    pm.stopAll();
   }, 20000);
 });
 

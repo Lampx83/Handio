@@ -471,7 +471,7 @@ export function builtinTools(env: Env): Tool[] {
           }
           await ctx.procs.settle(info.id, 6000);
           const p = ctx.procs.get(info.id)!;
-          return `Đã chạy nền (id=${info.id}). ${p.info.alive ? "Đang chạy." : `Đã thoát với mã ${p.info.code}.`}${p.info.url ? ` Địa chỉ: ${p.info.url} (người dùng có thể bấm “Mở” để xem).` : ""}\n--- đầu ra ---\n${clip(p.log.trim() || "(chưa có đầu ra)")}`;
+          return `Đã chạy nền (id=${info.id}).${info.replaced ? ` Đã dừng ${info.replaced} (cùng loại) để không chiếm hai cổng.` : ""} ${p.info.alive ? "Đang chạy." : `Đã thoát với mã ${p.info.code}.`}${p.info.url ? ` Địa chỉ: ${p.info.url} (người dùng có thể bấm “Mở” để xem).` : ""}\n--- đầu ra ---\n${clip(p.log.trim() || "(chưa có đầu ra)")}`;
         }
         const timeout = Math.max(1, Math.min(Math.floor(Number(a.timeout) || 60), 300));
         const r = await ctx.env.exec!(a.command, { cwd: ctx.root, timeoutMs: timeout * 1000, signal: ctx.signal });

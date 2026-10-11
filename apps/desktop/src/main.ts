@@ -9,6 +9,7 @@ import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, readPackDirs
 import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
 import { canInstallHere, launchInstaller } from "./installer";
+import { checkPage } from "./page-check";
 import { Updater, UPDATE_METHODS } from "./updater";
 import { APP_ORIGIN, AUTH_METHODS, authArgsOk, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
 
@@ -184,6 +185,8 @@ const makeEnv = (profile: Profile, dir: string) => {
   const env = new NodeEnv(dir, { allowExec: profile === "code", sandbox: process.platform === "darwin" ? { network: policy.bashNetwork !== false } : false });
   env.shrinkImage = shrinkImage;
   if (profile === "work") env.htmlToPdf = (html, o) => renderDesign(html, { format: "pdf", width: 794, footer: o.footer ?? "" });
+  // tab Code: agent tự thấy lỗi console/trang trắng của ứng dụng web đang làm (trình duyệt ẩn, cách ly, chỉ localhost/tệp dự án)
+  if (profile === "code") env.checkPage = (url, o) => checkPage(url, { waitMs: o.waitMs, root: dir, signal: o.signal });
   return env;
 };
 

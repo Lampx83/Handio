@@ -3,7 +3,9 @@ import type { BrowserWindow } from "electron";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createServer } from "node:http";
 import { office, type LocalController, type Profile } from "@neu/agent-core";
+import { checkPage } from "./page-check";
 
 interface Ctx {
   win: BrowserWindow;
@@ -246,6 +248,34 @@ export async function runSmoke(c: Ctx): Promise<number> {
       r.afterNav = location.href;
       return r;
     })()`);
+    // ---------------- check_page: trình duyệt ẩn, cách ly, báo lỗi console / trang trắng / yêu cầu hỏng
+    {
+      const pages: Record<string, [string, string]> = {
+        "/": ["text/html", `<!doctype html><title>Ổn</title><div id=root><h1>Xin chào đồng hồ</h1></div><script>console.log("bình thường")</script>`],
+        "/loi": ["text/html", `<!doctype html><title>Lỗi</title><div id=root></div><script>function App(){ return Grid; } App();</script>`],
+        "/ngoai": ["text/html", `<!doctype html><title>Ngoài</title><h1>Có chữ</h1><script>fetch("https://example.com/x").catch(()=>{}); new Image().src="http://203.0.113.9/p.png";</script>`],
+      };
+      const srv = createServer((req, res) => {
+        const hit = pages[(req.url ?? "/").split("?")[0]];
+        if (!hit) return void res.writeHead(404).end("x");
+        res.writeHead(200, { "content-type": hit[0] + "; charset=utf-8" }).end(hit[1]);
+      });
+      await new Promise<void>((r) => srv.listen(0, "127.0.0.1", () => r()));
+      const port = (srv.address() as { port: number }).port;
+      try {
+        const ok = await checkPage(`http://127.0.0.1:${port}/`, { waitMs: 300, root: c.codeDir });
+        const bad = await checkPage(`http://127.0.0.1:${port}/loi`, { waitMs: 300, root: c.codeDir });
+        const out = await checkPage(`http://127.0.0.1:${port}/ngoai`, { waitMs: 300, root: c.codeDir });
+        const none = await checkPage(`http://127.0.0.1:${port}/khong-co`, { waitMs: 100, root: c.codeDir });
+        const ext = await checkPage("https://example.com/", { waitMs: 100, root: c.codeDir });
+        check("check_page: trang ổn → có chữ, không lỗi, không trắng", ok.loaded && !ok.blank && ok.errors.length === 0 && /Xin chào/.test(ok.text), JSON.stringify({ t: ok.title, e: ok.errors }));
+        check("check_page: bắt đúng lỗi 'Grid is not defined' và báo TRANG TRẮNG", bad.loaded && bad.blank && bad.errors.some((e) => /Grid is not defined/.test(e)), JSON.stringify(bad.errors));
+        check("check_page: yêu cầu ra ngoài máy bị chặn và được ghi lại", out.loaded && out.failedRequests.some((f) => /chặn/.test(f)), JSON.stringify(out.failedRequests));
+        check("check_page: 404 được ghi nhận; địa chỉ ngoài máy bị từ chối ngay", none.failedRequests.some((f) => /^404 /.test(f)) && !ext.loaded && /localhost/.test(ext.error ?? ""), JSON.stringify([none.failedRequests, ext.error]));
+      } finally {
+        srv.close();
+      }
+    }
     check("tấn công: giao diện bị huỷ mọi yêu cầu mạng (fetch/XHR)", atk.fetch === "blocked" && atk.xhr === "blocked", JSON.stringify([atk.fetch, atk.xhr]));
     check("tấn công: lệnh IPC không có trong danh sách bị từ chối", atk.badMethod === "rejected" && atk.badArg === "rejected");
     check("tấn công: không đọc được /etc/passwd qua IPC", atk.read === "denied", atk.read);
