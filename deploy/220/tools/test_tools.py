@@ -155,7 +155,34 @@ class Search(unittest.TestCase):
         self.assertIn("1. Học phí NEU\n   https://fit.neu.edu.vn/hp\n   Mức thu & miễn giảm", out)
         self.assertNotIn("javascript:", out)
         self.assertLess(len(out.split("\n")[-3]), 400)
-        self.assertEqual(tools.format_results("zz", {"results": []}, 5).startswith("Không tìm thấy"), True)
+        empty = tools.format_results("zz", {"results": []}, 5)
+        self.assertTrue(empty.startswith("Chưa có kết quả"))
+        self.assertIn("KHÔNG kết luận", empty)  # rỗng có thể do máy tìm kiếm gián đoạn, đừng để mô hình tự kết luận
+
+    def test_search_retries_once_when_first_answer_is_empty(self):
+        calls = []
+
+        def get(url):
+            calls.append(url)
+            body = {"results": []} if len(calls) == 1 else {"results": [{"url": "https://example.org/a", "title": "A", "content": "x"}]}
+            return json.dumps(body).encode()
+
+        out = tools.search("nước dừa", 3, None, get=get, retry_wait=0)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("language=vi-VN", calls[0])
+        self.assertIn("language=auto", calls[1])  # lần thử lại bỏ ràng buộc ngôn ngữ
+        self.assertIn("https://example.org/a", out)
+
+    def test_search_gives_up_after_one_retry_with_honest_message(self):
+        calls = []
+
+        def get(url):
+            calls.append(url)
+            return json.dumps({"results": []}).encode()
+
+        out = tools.search("zz", 3, None, get=get, retry_wait=0)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("KHÔNG kết luận", out)
 
     def test_search_builds_query_and_handles_bad_json(self):
         got = []
@@ -193,7 +220,7 @@ class Server(unittest.TestCase):
         cls.fake = ThreadingHTTPServer(("127.0.0.1", 0), Fake)
         threading.Thread(target=cls.fake.serve_forever, daemon=True).start()
         tools.SEARX = f"http://127.0.0.1:{cls.fake.server_address[1]}"
-        tools.search.__defaults__ = (tools.SEARX, None)
+        tools.search.__defaults__ = (tools.SEARX, None) + tools.search.__defaults__[2:]  # giữ nguyên các tham số retry/language/retry_wait
         cls.srv = ThreadingHTTPServer(("127.0.0.1", 0), tools.Handler)
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
         cls.base = f"http://127.0.0.1:{cls.srv.server_address[1]}"
