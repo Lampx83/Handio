@@ -479,3 +479,12 @@ export async function readXlsxGrid(bytes: Uint8Array, opts: { sheet?: string; ma
   if (!out.length && want) throw new Error(`Không có sheet "${opts.sheet}". Các sheet: ${wb.worksheets.map((w: any) => w.name).join(", ")}`);
   return out;
 }
+
+/** Số hàng đang dùng của một sheet (mặc định sheet đầu): để công thức sinh tự động trỏ đúng hàng khi nối thêm. */
+export async function sheetRowCount(bytes: Uint8Array, sheet?: string): Promise<number> {
+  const ExcelJS = await excel();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(bytes);
+  const ws = sheet ? wb.worksheets.find((w: { name: string }) => w.name.toLowerCase() === sheet.toLowerCase()) : wb.worksheets[0];
+  return ws?.rowCount ?? 0;
+}

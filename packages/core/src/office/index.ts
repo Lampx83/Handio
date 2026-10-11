@@ -12,3 +12,4 @@ export * from "./pivot";
 export * from "./track";
 export * from "./chart";
 export * from "./work-tools";
+export * from "./gen";

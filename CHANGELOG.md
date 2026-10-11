@@ -5,6 +5,13 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+
+### Sửa
+- **Tạo dữ liệu mẫu hàng loạt không còn đẻ hàng loạt tệp và trả lời dài dòng**: tab Work nay sinh “200 bản ghi” ngay trong công cụ (chỉ cần mô tả các cột: số thứ tự, mã, tên người Việt, email, ngày, điểm, danh sách chọn, công thức…) thay vì bắt mô hình tự gõ từng ô; việc làm lại/mở rộng tệp do chính agent tạo thì ghi đè cùng một tệp (không tạo -v2, -moi, -final); giữa các bước agent chỉ nói một câu ngắn và không hỏi lại những điều tự quyết được.
+
+### Thay đổi
+- Excel: `create_xlsx` có tham số `generate` và `xlsx_edit` có `append_generate` để sinh hàng loạt dữ liệu mẫu tới 5.000 dòng trong một lời gọi ngắn.
+
 ## [0.7.0] - 2026-10-11
 
 ### Thêm

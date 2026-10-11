@@ -10,7 +10,8 @@ import { countsLine, isNotable, scanDocumentPii } from "./pii";
 import { createPptx, describePptx } from "./pptx";
 import { citeToken } from "./locate";
 import { extOf, fold, formatSections, isReadableDocument, readDocumentSections } from "./readdoc";
-import { createXlsx, describeXlsx, editXlsx, type SheetSpec } from "./xlsx";
+import { createXlsx, describeXlsx, editXlsx, sheetRowCount, type SheetSpec } from "./xlsx";
+import { genHeader, generateRows, validateGen, type GenSpec } from "./gen";
 
 const S = { type: "string" } as const;
 
@@ -66,6 +67,21 @@ export async function commit(ctx: ToolContext, abs: string, bytes: Uint8Array, e
   await ctx.env.writeBytes(abs, bytes);
   await remember(ctx, abs);
   pushUndo(ctx, abs, old);
+}
+
+/** Thay mỗi sheet có `generate` bằng các hàng đã sinh (hàng tiêu đề lấy từ tên cột, trừ khi người gọi tự đưa `rows` đầu tiên). */
+export function expandGenerated(sheets: SheetSpec[]): SheetSpec[] {
+  if (!Array.isArray(sheets)) return sheets;
+  return sheets.map((sh) => {
+    const gen = (sh as unknown as { generate?: GenSpec }).generate;
+    if (!gen) return sh;
+    const spec = validateGen(gen);
+    const given = Array.isArray(sh.rows) ? sh.rows : [];
+    const base = given.length ? given : [genHeader(spec)];
+    const { generate: _g, ...rest } = sh as unknown as Record<string, unknown>;
+    void _g;
+    return { ...(rest as unknown as SheetSpec), rows: [...base, ...generateRows(spec, base.length + 1)] };
+  });
 }
 
 export const kb = (n: number) => (n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`);
@@ -219,20 +235,25 @@ export function officeTools(env: Env): Tool[] {
     },
     {
       name: "create_xlsx", kind: "edit", readonly: false, pathArg: "path",
-      description: "Create an Excel workbook (.xlsx). sheets = [{name, rows: [[...], ...]}]; the first row is the header (bold, blue fill, frozen) unless header=false. Cells: numbers as real numbers (not '1.200.000' strings), text, or formulas as strings starting with '=' (English function names, comma separators, e.g. '=SUM(B2:B10)', '=IF(C2>=5,\"Đạt\",\"Không đạt\")'). ISO dates 'YYYY-MM-DD' become real dates shown dd/mm/yyyy. Formulas are calculated and returned so you can verify the numbers. number_formats e.g. {\"C\": \"#,##0\", \"D\": \"0.0%\"}. conditional colours cells: [{range: \"D2:D30\", rule: \"bars\" | \"scale\" | {op: \"lt\"|\"le\"|\"gt\"|\"ge\"|\"eq\"|\"ne\", value: 5, color: \"red\"|\"green\"|\"yellow\"}}]. Excel charts are not supported (use create_pptx for charts).",
-      parameters: { type: "object", properties: { path: S, sheets: { type: "array", items: { type: "object", properties: { name: S, rows: { type: "array", items: { type: "array", items: {} } }, header: { type: "boolean" }, widths: { type: "array", items: { type: "number" } }, freeze_header: { type: "boolean" }, autofilter: { type: "boolean" }, number_formats: { type: "object" }, conditional: { type: "array", items: { type: "object", properties: { range: S, rule: {} }, required: ["range", "rule"] } } }, required: ["name", "rows"] } } }, required: ["path", "sheets"] },
+      description: "Create an Excel workbook (.xlsx). sheets = [{name, rows: [[...], ...]}]; the first row is the header (bold, blue fill, frozen) unless header=false. Cells: numbers as real numbers (not '1.200.000' strings), text, or formulas as strings starting with '=' (English function names, comma separators, e.g. '=SUM(B2:B10)', '=IF(C2>=5,\"Đạt\",\"Không đạt\")'). ISO dates 'YYYY-MM-DD' become real dates shown dd/mm/yyyy. Formulas are calculated and returned so you can verify the numbers. number_formats e.g. {\"C\": \"#,##0\", \"D\": \"0.0%\"}. conditional colours cells: [{range: \"D2:D30\", rule: \"bars\" | \"scale\" | {op: \"lt\"|\"le\"|\"gt\"|\"ge\"|\"eq\"|\"ne\", value: 5, color: \"red\"|\"green\"|\"yellow\"}}]. Excel charts are not supported (use create_pptx for charts). BULK DATA: never type more than ~40 rows yourself (the call gets cut off). Instead give a sheet `generate` = {count, seed?, columns: [{name, type, ...}]} and the tool generates the rows: types seq {start,step,prefix,pad}, pick {values,weights?}, int {min,max}, float {min,max,decimals}, date {from,to} (ISO), name_vi {gender?: nam|nu}, email {from: column name, domain}, phone_vi, bool {true_label,false_label,p}, text {template}, formula {template}; in templates {seq} = 1..count, {row} = Excel row number, {col:Column name} = that column's value in the same row. The header row is built from the column names unless you give your own `rows` first.",
+      parameters: { type: "object", properties: { path: S, sheets: { type: "array", items: { type: "object", properties: { name: S, generate: { type: "object", description: "bulk generator {count, seed?, columns:[{name,type,...}]}: the tool generates the rows" }, rows: { type: "array", items: { type: "array", items: {} } }, header: { type: "boolean" }, widths: { type: "array", items: { type: "number" } }, freeze_header: { type: "boolean" }, autofilter: { type: "boolean" }, number_formats: { type: "object" }, conditional: { type: "array", items: { type: "object", properties: { range: S, rule: {} }, required: ["range", "rule"] } } }, required: ["name"] } } }, required: ["path", "sheets"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
         try {
-          return outlinePreview(ctx, a.path, describeXlsx(jsonArg<SheetSpec[]>(a.sheets, "sheets")));
+          return outlinePreview(ctx, a.path, describeXlsx(expandGenerated(jsonArg<SheetSpec[]>(a.sheets, "sheets"))));
         } catch {
           return null;
         }
       },
       async run(ctx, a) {
         const { abs, existed } = await prepareWrite(ctx, a.path, ".xlsx");
-        const sheets = jsonArg<SheetSpec[]>(a.sheets, "sheets");
-        if (!Array.isArray(sheets) || !sheets.length || sheets.some((s) => !s || !Array.isArray((s as any).rows))) throw new ToolError("sheets phải là danh sách {name, rows: [[...]]}.");
+        let sheets = jsonArg<SheetSpec[]>(a.sheets, "sheets");
+        try {
+          sheets = expandGenerated(sheets);
+        } catch (e) {
+          throw new ToolError((e as Error).message);
+        }
+        if (!Array.isArray(sheets) || !sheets.length || sheets.some((s) => !s || !Array.isArray((s as any).rows))) throw new ToolError("sheets phải là danh sách {name, rows: [[...]]} hoặc {name, generate: {count, columns}}.");
         for (const sh of sheets) sh.rows = sh.rows.map((r) => (Array.isArray(r) ? r : [r as never]));
         let built;
         try {
@@ -247,7 +268,7 @@ export function officeTools(env: Env): Tool[] {
     {
       name: "xlsx_edit", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || a.path,
       description: "Edit an existing Excel file: set cells, append rows, or add a sheet. Read the file first. All formulas are recalculated and checked. set = {\"B2\": 10, \"C2\": \"=B2*2\", \"Sheet2!D5\": \"Đạt\", \"E1\": null}. Use save_as to keep the original untouched (recommended). Note: charts, pivot tables and macros in the original may be lost.",
-      parameters: { type: "object", properties: { path: S, sheet: { type: "string", description: "default sheet for set/append_rows" }, set: { type: "object" }, append_rows: { type: "array", items: { type: "array", items: {} } }, add_sheet: { type: "object", properties: { name: S, rows: { type: "array", items: { type: "array", items: {} } } } }, save_as: { type: "string" } }, required: ["path"] },
+      parameters: { type: "object", properties: { path: S, sheet: { type: "string", description: "default sheet for set/append_rows" }, set: { type: "object" }, append_generate: { type: "object", description: "append BULK generated rows (same spec as create_xlsx generate: {count, seed?, columns}); use this instead of typing many rows" }, append_rows: { type: "array", items: { type: "array", items: {} } }, add_sheet: { type: "object", properties: { name: S, rows: { type: "array", items: { type: "array", items: {} } } } }, save_as: { type: "string" } }, required: ["path"] },
       summarize: (a) => `${a.path ?? ""}${a.save_as ? " → " + a.save_as : ""}`,
       async preview(ctx, a) {
         let n = 0;
@@ -262,7 +283,16 @@ export function officeTools(env: Env): Tool[] {
         await checkFresh(ctx, src, a.path);
         const { bytes } = await loadBinary(ctx, a.path, [".xlsx", ".xlsm"]);
         const edit = { sheet: a.sheet, set: jsonArg<Record<string, any>>(a.set, "set"), append_rows: jsonArg<any[][]>(a.append_rows, "append_rows"), add_sheet: jsonArg<any>(a.add_sheet, "add_sheet") };
-        if (!edit.set && !edit.append_rows && !edit.add_sheet) throw new ToolError("Cần ít nhất một trong set, append_rows, add_sheet.");
+        const gen = jsonArg<GenSpec>(a.append_generate, "append_generate");
+        if (gen) {
+          try {
+            const first = (await sheetRowCount(bytes, a.sheet)) + 1;
+            edit.append_rows = [...(edit.append_rows ?? []), ...generateRows(validateGen(gen), first)];
+          } catch (e) {
+            throw new ToolError((e as Error).message);
+          }
+        }
+        if (!edit.set && !edit.append_rows && !edit.add_sheet) throw new ToolError("Cần ít nhất một trong set, append_rows, append_generate, add_sheet.");
         let res;
         try {
           res = await editXlsx(bytes, edit);
