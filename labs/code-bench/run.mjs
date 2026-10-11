@@ -10,6 +10,7 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import os from "node:os";
+import readline from "node:readline";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
@@ -165,10 +166,34 @@ async function grade(task, appDir) {
 let runAgent = null;
 let cookie = "", cookieAt = 0, authHeaders = null;
 if (!regrade) {
-  const baseUrl = process.env.HANDIO_BENCH_BASE_URL;
-  if (!baseUrl) {
-    console.error("Thiếu HANDIO_BENCH_BASE_URL (địa chỉ API tương thích OpenAI, vd https://…/v1). Xem labs/code-bench/README.md.\nChỉ muốn xem đề: node labs/code-bench/run.mjs --list");
-    process.exit(2);
+  // mặc định là máy chủ của Handio; chỉ cần đặt biến khi dùng máy chủ khác
+  const baseUrl = process.env.HANDIO_BENCH_BASE_URL || "https://ai.neu.edu.vn/agent/vllm/v1";
+  process.env.HANDIO_BENCH_BASE_URL = baseUrl;
+  const ask = (q, hidden) =>
+    new Promise((res) => {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+      if (hidden) rl._writeToOutput = (t) => { if (t.includes(q)) process.stdout.write(t); }; // không hiện ký tự gõ
+      rl.question(q, (a) => { rl.close(); if (hidden) process.stdout.write("\n"); res(a.trim()); });
+    });
+  if (!process.env.HANDIO_BENCH_KEY && !process.env.HANDIO_BENCH_USER) {
+    if (!process.stdin.isTTY) {
+      console.error("Chưa có thông tin đăng nhập: đặt HANDIO_BENCH_USER + HANDIO_BENCH_PASSWORD hoặc HANDIO_BENCH_KEY (hoặc chạy trong terminal để được hỏi).");
+      process.exit(2);
+    }
+    console.log(`Máy chủ mô hình: ${baseUrl}\nĐăng nhập bằng: [1] tài khoản (tên + mật khẩu)   [2] khoá API`);
+    const how = await ask("Chọn 1 hoặc 2: ");
+    if (how === "2") process.env.HANDIO_BENCH_KEY = await ask("Khoá API (gõ không hiện): ", true);
+    else {
+      process.env.HANDIO_BENCH_USER = await ask("Tên tài khoản: ");
+      process.env.HANDIO_BENCH_PASSWORD = await ask("Mật khẩu (gõ không hiện): ", true);
+    }
+  }
+  // chữ mẫu trong hướng dẫn (ĐỊA-CHỈ…, …, KHOÁ-THẬT) mà chưa thay bằng giá trị thật → báo rõ, không để lỗi khó hiểu
+  for (const [name, v] of [["HANDIO_BENCH_BASE_URL", baseUrl], ["HANDIO_BENCH_KEY", process.env.HANDIO_BENCH_KEY], ["HANDIO_BENCH_USER", process.env.HANDIO_BENCH_USER], ["HANDIO_BENCH_PASSWORD", process.env.HANDIO_BENCH_PASSWORD]]) {
+    if (v && /[^\x20-\x7e]/.test(v)) {
+      console.error(`${name} có ký tự không hợp lệ (có vẻ vẫn là chữ mẫu trong hướng dẫn, chưa thay bằng giá trị thật).\nChạy lại và để chương trình tự hỏi: node labs/code-bench/run.mjs --only 03,04`);
+      process.exit(2);
+    }
   }
   // kiểm tra cấu hình TRƯỚC khi tốn thời gian: địa chỉ hợp lệ, máy chủ trả lời, khoá được nhận
   let u;

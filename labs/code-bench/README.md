@@ -17,6 +17,8 @@
 
 ## Chạy tự động
 
+Cách dễ nhất: `node labs/code-bench/run.mjs --only 03,04` rồi trả lời các câu hỏi (máy chủ mặc định là của Handio; chọn đăng nhập bằng tài khoản hoặc khoá API, gõ mật khẩu không hiện). Cách thủ công bằng biến môi trường:
+
 Cần một mô hình thật (API kiểu OpenAI) và `npm ci` ở gốc kho. Thông tin kết nối đặt qua biến môi trường, **không** ghi vào kho:
 
 ```bash
