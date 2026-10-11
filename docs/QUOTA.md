@@ -53,6 +53,7 @@ Mặc định cổng **không ghi nội dung** nào. Quản trị có thể bậ
 
 ```bash
 sudo ~/neu-agent-220/quota/quota.sh capture add test01        # bật (khởi động lại cổng; áp dụng từ yêu cầu kế tiếp)
+sudo ~/neu-agent-220/quota/quota.sh capture add 'test0*'       # theo tiền tố: mọi tài khoản TÊN bắt đầu bằng test0 (tối thiểu 3 ký tự; không bao giờ khớp email)
 sudo ~/neu-agent-220/quota/quota.sh capture list              # ai đang được ghi + số dòng
 sudo ~/neu-agent-220/quota/quota.sh capture export test01 7 > test01.jsonl   # xuất 7 ngày gần nhất (JSON Lines)
 sudo ~/neu-agent-220/quota/quota.sh capture remove test01     # tắt (dữ liệu cũ vẫn còn)
@@ -61,6 +62,7 @@ sudo ~/neu-agent-220/quota/quota.sh capture purge test01      # xoá hết nội
 
 - **Chỗ lưu:** `/var/lib/neu-agent/quota/captures.db` (SQLite, quyền 600, chỉ root/dịch vụ đọc), bảng `captures`; tự xoá dòng cũ hơn `capture.keep_days` (mặc định 90 ngày).
 - **Mỗi dòng** = một lần gọi mô hình: tên tài khoản, nhóm cuộc trò chuyện (`conv`), phần **mới** của yêu cầu (các tin sau lần trả lời trước của trợ lý), **lời trả lời** (chữ và lệnh công cụ), lý do kết thúc, số token, thời gian, mã trạng thái. Không ghi IP, không ghi key.
+- **Lấy dữ liệu:** dùng `capture export` (JSON Lines, chọn được `test0*`). Nếu chép thẳng `captures.db` phải chép kèm `captures.db-wal` (SQLite chế độ WAL), nếu không tệp trông như rỗng.
 - **Phạm vi:** chỉ đúng các tài khoản trong `capture.users` (cấu hình `quota.json`); người khác không bao giờ bị ghi. Lỗi ghi không làm hỏng yêu cầu của người dùng.
 - **Riêng tư:** đây là ngoại lệ có chủ đích so với nguyên tắc “không lưu nội dung” (số liệu chẩn đoán vẫn không chứa nội dung). Chỉ dùng cho tài khoản thử nghiệm của nhóm phát triển; **người dùng thật phải được thông báo trước**. Không đưa tệp xuất lên kho mã.
 - Cần cập nhật cổng: `sudo ./quota/install-quota.sh` (không ghi đè `quota.json`).

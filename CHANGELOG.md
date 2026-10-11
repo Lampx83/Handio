@@ -6,8 +6,11 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
-- **Quản trị: ghi nội dung hội thoại của tài khoản chỉ định** (mặc định tắt) vào CSDL riêng trên máy chủ để nghiên cứu, kèm lệnh bật/tắt/xuất/xoá (`quota.sh capture …`, xem docs/QUOTA.md). Chỉ ghi đúng các tài khoản được liệt kê; người khác không bị ảnh hưởng.
+- **Quản trị: ghi nội dung hội thoại của tài khoản chỉ định** (mặc định tắt) vào CSDL riêng trên máy chủ để nghiên cứu, kèm lệnh bật/tắt/xuất/xoá (`quota.sh capture …`, xem docs/QUOTA.md). Chỉ ghi đúng các tài khoản được liệt kê (hoặc theo tiền tố như `test0*` cho tài khoản tên; không áp cho email); người khác không bị ảnh hưởng.
 - **Cấp quyền quản trị cho tài khoản tên + mật khẩu**: ghi đúng tên đăng nhập (ví dụ `test01`) vào danh sách quản trị trên máy chủ là tài khoản đó vào được `/agent/admin/`. Mặc định không tài khoản mật khẩu nào là quản trị viên.
+
+### Sửa
+- **Bản Desktop trên Windows không đọc/sửa được tệp nào trong thư mục dự án** (báo “nằm ngoài thư mục dự án” dù tệp nằm ngay đó, nhất là khi thư mục ở ổ đĩa như `E:\…`). Đường dẫn Windows nay được hiểu đúng.
 
 ### Thay đổi
 - **Trang chủ `/agent/` là trang giới thiệu khi chưa đăng nhập**: có nút “Đăng nhập”; đăng nhập xong vào thẳng trang làm việc. Chuột trong hình hero vẽ lại bằng vector (nút giữa thỉnh thoảng sáng), ảnh demo chụp lại ở độ phân giải cao (2560 × 1600, định dạng WebP) nên không còn mờ.

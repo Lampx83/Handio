@@ -7,7 +7,7 @@
 #   sudo ./quota.sh unset <email|tên-đăng-nhập>                bỏ đặt riêng
 #   sudo ./quota.sh usage <email|tên-đăng-nhập>                mức đã dùng hôm nay của một người
 #   sudo ./quota.sh uid <email|tên-đăng-nhập>                  mã giả danh (8 ký tự đầu) để đối chiếu trang quản trị
-#   sudo ./quota.sh capture add <tên-đăng-nhập|email>          BẬT ghi nội dung hội thoại (yêu cầu + câu trả lời) của đúng tài khoản đó vào CSDL
+#   sudo ./quota.sh capture add <tên-đăng-nhập|email|tiền-tố*> BẬT ghi nội dung hội thoại (yêu cầu + câu trả lời) vào CSDL; 'test0*' = mọi tài khoản tên bắt đầu bằng test0 (không áp cho email)
 #   sudo ./quota.sh capture remove <tên-đăng-nhập|email>       tắt ghi cho tài khoản đó (dữ liệu đã ghi vẫn còn)
 #   sudo ./quota.sh capture list                               tài khoản đang được ghi + số dòng đã ghi
 #   sudo ./quota.sh capture export [tài-khoản] [ngày]          xuất JSON Lines ra màn hình (> tep.jsonl); ngày = số ngày gần nhất
@@ -40,7 +40,7 @@ elif op == "unset":
     cfg.setdefault("overrides", {}).pop(ident(a[0]), None)
 elif op in ("capture_add", "capture_remove"):
     i = ident(a[0])
-    if not re.fullmatch(r"[a-z0-9._%+'-]{1,64}@[a-z0-9.-]{1,190}|[a-z0-9][a-z0-9._-]{2,31}", i): sys.exit("Email/tên đăng nhập không hợp lệ")
+    if not re.fullmatch(r"[a-z0-9._%+'-]{1,64}@[a-z0-9.-]{1,190}|[a-z0-9][a-z0-9._-]{2,31}|[a-z0-9][a-z0-9._-]{2,30}\*", i): sys.exit("Email/tên đăng nhập không hợp lệ (mẫu tiền tố: test0* — tối thiểu 3 ký tự trước dấu *)")
     cap = cfg.setdefault("capture", {"users": [], "keep_days": 90}); cap.setdefault("keep_days", 90)
     users = [u for u in cap.get("users", []) if u != i]
     if op == "capture_add": users.append(i)
@@ -104,7 +104,8 @@ except sqlite3.Error:
     sys.exit("Chưa có dữ liệu: CSDL chỉ được tạo khi tài khoản đang được ghi gửi yêu cầu đầu tiên (sau lệnh capture add).")
 q, args = "select * from captures", []
 w = []
-if sys.argv[2]: w.append("user=?"); args.append(sys.argv[2].strip().lower())
+if sys.argv[2].endswith("*"): w.append("user like ? escape '\\'"); args.append(sys.argv[2].strip().lower()[:-1].replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%")   # tiền tố: test0*
+elif sys.argv[2]: w.append("user=?"); args.append(sys.argv[2].strip().lower())
 if sys.argv[3].isdigit(): w.append("ts>=?"); args.append(int(time.time()) - int(sys.argv[3]) * 86400)
 if w: q += " where " + " and ".join(w)
 for r in db.execute(q + " order by ts, id", args):

@@ -30,6 +30,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 TZ = datetime.timezone(datetime.timedelta(hours=7))
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+'-]{1,64}@[A-Za-z0-9.-]{1,190}$")
 USER_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,31}$")  # tài khoản tên + mật khẩu (không có email)
+PREFIX_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,30}\*$")  # "test0*": mọi tài khoản tên (không email) bắt đầu bằng "test0"; tối thiểu 3 ký tự trước dấu *
+
+
+def capture_wanted(users, ident):
+    """Tài khoản có nằm trong danh sách ghi nội dung không. Mẫu tiền tố chỉ áp cho tài khoản tên (không có "@"):
+    sinh viên có email dạng test0123@st.neu.edu.vn không bao giờ bị khớp nhầm."""
+    if ident in users:
+        return True
+    return "@" not in ident and any(u.endswith("*") and ident.startswith(u[:-1]) for u in users)
 CHAT_PATH = "/vllm/v1/chat/completions"
 MAX_BODY = 4 * 1024 * 1024
 MAX_NONSTREAM = 16 * 1024 * 1024
@@ -91,7 +100,7 @@ def load_config(path):
             cap = raw.get("capture")
             if isinstance(cap, dict):
                 users = [str(u).strip().lower() for u in (cap.get("users") or []) if isinstance(u, str)]
-                cfg["capture"]["users"] = [u for u in users if EMAIL_RE.match(u) or USER_RE.match(u)][:50]
+                cfg["capture"]["users"] = [u for u in users if EMAIL_RE.match(u) or USER_RE.match(u) or PREFIX_RE.match(u)][:50]
                 kd = cap.get("keep_days")
                 if isinstance(kd, (int, float)) and not isinstance(kd, bool) and 1 <= kd <= 365:
                     cfg["capture"]["keep_days"] = int(kd)
@@ -602,7 +611,7 @@ def _capture(self, c, req, status, sniff, t_start):
         return
     cap = c.cfg()["capture"]
     ident = self._ident()
-    if not ident or ident not in cap["users"]:
+    if not ident or not capture_wanted(cap["users"], ident):
         return
     try:
         rec = capture_record(req, status, "".join(sniff.text), [sniff.calls[k] for k in sorted(sniff.calls)], sniff.finish, sniff.usage, int((time.time() - t_start) * 1000))

@@ -173,6 +173,15 @@ class CaptureTests(GatewayCase):
         self.assertEqual((r[0]["prompt_tokens"], r[0]["completion_tokens"]), (10, 5))
         self.assertEqual(len(r[0]["conv"]), 12)
 
+    def test_prefix_pattern_captures_named_accounts_but_never_emails(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "capture": {"users": ["test0*", "ab*", "*", "x*", "tes*t"]}})
+        self.assertEqual(Q.load_config(self.cfg_path)["capture"]["users"], ["test0*"])   # mẫu quá ngắn / có * giữa bị bỏ
+        for who in ("test02", "test09"):
+            self.post(ident=who, body=self.BODY)
+        self.post(ident="test0123@st.neu.edu.vn", body=self.BODY)   # email sinh viên giống tiền tố: không ghi
+        self.post(ident="khach01", body=self.BODY)
+        self.assertEqual([r["user"] for r in self.rows()], ["test02", "test09"])
+
     def test_tool_calls_and_nonstream_reply_are_captured(self):
         self.write_cfg({"tiers": {"student": 1_000_000}, "capture": {"users": ["test01"]}})
         ev = [{"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"name": "read_file", "arguments": "{\"path\""}}]}}]},

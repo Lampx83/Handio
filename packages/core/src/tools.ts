@@ -98,9 +98,10 @@ export async function resolveSafe(ctx: ToolContext, p: unknown): Promise<string>
       real = join(await ctx.env.realpath(cur), ...rest.reverse());
       break;
     } catch {
-      if (cur === "/" || cur === ".") break;
+      const up = dirname(cur);
+      if (up === cur || cur === ".") break; // gốc ("/" hoặc "E:/")
       rest.push(basename(cur));
-      cur = dirname(cur);
+      cur = up;
     }
   }
   if ([ctx.root, ...ctx.extraDirs].some((b) => isInside(b, real))) return real;

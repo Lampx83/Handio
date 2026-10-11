@@ -1,6 +1,6 @@
 import type { Env } from "./env";
 import { globToRegExp } from "./glob";
-import { basename, dirname, join, normalize } from "./path";
+import { basename, dirname, isInside, join, normalize } from "./path";
 import { isSensitivePath } from "./sensitive";
 
 export const MEMORY_FILES = ["AGENTS.md", "CLAUDE.md", "NEUAGENT.md", ".neuagent/NEUAGENT.md", "NEUAGENT.local.md"];
@@ -62,10 +62,10 @@ async function expandImports(env: Env, text: string, baseDir: string, allowRoot:
   for (const t of tokens) {
     if (t.startsWith("/") || t.startsWith("~")) continue;
     const abs = join(baseDir, t);
-    if (!(abs + "/").startsWith(normalize(allowRoot) + "/") || isSensitivePath(t)) continue;
+    if (!isInside(allowRoot, abs) || isSensitivePath(t)) continue;
     try {
       const real = await env.realpath(abs);
-      if (!(real + "/").startsWith(rootReal + "/")) continue;
+      if (!isInside(rootReal, real)) continue;
       const stt = await env.stat(real);
       if (!stt?.isFile || stt.size > 200_000) continue;
       if (st.seen.has(real)) {
