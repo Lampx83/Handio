@@ -190,8 +190,8 @@ jobs:
         with:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          host: ${{ vars.DEPLOY_HOST }}
-          port: ${{ vars.DEPLOY_PORT }}
+          host: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || vars.DEPLOY_PORT }}
           user: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
       - name: Đưa lên máy chủ 220 (người dùng thấy "Có bản mới" và tải được)
         id: server

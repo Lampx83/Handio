@@ -202,7 +202,9 @@ print(json.loads(b).get("ok"))
 PY
 }
 a_list=$(acc_rpc '{"op":"list"}' 2>/dev/null || echo err)
-a_add=$(acc_rpc '{"op":"add","name":"zz-kiem-tra-cai","password":"Kiem-tra-cai-dat-9X!","actor":"install@local"}' 2>/dev/null || echo err)
+# mật khẩu NGẪU NHIÊN mỗi lần cài (không để mật khẩu cố định trong mã công khai, phòng khi bước xoá ngay sau đây lỗi)
+TEST_PW="Kt-$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | cut -c1-22)-9X"
+a_add=$(acc_rpc "{\"op\":\"add\",\"name\":\"zz-kiem-tra-cai\",\"password\":\"$TEST_PW\",\"actor\":\"install@local\"}" 2>/dev/null || echo err)
 a_del=$(acc_rpc '{"op":"remove","name":"zz-kiem-tra-cai","actor":"install@local"}' 2>/dev/null || echo err)
 first_admin=$(grep -m1 -E '^[^#[:space:]]' "$ADMINS" 2>/dev/null || true)
 c_api=skip; [ -n "$first_admin" ] && c_api=$(code -H "X-User-Email: $first_admin" http://127.0.0.1:4190/admin/api/accounts || true)   # quản trị viên qua collector: 200

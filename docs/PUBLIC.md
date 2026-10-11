@@ -9,7 +9,7 @@ Kho này công khai theo Apache-2.0 (`LICENSE`, `NOTICE`). Mọi thứ **riêng 
 | Địa chỉ gateway mô hình, máy 220/222 (công khai + nội bộ), tenant/client SSO của máy chủ | **Secret repo `SITE_CONF`** | Nhiều dòng `SITE_TÊN=giá-trị`; mẫu: `deploy/site.example.env`. CD điền vào các tệp `@@SITE_…@@` lúc đóng gói và **che** từng giá trị trong nhật ký. |
 | Tenant ID, client ID Entra của bản Desktop | Biến repo `NEU_AUTH_TENANT`, `NEU_AUTH_CLIENT_ID` | Là định danh công khai nhúng trong ứng dụng; bản phát hành dừng sớm (5 giây) nếu thiếu. |
 | Gateway mạng nội bộ (HTTP) cho Desktop, tuỳ chọn | Biến repo `NEU_LAN_GATEWAY` | Dạng `http://địa-chỉ:cổng/vllm/v1`. Trống = không có lựa chọn "Mạng nội bộ". |
-| Khoá SSH triển khai, known_hosts | Secrets `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`; biến `DEPLOY_ENABLED`, `DEPLOY_HOST`, `DEPLOY_PORT` | Như `docs/CICD.md`. |
+| Khoá SSH triển khai, known_hosts, **địa chỉ và cổng SSH** của máy chủ | **Secrets** `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_HOST`, `DEPLOY_PORT`; biến `DEPLOY_ENABLED` | Host/cổng phải là *secret*, không phải biến: biến in rõ trong nhật ký Actions (công khai), secret thì được che. Như `docs/CICD.md`. |
 | Chứng chỉ ký số macOS/Windows (nếu có) | Secrets như `docs/RELEASE-SIGNING.md` | |
 | Sổ vận hành gateway (tên container, route Kong, consumer…) | Kho **riêng tư** của đơn vị vận hành | Không để trong kho công khai. |
 
@@ -19,6 +19,10 @@ Kho này công khai theo Apache-2.0 (`LICENSE`, `NOTICE`). Mọi thứ **riêng 
 # 1) Cấu hình máy chủ: tạo site.env từ mẫu, điền địa chỉ thật, rồi đặt thành SECRET (nội dung nhiều dòng)
 cp deploy/site.example.env site.env      # sửa site.env; KHÔNG commit (đã nằm trong .gitignore)
 gh secret set SITE_CONF < site.env
+
+# 1b) Máy chủ triển khai (secret để được che trong nhật ký công khai)
+gh secret set DEPLOY_HOST --body <địa-chỉ-ssh>
+gh secret set DEPLOY_PORT --body <cổng-ssh>
 
 # 2) Bản Desktop
 gh variable set NEU_AUTH_TENANT --body <tenant-id>

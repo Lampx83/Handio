@@ -35,8 +35,8 @@ jobs:
       name: production          # có thể thêm "Required reviewers" ở Settings → Environments để bắt duyệt tay trước khi triển khai
       url: https://ai.neu.edu.vn/agent/
     env:
-      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
-      DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || vars.DEPLOY_PORT }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
       SITE: ${{ vars.DEPLOY_SITE_URL || 'https://ai.neu.edu.vn' }}
     steps:
@@ -45,8 +45,8 @@ jobs:
         with:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          host: ${{ vars.DEPLOY_HOST }}
-          port: ${{ vars.DEPLOY_PORT }}
+          host: ${{ secrets.DEPLOY_HOST || vars.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT || vars.DEPLOY_PORT }}
           user: ${{ vars.DEPLOY_USER || 'neu-deploy' }}
 
       - name: Quay lại bản trước (chỉ khi chọn rollback)

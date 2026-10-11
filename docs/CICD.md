@@ -41,7 +41,7 @@ Bản chưa có chứng chỉ ký sẽ được macOS/Windows cảnh báo lần 
   2. Chỉ cho **ít người có quyền Write/Admin**; người ngoài đóng góp qua fork + PR.
   3. (Khuyến nghị) Settings → Environments → `production` → **Required reviewers**: mỗi lần triển khai chờ một người bấm duyệt.
 - Khoá SSH của CI **không có shell**. Trên máy 220 nó bị trói vào đúng một lệnh (`authorized_keys: restrict,command="sudo -n /usr/local/sbin/neu-agent-deploy …"`), sudoers chỉ cho đúng lệnh đó. `neu-agent-deploy` (thuộc root) kiểm tra: gói ≤ 400 MB, mã băm SHA-256 khớp, chỉ tệp thường/thư mục, không đường dẫn tuyệt đối/`..`/liên kết; chép sang thư mục của root rồi mới chạy script cài từ bản sao đó. Hết thảy được kiểm thử trong `deploy/test/e2e-deploy.mjs` (gói độc hại, lệnh lạ qua `SSH_ORIGINAL_COMMAND`, web hỏng tự đưa về bản trước, rollback, khoá chống chạy song song).
-- Bí mật chỉ nằm ở GitHub Secrets của repo: `DEPLOY_SSH_KEY` (khoá riêng chỉ dùng cho việc này) và `DEPLOY_KNOWN_HOSTS` (khoá host được ghim, không tin lần đầu) và `SITE_CONF` (địa chỉ máy chủ/gateway và định danh SSO của nơi triển khai; CD điền vào các tệp mẫu `@@SITE_…@@` lúc đóng gói và che giá trị trong nhật ký — xem docs/PUBLIC.md). **Key mô hình và secret Entra KHÔNG ở GitHub**: `install.sh` tự dùng lại key đang chạy trên máy chủ.
+- Bí mật chỉ nằm ở GitHub Secrets của repo: `DEPLOY_SSH_KEY` (khoá riêng chỉ dùng cho việc này), `DEPLOY_HOST` và `DEPLOY_PORT` (địa chỉ/cổng SSH: là *secret* để được che trong nhật ký của repo công khai) và `DEPLOY_KNOWN_HOSTS` (khoá host được ghim, không tin lần đầu) và `SITE_CONF` (địa chỉ máy chủ/gateway và định danh SSO của nơi triển khai; CD điền vào các tệp mẫu `@@SITE_…@@` lúc đóng gói và che giá trị trong nhật ký — xem docs/PUBLIC.md). **Key mô hình và secret Entra KHÔNG ở GitHub**: `install.sh` tự dùng lại key đang chạy trên máy chủ.
 - Máy chủ phải nhận được kết nối SSH từ GitHub Actions. Nếu tường lửa chỉ cho IP trường, dùng runner tự lưu trữ đặt trong mạng trường (đổi `runs-on` của job `deploy`) — logic còn lại giữ nguyên.
 
 ## 3. Thiết lập một lần
@@ -62,8 +62,8 @@ Script tạo người dùng `neu-deploy` (khoá mật khẩu), cài `/usr/local/
 ssh-keygen -t ed25519 -N '' -C github-deploy -f ./deploy_key        # sinh khoá riêng dùng cho CI
 gh secret set DEPLOY_SSH_KEY < ./deploy_key                         # riêng → GitHub Secrets
 ssh-keygen -F '[<địa chỉ 220>]:<cổng-ssh>' -f ~/.ssh/known_hosts | grep -v '^#' | gh secret set DEPLOY_KNOWN_HOSTS   # khoá host đã tin cậy trên máy bạn
-gh variable set DEPLOY_HOST --body '<địa chỉ công khai 220>'
-gh variable set DEPLOY_PORT --body '<cổng-ssh>'
+gh secret set DEPLOY_HOST --body '<địa chỉ công khai 220>'     # secret (không phải biến): biến in rõ trong nhật ký Actions công khai
+gh secret set DEPLOY_PORT --body '<cổng-ssh>'
 shred -u ./deploy_key 2>/dev/null || rm -P ./deploy_key             # xoá khoá riêng khỏi máy bạn (chỉ còn ở GitHub)
 ```
 

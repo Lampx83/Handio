@@ -8,10 +8,10 @@ inputs:
     description: Khoá host đã tin cậy (secret DEPLOY_KNOWN_HOSTS)
     required: true
   host:
-    description: Địa chỉ máy chủ (biến DEPLOY_HOST)
+    description: Địa chỉ máy chủ (secret DEPLOY_HOST — secret để được che trong nhật ký công khai)
     required: true
   port:
-    description: Cổng SSH (biến DEPLOY_PORT)
+    description: Cổng SSH (secret DEPLOY_PORT)
     required: true
   user:
     description: Người dùng triển khai
@@ -29,7 +29,7 @@ runs:
       run: |
         set -euo pipefail
         if [ -z "$HOST" ] || [ -z "$PORT" ] || [ -z "$KEY" ] || [ -z "$KNOWN" ]; then
-          echo "::error::Thiếu cấu hình triển khai (biến DEPLOY_HOST, DEPLOY_PORT; bí mật DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS). Xem docs/CICD.md."; exit 1
+          echo "::error::Thiếu cấu hình triển khai (secret DEPLOY_HOST, DEPLOY_PORT, DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS). Xem docs/CICD.md."; exit 1
         fi
         case "$HOST$PORT$USER_NAME" in *[!A-Za-z0-9._:-]*) echo "::error::Địa chỉ/cổng/người dùng có ký tự lạ"; exit 1;; esac
         install -d -m 700 ~/.ssh
