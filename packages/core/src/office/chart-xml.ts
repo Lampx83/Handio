@@ -33,7 +33,7 @@ export interface ChartRefs {
   series?: { name?: string; values: string }[];
 }
 
-export const DEFAULT_CHART_PALETTE = ["2F5597", "ED7D31", "70AD47", "5B9BD5", "BF9000", "7030A0", "C00000", "A5A5A5"];
+export const DEFAULT_CHART_PALETTE = ["2A78D6", "EB6834", "1BAF7A", "EDA100", "E87BA4", "008300", "4A3AA7", "E34948"]; // thứ tự cố định, đã kiểm CVD (skill dataviz)
 
 const NS = 'xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
 // eslint-disable-next-line no-control-regex

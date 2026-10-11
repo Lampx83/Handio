@@ -28,7 +28,7 @@ describe("trích dẫn nguồn có vị trí", () => {
     const { run, env } = mk();
     await run("create_docx", { path: "thu-moi.docx", content: "# Thư mời\n\nKính mời thầy Nguyễn Văn Hùng dự họp.\n\n- Ý một\n- Ý hai\n\nĐoạn cuối nói về kinh phí 28.000.000 đồng." });
     await run("create_xlsx", { path: "ds.xlsx", sheets: [{ name: "DS", rows: [["Họ tên", "Lớp"], ["Nguyễn Văn Hùng", "K65A"], ["Lê Thị Mai", "K65B"]] }] });
-    await run("create_pptx", { path: "gt.pptx", content: "## Mở đầu\n- ý\n\n---\n\n## Giới thiệu\n- Diễn giả: Nguyễn Văn Hùng" });
+    await run("create_pptx", { path: "gt.pptx", content: "## Mở đầu\n- ý\n\n---\n\n## Giới thiệu\n- Diễn giả: Nguyễn Văn Hùng", auto: false });
     await env.writeText("/ws/ghi-chu.txt", "dòng một\n\nông Nguyễn Văn Hùng phụ trách phần nội dung\n");
     const r = await run("find_in_documents", { query: "nguyen van hung" });
     expect(r).toContain("[[thu-moi.docx|đoạn 2]]");
@@ -90,7 +90,7 @@ describe("trích dẫn nguồn có vị trí", () => {
     const grid = g.sections[0].blocks[0];
     expect(grid.t === "grid" && grid.hitRow === 3 && grid.hitCol === 2).toBe(true);
     expect((await buildDocView(await env.readBytes("/ws/b.xlsx"), "b.xlsx", "Điểm!B99")).found).toBe(false);
-    await run("create_pptx", { path: "c.pptx", content: "## A\n- một\n\n---\n\n## B\n- hai" });
+    await run("create_pptx", { path: "c.pptx", content: "## A\n- một\n\n---\n\n## B\n- hai", auto: false });
     const sv = await buildDocView(await env.readBytes("/ws/c.pptx"), "c.pptx", "slide 2");
     expect(sv.found && sv.sections.map((s) => !!s.hit)).toEqual([false, true]);
   });
@@ -173,7 +173,7 @@ describe("trộn thư hàng loạt", () => {
   });
   it("mẫu PowerPoint và dữ liệu CSV (nháy kép, dấu chấm phẩy)", async () => {
     const { run, env } = mk();
-    await env.writeBytes("/ws/mau.pptx", (await createPptx({ content: "# Giấy khen\n{{Họ tên}} — {{Lớp}}" })).bytes);
+    await env.writeBytes("/ws/mau.pptx", (await createPptx({ content: "# Giấy khen\n{{Họ tên}} — {{Lớp}}", auto: false })).bytes);
     await env.writeText("/ws/ds.csv", 'Họ tên;Lớp\n"Nguyễn, Văn ""An""";K65A\nLê Mai;K65B\n');
     expect(parseCsv('a;b\n"x;1";"y""z"\n')).toEqual([["a", "b"], ["x;1", 'y"z']]);
     expect(await run("merge_documents", { template: "mau.pptx", data: "ds.csv" })).toContain("Đã tạo 2 tệp");
@@ -377,7 +377,7 @@ describe("Word: đề xuất sửa (Track Changes)", () => {
 describe("PowerPoint: biểu đồ thật", () => {
   const md = "# Báo cáo\n\n---\n\n## Điểm theo lớp\n\n```chart cột\ntitle: Điểm trung bình\n| Lớp | Giữa kỳ | Cuối kỳ |\n|---|---|---|\n| K65A | 7,2 | 6.8 |\n| K65B | 8 | 7,5 |\n```\n\n---\n\n## Cơ cấu\n\n```chart tròn\n| Loại | SL |\n|---|---|\n| Giỏi | 10 |\n| Khá | 1.200 |\n```";
   it("tạo biểu đồ cột/tròn bằng pptxgenjs và đọc lại đúng nhãn + số liệu (kể cả số kiểu Việt Nam)", async () => {
-    const r = await createPptx({ content: md });
+    const r = await createPptx({ content: md, auto: false });
     expect(r.warnings).toEqual([]);
     const zip = await loadZip(r.bytes);
     const charts = Object.keys(zip.files).filter((n) => /^ppt\/charts\/chart\d+\.xml$/.test(n));
@@ -389,7 +389,7 @@ describe("PowerPoint: biểu đồ thật", () => {
     expect(t).toContain("SL: 10, 1200");
   });
   it("bảng chart sai thì cảnh báo, không làm hỏng cả bài", async () => {
-    const r = await createPptx({ content: "## A\n\n```chart cột\n| x | y |\n|---|---|\n| a | abc |\n```\n\n- ý khác" });
+    const r = await createPptx({ content: "## A\n\n```chart cột\n| x | y |\n|---|---|\n| a | abc |\n```\n\n- ý khác", auto: false });
     expect(r.warnings.join()).toContain("biểu đồ lỗi");
     expect((await readPptx(r.bytes))[0].text).toContain("ý khác");
   });

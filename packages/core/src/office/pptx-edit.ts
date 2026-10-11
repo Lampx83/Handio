@@ -17,6 +17,8 @@ export interface PptxEditOptions {
   style?: PptxStyle[];
   /** Màu nền slide (mọi slide nếu bỏ trống `slides`). */
   background?: { slides?: number[]; color: string };
+  /** Đặt lại tiêu đề của slide (số theo bài trước khi sửa): không cần biết chữ cũ. */
+  set_title?: { slide: number; text: string }[];
 }
 
 export interface PptxStyle {
@@ -43,6 +45,8 @@ export interface PptxEditResult {
   /** Mô tả từng thay đổi ("Slide 2: “a” → “b”"), tối đa 40. */
   changes: string[];
   deleted: number[];
+  /** Với mỗi `replacements` không tìm thấy: vài đoạn chữ gần giống nhất trong bài (để lần sau chép đúng). */
+  suggestions: Record<number, string[]>;
   /** Thứ tự cuối cùng: mỗi phần tử là số slide GỐC (hoặc "bản sao của N"). */
   layout: string[];
 }
@@ -201,12 +205,96 @@ function fillShape(sp: string, hex: string): string {
   });
 }
 
+
+/** "Slide 9: Lợi ích" / "- Lợi ích" → "Lợi ích": nhãn do read_document thêm vào, không có trong slide. */
+const stripLabel = (t: string): string => String(t ?? "").replace(/^\s*(?:slide\s*\d+\s*[:：.\-–—]\s*)/i, "").replace(/^\s*[-•·▪]\s+/, "").trim();
+
+/** Gấp chữ để so khớp: bỏ dấu, không phân biệt hoa/thường, gộp khoảng trắng; `map[i]` = vị trí trong chuỗi gốc. */
+function fold(text: string): { s: string; map: number[] } {
+  let s = "";
+  const map: number[] = [];
+  let lastSpace = true;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (/\s/.test(ch)) {
+      if (!lastSpace) {
+        s += " ";
+        map.push(i);
+        lastSpace = true;
+      }
+      continue;
+    }
+    const f = ch.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
+    for (const c of f) {
+      s += c;
+      map.push(i);
+    }
+    lastSpace = false;
+  }
+  return { s, map };
+}
+
+/** Thay chữ trong một đoạn bằng so khớp "mờ" (bỏ dấu, hoa/thường, khoảng trắng); trả về số chỗ đã thay. */
+function fuzzyReplaceInParagraph(p: string, find: string, replace: string): { xml: string; count: number } {
+  const nodes: { index: number; len: number; attrs: string; text: string }[] = [];
+  for (const m of p.matchAll(T_RE)) nodes.push({ index: m.index!, len: m[0].length, attrs: m[1] ?? "", text: decodeXml(m[2]) });
+  if (!nodes.length) return { xml: p, count: 0 };
+  const needle = fold(find).s.trim();
+  if (needle.length < 2) return { xml: p, count: 0 };
+  const full = nodes.map((n) => n.text).join("");
+  const f = fold(full);
+  const at = f.s.indexOf(needle);
+  if (at < 0) return { xml: p, count: 0 };
+  const start = f.map[at];
+  const end = (f.map[at + needle.length - 1] ?? full.length - 1) + 1;
+  let pos = 0;
+  let first = true;
+  for (const n of nodes) {
+    const s = pos;
+    const e = pos + n.text.length;
+    pos = e;
+    if (e <= start || s >= end) continue;
+    const from = Math.max(start, s) - s;
+    const to = Math.min(end, e) - s;
+    n.text = n.text.slice(0, from) + (first ? replace : "") + n.text.slice(to);
+    first = false;
+  }
+  let out = "";
+  let last = 0;
+  for (const n of nodes) {
+    out += p.slice(last, n.index) + `<a:t${n.attrs}>${encodeXml(n.text)}</a:t>`;
+    last = n.index + n.len;
+  }
+  return { xml: out + p.slice(last), count: 1 };
+}
+
+/** Đặt chữ của cả đoạn: giữ định dạng của đoạn chữ đầu, xoá các đoạn chữ còn lại. */
+function setParagraphText(p: string, text: string): string {
+  let i = 0;
+  return p.replace(T_RE, (_m, attrs: string | undefined) => `<a:t${attrs ?? ""}>${i++ === 0 ? encodeXml(text) : ""}</a:t>`);
+}
+
+/** Các đoạn chữ gần giống `find` nhất (theo số từ chung), mỗi mục "Slide N: chữ…". */
+function nearest(find: string, slides: { n: number; texts: string[] }[]): string[] {
+  const words = new Set(fold(find).s.split(" ").filter((w) => w.length > 1));
+  if (!words.size) return [];
+  const scored: { score: number; label: string }[] = [];
+  for (const sl of slides)
+    for (const t of sl.texts) {
+      const tw = fold(t).s.split(" ");
+      const score = tw.filter((w) => words.has(w)).length / Math.sqrt(Math.max(1, tw.length));
+      if (score > 0) scored.push({ score, label: `Slide ${sl.n}: “${t.slice(0, 90)}${t.length > 90 ? "…" : ""}”` });
+    }
+  return scored.sort((a, b) => b.score - a.score).slice(0, 4).map((x) => x.label);
+}
+
 export async function editPptx(bytes: Uint8Array, o: PptxEditOptions): Promise<PptxEditResult> {
   const zip = await loadZip(bytes);
   const order = await slideOrder(zip);
   if (!order.length) throw new Error("Không thấy slide nào trong tệp PowerPoint này.");
-  const reps = o.replacements ?? [];
+  const reps = (o.replacements ?? []).map((r) => ({ ...r, find: stripLabel(r.find), replace: stripLabel(r.replace) }));
   const counts = reps.map(() => 0);
+  const suggestions: Record<number, string[]> = {};
   const changes: string[] = [];
   const note = (s: string) => changes.length < 40 && changes.push(s);
   const del = [...new Set(o.delete_slides ?? [])].sort((a, b) => a - b);
@@ -286,6 +374,48 @@ export async function editPptx(bytes: Uint8Array, o: PptxEditOptions): Promise<P
       }
       if (xml !== orig) zip.file(part, xml);
     }
+  }
+
+  // set_title: đặt lại tiêu đề theo số slide (không cần chữ cũ)
+  for (const t of o.set_title ?? []) {
+    if (!Number.isInteger(t.slide) || t.slide < 1 || t.slide > order.length) throw new Error(`set_title: không có slide ${t.slide} (bài có ${order.length} slide).`);
+    const file = order[t.slide - 1];
+    let xml = await zip.file(file)!.async("string");
+    const shapes = [...xml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)].map((m) => m[0]);
+    const idx = [...titleShapeIndexes(shapes)][0];
+    if (idx === undefined) throw new Error(`set_title: slide ${t.slide} không có tiêu đề để sửa (hãy dùng replacements).`);
+    const before = shapes[idx];
+    const oldTitle = [...before.matchAll(T_RE)].map((m) => decodeXml(m[2])).join("");
+    let done = false;
+    const after = before.replace(P_RE, (p) => (done || !/<a:t[\s>]/.test(p) ? p : ((done = true), setParagraphText(p, stripLabel(String(t.text ?? ""))))));
+    xml = xml.replace(before, after);
+    zip.file(file, xml);
+    note(`Slide ${t.slide}: tiêu đề “${oldTitle.slice(0, 50)}” → “${stripLabel(String(t.text ?? "")).slice(0, 50)}”`);
+  }
+  // bước 2 cho replacements chưa thấy: so khớp mờ (bỏ dấu, hoa/thường, khoảng trắng); vẫn không thấy thì gợi ý đoạn gần giống
+  const missing = reps.map((_r, k) => k).filter((k) => counts[k] === 0 && reps[k].find);
+  if (missing.length) {
+    const texts: { n: number; texts: string[] }[] = [];
+    for (const [i, file] of order.entries()) {
+      const n = i + 1;
+      let xml = await zip.file(file)!.async("string");
+      const orig = xml;
+      for (const k of missing) {
+        const r = reps[k];
+        if (r.slide !== undefined && r.slide !== n) continue;
+        xml = xml.replace(P_RE, (p) => {
+          const f = fuzzyReplaceInParagraph(p, r.find, r.replace);
+          if (f.count) {
+            counts[k] += f.count;
+            note(`Slide ${n}: “${[...p.matchAll(T_RE)].map((m) => decodeXml(m[2])).join("").slice(0, 50)}” → “${[...f.xml.matchAll(T_RE)].map((m) => decodeXml(m[2])).join("").slice(0, 50)}”`);
+          }
+          return f.xml;
+        });
+      }
+      if (xml !== orig) zip.file(file, xml);
+      texts.push({ n, texts: [...xml.matchAll(P_RE)].map((p) => [...p[0].matchAll(T_RE)].map((m) => decodeXml(m[2])).join("")).filter((t) => t.trim()) });
+    }
+    for (const k of missing) if (counts[k] === 0) suggestions[k] = nearest(reps[k].find, texts);
   }
 
   // cấu trúc: chuyển, nhân đôi, xoá (theo số slide GỐC); viết lại presentation.xml, quan hệ và kiểu nội dung cho khớp
@@ -382,5 +512,5 @@ export async function editPptx(bytes: Uint8Array, o: PptxEditOptions): Promise<P
     for (const d of dup) note(`Đã nhân đôi slide ${d}: bản sao nằm ngay sau nó`);
     if (mv && mv.slide !== mv.to) note(`Đã chuyển slide ${mv.slide} tới vị trí ${mv.to}`);
   }
-  return { bytes: await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }), slides: layout.length, counts, changes, deleted: del, layout: layout.map((l) => l.label) };
+  return { bytes: await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" }), slides: layout.length, counts, changes, deleted: del, suggestions, layout: layout.map((l) => l.label) };
 }

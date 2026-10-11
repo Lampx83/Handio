@@ -86,7 +86,7 @@ describe("mẫu thiết kế: prompt", () => {
   it("chỉ nhắc tên công cụ có thật (mọi tên dạng snake_case phải là công cụ)", () => {
     for (const t of [...DESIGN_TEMPLATES.map((x) => ({ id: x.command, text: x.prompt })), { id: "DESIGN_BASE", text: DESIGN_BASE }]) {
       const names = t.text.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [];
-      for (const n of names) expect(known.has(n), `${t.id}: "${n}" không phải công cụ`).toBe(true);
+      for (const n of names) expect(known.has(n) || n === "ask_user", `${t.id}: "${n}" không phải công cụ`).toBe(true); // ask_user là công cụ meta của phiên, không nằm trong danh sách công cụ tệp
       for (const n of ["write_file", "edit_file", "read_file"]) expect(known.has(n), n).toBe(true);
     }
     expect(known.has("read_document")).toBe(true);
@@ -182,7 +182,7 @@ describe("DESIGN_BASE", () => {
     expect(DESIGN_BASE).toMatch(/event-handler/);
     expect(DESIGN_BASE).toMatch(/no external resources/);
     expect(DESIGN_BASE).toMatch(/4\.5:1/);
-    expect(DESIGN_BASE).toMatch(/at most 3 short numbered questions/);
+    expect(DESIGN_BASE).toMatch(/ASK FIRST, THEN DESIGN[\s\S]*ask_user[\s\S]*ONCE with 2-4 short questions/);
     expect(DESIGN_BASE).toMatch(/NEW clear name/);
     expect(DESIGN_BASE).toMatch(/-v2/);
     expect(DESIGN_BASE).toMatch(/:root/);

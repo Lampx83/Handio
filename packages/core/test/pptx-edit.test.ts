@@ -77,4 +77,22 @@ describe("pptx_edit", () => {
     await expect(run("pptx_edit", { path: "la.pptx", transform: { case: "upper" } })).rejects.toThrow(/đọc .* bằng read_document/);
     await expect(run("pptx_edit", { path: "bc.pptx" })).rejects.toThrow(/Chưa nói cần sửa gì/);
   });
+
+  it("chép nguyên nhãn 'Slide N: …' từ read_document vẫn tìm được; sai dấu/hoa thường vẫn thay được", async () => {
+    const { run, read } = await mk();
+    await run("pptx_edit", { path: "bc.pptx", replacements: [{ find: "Slide 3: Kết quả", replace: "Slide 3: Kết luận" }] });
+    expect(await read()).toContain("Slide 3: Kết luận");
+    await run("pptx_edit", { path: "bc.pptx", replacements: [{ find: "ket qua nam hoc", replace: "x" }, { find: "MỞ ĐẦU", replace: "Giới thiệu" }] }).catch(() => undefined);
+    expect(await read()).toContain("Slide 2: Giới thiệu");
+  });
+
+  it("set_title đặt lại tiêu đề theo số slide; không thấy chữ thì gợi ý đoạn gần giống", async () => {
+    const { run, read } = await mk();
+    await run("pptx_edit", { path: "bc.pptx", set_title: [{ slide: 2, text: "Tóm tắt" }, { slide: 3, text: "Slide 3: Kết luận" }] });
+    const back = await read();
+    expect(back).toContain("Slide 2: Tóm tắt");
+    expect(back).toContain("Slide 3: Kết luận");
+    await expect(run("pptx_edit", { path: "bc.pptx", replacements: [{ find: "Tóm tắt năm học dài dòng", replace: "x" }] })).rejects.toThrow(/Gần giống/);
+  });
 });
+

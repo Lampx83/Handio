@@ -41,7 +41,7 @@ const fmt = (n: number): string => (Math.abs(n) >= 1000 ? n.toLocaleString("vi-V
 
 /** Biểu đồ SVG nội tuyến (cột, ngang, đường, vùng, tròn, vành). */
 export function chartSvg(c: ChartSpec, accent: string): string {
-  const pal = [accent, "F2B134", "2E9E6B", "C8442F", "7A5BB5", "4FA3C7"].map((x) => "#" + x);
+  const pal = [accent, "EB6834", "1BAF7A", "EDA100", "E87BA4", "008300", "4A3AA7", "E34948"].map((x) => "#" + x); // thứ tự cố định (dataviz)
   const W = 640;
   const font = `font-family="Segoe UI, -apple-system, Roboto, Arial, sans-serif"`;
   const title = c.title ? `<text x="${W / 2}" y="22" text-anchor="middle" font-size="15" font-weight="700" fill="#1f2937" ${font}>${esc(c.title)}</text>` : "";

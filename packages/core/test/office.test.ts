@@ -120,7 +120,7 @@ describe("PowerPoint", () => {
     expect(s[1].notes).toBe("nói chậm");
   });
   it("tạo → đọc lại đủ tiêu đề, gạch đầu dòng, bảng, ghi chú", async () => {
-    const r = await createPptx({ content: md });
+    const r = await createPptx({ content: md, auto: false });
     expect(r.slides).toBe(3);
     const back = await readPptx(r.bytes);
     expect(back).toHaveLength(3);
@@ -132,7 +132,7 @@ describe("PowerPoint", () => {
     expect(text).toContain("[Ghi chú người trình bày] nói chậm");
   });
   it("cảnh báo slide quá nhiều chữ", async () => {
-    const r = await createPptx({ content: "## Dài\n\n" + Array.from({ length: 30 }, (_, i) => `- Ý số ${i} khá dài để chiếm nhiều chỗ trên slide này nhằm thử cảnh báo tràn`).join("\n") });
+    const r = await createPptx({ content: "## Dài\n\n" + Array.from({ length: 30 }, (_, i) => `- Ý số ${i} khá dài để chiếm nhiều chỗ trên slide này nhằm thử cảnh báo tràn`).join("\n"), auto: false });
     expect(r.warnings.join()).toContain("tràn");
   });
 });
@@ -187,7 +187,7 @@ describe("công cụ cho agent (end-to-end trên thư mục ảo)", () => {
     const { run } = mk();
     await run("create_docx", { path: "thu-moi.docx", content: "Kính mời thầy Nguyễn Văn Hùng dự họp." });
     await run("create_xlsx", { path: "ds.xlsx", sheets: [{ name: "DS", rows: [["Họ tên", "Lớp"], ["Nguyễn Văn Hùng", "K65A"], ["Lê Thị Mai", "K65B"]] }] });
-    await run("create_pptx", { path: "gt.pptx", content: "## Giới thiệu\n- Diễn giả: Nguyễn Văn Hùng" });
+    await run("create_pptx", { path: "gt.pptx", content: "## Giới thiệu\n- Diễn giả: Nguyễn Văn Hùng", auto: false });
     const r = await run("find_in_documents", { query: "nguyen van hung" });
     expect(r).toContain("thu-moi.docx");
     expect(r).toContain("[[ds.xlsx|DS!A2]]");

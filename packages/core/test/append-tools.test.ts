@@ -24,7 +24,7 @@ describe("dựng tệp dài từng phần (append)", () => {
 
   it("create_pptx: nối thêm slide, giữ chân trang và chủ đề; tổng số slide đúng", async () => {
     const { env, run } = mk();
-    await run("create_pptx", { path: "bc.pptx", content: "# Bìa\nPhụ đề\n\n---\n\n## Một\n- a", footer: "Khoa Dược", theme: "cam" });
+    await run("create_pptx", { path: "bc.pptx", content: "# Bìa\nPhụ đề\n\n---\n\n## Một\n- a", footer: "Khoa Dược", theme: "cam", auto: false });
     const r = await run("create_pptx", { path: "bc.pptx", content: "---\n## Hai\n- b\n\n---\n\n## Ba\n- c", append: true });
     expect(r).toContain("4 slide");
     const back = await office.readPptx(await env.readBytes("/ws/bc.pptx"));

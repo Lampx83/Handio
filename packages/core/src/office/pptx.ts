@@ -12,6 +12,12 @@ export interface PptxOptions {
   footer?: string;
   /** Chủ đề màu: xanh (mặc định), ngoc, xanhla, cam, tim, do, den. */
   theme?: string;
+  /** Tiêu đề bài (cho trang bìa tự thêm); bỏ trống thì lấy tiêu đề slide đầu. */
+  title?: string;
+  /** Dòng phụ trang bìa (đơn vị, người trình bày, ngày). */
+  subtitle?: string;
+  /** Tự thêm trang bìa, mục lục (từ 5 slide nội dung) và trang cảm ơn nếu bài chưa có; mặc định bật. */
+  auto?: boolean;
   /** Ảnh dùng trong `![mô tả](đường-dẫn)`: khoá = đúng chuỗi đường dẫn trong Markdown, giá trị = byte tệp ảnh (png/jpg/gif). */
   images?: Record<string, Uint8Array>;
 }
@@ -28,12 +34,39 @@ export const PPTX_THEMES: Record<string, Theme> = {
   tim: { primary: "5B34B8", dark: "34206B", accent: "F59E0B", tint: "F1ECFB", text: "1F2937", muted: "5F5A6E", line: "DDD4F2" },
   do: { primary: "B42318", dark: "5E1410", accent: "F2B134", tint: "FDEEEC", text: "1F2937", muted: "6B5958", line: "F1D3D0" },
   den: { primary: "1F2937", dark: "0B0F19", accent: "F2B134", tint: "F3F4F6", text: "111827", muted: "6B7280", line: "E1E4EA" },
+  // bảng màu gợi ý trong skill pptx của Claude (chọn theo chủ đề, một màu chiếm ưu thế)
+  midnight: { primary: "1E2761", dark: "121A44", accent: "7C9CF0", tint: "EEF2FD", text: "1F2937", muted: "5B6475", line: "D6DDF0" },
+  rung: { primary: "2C5F2D", dark: "1C3F1D", accent: "97BC62", tint: "F1F6EA", text: "1F2937", muted: "5A6558", line: "DCE8CF" },
+  sanho: { primary: "E8474D", dark: "2F3C7E", accent: "F2B134", tint: "FFF1F1", text: "1F2937", muted: "6B5E60", line: "F4D5D6" },
+  datnung: { primary: "B85042", dark: "6E2E26", accent: "A7BEAE", tint: "F7EDEA", text: "1F2937", muted: "6B5E5A", line: "EBD7D2" },
+  daiduong: { primary: "065A82", dark: "21295C", accent: "1C7293", tint: "E6F1F6", text: "1F2937", muted: "546574", line: "CFE2EC" },
+  than: { primary: "36454F", dark: "212121", accent: "F2B134", tint: "F2F2F2", text: "212121", muted: "6B7280", line: "E0E0E0" },
+  man: { primary: "6D2E46", dark: "40182B", accent: "A26769", tint: "F6EDEF", text: "1F2937", muted: "6B5A60", line: "EAD7DC" },
+  sage: { primary: "50808E", dark: "2F4F5A", accent: "84B59F", tint: "EAF3F0", text: "1F2937", muted: "56656A", line: "D3E4DE" },
+  cherry: { primary: "990011", dark: "5E000B", accent: "2F3C7E", tint: "FBEDEE", text: "1F2937", muted: "6B5A5C", line: "F0D3D6" },
 };
 const THEME_ALIASES: Record<string, string> = {
   blue: "xanh", navy: "xanh", neu: "xanh", "xanh duong": "xanh", mac_dinh: "xanh", default: "xanh",
   teal: "ngoc", "xanh ngoc": "ngoc", green: "xanhla", "xanh la": "xanhla", la: "xanhla",
   orange: "cam", purple: "tim", violet: "tim", red: "do", black: "den", dark: "den", "den vang": "den",
+  "xanh than": "midnight", "midnight executive": "midnight", forest: "rung", "xanh rung": "rung", coral: "sanho", "san ho": "sanho", terracotta: "datnung", "dat nung": "datnung", gach: "datnung",
+  ocean: "daiduong", "dai duong": "daiduong", charcoal: "than", berry: "man", "tim than": "man", "do man": "man", "sage calm": "sage", "xanh sage": "sage", "do ruou": "cherry",
 };
+
+/** Chọn chủ đề theo chủ đề nói trong bài (khi người dùng không nêu): một màu chủ đạo hợp nội dung thay vì luôn xanh. */
+export function themeForTopic(text: string): string {
+  const t = text.toLowerCase();
+  const rules: [RegExp, string][] = [
+    [/y tế|sức khỏe|sức khoẻ|dược|bệnh|thuốc|điều dưỡng|bác sĩ|dinh dưỡng/, "ngoc"],
+    [/môi trường|nông nghiệp|thiên nhiên|sinh thái|rừng|bền vững|khí hậu|năng lượng xanh/, "rung"],
+    [/tài chính|ngân hàng|kinh tế|đầu tư|kế toán|kiểm toán|thuế|chứng khoán|bảo hiểm/, "midnight"],
+    [/công nghệ|trí tuệ nhân tạo|\bai\b|dữ liệu|phần mềm|an ninh mạng|chuyển đổi số|lập trình|blockchain|iot/, "daiduong"],
+    [/marketing|truyền thông|sáng tạo|thiết kế|sự kiện|thương hiệu|quảng cáo|bán hàng/, "sanho"],
+    [/lịch sử|văn hóa|văn hoá|di sản|truyền thống|nghệ thuật|du lịch|ẩm thực/, "datnung"],
+    [/pháp luật|pháp lý|hành chính|nhân sự|quản trị|chiến lược|kiểm soát/, "than"],
+  ];
+  return rules.find(([re]) => re.test(t))?.[1] ?? "xanh";
+}
 
 export function pickTheme(name?: string): { key: string; theme: Theme; known: boolean } {
   const n = (name ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").toLowerCase().trim();
@@ -62,6 +95,8 @@ interface SlideSpec {
   blocks: SlideBlock[];
   notes: string;
   cover: boolean;
+  /** Slide mục lục tự tạo: các tiêu đề nội dung, hiện thành lưới đánh số. */
+  agenda?: string[];
 }
 
 const IMG_RE = /^!\[([^\]]*)\]\(([^)\s]+)\)$/;
@@ -153,16 +188,70 @@ function imageMime(b: Uint8Array): string | null {
 }
 const b64 = (b: Uint8Array) => (typeof Buffer !== "undefined" ? Buffer.from(b).toString("base64") : btoa(String.fromCharCode(...b)));
 
-export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; slides: number; warnings: string[] }> {
+
+const ICONS: [RegExp, string][] = [
+  [/bảo mật|an toàn|an ninh|rủi ro|quyền|security/i, "🔒"],
+  [/dữ liệu|data|thống kê|số liệu|báo cáo|phân tích/i, "📊"], [/mục tiêu|đích|kết quả|goal|target/i, "🎯"], [/con người|nhân (sự|lực)|nhóm|đội|người dùng|sinh viên|học viên|khách/i, "👥"],
+[/chi phí|ngân sách|tài chính|doanh thu|lợi nhuận|giá|tiền|đầu tư/i, "💰"], [/thời gian|lộ trình|tiến độ|kế hoạch|lịch|deadline/i, "🗓"],
+  [/công nghệ|hạ tầng|hệ thống|phần mềm|ai\b|trí tuệ|nền tảng|số hoá|chuyển đổi/i, "💻"], [/giáo dục|đào tạo|học|giảng|bài giảng|kiến thức|kỹ năng/i, "🎓"], [/quy trình|quy định|chính sách|thủ tục|phương pháp|giải pháp/i, "⚙️"],
+  [/chất lượng|đánh giá|kiểm tra|tiêu chuẩn|hiệu quả/i, "✅"], [/hợp tác|đối tác|kết nối|truyền thông|liên hệ/i, "🤝"], [/ý tưởng|sáng tạo|đổi mới|nghiên cứu|phát triển/i, "💡"],
+];
+const iconFor = (label: string): string | null => ICONS.find(([re]) => re.test(label))?.[1] ?? null;
+
+const CLOSING_RE = /^\s*(cảm ơn|cam on|xin cảm ơn|hỏi đáp|hoi dap|q\s*&\s*a|thank|kết thúc|ket thuc|liên hệ|lien he)/i;
+const ds = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+const para = (text: string): SlideBlock => ({ t: "para", runs: [{ text }] });
+
+/**
+ * Bài mô hình viết thường thiếu bộ khung: không bìa, không mục lục, danh sách quá dài, không trang cảm ơn.
+ * Bổ sung ở đây (không phụ thuộc vào việc mô hình nhớ làm): bìa, mục lục (≥ 5 slide nội dung), chia danh sách > 6 mục thành nhiều slide, trang cảm ơn.
+ */
+function structureSpecs(specs: SlideSpec[], o: PptxOptions, footer: string): SlideSpec[] {
+  if (o.auto === false) return specs;
+  const out: SlideSpec[] = [];
+  const deckTitle = (o.title ?? "").trim() || specs.find((s) => s.title)?.title || "Bài trình chiếu";
+  // slide đầu là nội dung trùng tên bài: bìa lấy tên đó, slide nội dung đổi thành "Tổng quan"
+  if (specs[0] && !specs[0].cover && specs[0].title.trim() === deckTitle) specs = [{ ...specs[0], title: "Tổng quan" }, ...specs.slice(1)];
+  // chia danh sách quá dài (chỉ slide có đúng một danh sách phẳng) thành các slide ≤ 5 mục
+  for (const sp of specs) {
+    const only = sp.blocks.length === 1 && sp.blocks[0].t === "list" ? (sp.blocks[0] as Extract<Block, { t: "list" }>) : null;
+    if (!sp.cover && only && only.items.length > 6 && only.items.every((i) => i.level === 0)) {
+      const parts = Math.ceil(only.items.length / 5);
+      const per = Math.ceil(only.items.length / parts);
+      for (let k = 0; k < parts; k++) out.push({ ...sp, title: `${sp.title} (${k + 1}/${parts})`, blocks: [{ t: "list", items: only.items.slice(k * per, (k + 1) * per) }], notes: k === 0 ? sp.notes : "" });
+      continue;
+    }
+    out.push(sp);
+  }
+  if (!out.length) return out;
+  const title = deckTitle;
+  if (!out[0].cover) {
+    const sub = [(o.subtitle ?? "").trim() || footer, `Ngày ${ds(new Date())}`].filter(Boolean).join("\n");
+    out.unshift({ title, blocks: sub ? [para(sub)] : [], notes: "", cover: true });
+  } else if (o.subtitle && !out[0].blocks.length) out[0] = { ...out[0], blocks: [para(o.subtitle)] };
+  const last = out[out.length - 1];
+  const closing = out.length > 1 && (CLOSING_RE.test(last.title) || (last.title && !last.blocks.length && last !== out[0]));
+  if (!closing) out.push({ title: "Cảm ơn quý vị đã lắng nghe", blocks: [para("Rất mong nhận được ý kiến đóng góp.")], notes: "", cover: false });
+  // mục lục: từ 5 slide nội dung trở lên
+  const body = out.filter((s, i) => i > 0 && !s.cover && s.title && !CLOSING_RE.test(s.title) && !(s.blocks.length === 0));
+  if (body.length >= 5 && !out.some((s) => /^\s*(mục lục|nội dung( chính)?|agenda)\b/i.test(s.title))) {
+    out.splice(1, 0, { title: "Nội dung chính", blocks: [], notes: "", cover: false, agenda: body.slice(0, 12).map((s) => s.title.replace(/^\s*\d+\s*[.)\-:]\s+/, "").replace(/\s*\(\d+\/\d+\)$/, "")).filter((t, i, a) => a.indexOf(t) === i) });
+  }
+  return out;
+}
+
+export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; slides: number; warnings: string[]; theme: string }> {
   const mod: any = await import("pptxgenjs");
   const PptxGenJS = mod.default ?? mod;
   const pptx = new PptxGenJS();
   pptx.layout = "LAYOUT_WIDE"; // 13.33 x 7.5 in
   pptx.author = brandName();
-  const specs = parseSlides(o.content);
-  if (!specs.length) throw new Error("Nội dung trống: cần ít nhất một slide.");
+  pptx.theme = { headFontFace: FONT, bodyFontFace: FONT };
+  const parsed = parseSlides(o.content);
+  if (!parsed.length) throw new Error("Nội dung trống: cần ít nhất một slide.");
+  const specs = structureSpecs(parsed, o, o.footer ?? "");
   const warnings: string[] = [];
-  const picked = pickTheme(o.theme);
+  const picked = o.theme ? pickTheme(o.theme) : pickTheme(themeForTopic([o.title ?? "", ...parsed.slice(0, 4).map((x) => x.title)].join(" ")));
   if (!picked.known) warnings.push(`Chủ đề “${o.theme}” không có; đã dùng “xanh”. Chủ đề có sẵn: ${Object.keys(PPTX_THEMES).join(", ")}.`);
   const t = picked.theme;
   const soft = tintOf(t.primary, 0.78);
@@ -172,10 +261,8 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
     title: "CONTENT",
     background: { color: "FFFFFF" },
     objects: [
-      { rect: { x: 0, y: 7.0, w: SW, h: 0.012, fill: { color: t.line } } },
-      { rect: { x: 0, y: 0, w: 0.28, h: 7.5, fill: { color: t.primary } } },
       ...footerObj(t.muted),
-      { placeholder: { options: { name: "title", type: "title", x: MX, y: 0.55, w: CW, h: 1.0, fontFace: FONT, fontSize: 30, bold: true, color: t.dark, valign: "middle", align: "left", margin: 0, fit: "shrink" }, text: "" } },
+      { placeholder: { options: { name: "title", type: "title", x: MX, y: 0.5, w: CW, h: 1.05, fontFace: FONT, fontSize: 36, bold: true, color: t.dark, valign: "middle", align: "left", margin: 0, fit: "shrink" }, text: "" } },
     ],
     slideNumber: { x: 12.2, y: 7.03, w: 0.6, h: 0.3, fontSize: 11, color: t.muted, fontFace: FONT, align: "right" },
   });
@@ -198,53 +285,65 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
   pptx.defineSlideMaster({
     title: "QUOTE",
     background: { color: t.tint },
-    objects: [
-      { rect: { x: 0, y: 0, w: 0.28, h: 7.5, fill: { color: t.accent } } },
-      ...footerObj(t.muted),
-    ],
+    objects: [...footerObj(t.muted)],
     slideNumber: { x: 12.2, y: 7.03, w: 0.6, h: 0.3, fontSize: 11, color: t.muted, fontFace: FONT, align: "right" },
   });
 
+  /** Thêm slide; mọi hộp chữ không phải placeholder được đánh dấu là hộp văn bản (trình đọc màn hình đọc đúng). */
+  const newSlide = (masterName: string): any => {
+    const sl = pptx.addSlide({ masterName });
+    const add = sl.addText.bind(sl);
+    sl.addText = (text: unknown, opts: Record<string, unknown> = {}) => add(text, opts.placeholder || opts.isTextBox !== undefined ? opts : { isTextBox: true, ...opts });
+    return sl;
+  };
   const shapes = pptx.ShapeType ?? {};
   const RECT = shapes.rect ?? "rect";
   const ROUND = shapes.roundRect ?? "roundRect";
   const OVAL = shapes.ellipse ?? "ellipse";
 
+  // thẻ: nền (trắng hoặc nhạt) + bóng rất nhẹ; không viền sọc một cạnh (xem docs: dấu hiệu "slide do AI làm")
   const card = (slide: any, x: number, y: number, w: number, h: number, fill = "FFFFFF", line: string | null = t.line) =>
-    slide.addShape(ROUND, { x, y, w, h, rectRadius: 0.06, fill: { color: fill }, line: line ? { color: line, width: 0.75 } : { color: fill, width: 0 } });
+    slide.addShape(ROUND, { x, y, w, h, rectRadius: 0.06, fill: { color: fill }, line: line ? { color: line, width: 0.75 } : { color: fill, width: 0 }, shadow: { type: "outer", color: "000000", opacity: 0.1, blur: 6, offset: 2, angle: 90 } });
 
   // ---- khối nội dung xếp dọc; slide = null → chỉ đo chiều cao
   function stack(slide: any | null, blocks: SlideBlock[], x: number, y0: number, w: number, fs: number, idx: number): number {
     let y = y0;
     for (const b of blocks) {
       if (b.t === "list") {
-        for (const it of b.items) {
-          const indent = it.level * 0.45;
+        let h = 0;
+        const heights = b.items.map((it) => {
           const size = Math.max(12, fs - it.level * 2);
-          const tw = w - 0.4 - indent;
-          const text = runsText(it.runs);
-          const lh = lhOf(size);
-          const h = linesOf(text, tw, size) * lh;
-          if (slide) {
-            if (it.ordered) {
-              const n = b.items.slice(0, b.items.indexOf(it) + 1).filter((z) => z.ordered && z.level === it.level).length;
-              slide.addShape(OVAL, { x: x + indent, y: y + (lh - 0.32) / 2 + 0.02, w: 0.32, h: 0.32, fill: { color: t.primary }, line: { color: t.primary, width: 0 } });
-              slide.addText(String(n), { x: x + indent, y: y + (lh - 0.32) / 2 + 0.02, w: 0.32, h: 0.32, fontFace: FONT, fontSize: 12, bold: true, color: "FFFFFF", align: "center", valign: "middle", margin: 0 });
-            } else if (it.level === 0) slide.addShape(OVAL, { x: x + 0.04, y: y + lh / 2 - 0.06, w: 0.13, h: 0.13, fill: { color: t.primary }, line: { color: t.primary, width: 0 } });
-            else slide.addShape(RECT, { x: x + indent + 0.02, y: y + lh / 2 - 0.02, w: 0.16, h: 0.04, fill: { color: t.muted }, line: { color: t.muted, width: 0 } });
-            slide.addText(textOfRuns(it.runs, t.text) as any, { x: x + 0.4 + indent, y, w: tw, h: h + 0.02, fontFace: FONT, fontSize: size, color: t.text, valign: "top", margin: 0, fit: "shrink" });
-          }
-          y += h + 0.17;
+          const tw = w - 0.45 - it.level * 0.45;
+          return linesOf(runsText(it.runs), tw, size) * lhOf(size) + 0.17;
+        });
+        h = heights.reduce((s2, v) => s2 + v, 0);
+        if (slide) {
+          const runs: any[] = [];
+          b.items.forEach((it, i) => {
+            const size = Math.max(12, fs - it.level * 2);
+            const rs = textOfRuns(it.runs, t.text);
+            rs.forEach((r, k) =>
+              runs.push({
+                text: r.text,
+                options: {
+                  ...r.options, fontSize: size, color: t.text, fontFace: FONT,
+                  ...(k === 0 ? { bullet: it.ordered ? { type: "number" } : { characterCode: it.level === 0 ? "2022" : "2013" }, indentLevel: it.level } : {}),
+                  breakLine: k === rs.length - 1 && i < b.items.length - 1, paraSpaceAfter: 9,
+                },
+              }),
+            );
+          });
+          slide.addText(runs, { x, y, w, h: h + 0.1, fontFace: FONT, color: t.text, valign: "top", margin: 0, isTextBox: true });
         }
-        y += 0.05;
+        y += h + 0.1;
       } else if (b.t === "para" || b.t === "quote") {
         const text = runsText(b.runs);
         const quote = b.t === "quote";
-        const tw = w - (quote ? 0.35 : 0);
+        const tw = w - (quote ? 0.6 : 0);
         const h = linesOf(text, tw, fs) * lhOf(fs);
         if (slide) {
-          if (quote) slide.addShape(RECT, { x, y, w: 0.07, h: h + 0.02, fill: { color: t.accent }, line: { color: t.accent, width: 0 } });
-          slide.addText(textOfRuns(b.runs, quote ? t.muted : t.text) as any, { x: x + (quote ? 0.3 : 0), y, w: tw, h: h + 0.02, fontFace: FONT, fontSize: fs, color: quote ? t.muted : t.text, italic: quote, align: b.t === "para" && b.align && b.align !== "justify" ? b.align : "left", valign: "top", margin: 0, fit: "shrink" });
+          if (quote) slide.addShape(ROUND, { x, y: y - 0.12, w, h: h + 0.28, rectRadius: 0.05, fill: { color: t.tint }, line: { color: t.tint, width: 0 } });
+          slide.addText(textOfRuns(b.runs, quote ? t.muted : t.text) as any, { isTextBox: true, x: x + (quote ? 0.3 : 0), y, w: tw, h: h + 0.02, fontFace: FONT, fontSize: fs, color: quote ? t.muted : t.text, italic: quote, align: b.t === "para" && b.align && b.align !== "justify" ? b.align : "left", valign: "top", margin: 0, fit: "shrink" });
         }
         y += h + 0.2;
       } else if (b.t === "code" && b.lang === "chart") {
@@ -317,7 +416,10 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
     return fs;
   };
 
-  const titleOn = (slide: any, text: string, long = 56) => slide.addText(text, { placeholder: "title", ...(text.length > long ? { fontSize: 24 } : {}) });
+  const titleOn = (slide: any, text: string, long = 48) => {
+    const clean = text.replace(/[.。]+\s*$/, ""); // tiêu đề không kết thúc bằng dấu chấm
+    slide.addText(clean, { placeholder: "title", ...(clean.length > long ? { fontSize: 28 } : {}) });
+  };
 
   specs.forEach((sp, idx) => {
     const last = idx === specs.length - 1;
@@ -327,38 +429,53 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
     const paraText = paras.map((b) => runsText(b.runs)).join("\n");
     let slide: any;
 
-    if (sp.cover) {
-      slide = pptx.addSlide({ masterName: "COVER" });
+    if (sp.agenda) {
+      slide = newSlide("CONTENT");
+      titleOn(slide, sp.title);
+      const items = sp.agenda;
+      const cols = items.length > 6 ? 2 : 1;
+      const per = Math.ceil(items.length / cols);
+      const cw = (CW - (cols - 1) * 0.5) / cols;
+      items.forEach((txt, i) => {
+        const col = Math.floor(i / per);
+        const row = i % per;
+        const x = MX + col * (cw + 0.5);
+        const rh = Math.min(0.82, (BOTTOM - TOP - 0.1) / per);
+        const y = TOP + 0.1 + row * rh;
+        slide.addShape(ROUND, { x, y, w: 0.56, h: 0.56, rectRadius: 0.12, fill: { color: i % 2 ? t.accent : t.primary }, line: { color: t.primary, width: 0 } });
+        slide.addText(String(i + 1).padStart(2, "0"), { x, y, w: 0.56, h: 0.56, fontFace: FONT, fontSize: 16, bold: true, color: i % 2 ? onColor(t.accent, t.dark) : "FFFFFF", align: "center", valign: "middle", margin: 0 , objectName: "deco" });
+        slide.addText(txt, { x: x + 0.78, y, w: cw - 0.8, h: 0.56, fontFace: FONT, fontSize: items.length > 8 ? 18 : 22, color: t.dark, valign: "middle", margin: 0, fit: "shrink" });
+      });
+    } else if (sp.cover) {
+      slide = newSlide("COVER");
       slide.addShape(OVAL, { x: 8.6, y: -1.6, w: 7.4, h: 7.4, fill: { color: t.primary, transparency: 30 }, line: { color: t.primary, width: 0 } });
       slide.addShape(OVAL, { x: 10.6, y: 3.9, w: 4.4, h: 4.4, fill: { color: t.dark, transparency: 100 }, line: { color: t.accent, width: 1.5, transparency: 35 } });
       slide.addShape(OVAL, { x: 11.4, y: 1.0, w: 0.34, h: 0.34, fill: { color: t.accent }, line: { color: t.accent, width: 0 } });
-      slide.addShape(RECT, { x: 0.9, y: 4.65, w: 1.4, h: 0.08, fill: { color: t.accent }, line: { color: t.accent, width: 0 } });
       titleOn(slide, sp.title, 38);
       if (paraText) slide.addText(paraText, { x: 0.9, y: 4.95, w: 7.4, h: 1.5, fontFace: FONT, fontSize: 20, color: tintOf(t.dark, 0.8), valign: "top", margin: 0, fit: "shrink" });
     } else if (!sp.blocks.length || (!lists.length && !sp.blocks.some((b) => b.t === "table" || b.t === "code" || b.t === "quote" || b.t === "image") && paras.length <= 1 && paraText.length <= 160)) {
       // mở đầu phần / kết thúc: chỉ có tiêu đề và tối đa một dòng phụ
       const closing = last && idx > 0;
-      slide = pptx.addSlide({ masterName: closing ? "COVER" : "SECTION" });
+      slide = newSlide(closing ? "COVER" : "SECTION");
       const num = /^(\d{1,2})\s*[.)\-:]\s+/.exec(sp.title);
       slide.addShape(OVAL, { x: 9.8, y: 3.6, w: 6.2, h: 6.2, fill: { color: closing ? t.primary : t.dark, transparency: closing ? 35 : 55 }, line: { color: t.dark, width: 0 } });
       if (num && !closing) {
-        slide.addText(num[1].padStart(2, "0"), { x: 0.9, y: 1.55, w: 4, h: 1.1, fontFace: FONT, fontSize: 60, bold: true, color: tintOf(t.primary, 0.72), margin: 0, valign: "middle" });
+        slide.addText(num[1].padStart(2, "0"), { x: 0.9, y: 1.55, w: 4, h: 1.1, fontFace: FONT, fontSize: 60, bold: true, color: tintOf(t.primary, 0.72), margin: 0, valign: "middle" , objectName: "deco" });
         slide.addText(sp.title.slice(num[0].length), { placeholder: "title" });
       } else {
-        slide.addShape(RECT, { x: 0.9, y: closing ? 4.65 : 2.35, w: 1.4, h: 0.08, fill: { color: t.accent }, line: { color: t.accent, width: 0 } });
         titleOn(slide, sp.title, 40);
       }
       if (paraText) slide.addText(paraText, { x: 0.9, y: closing ? 4.95 : 4.5, w: 8.6, h: 1.4, fontFace: FONT, fontSize: 20, color: tintOf(closing ? t.dark : t.primary, 0.8), valign: "top", margin: 0, fit: "shrink" });
     } else if (only.length >= 1 && only[0].t === "quote" && only.length <= 2 && only.slice(1).every((b) => b.t === "para")) {
-      slide = pptx.addSlide({ masterName: "QUOTE" });
+      slide = newSlide("QUOTE");
       const q = only[0] as Extract<Block, { t: "quote" }>;
-      slide.addText("“", { x: 0.9, y: 0.5, w: 2, h: 1.8, fontFace: "Georgia", fontSize: 130, bold: true, color: t.accent, margin: 0, valign: "top" });
+      slide.addText("“", { x: 0.9, y: 0.5, w: 2, h: 1.8, fontFace: "Georgia", fontSize: 130, bold: true, color: t.accent, margin: 0, valign: "top" , objectName: "deco" });
       if (sp.title) slide.addText(sp.title.toUpperCase(), { x: 2.7, y: 0.75, w: 9.5, h: 0.4, fontFace: FONT, fontSize: 14, bold: true, color: t.primary, charSpacing: 3, margin: 0 });
       const qs = runsText(q.runs).length > 220 ? 26 : runsText(q.runs).length > 110 ? 30 : 36;
       slide.addText(textOfRuns(q.runs, t.dark) as any, { x: 1.4, y: 1.9, w: 10.6, h: 3.6, fontFace: "Georgia", fontSize: qs, italic: true, color: t.dark, valign: "middle", margin: 0, fit: "shrink" });
       if (only[1]) slide.addText("— " + runsText((only[1] as Extract<Block, { t: "para" }>).runs), { x: 1.4, y: 5.45, w: 10.6, h: 0.6, fontFace: FONT, fontSize: 18, color: t.muted, margin: 0 });
     } else {
-      slide = pptx.addSlide({ masterName: "CONTENT" });
+      slide = newSlide("CONTENT");
       if (sp.title) titleOn(slide, sp.title);
       const oneList = lists.length === 1 && only.length === 1 ? lists[0] : null;
       const flat = oneList && oneList.items.every((i) => i.level === 0);
@@ -374,10 +491,9 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
         const cw = (CW - gap * (n - 1)) / n;
         stats.forEach((s, i) => {
           const x = MX + i * (cw + gap);
-          card(slide, x, 2.1, cw, 3.3, t.tint, t.line);
-          slide.addShape(RECT, { x, y: 2.1, w: cw, h: 0.1, fill: { color: i % 2 ? t.accent : t.primary }, line: { color: t.primary, width: 0 } });
-          slide.addText(s!.num, { x: x + 0.2, y: 2.5, w: cw - 0.4, h: 1.3, fontFace: FONT, fontSize: s!.num.length > 7 ? 38 : 54, bold: true, color: t.primary, align: "center", valign: "middle", margin: 0, fit: "shrink" });
-          slide.addText(s!.rest, { x: x + 0.25, y: 3.85, w: cw - 0.5, h: 1.3, fontFace: FONT, fontSize: 18, color: t.text, align: "center", valign: "top", margin: 0, fit: "shrink" });
+          card(slide, x, 2.1, cw, 3.3, t.tint, null);
+          slide.addText(s!.num, { x: x + 0.3, y: 2.45, w: cw - 0.6, h: 1.4, fontFace: FONT, fontSize: s!.num.length > 7 ? 40 : 60, bold: true, color: t.primary, align: "left", valign: "middle", margin: 0, fit: "shrink", isTextBox: true });
+          slide.addText(s!.rest, { x: x + 0.3, y: 3.95, w: cw - 0.6, h: 1.3, fontFace: FONT, fontSize: 18, color: t.text, align: "left", valign: "top", margin: 0, fit: "shrink", isTextBox: true });
         });
       } else if (process) {
         const items = oneList!.items;
@@ -388,9 +504,9 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
           const x = MX + i * (cw + gap);
           const lab = splitLabel(it.runs);
           slide.addShape(OVAL, { x: x + cw / 2 - 0.4, y: 2.24, w: 0.8, h: 0.8, fill: { color: i === n - 1 ? t.accent : t.primary }, line: { color: "FFFFFF", width: 3 } });
-          slide.addText(String(i + 1), { x: x + cw / 2 - 0.4, y: 2.24, w: 0.8, h: 0.8, fontFace: FONT, fontSize: 24, bold: true, color: i === n - 1 ? onColor(t.accent, t.dark) : "FFFFFF", align: "center", valign: "middle", margin: 0 });
+          slide.addText(String(i + 1), { x: x + cw / 2 - 0.4, y: 2.24, w: 0.8, h: 0.8, fontFace: FONT, fontSize: 24, bold: true, color: i === n - 1 ? onColor(t.accent, t.dark) : "FFFFFF", align: "center", valign: "middle", margin: 0 , objectName: "deco" });
           slide.addText(lab ? lab.label : runsText(it.runs), { x, y: 3.3, w: cw, h: 0.7, fontFace: FONT, fontSize: 19, bold: true, color: t.dark, align: "center", valign: "top", margin: 0, fit: "shrink" });
-          if (lab) slide.addText(lab.rest, { x: x + 0.05, y: 4.05, w: cw - 0.1, h: 2.2, fontFace: FONT, fontSize: 17, color: t.text, align: "center", valign: "top", margin: 0, fit: "shrink" });
+          if (lab) slide.addText(lab.rest, { x: x + 0.05, y: 4.05, w: cw - 0.1, h: 2.2, fontFace: FONT, fontSize: 17, color: t.text, align: "left", valign: "top", margin: 0, fit: "shrink", isTextBox: true });
         });
       } else if (labelled && labelled.filter(Boolean).length >= Math.ceil(n * 0.7)) {
         const cols = n === 4 ? 2 : Math.min(3, n);
@@ -403,11 +519,27 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
           const x = MX + (i % cols) * (cw + gap);
           const y = TOP + 0.05 + Math.floor(i / cols) * (ch + gap);
           card(slide, x, y, cw, ch);
-          slide.addShape(RECT, { x, y, w: 0.09, h: ch, fill: { color: i % 2 ? t.accent : t.primary }, line: { color: t.primary, width: 0 } });
-          slide.addShape(OVAL, { x: x + 0.3, y: y + 0.22, w: 0.46, h: 0.46, fill: { color: i % 2 ? t.accent : t.primary }, line: { color: t.primary, width: 0 } });
-          slide.addText(String(i + 1), { x: x + 0.3, y: y + 0.22, w: 0.46, h: 0.46, fontFace: FONT, fontSize: 16, bold: true, color: i % 2 ? onColor(t.accent, t.dark) : "FFFFFF", align: "center", valign: "middle", margin: 0 });
-          slide.addText(lab.label || runsText(it.runs), { x: x + 0.9, y: y + 0.18, w: cw - 1.1, h: 0.56, fontFace: FONT, fontSize: 19, bold: true, color: t.dark, valign: "middle", margin: 0, fit: "shrink" });
-          if (lab.label) slide.addText(lab.rest, { x: x + 0.3, y: y + 0.9, w: cw - 0.5, h: ch - 1.05, fontFace: FONT, fontSize: lab.rest.length > 150 ? 15 : lab.rest.length > 90 ? 17 : 19, color: t.text, valign: "top", margin: 0, fit: "shrink" });
+          const icon = iconFor(lab.label || runsText(it.runs));
+          slide.addShape(OVAL, { x: x + 0.3, y: y + 0.22, w: 0.52, h: 0.52, fill: { color: icon ? t.tint : i % 2 ? t.accent : t.primary }, line: { color: icon ? t.primary : t.primary, width: icon ? 1 : 0 } });
+          slide.addText(icon ?? String(i + 1), { x: x + 0.3, y: y + 0.22, w: 0.52, h: 0.52, fontFace: icon ? "Segoe UI Emoji" : FONT, fontSize: icon ? 16 : 16, bold: !icon, color: icon ? t.dark : i % 2 ? onColor(t.accent, t.dark) : "FFFFFF", align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "deco" });
+          slide.addText(lab.label || runsText(it.runs), { x: x + 0.98, y: y + 0.2, w: cw - 1.2, h: 0.56, fontFace: FONT, fontSize: 19, bold: true, color: t.dark, valign: "middle", margin: 0, fit: "shrink", isTextBox: true });
+          if (lab.label) slide.addText(lab.rest, { x: x + 0.3, y: y + 0.9, w: cw - 0.5, h: ch - 1.05, fontFace: FONT, fontSize: lab.rest.length > 150 ? 15 : lab.rest.length > 90 ? 17 : 19, color: t.text, valign: "top", margin: 0, fit: "shrink", isTextBox: true });
+        });
+      } else if (flat && n >= 2 && n <= 6 && oneList!.items.every((i) => runsText(i.runs).length <= 140)) {
+        // danh sách ngắn: mỗi ý một hàng có biểu tượng/số trong vòng tròn màu (không để slide chỉ có chữ gạch đầu dòng)
+        const avail = BOTTOM - TOP - 0.1;
+        const gap = 0.2;
+        const rh = Math.min(1.0, (avail - gap * (n - 1)) / n);
+        const size = n <= 3 ? 24 : n <= 4 ? 22 : 20;
+        oneList!.items.forEach((it, i) => {
+          const y = TOP + 0.1 + i * (rh + gap);
+          const text = runsText(it.runs);
+          const icon = iconFor(text);
+          card(slide, MX, y, CW, rh, t.tint, null);
+          const d = Math.min(0.62, rh - 0.2);
+          slide.addShape(OVAL, { x: MX + 0.3, y: y + (rh - d) / 2, w: d, h: d, fill: { color: icon ? "FFFFFF" : i % 2 ? t.accent : t.primary }, line: { color: t.primary, width: icon ? 1 : 0 } });
+          slide.addText(icon ?? String(i + 1), { x: MX + 0.3, y: y + (rh - d) / 2, w: d, h: d, fontFace: icon ? "Segoe UI Emoji" : FONT, fontSize: 18, bold: !icon, color: icon ? t.dark : i % 2 ? onColor(t.accent, t.dark) : "FFFFFF", align: "center", valign: "middle", margin: 0, isTextBox: true, objectName: "deco" });
+          slide.addText(textOfRuns(it.runs, t.text) as any, { x: MX + 1.2, y, w: CW - 1.5, h: rh, fontFace: FONT, fontSize: size, color: t.text, valign: "middle", margin: 0, fit: "shrink", isTextBox: true });
         });
       } else if (vis.length === 1 && textual.length >= 1 && sp.blocks.length === textual.length + 1) {
         // chữ bên trái, hình/biểu đồ/bảng nhỏ bên phải
@@ -442,11 +574,31 @@ export async function createPptx(o: PptxOptions): Promise<{ bytes: Uint8Array; s
     if (sp.notes) slide.addNotes(sp.notes);
   });
   const out: any = await pptx.write({ outputType: "uint8array" });
-  return { bytes: out instanceof Uint8Array ? out : new Uint8Array(out), slides: specs.length, warnings };
+  const raw: Uint8Array = out instanceof Uint8Array ? out : new Uint8Array(out);
+  return { bytes: await applyThemeColors(raw, t, picked.key), slides: specs.length, warnings, theme: picked.key };
+}
+
+/** Ghi bảng màu của chủ đề vào chính tệp (theme1.xml) để tab Design/Variants của PowerPoint và hình mới thêm dùng đúng màu. */
+async function applyThemeColors(bytes: Uint8Array, t: Theme, key: string): Promise<Uint8Array> {
+  try {
+    const zip = await loadZip(bytes);
+    const file = Object.keys(zip.files).find((n) => /^ppt\/theme\/theme\d+\.xml$/.test(n));
+    if (!file) return bytes;
+    let xml = await zip.file(file)!.async("string");
+    const c = (tag: string, hex: string) => `<a:${tag}><a:srgbClr val="${hex}"/></a:${tag}>`;
+    const scheme = `<a:clrScheme name="Handio ${key}">${c("dk1", t.text)}${c("lt1", "FFFFFF")}${c("dk2", t.dark)}${c("lt2", t.tint)}${c("accent1", t.primary)}${c("accent2", t.accent)}${c("accent3", "1BAF7A")}${c("accent4", "EB6834")}${c("accent5", "4A3AA7")}${c("accent6", "EDA100")}${c("hlink", t.primary)}${c("folHlink", t.muted)}</a:clrScheme>`;
+    if (!/<a:clrScheme\b[\s\S]*?<\/a:clrScheme>/.test(xml)) return bytes;
+    xml = xml.replace(/<a:clrScheme\b[\s\S]*?<\/a:clrScheme>/, scheme);
+    zip.file(file, xml);
+    return await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+  } catch {
+    return bytes; // không đổi được bảng màu thì giữ bản gốc (vẫn dùng được)
+  }
 }
 
 function addChart(pptx: any, slide: any, c: ChartSpec, x: number, y: number, w: number, h: number, t: Theme): void {
-  const colors = [t.primary, t.accent, "2E9E6B", "C8442F", "7A5BB5", "4FA3C7"];
+  // thứ tự màu cố định theo nguyên tắc trực quan hoá dữ liệu: xanh chủ đề → cam → ngọc → vàng → hồng → lục → tím → đỏ (không xoay vòng)
+  const colors = [t.primary, "EB6834", "1BAF7A", "EDA100", "E87BA4", "008300", "4A3AA7", "E34948"];
   const T = pptx.charts;
   const type = c.kind === "line" ? T.LINE : c.kind === "pie" ? T.PIE : c.kind === "doughnut" ? T.DOUGHNUT : c.kind === "area" ? T.AREA : T.BAR;
   const pie = c.kind === "pie" || c.kind === "doughnut";
@@ -515,6 +667,7 @@ export async function readPptx(bytes: Uint8Array): Promise<{ label: string; text
         }
         continue;
       }
+      if (/<p:cNvPr\b[^>]*\bname="deco"/.test(sp)) continue; // số/biểu tượng trang trí, không phải nội dung
       const texts = paraTexts(sp);
       if (!texts.length) continue;
       if (!title && /<p:ph[^>]*type="(title|ctrTitle)"/.test(sp)) title = texts.join(" ");

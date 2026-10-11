@@ -325,7 +325,7 @@ describe("file_info", () => {
     expect(await run("file_info", { path: "tl.docx" })).toMatch(/Loại: Word[\s\S]*Số từ: ≈?\d+/);
     await run("create_xlsx", { path: "so.xlsx", sheets: [{ name: "Tháng 1", rows: [["a"], [1]] }, { name: "Tháng 2", rows: [["b"]] }] });
     expect(await run("file_info", { path: "so.xlsx" })).toContain("Số sheet: 2 (Tháng 1, Tháng 2)");
-    await run("create_pptx", { path: "bc.pptx", content: "# Bìa\n\n---\n\n## Một\n- a\n\n---\n\n## Hai\n- b" });
+    await run("create_pptx", { path: "bc.pptx", content: "# Bìa\n\n---\n\n## Một\n- a\n\n---\n\n## Hai\n- b", auto: false });
     expect(await run("file_info", { path: "bc.pptx" })).toContain("Số slide: 3");
     void env;
   });

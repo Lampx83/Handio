@@ -26,7 +26,8 @@ describe("hồ sơ Code / Work", () => {
     await work.c.send("xin chào");
     const sys = String(work.llm.calls[0].messages[0].content);
     expect(sys).toContain("(Work mode)");
-    expect(sys).toContain("NEVER overwrite the user's ORIGINAL files");
+    expect(sys).toContain("EDIT IN PLACE");
+    expect(sys).toContain("ASK FIRST, THEN BUILD");
     const st = await work.c.getState();
     expect(st.profile).toBe("work");
     expect(st.allowedModes).toEqual(["default", "acceptEdits", "auto", "plan", "bypass"]);

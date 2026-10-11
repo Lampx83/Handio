@@ -8,12 +8,12 @@ describe("PowerPoint: bố cục và chủ đề", () => {
     expect(pickTheme("Xanh ngọc").key).toBe("ngoc");
     expect(pickTheme("teal").key).toBe("ngoc");
     expect(pickTheme(undefined)).toMatchObject({ key: "xanh", known: true });
-    const r = await createPptx({ content: "## A\n- b", theme: "cầu vồng" });
+    const r = await createPptx({ content: "## A\n- b", theme: "cầu vồng", auto: false });
     expect(r.warnings.join()).toContain("cầu vồng");
   });
 
   it("tiêu đề là placeholder thật (đọc lại có nhãn 'Slide N: tiêu đề')", async () => {
-    const r = await createPptx({ content: "# Bìa\nPhụ đề\n\n---\n\n## Nội dung chính\n- Ý một\n- Ý hai" });
+    const r = await createPptx({ content: "# Bìa\nPhụ đề\n\n---\n\n## Nội dung chính\n- Ý một\n- Ý hai", auto: false });
     const back = await readPptx(r.bytes);
     expect(back.map((b) => b.label)).toEqual(["Slide 1: Bìa", "Slide 2: Nội dung chính"]);
   });
@@ -27,7 +27,7 @@ describe("PowerPoint: bố cục và chủ đề", () => {
       "> Câu trích dẫn rất đáng nhớ\n\nNguồn: một giảng viên",
       "# Cảm ơn\nliên hệ: a@example.com",
     ].join("\n\n---\n\n");
-    const r = await createPptx({ content: md });
+    const r = await createPptx({ content: md, auto: false });
     expect(r.slides).toBe(7);
     expect(r.warnings).toEqual([]);
     const text = (await readPptx(r.bytes)).map((b) => b.text).join("\n");
@@ -38,7 +38,7 @@ describe("PowerPoint: bố cục và chủ đề", () => {
     const md = "## Ảnh\n![Logo trường](logo.png)\n\n---\n\n## Thiếu\n![Không có](khong-co.png)";
     expect(pptxImageRefs(md)).toEqual(["logo.png", "khong-co.png"]);
     expect(parseSlides(md)[0].blocks[0]).toMatchObject({ t: "image", alt: "Logo trường", src: "logo.png" });
-    const r = await createPptx({ content: md, images: { "logo.png": PNG } });
+    const r = await createPptx({ content: md, images: { "logo.png": PNG }, auto: false });
     expect(r.warnings.join()).toContain("khong-co.png");
     expect(r.warnings.join()).not.toContain("logo.png");
     const zip = await loadZip(r.bytes);
@@ -46,7 +46,30 @@ describe("PowerPoint: bố cục và chủ đề", () => {
   });
 
   it("cảnh báo tràn vẫn hoạt động ở bố cục mặc định", async () => {
-    const r = await createPptx({ content: "## Dài\n\n" + Array.from({ length: 30 }, (_, i) => `- Ý số ${i} khá dài để chiếm nhiều chỗ trên slide này nhằm thử cảnh báo tràn`).join("\n") });
+    const r = await createPptx({ content: "## Dài\n\n" + Array.from({ length: 30 }, (_, i) => `- Ý số ${i} khá dài để chiếm nhiều chỗ trên slide này nhằm thử cảnh báo tràn`).join("\n"), auto: false });
     expect(r.warnings.join()).toContain("tràn");
   });
+
+  it("tự thêm bìa, mục lục, trang cảm ơn; chia danh sách quá dài; tắt được bằng auto:false", async () => {
+    const items = Array.from({ length: 8 }, (_, i) => `- **Mục ${i + 1}**: mô tả ngắn số ${i + 1}`).join("\n");
+    const md = ["## Công nghệ giáo dục\n" + items, "## Hai\n- a\n- b", "## Ba\n- c\n- d", "## Bốn\n- e\n- f", "## Năm\n- g\n- h"].join("\n\n---\n\n");
+    const r = await createPptx({ content: md, footer: "Khoa CNTT" });
+    const labels = (await readPptx(r.bytes)).map((b) => b.label);
+    expect(labels[0]).toBe("Slide 1: Công nghệ giáo dục"); // bìa lấy tiêu đề slide đầu
+    expect(labels[1]).toBe("Slide 2: Nội dung chính"); // mục lục vì có từ 5 slide nội dung
+    expect(labels).toContain("Slide 3: Tổng quan (1/2)"); // slide đầu trùng tên bìa → "Tổng quan", danh sách 8 mục chia hai
+    expect(labels).toContain("Slide 4: Tổng quan (2/2)");
+    expect(labels.at(-1)).toMatch(/Cảm ơn/);
+    const agenda = (await readPptx(r.bytes))[1].text;
+    expect(agenda).toContain("Hai");
+    expect(agenda).toContain("Năm");
+    const raw = await createPptx({ content: md, auto: false });
+    expect(raw.slides).toBe(5);
+  });
+
+  it("không thêm trùng khi bài đã có bìa và trang cảm ơn", async () => {
+    const r = await createPptx({ content: "# Bìa\nPhụ đề\n\n---\n\n## Một\n- a\n\n---\n\n## Cảm ơn\nHỏi đáp" });
+    expect(r.slides).toBe(3);
+  });
 });
+

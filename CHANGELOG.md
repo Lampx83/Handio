@@ -6,7 +6,14 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thay đổi
+- **Bài trình chiếu đẹp và đủ bộ khung hơn** (học theo bộ quy tắc thiết kế slide của Claude): tự thêm **trang bìa**, **mục lục** (từ 5 slide nội dung) và **trang cảm ơn** nếu bài thiếu; danh sách quá dài tự chia thành nhiều slide; ý ngắn hiện thành hàng có **biểu tượng trong vòng tròn màu** thay vì chỉ có chữ; bỏ các sọc/vạch trang trí; danh sách gạch đầu dòng là danh sách thật (dễ sửa trong PowerPoint); tiêu đề 36pt; thêm 9 bảng màu và **tự chọn màu theo chủ đề** bài (y tế, tài chính, công nghệ, môi trường…); bảng màu được ghi vào chính tệp nên tab Design của PowerPoint dùng đúng màu.
+- **Biểu đồ theo nguyên tắc trực quan hoá dữ liệu**: thứ tự màu cố định đã kiểm tra cho người khó phân biệt màu; hướng dẫn cho AI chọn đúng loại biểu đồ, không dùng hai trục, mỗi biểu đồ có tiêu đề nêu kết luận.
+- **AI hỏi lại trước khi làm** (Work, Code, Design): khi yêu cầu tạo mới còn thiếu thông tin quan trọng (mục đích, người xem, độ dài, phong cách…), AI dùng thẻ chọn đáp án hỏi một lần rồi mới bắt tay làm; yêu cầu đã rõ thì làm ngay.
+- **Sửa tệp thì sửa chính tệp đó** (không còn sinh ra hàng loạt tệp `-v2`, `-v3`…); có “Hoàn tác” nếu cần quay lại. Chỉ tạo bản mới khi bạn yêu cầu.
 - **Nút “Kiểm tra cập nhật” chuyển vào hộp Nhật ký thay đổi** (bấm “vX · Nhật ký thay đổi” ở thanh bên), bỏ nút riêng ở thanh bên cho gọn. Menu Tệp → Kiểm tra bản cập nhật… vẫn còn.
+
+### Sửa
+- **Sửa slide không còn báo “không tìm thấy”** khi chép cả nhãn “Slide 9:” hoặc khác dấu/hoa thường; thêm đặt lại tiêu đề theo số slide, và khi không thấy chữ thì gợi ý các đoạn gần giống.
 
 ## [0.8.4] - 2026-10-11
 

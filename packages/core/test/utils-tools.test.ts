@@ -782,7 +782,7 @@ describe("doc_stats", () => {
 
   it("PowerPoint: số slide và số chữ mỗi slide", async () => {
     const m = mk();
-    await m.run("create_pptx", { path: "tt.pptx", content: "# Tiêu đề bìa\nPhụ đề\n\n---\n\n## Một\n- a b c\n- d e\n\n---\n\n## Hai\n- x y z w" });
+    await m.run("create_pptx", { path: "tt.pptx", content: "# Tiêu đề bìa\nPhụ đề\n\n---\n\n## Một\n- a b c\n- d e\n\n---\n\n## Hai\n- x y z w", auto: false });
     const out = await m.run("doc_stats", { path: "tt.pptx" });
     expect(out).toContain("[PowerPoint]");
     expect(out).toContain("Số slide: 3");

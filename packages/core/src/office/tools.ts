@@ -406,13 +406,14 @@ export function officeTools(env: Env): Tool[] {
     },
     {
       name: "pptx_edit", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || a.path,
-      description: "Edit an EXISTING PowerPoint (.pptx) while keeping its design. (1) replacements [{find, replace, slide?}]: change text (slides and notes; works even when the text is split across formatting runs). (2) transform {case: upper|lower|capitalize, target: titles (default)|all, slides?}: change letter case, e.g. 'make every title UPPERCASE'. (3) style [{target: titles (default)|all|match, match?, slides?, color, size, bold, italic, underline, font, align, fill}]: text color/size/font/alignment and the fill color of the shape that holds the text. (4) background {color, slides?}: slide background color. (5) delete_slides [n], duplicate_slides [n] (the copy sits right after the original; to change its text call again with the new slide number), move_slide {slide, to}. Slide numbers always refer to the file as it was BEFORE this call. Read the file with read_document first. Use save_as to keep the original (recommended). Colors: #RRGGBB or common names (đỏ, xanh dương, xanh lá, cam, vàng, tím, đen, trắng, xám). Not supported: adding new shapes, pictures or animations; to add brand-new slides either duplicate_slides then edit the copy, or rebuild the deck with create_pptx.",
+      description: "Edit an EXISTING PowerPoint (.pptx) while keeping its design. (1) replacements [{find, replace, slide?}]: change text (slides and notes; works even when the text is split across formatting runs). (2) transform {case: upper|lower|capitalize, target: titles (default)|all, slides?}: change letter case, e.g. 'make every title UPPERCASE'. (3) style [{target: titles (default)|all|match, match?, slides?, color, size, bold, italic, underline, font, align, fill}]: text color/size/font/alignment and the fill color of the shape that holds the text. (4) background {color, slides?}: slide background color. (5) set_title [{slide, text}]: set a slide's title by number without knowing the old text (best for 'rename slide 9'). (6) delete_slides [n], duplicate_slides [n] (the copy sits right after the original; to change its text call again with the new slide number), move_slide {slide, to}. Slide numbers always refer to the file as it was BEFORE this call. Read the file with read_document first. In `find` give the slide's own words only: the 'Slide 9:' label that read_document prints is NOT part of the slide. The file is edited IN PLACE (the user can undo); pass save_as ONLY when the user asks to keep the original or to make a copy — never create -v2/-v3 files for a plain 'sửa slide' request. Colors: #RRGGBB or common names (đỏ, xanh dương, xanh lá, cam, vàng, tím, đen, trắng, xám). Not supported: adding new shapes, pictures or animations; to add brand-new slides either duplicate_slides then edit the copy, or rebuild the deck with create_pptx.",
       parameters: { type: "object", properties: {
         path: S, save_as: { type: "string", description: "new .pptx path; the original stays unchanged" },
         replacements: { type: "array", items: { type: "object", properties: { find: S, replace: S, slide: { type: "integer" } }, required: ["find", "replace"] } },
         transform: { type: "object", properties: { case: { type: "string", enum: ["upper", "lower", "capitalize"] }, target: { type: "string", enum: ["titles", "all"] }, slides: { type: "array", items: { type: "integer" } } }, required: ["case"] },
         style: { type: "array", items: { type: "object", properties: { target: { type: "string", enum: ["titles", "all", "match"] }, match: S, slides: { type: "array", items: { type: "integer" } }, color: S, size: { type: "number" }, bold: { type: "boolean" }, italic: { type: "boolean" }, underline: { type: "boolean" }, font: S, align: { type: "string", enum: ["left", "center", "right", "justify"] }, fill: S } } },
         background: { type: "object", properties: { color: S, slides: { type: "array", items: { type: "integer" } } }, required: ["color"] },
+        set_title: { type: "array", items: { type: "object", properties: { slide: { type: "integer" }, text: S }, required: ["slide", "text"] } },
         delete_slides: { type: "array", items: { type: "integer" } }, duplicate_slides: { type: "array", items: { type: "integer" } },
         move_slide: { type: "object", properties: { slide: { type: "integer" }, to: { type: "integer" } }, required: ["slide", "to"] },
       }, required: ["path"] },
@@ -437,11 +438,12 @@ export function officeTools(env: Env): Tool[] {
           delete_slides: jsonArg<number[]>(a.delete_slides, "delete_slides"),
           duplicate_slides: jsonArg<number[]>(a.duplicate_slides, "duplicate_slides"),
           move_slide: jsonArg<PptxEditOptions["move_slide"]>(a.move_slide, "move_slide"),
+          set_title: jsonArg<PptxEditOptions["set_title"]>(a.set_title, "set_title"),
         };
         if (opts.replacements && (!Array.isArray(opts.replacements) || opts.replacements.some((r) => !r || typeof r.find !== "string" || typeof r.replace !== "string"))) throw new ToolError("replacements phải là danh sách {find, replace}.", "bad_args");
         if (opts.style && !Array.isArray(opts.style)) throw new ToolError("style phải là danh sách.", "bad_args");
-        if (!opts.replacements?.length && !opts.transform && !opts.style?.length && !opts.background && !opts.delete_slides?.length && !opts.duplicate_slides?.length && !opts.move_slide)
-          throw new ToolError("Chưa nói cần sửa gì: dùng replacements, transform, style, background, delete_slides, duplicate_slides hoặc move_slide.", "bad_args");
+        if (!opts.replacements?.length && !opts.transform && !opts.style?.length && !opts.background && !opts.delete_slides?.length && !opts.duplicate_slides?.length && !opts.move_slide && !opts.set_title?.length)
+          throw new ToolError("Chưa nói cần sửa gì: dùng replacements, set_title, transform, style, background, delete_slides, duplicate_slides hoặc move_slide.", "bad_args");
         const src = await resolveSafe(ctx, a.path);
         if (!ctx.readFiles.has(src)) throw new ToolError(`Hãy đọc ${a.path} bằng read_document trước khi sửa.`, "read_first");
         await checkFresh(ctx, src, a.path);
@@ -454,14 +456,15 @@ export function officeTools(env: Env): Tool[] {
         }
         const miss = (opts.replacements ?? []).filter((_r, i) => res.counts[i] === 0);
         const structural = !!(opts.delete_slides?.length || opts.duplicate_slides?.length || opts.move_slide);
-        if (!res.changes.length && !structural) throw new ToolError(`Không có gì thay đổi trong ${a.path}.` + (miss.length ? " Không tìm thấy: " + miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ") + ". Kiểm tra đúng từng ký tự (hoa/thường, dấu cách) bằng read_document." : " Kiểm tra số slide và điều kiện (target/match)."), "no_match");
+        const hints = (opts.replacements ?? []).flatMap((r, i) => (res.counts[i] === 0 && res.suggestions[i]?.length ? [`Gần giống “${r.find.slice(0, 40)}”: ` + res.suggestions[i].join(" | ")] : []));
+        if (!res.changes.length && !structural) throw new ToolError(`Không có gì thay đổi trong ${a.path}.` + (miss.length ? " Không tìm thấy: " + miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ") + ". Chép đúng chữ có trong slide (không kèm nhãn “Slide N:”); hoặc dùng set_title để đổi tiêu đề theo số slide." + (hints.length ? "\n" + hints.join("\n") : "") : " Kiểm tra số slide và điều kiện (target/match)."), "no_match");
         let abs = src;
         let existed = true;
         if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, ".pptx"));
         await commit(ctx, abs, res.bytes, existed);
         return `Đã lưu ${relPath(ctx, abs)} (${res.slides} slide).\n` + res.changes.slice(0, 25).join("\n") +
           (opts.replacements?.length ? "\nSố chỗ đã thay: " + opts.replacements.map((r, i) => `“${r.find.slice(0, 30)}” ×${res.counts[i]}`).join(", ") : "") +
-          (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` : "") +
+          (miss.length ? `\n⚠ Không tìm thấy: ${miss.map((m) => "“" + m.find.slice(0, 40) + "”").join(", ")}` + (hints.length ? "\n" + hints.join("\n") : "") : "") +
           (structural ? `\nThứ tự slide mới: ${res.layout.join(", ")} (số = slide gốc).` : "") +
           "\nHãy dùng read_document để kiểm tra lại.";
       },
@@ -469,7 +472,7 @@ export function officeTools(env: Env): Tool[] {
     {
       name: "create_pptx", kind: "edit", readonly: false, pathArg: "path",
       description: "Create a PowerPoint (.pptx) from Markdown. Slides are separated by a line containing only ---. Each slide: a '# Title' (or ##) line, then bullets (- item, nested by 2 spaces), paragraphs, tables or code. The first slide with '# Title' and a short subtitle paragraph becomes the cover. A paragraph starting 'Ghi chú:' becomes the presenter notes. A real chart: a fenced block ```chart cột (or ngang, đường, tròn, vành, vùng) with an optional 'title: ...' line and a Markdown table (first column = labels, other columns = numeric series, e.g. 7,5 or 1.200). Keep 3-6 short bullets per slide; split long content across slides. LAYOUTS are chosen automatically from the content, so write it to fit: a title-only slide (or '## 1. Name' + one line) = section divider; the LAST slide with a short title (e.g. 'Cảm ơn') = closing; 2-4 bullets like '92%: sinh viên dùng…' or '**1.200** bài giảng' = big-number cards; 3-6 bullets like '**Hạ tầng**: mô tả…' or 'Hạ tầng: mô tả…' = numbered cards; an ORDERED list (1. 2. 3.) of 3-5 steps = process timeline; a single '> quote' (+ optional attribution line) = quote slide; bullets plus ONE chart, small table or image = two columns. An image: a line '![mô tả](hinh/anh.png)' with a png/jpg/gif file in the project folder. theme chooses the colors: xanh (default), ngoc, xanhla, cam, tim, do, den; pick one that fits the topic or the user's wish.",
-      parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, footer: { type: "string" }, theme: { type: "string", enum: Object.keys(PPTX_THEMES), description: "color theme (default xanh)" }, append: { type: "boolean", description: "true = add these slides to the END of the deck you created earlier at the same path with create_pptx (use it for decks longer than ~6 slides or ~2,000 characters: send the cover and first slides without append, then the next slides with append=true; footer and theme are kept from the first call)" } }, required: ["path", "content"] },
+      parameters: { type: "object", properties: { path: S, content: { type: "string", description: "Markdown, slides separated by ---" }, footer: { type: "string" }, title: { type: "string", description: "deck title for the auto-added cover slide (default: first slide title)" }, subtitle: { type: "string", description: "cover subtitle: unit, presenter" }, auto: { type: "boolean", description: "default true: a cover, an agenda (5+ content slides) and a closing thank-you slide are added when missing; false = exactly the slides you wrote" }, theme: { type: "string", enum: Object.keys(PPTX_THEMES), description: "color theme (default xanh)" }, append: { type: "boolean", description: "true = add these slides to the END of the deck you created earlier at the same path with create_pptx (use it for decks longer than ~6 slides or ~2,000 characters: send the cover and first slides without append, then the next slides with append=true; footer and theme are kept from the first call)" } }, required: ["path", "content"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
         return outlinePreview(ctx, a.path, describePptx(String(a.content ?? "")));
@@ -481,6 +484,9 @@ export function officeTools(env: Env): Tool[] {
         let content: string = a.content;
         let footer: string | undefined = a.footer;
         let theme: string | undefined = typeof a.theme === "string" ? a.theme : undefined;
+        let savedTitle: string | undefined;
+        let savedSubtitle: string | undefined;
+        let savedAuto: boolean | undefined;
         if (append) {
           const p = await prepareAppend(ctx, a.path, ".pptx", "create_pptx");
           if (p.st.content.length + a.content.length > MAX_BUILD_CHARS) throw new ToolError("Bài trình chiếu quá dài để nối thêm; hãy tách thành tệp khác.");
@@ -489,6 +495,9 @@ export function officeTools(env: Env): Tool[] {
           content = p.st.content + "\n\n---\n\n" + a.content.replace(/^\s*---\s*\n/, "");
           footer = p.st.opts.footer as string | undefined;
           theme = p.st.opts.theme as string | undefined;
+          savedTitle = p.st.opts.title as string | undefined;
+          savedSubtitle = p.st.opts.subtitle as string | undefined;
+          savedAuto = p.st.opts.auto as boolean | undefined;
         } else ({ abs, existed } = await prepareWrite(ctx, a.path, ".pptx"));
         let r;
         try {
@@ -502,13 +511,13 @@ export function officeTools(env: Env): Tool[] {
               /* ảnh thiếu: createPptx đặt khung chữ thay thế và cảnh báo */
             }
           }
-          r = await createPptx({ content, footer, theme, images });
+          r = await createPptx({ content, footer, theme, images, title: a.title ?? savedTitle, subtitle: a.subtitle ?? savedSubtitle, auto: (a.auto ?? savedAuto) === false ? false : undefined });
         } catch (e) {
           throw new ToolError((e as Error).message);
         }
         await commit(ctx, abs, r.bytes, existed);
-        buildingOf(ctx.env).set(abs, { content, opts: { footer, theme }, size: r.bytes.length });
-        return `Đã ${append ? "nối thêm vào" : existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(r.bytes.length)}, ${r.slides} slide${append ? " tổng cộng" : ""}).` + (r.warnings.length ? "\n⚠ " + r.warnings.join("\n⚠ ") : "") + "\nNếu còn slide nữa, gọi tiếp create_pptx với cùng path và append=true (mỗi lần 3-5 slide). Khi đủ, dùng read_document để kiểm tra lại."
+        buildingOf(ctx.env).set(abs, { content, opts: { footer, theme, title: a.title ?? savedTitle, subtitle: a.subtitle ?? savedSubtitle, auto: a.auto ?? savedAuto }, size: r.bytes.length });
+        return `Đã ${append ? "nối thêm vào" : existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(r.bytes.length)}, ${r.slides} slide${append ? " tổng cộng" : ""}, chủ đề màu “${r.theme}”).` + (r.warnings.length ? "\n⚠ " + r.warnings.join("\n⚠ ") : "") + "\nNếu còn slide nữa, gọi tiếp create_pptx với cùng path và append=true (mỗi lần 3-5 slide). Khi đủ, dùng read_document để kiểm tra lại."
       },
     },
   ];
