@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Quản trị: ghi nội dung hội thoại của tài khoản chỉ định** (mặc định tắt) vào CSDL riêng trên máy chủ để nghiên cứu, kèm lệnh bật/tắt/xuất/xoá (`quota.sh capture …`, xem docs/QUOTA.md). Chỉ ghi đúng các tài khoản được liệt kê; người khác không bị ảnh hưởng.
+
 ### Thay đổi
 - **Trang chủ `/agent/` là trang giới thiệu khi chưa đăng nhập**: có nút “Đăng nhập”; đăng nhập xong vào thẳng trang làm việc. Chuột trong hình hero vẽ lại bằng vector (nút giữa thỉnh thoảng sáng), ảnh demo chụp lại ở độ phân giải cao (2560 × 1600, định dạng WebP) nên không còn mờ.
 

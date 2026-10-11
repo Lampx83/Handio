@@ -7,10 +7,16 @@
 #   sudo ./quota.sh unset <email|tên-đăng-nhập>                bỏ đặt riêng
 #   sudo ./quota.sh usage <email|tên-đăng-nhập>                mức đã dùng hôm nay của một người
 #   sudo ./quota.sh uid <email|tên-đăng-nhập>                  mã giả danh (8 ký tự đầu) để đối chiếu trang quản trị
+#   sudo ./quota.sh capture add <tên-đăng-nhập|email>          BẬT ghi nội dung hội thoại (yêu cầu + câu trả lời) của đúng tài khoản đó vào CSDL
+#   sudo ./quota.sh capture remove <tên-đăng-nhập|email>       tắt ghi cho tài khoản đó (dữ liệu đã ghi vẫn còn)
+#   sudo ./quota.sh capture list                               tài khoản đang được ghi + số dòng đã ghi
+#   sudo ./quota.sh capture export [tài-khoản] [ngày]          xuất JSON Lines ra màn hình (> tep.jsonl); ngày = số ngày gần nhất
+#   sudo ./quota.sh capture purge <tên-đăng-nhập|email>        XOÁ mọi nội dung đã ghi của tài khoản đó
 # Mỗi lệnh đổi cấu hình kiểm tra hợp lệ rồi khởi động lại dịch vụ (cấu hình được nạp lúc khởi động). Bậc theo tên miền: xem "domains" trong /etc/neu-agent/quota.json.
 set -euo pipefail
 CONF=/etc/neu-agent/quota.json
 DB=/var/lib/neu-agent/quota/usage.db
+CAPDB=/var/lib/neu-agent/quota/captures.db
 SECRET=/etc/neu-agent/diag-secret
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
 [ -f "$CONF" ] || { echo "Chưa có $CONF: chạy quota/install-quota.sh trước."; exit 1; }
@@ -32,6 +38,13 @@ elif op == "set":
     cfg.setdefault("overrides", {})[i] = "unlimited" if a[1] == "unlimited" else num(a[1])
 elif op == "unset":
     cfg.setdefault("overrides", {}).pop(ident(a[0]), None)
+elif op in ("capture_add", "capture_remove"):
+    i = ident(a[0])
+    if not re.fullmatch(r"[a-z0-9._%+'-]{1,64}@[a-z0-9.-]{1,190}|[a-z0-9][a-z0-9._-]{2,31}", i): sys.exit("Email/tên đăng nhập không hợp lệ")
+    cap = cfg.setdefault("capture", {"users": [], "keep_days": 90}); cap.setdefault("keep_days", 90)
+    users = [u for u in cap.get("users", []) if u != i]
+    if op == "capture_add": users.append(i)
+    cap["users"] = sorted(users)
 fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path)); os.fchmod(fd, 0o640)
 with os.fdopen(fd, "w", encoding="utf-8") as f: json.dump(cfg, f, ensure_ascii=False, indent=2); f.write("\n")
 os.replace(tmp, path)
@@ -47,6 +60,7 @@ tz = datetime.timezone(datetime.timedelta(hours=7))
 print("Chế độ: %s | bậc: %s | vượt thêm %s%% | nhắc từ %s%% | tối đa %s yêu cầu đồng thời/người" % (cfg.get("mode"), cfg.get("tiers"), cfg.get("grace_pct"), cfg.get("warn_pct"), cfg.get("max_concurrent")))
 print("Tên miền → bậc:", cfg.get("domains"), "| mặc định:", cfg.get("default_tier"))
 print("Đặt riêng:", cfg.get("overrides") or "(không có)")
+print("Ghi nội dung hội thoại của:", (cfg.get("capture") or {}).get("users") or "(không ai)")
 try:
     db = sqlite3.connect("file:%s?mode=ro" % sys.argv[2], uri=True)
     day = datetime.datetime.now(tz).date().isoformat()
@@ -58,6 +72,49 @@ try:
 except sqlite3.Error as e:
     print("\n(chưa có dữ liệu sử dụng:", e, ")")
 PY
+    ;;
+  capture)
+    case "${2:-}" in
+      add)    [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }; edit capture_add "$3"; restart
+              echo "ĐÃ BẬT ghi nội dung hội thoại của '$3' vào $CAPDB (quyền 600, giữ 90 ngày). Hãy báo cho người dùng tài khoản này." ;;
+      remove) [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }; edit capture_remove "$3"; restart ;;
+      list)
+        python3 - "$CONF" "$CAPDB" <<'PY'
+import json, sqlite3, sys
+cfg = json.load(open(sys.argv[1], encoding="utf-8"))
+cap = cfg.get("capture") or {}
+print("Đang ghi nội dung:", cap.get("users") or "(không tài khoản nào)", "| giữ", cap.get("keep_days", 90), "ngày")
+try:
+    db = sqlite3.connect("file:%s?mode=ro" % sys.argv[2], uri=True)
+    for u, n, a, b in db.execute("select user,count(*),min(ts),max(ts) from captures group by user"):
+        import datetime
+        f = lambda t: datetime.datetime.fromtimestamp(t, datetime.timezone(datetime.timedelta(hours=7))).strftime("%Y-%m-%d %H:%M")
+        print("  %-24s %6d dòng  %s → %s" % (u, n, f(a), f(b)))
+except sqlite3.Error as e:
+    print("(chưa có dữ liệu:", e, ")")
+PY
+        ;;
+      export)
+        python3 - "$CAPDB" "${3:-}" "${4:-}" <<'PY'
+import json, sqlite3, sys, time
+db = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True); db.row_factory = sqlite3.Row
+q, args = "select * from captures", []
+w = []
+if sys.argv[2]: w.append("user=?"); args.append(sys.argv[2].strip().lower())
+if sys.argv[3].isdigit(): w.append("ts>=?"); args.append(int(time.time()) - int(sys.argv[3]) * 86400)
+if w: q += " where " + " and ".join(w)
+for r in db.execute(q + " order by ts, id", args):
+    d = dict(r)
+    for k in ("new_messages", "tool_calls"):
+        try: d[k] = json.loads(d[k]) if d[k] else None
+        except ValueError: pass
+    print(json.dumps(d, ensure_ascii=False))
+PY
+        ;;
+      purge)  [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }
+              python3 -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); n=db.execute("delete from captures where user=?",(sys.argv[2].strip().lower(),)).rowcount; db.commit(); print("Đã xoá",n,"dòng")' "$CAPDB" "$3" ;;
+      *) sed -n 2,18p "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+    esac
     ;;
   mode)  [ "${2:-}" ] || { sed -n 2,12p "$0"; exit 1; }; edit mode "$2"; restart;;
   tier)  [ "${3:-}" ] || { sed -n 2,12p "$0"; exit 1; }; edit tier "$2" "$3"; restart;;

@@ -44,6 +44,9 @@ DEFAULT_CONFIG = {
     "warn_pct": 80,                         # từ mức này giao diện nhắc người dùng
     "max_concurrent": 6,                    # số yêu cầu đang chạy đồng thời tối đa của một người
     "overrides": {},                        # {"email hoặc tên đăng nhập viết thường": số token | "unlimited"}
+    # GHI LẠI NỘI DUNG hội thoại (yêu cầu gửi lên + lời mô hình trả) của CHÍNH các tài khoản liệt kê ở đây, để quản trị nghiên cứu.
+    # Mặc định TẮT (danh sách rỗng). Chỉ dùng cho tài khoản thử nghiệm của nhóm phát triển; người dùng thật phải được báo trước.
+    "capture": {"users": [], "keep_days": 90},
 }
 
 
@@ -85,6 +88,13 @@ def load_config(path):
                 cfg["domains"] = {str(k).lower(): str(v) for k, v in raw["domains"].items()}
             if isinstance(raw.get("overrides"), dict):
                 cfg["overrides"] = {str(k).lower(): v for k, v in raw["overrides"].items() if v == "unlimited" or (isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0)}
+            cap = raw.get("capture")
+            if isinstance(cap, dict):
+                users = [str(u).strip().lower() for u in (cap.get("users") or []) if isinstance(u, str)]
+                cfg["capture"]["users"] = [u for u in users if EMAIL_RE.match(u) or USER_RE.match(u)][:50]
+                kd = cap.get("keep_days")
+                if isinstance(kd, (int, float)) and not isinstance(kd, bool) and 1 <= kd <= 365:
+                    cfg["capture"]["keep_days"] = int(kd)
     except (OSError, ValueError):
         pass
     if cfg["mode"] not in ("enforce", "observe"):
@@ -189,6 +199,69 @@ class Store:
             self.db.execute("DELETE FROM usage WHERE day < ?", (cutoff,))
 
 
+class CaptureStore:
+    """Ghi NỘI DUNG yêu cầu + câu trả lời của các tài khoản được liệt kê trong cấu hình (`capture.users`). Tệp riêng, quyền 600, chỉ root/dịch vụ đọc.
+
+    Mỗi dòng = một lần gọi mô hình: phần MỚI của yêu cầu (các tin sau lần trả lời gần nhất của trợ lý), lời trả lời (chữ + lệnh công cụ),
+    cùng token và thời gian. `conv` nhóm các lượt của một cuộc trò chuyện. Không ghi IP, không ghi khoá."""
+
+    def __init__(self, path):
+        self.path = path
+        self.db = None
+        self.lock = threading.Lock()
+        self.last_prune = 0
+
+    def _open(self):
+        if self.db is None:
+            os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
+            old = os.umask(0o077)
+            try:
+                self.db = sqlite3.connect(self.path, check_same_thread=False, isolation_level=None)
+            finally:
+                os.umask(old)
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("""CREATE TABLE IF NOT EXISTS captures(
+                id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, day TEXT NOT NULL, user TEXT NOT NULL, conv TEXT NOT NULL,
+                model TEXT NOT NULL DEFAULT '', n_messages INTEGER NOT NULL DEFAULT 0, new_messages TEXT NOT NULL, reply TEXT NOT NULL DEFAULT '',
+                tool_calls TEXT NOT NULL DEFAULT '', finish TEXT NOT NULL DEFAULT '', status INTEGER NOT NULL DEFAULT 0,
+                prompt_tokens INTEGER NOT NULL DEFAULT 0, completion_tokens INTEGER NOT NULL DEFAULT 0, ms INTEGER NOT NULL DEFAULT 0)""")
+            self.db.execute("CREATE INDEX IF NOT EXISTS captures_user_ts ON captures(user, ts)")
+        return self.db
+
+    def add(self, now, user, rec, keep_days):
+        with self.lock:
+            db = self._open()
+            db.execute(
+                "INSERT INTO captures(ts,day,user,conv,model,n_messages,new_messages,reply,tool_calls,finish,status,prompt_tokens,completion_tokens,ms) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (int(now), vn_day(now), user, rec["conv"], rec["model"], rec["n_messages"], rec["new_messages"], rec["reply"], rec["tool_calls"], rec["finish"],
+                 rec["status"], rec["prompt"], rec["completion"], rec["ms"]))
+            if now - self.last_prune >= 3600:
+                self.last_prune = now
+                db.execute("DELETE FROM captures WHERE ts < ?", (int(now) - keep_days * 86400,))
+
+    def close(self):
+        with self.lock:
+            if self.db is not None:
+                self.db.close()
+                self.db = None
+
+
+def capture_record(req, status, reply_text, tool_calls, finish, usage, ms):
+    """Dựng một dòng ghi từ yêu cầu và phản hồi (đã gom)."""
+    msgs = req.get("messages") if isinstance(req.get("messages"), list) else []
+    last_a = max((i for i, m in enumerate(msgs) if isinstance(m, dict) and m.get("role") == "assistant"), default=-1)
+    new = msgs[last_a + 1:]
+    first = next((m for m in msgs if isinstance(m, dict) and m.get("role") == "user"), {})
+    sysm = next((m for m in msgs if isinstance(m, dict) and m.get("role") == "system"), {})
+    key = json.dumps([str(sysm.get("content", ""))[:200], str(first.get("content", ""))[:400]], ensure_ascii=False)
+    t = tokens_of(usage) or (0, 0)
+    return {
+        "conv": hashlib.sha1(key.encode("utf-8")).hexdigest()[:12], "model": str(req.get("model") or "")[:80], "n_messages": len(msgs),
+        "new_messages": json.dumps(new, ensure_ascii=False), "reply": reply_text, "tool_calls": json.dumps(tool_calls, ensure_ascii=False) if tool_calls else "",
+        "finish": finish or "", "status": status, "prompt": t[0], "completion": t[1], "ms": ms,
+    }
+
+
 class Grants:
     """Token CẤP THÊM CHO HÔM NAY (quản trị viên bấm ở trang quản trị `/admin/quota`).
 
@@ -230,8 +303,9 @@ class Grants:
 
 
 class Config:
-    def __init__(self, secret, store, config_path, admins_path, upstream, now=time.time, grants_path=""):
+    def __init__(self, secret, store, config_path, admins_path, upstream, now=time.time, grants_path="", capture_path=""):
         self.secret, self.store, self.config_path, self.admins_path, self.upstream, self.now = secret, store, config_path, admins_path, upstream, now
+        self.capture = CaptureStore(capture_path) if capture_path else None
         self.grants = Grants(grants_path)
         self._cfg = (None, None)
         self.active = {}          # uid -> số yêu cầu đang chạy
@@ -285,6 +359,9 @@ class UsageSniffer:
         self.buf = b""
         self.usage = None
         self.out_chars = 0
+        self.text = []           # chữ trả lời (chỉ dùng khi ghi nội dung)
+        self.calls = {}          # chỉ số -> {"name","arguments"}
+        self.finish = ""
 
     def feed(self, chunk):
         self.buf += chunk
@@ -309,10 +386,23 @@ class UsageSniffer:
         if isinstance(j.get("usage"), dict):
             self.usage = j["usage"]
         for ch in j.get("choices") or []:
+            if isinstance(ch, dict) and isinstance(ch.get("finish_reason"), str):
+                self.finish = ch["finish_reason"]
             d = (ch or {}).get("delta") or {}
             for k in ("content", "reasoning_content", "reasoning"):
                 if isinstance(d.get(k), str):
                     self.out_chars += len(d[k])
+            if isinstance(d.get("content"), str) and sum(len(x) for x in self.text) < 400_000:
+                self.text.append(d["content"])
+            for tc in d.get("tool_calls") or []:
+                if not isinstance(tc, dict):
+                    continue
+                cur = self.calls.setdefault(tc.get("index", 0), {"name": "", "arguments": ""})
+                fn = tc.get("function") or {}
+                if isinstance(fn.get("name"), str):
+                    cur["name"] += fn["name"]
+                if isinstance(fn.get("arguments"), str) and len(cur["arguments"]) < 200_000:
+                    cur["arguments"] += fn["arguments"]
 
 
 def cached_of(usage):
@@ -455,6 +545,7 @@ class Handler(BaseHTTPRequestHandler):
             up.close()
             return self._json(502, {"error": "upstream", "message": "Không kết nối được máy chủ mô hình."})
         sniff, stream = UsageSniffer(), "event-stream" in (r.getheader("Content-Type") or "")
+        t_start = time.time()
         qh = quota_headers(q)
         try:
             self.send_response(r.status)
@@ -482,20 +573,45 @@ class Handler(BaseHTTPRequestHandler):
             pass  # máy khách ngắt: dừng đọc từ mô hình (kết thúc việc sinh) nhưng vẫn tính phần đã dùng
         finally:
             up.close()
-        if own or not (200 <= r.status < 300):
-            return
         if not stream:
             try:
                 j = json.loads(full.decode("utf-8"))
                 sniff.usage = j.get("usage") if isinstance(j, dict) else None
                 sniff.out_chars = len(full)
+                msg = ((j.get("choices") or [{}])[0] or {}).get("message") or {}
+                sniff.text = [msg["content"]] if isinstance(msg.get("content"), str) else []
+                sniff.finish = str(((j.get("choices") or [{}])[0] or {}).get("finish_reason") or "")
+                for i, tc in enumerate(msg.get("tool_calls") or []):
+                    fn = (tc or {}).get("function") or {}
+                    sniff.calls[i] = {"name": str(fn.get("name", "")), "arguments": str(fn.get("arguments", ""))}
             except ValueError:
                 pass
+        self._capture(c, req, r.status, sniff, t_start)
+        if own or not (200 <= r.status < 300):
+            return
         t = tokens_of(sniff.usage)
         est = False
         if t is None:  # không có usage (ngắt giữa chừng hoặc mô hình không trả): ước lượng từ kích thước, đánh dấu
             t, est = (len(raw) // 3, sniff.out_chars // 3), True
         c.store.add(day, uid, q["tier"], limit, t[0], t[1], est, 0 if est else cached_of(sniff.usage), q["extra"])
+
+
+def _capture(self, c, req, status, sniff, t_start):
+    """Ghi nội dung nếu tài khoản nằm trong danh sách `capture.users` (mặc định rỗng = không ghi gì)."""
+    if c.capture is None:
+        return
+    cap = c.cfg()["capture"]
+    ident = self._ident()
+    if not ident or ident not in cap["users"]:
+        return
+    try:
+        rec = capture_record(req, status, "".join(sniff.text), [sniff.calls[k] for k in sorted(sniff.calls)], sniff.finish, sniff.usage, int((time.time() - t_start) * 1000))
+        c.capture.add(c.now(), ident, rec, cap["keep_days"])
+    except (sqlite3.Error, OSError, ValueError, TypeError):
+        pass  # ghi nội dung không bao giờ được làm hỏng yêu cầu của người dùng
+
+
+Handler._capture = _capture
 
 
 def make_server(ctx, host="127.0.0.1", port=4191):
@@ -528,6 +644,7 @@ def main():
         admins_path=os.environ.get("NEU_QUOTA_ADMINS") or os.path.join(cred, "admins"),
         upstream=(up[0], int(up[1])),
         grants_path=os.environ.get("NEU_QUOTA_GRANTS", "/var/lib/neu-agent/quota/grants.json"),
+        capture_path=os.environ.get("NEU_QUOTA_CAPTURE_DB", "/var/lib/neu-agent/quota/captures.db"),
     )
     srv = make_server(ctx, os.environ.get("NEU_QUOTA_BIND", "127.0.0.1"), int(os.environ.get("NEU_QUOTA_PORT", "4191")))
     cfg = ctx.cfg()

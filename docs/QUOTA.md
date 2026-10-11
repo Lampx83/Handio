@@ -47,6 +47,24 @@ Cần cài lại: `sudo ./quota/install-quota.sh` (cổng đọc tệp cấp th�
 
 Trang quản trị `https://ai.neu.edu.vn/agent/admin/` có mục **Hạn mức token**: token mỗi ngày, số người gần/hết hạn mức, số yêu cầu bị chặn, bảng người dùng đang dùng nhiều hạn mức.
 
+## Ghi nội dung hội thoại của tài khoản chỉ định (để nghiên cứu)
+
+Mặc định cổng **không ghi nội dung** nào. Quản trị có thể bật ghi cho **đúng một số tài khoản** (thường là tài khoản thử nghiệm như `test01`) để nghiên cứu cách người dùng hỏi và mô hình trả lời:
+
+```bash
+sudo ~/neu-agent-220/quota/quota.sh capture add test01        # bật (khởi động lại cổng; áp dụng từ yêu cầu kế tiếp)
+sudo ~/neu-agent-220/quota/quota.sh capture list              # ai đang được ghi + số dòng
+sudo ~/neu-agent-220/quota/quota.sh capture export test01 7 > test01.jsonl   # xuất 7 ngày gần nhất (JSON Lines)
+sudo ~/neu-agent-220/quota/quota.sh capture remove test01     # tắt (dữ liệu cũ vẫn còn)
+sudo ~/neu-agent-220/quota/quota.sh capture purge test01      # xoá hết nội dung đã ghi của tài khoản đó
+```
+
+- **Chỗ lưu:** `/var/lib/neu-agent/quota/captures.db` (SQLite, quyền 600, chỉ root/dịch vụ đọc), bảng `captures`; tự xoá dòng cũ hơn `capture.keep_days` (mặc định 90 ngày).
+- **Mỗi dòng** = một lần gọi mô hình: tên tài khoản, nhóm cuộc trò chuyện (`conv`), phần **mới** của yêu cầu (các tin sau lần trả lời trước của trợ lý), **lời trả lời** (chữ và lệnh công cụ), lý do kết thúc, số token, thời gian, mã trạng thái. Không ghi IP, không ghi key.
+- **Phạm vi:** chỉ đúng các tài khoản trong `capture.users` (cấu hình `quota.json`); người khác không bao giờ bị ghi. Lỗi ghi không làm hỏng yêu cầu của người dùng.
+- **Riêng tư:** đây là ngoại lệ có chủ đích so với nguyên tắc “không lưu nội dung” (số liệu chẩn đoán vẫn không chứa nội dung). Chỉ dùng cho tài khoản thử nghiệm của nhóm phát triển; **người dùng thật phải được thông báo trước**. Không đưa tệp xuất lên kho mã.
+- Cần cập nhật cổng: `sudo ./quota/install-quota.sh` (không ghi đè `quota.json`).
+
 ## Cài đặt / cập nhật
 ```bash
 scp -r deploy/220 220:~/neu-agent-220

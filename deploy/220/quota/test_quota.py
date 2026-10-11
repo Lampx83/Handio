@@ -134,6 +134,75 @@ class GatewayCase(unittest.TestCase):
         return self.store.used(Q.vn_day(self.now[0]), self.uid(ident))
 
 
+class CaptureTests(GatewayCase):
+    """Ghi NỘI DUNG hội thoại: chỉ đúng tài khoản được liệt kê, mặc định tắt, không làm hỏng yêu cầu."""
+
+    def setUp(self):
+        super().setUp()
+        self.cap_path = os.path.join(self.tmp.name, "q", "captures.db")
+        self.ctx.capture = Q.CaptureStore(self.cap_path)
+        self.addCleanup(self.ctx.capture.close)
+
+    def rows(self):
+        if not os.path.exists(self.cap_path):
+            return []
+        db = sqlite3.connect(self.cap_path)
+        db.row_factory = sqlite3.Row
+        out = [dict(r) for r in db.execute("select * from captures order by id")]
+        db.close()
+        return out
+
+    BODY = {"model": "m", "stream": True, "messages": [
+        {"role": "system", "content": "Bạn là trợ lý"}, {"role": "user", "content": "câu hỏi 1"},
+        {"role": "assistant", "content": "trả lời 1"}, {"role": "user", "content": "câu hỏi 2"}]}
+
+    def test_off_by_default_writes_nothing(self):
+        self.assertEqual(self.post(ident="test01", body=self.BODY)[0], 200)
+        self.assertEqual(self.rows(), [])
+        self.assertFalse(os.path.exists(self.cap_path))          # không tạo cả tệp khi tính năng tắt
+
+    def test_only_listed_account_is_captured_with_request_and_reply(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "capture": {"users": ["Test01 ", "bad user!"], "keep_days": 30}})
+        self.post(ident="test01", body=self.BODY)
+        self.post(ident=SV, body=self.BODY)                       # tài khoản khác: không ghi
+        r = self.rows()
+        self.assertEqual(len(r), 1)
+        self.assertEqual((r[0]["user"], r[0]["model"], r[0]["n_messages"], r[0]["status"]), ("test01", "m", 4, 200))
+        self.assertEqual(json.loads(r[0]["new_messages"]), [{"role": "user", "content": "câu hỏi 2"}])   # chỉ phần MỚI của lượt này
+        self.assertEqual(r[0]["reply"], "xin chào bạn")
+        self.assertEqual((r[0]["prompt_tokens"], r[0]["completion_tokens"]), (10, 5))
+        self.assertEqual(len(r[0]["conv"]), 12)
+
+    def test_tool_calls_and_nonstream_reply_are_captured(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "capture": {"users": ["test01"]}})
+        ev = [{"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"name": "read_file", "arguments": "{\"path\""}}]}}]},
+              {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": ": \"a.md\"}"}}]}, "finish_reason": "tool_calls"}]},
+              {"choices": [], "usage": {"prompt_tokens": 7, "completion_tokens": 3}}]
+        self.up.stream_body = b"".join(b"data: " + json.dumps(e).encode() + b"\n\n" for e in ev) + b"data: [DONE]\n\n"
+        self.post(ident="test01", body=self.BODY)
+        self.post(ident="test01", body={"model": "m", "messages": [{"role": "user", "content": "x"}], "stream": False})
+        r = self.rows()
+        self.assertEqual(json.loads(r[0]["tool_calls"]), [{"name": "read_file", "arguments": "{\"path\": \"a.md\"}"}])
+        self.assertEqual(r[0]["finish"], "tool_calls")
+        self.assertEqual(r[1]["reply"], "ok")
+
+    def test_capture_failure_never_breaks_the_user_request(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "capture": {"users": ["test01"]}})
+        self.ctx.capture = Q.CaptureStore("/proc/khong-ghi-duoc/captures.db")
+        st, out, _ = self.post(ident="test01", body=self.BODY)
+        self.assertEqual((st, out), (200, sse()))
+
+    def test_retention_prunes_old_rows(self):
+        db = Q.CaptureStore(os.path.join(self.tmp.name, "r", "c.db"))
+        rec = Q.capture_record(self.BODY, 200, "x", [], "stop", None, 1)
+        db.add(T0 - 100 * 86400, "test01", rec, 90)
+        db.last_prune = 0
+        db.add(T0, "test01", rec, 90)
+        n = db.db.execute("select count(*) from captures").fetchone()[0]
+        db.close()
+        self.assertEqual(n, 1)
+
+
 class PureTests(unittest.TestCase):
     def test_tiers_and_limits(self):
         cfg = Q.load_config("/không/có")

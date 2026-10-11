@@ -123,7 +123,7 @@ Phát hiện phía ứng dụng (`DIAG_THRESHOLDS`): lặp ≥3 lần cùng côn
 
 ## Góp ý / báo lỗi do người dùng viết (khác chẩn đoán)
 
-Chẩn đoán KHÔNG chứa nội dung. **Góp ý** thì ngược lại: là chữ do chính người dùng viết và chủ động gửi qua nút 💬 để nhóm phát triển đọc, nên có nội dung và **kèm tên đăng nhập** (hộp góp ý nói rõ điều này). Không có gì được gửi tự động.
+Chẩn đoán KHÔNG chứa nội dung (ngoại lệ riêng, mặc định tắt: quản trị có thể bật ghi nội dung hội thoại của vài tài khoản thử nghiệm ở cổng hạn mức, xem [QUOTA.md](QUOTA.md)). **Góp ý** thì ngược lại: là chữ do chính người dùng viết và chủ động gửi qua nút 💬 để nhóm phát triển đọc, nên có nội dung và **kèm tên đăng nhập** (hộp góp ý nói rõ điều này). Không có gì được gửi tự động.
 
 | Điều | Cách làm |
 |---|---|

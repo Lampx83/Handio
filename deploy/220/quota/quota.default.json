@@ -6,5 +6,6 @@
   "grace_pct": 10,
   "warn_pct": 80,
   "max_concurrent": 6,
-  "overrides": {}
+  "overrides": {},
+  "capture": { "users": [], "keep_days": 90 }
 }
