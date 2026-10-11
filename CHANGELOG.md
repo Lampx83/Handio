@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.6] - 2026-10-11
+
 ### Thay đổi
 - **Tab Work yên lặng hơn**: các bước của agent gập vào một dòng ("Đang tạo bài trình chiếu… · 4 bước", xong thì "✓ Hoàn tất · N bước · 12 giây"); lỗi agent tự xử lý không còn hiện đỏ giữa màn hình; cuối lượt có nút mở tệp vừa tạo. Muốn xem từng bước: Cài đặt › Giao diện › "Hiện từng bước chi tiết".
 - **Danh sách tệp chuyển sang thanh bên phải** (có thể thu gọn); ẩn tệp tạm `~$…` của Office. Xem tài liệu mở ngay trong cột đó, có nút "← Tệp" để quay lại.
