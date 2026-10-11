@@ -81,7 +81,7 @@ export type SessionEvent =
   | { type: "todos"; todos: Todo[] }
   | { type: "mode"; mode: Mode }
   | { type: "quota"; quota: QuotaInfo }
-  | { type: "usage"; promptTokens: number; completionTokens: number; contextPct: number; calls: number; /** token lời nhắc dùng lại từ bộ nhớ đệm (cộng dồn; 0 nếu máy chủ không báo) */ cachedTokens?: number }
+  | { type: "usage"; promptTokens: number; completionTokens: number; contextPct: number; calls: number; /** token lời nhắc dùng lại từ bộ nhớ đệm (cộng dồn; 0 nếu máy chủ không báo) */ cachedTokens?: number; /** Chi tiết cửa sổ ngữ cảnh (ước lượng đã hiệu chỉnh theo token thật) */ context?: { used: number; limit: number; parts: { name: string; tokens: number }[] } }
   | { type: "notice"; level: "info" | "warn" | "error"; text: string; /** Hành động gợi ý cho người dùng: "login" = hiện nút Đăng nhập lại. */ action?: "login" }
   | { type: "files_changed"; paths: string[] }
   | { type: "summary"; turn: number; files: ChangeFile[]; /** Đã chạy kiểm tra sau lần sửa cuối chưa */ verify: "ok" | "fail" | "none" }

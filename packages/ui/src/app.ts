@@ -19,6 +19,9 @@ import { DocPane } from "./docview";
 import { WorkTools } from "./work-tools";
 import { PROMPT_TEMPLATE } from "./prompt-tips";
 import { buildQuestionCard } from "./question-card";
+import { ActivityBlock, activityLabel, changedFiles, chipSplit, DEFAULT_LABEL, detailSteps, groupHistory, isDocViewable, isQuiet, keepsPrecedingText } from "./activity";
+import { buildContextPanel, contextTitle, contextView, type UsageInfo } from "./context-info";
+import { sortEntries, splitName, visibleEntries, type SortBy } from "./file-list";
 
 const MODE_INFO: Record<Mode, { label: string; desc: string }> = {
   default: { label: "Hỏi trước", desc: "Đọc tự do. Sửa file và chạy lệnh phải được bạn duyệt." },
@@ -37,6 +40,8 @@ interface ToolCard {
   body: HTMLElement;
   res: HTMLElement;
   depth: number;
+  /** Thẻ nằm trong khối gập của chế độ yên lặng. */
+  inAct?: boolean;
 }
 
 export interface MountOptions {
@@ -140,6 +145,17 @@ class App {
   private shell: HTMLElement;
   private visible = true;
   private cur: HTMLElement | null = null; // khối trả lời đang stream
+  // chế độ yên lặng (tab Work): hoạt động của một lượt gom vào một khối gập
+  private act: ActivityBlock | null = null;
+  /** Lời dẫn/suy nghĩ/thông báo nhẹ đã hiện ở dòng chính từ công cụ trước: chuyển vào khối khi công cụ kế tiếp bắt đầu. */
+  private mid: HTMLElement[] = [];
+  private turnQuiet: boolean | null = null;
+  private turnFiles: string[] = [];
+  private curTool: string | null = null;
+  // bảng chi tiết ngữ cảnh (bấm vào vòng tròn)
+  private meterBtn!: HTMLButtonElement;
+  private lastUsage: UsageInfo | null = null;
+  private ctxPop: HTMLElement | null = null;
   private curRaw = "";
   private curThink: HTMLElement | null = null;
   private renderQueued = false;
@@ -152,6 +168,21 @@ class App {
   private stick = true;
   private expanded = new Set<string>();
   private sideStore = store("neu.side");
+  // thanh bên phải: danh sách tệp ("Tệp") và khung xem (tài liệu / xem trước / thay đổi) trong cùng một cột
+  private rside = h("aside", { class: "rside", "aria-label": "Tệp", hidden: true });
+  private filesView = h("div", { class: "rs-files" });
+  private viewWrap = h("div", { class: "rs-view", hidden: true });
+  private filesBtn!: HTMLButtonElement;
+  private sortBtn!: HTMLButtonElement;
+  private rsStore = store("neu.files");
+  private sortStore = store("neu.sort");
+  private rsOpen = false;
+  private rsInit = false;
+  private filesForced = false;
+  private wasView = false;
+  private sortBy: SortBy = "recent";
+  /** Tệp agent/người dùng vừa tạo hoặc sửa trong phiên (lõi chưa gửi thời gian sửa của tệp): để xếp "mới nhất". */
+  private touched = new Map<string, number>();
   private history: string[] = [];
   private histIdx = -1;
 
@@ -171,7 +202,7 @@ class App {
       append: (el) => this.append(el),
       setInput: (t) => { this.input.value = t; this.autoGrow(); this.input.focus(); },
       refreshState: () => void this.refresh(),
-      openDoc: (path, loc) => void this.docPane.open(path, loc),
+      openDoc: (path, loc) => this.openDoc(path, loc),
     });
     this.build();
     ctl.onEvent((e) => this.onEvent(e));
@@ -180,6 +211,7 @@ class App {
 
   setVisible(v: boolean): void {
     this.visible = v;
+    if (!v) this.closeCtxPop(false);
     if (v) {
       this.opts.onAttention?.("clear");
       requestAnimationFrame(() => {
@@ -192,11 +224,16 @@ class App {
   // ------------------------------------------------------------------ khung
   private build(): void {
     const toggle = h("button", { class: "iconbtn toggle-side", type: "button", "aria-label": "Mở/đóng thanh bên", onclick: () => this.shell.classList.toggle("side-open") }, "☰");
+    this.filesBtn = h("button", { class: "iconbtn", type: "button", "aria-label": "Tệp", title: "Danh sách tệp", "aria-pressed": "false", onclick: () => this.toggleRside() }, "📄");
+    this.sortBtn = h("button", { class: "rs-sort", type: "button", onclick: () => this.setSort(this.sortBy === "recent" ? "name" : "recent") });
+    this.sortBy = this.sortStore.get() === "name" ? "name" : "recent";
+    this.paintSort();
     const tools = [
       ...this.codeTools.buttons,
       ...this.workTools.buttons,
       this.learnBtn,
       this.newBtn,
+      this.filesBtn,
       ...(this.ctl.shareChat ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Chia sẻ cuộc trò chuyện", title: "Chia sẻ cuộc trò chuyện này bằng một liên kết", onclick: () => openShare(this.ctl, { track: (a) => this.t(a) }) }, "🔗")] : []),
       ...(this.ctl.sendFeedback ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Góp ý", title: "Góp ý / báo lỗi cho nhóm phát triển", onclick: () => openFeedback(this.ctl, { track: (a) => this.t(a) }) }, "💬")] : []),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Hướng dẫn", title: "Hướng dẫn: mẹo, thủ thuật, tình huống mẫu", onclick: () => this.openGuideDlg() }, "💡"),
@@ -214,14 +251,13 @@ class App {
       h("div", { class: "newchat-wrap" }, this.newChatBtn),
       this.chatsHead,
       this.chatsEl,
-      h("h4", { class: "files-h" }, "Tệp", this.sideActions),
-      this.tree,
       this.todosHead,
       this.todosEl,
       this.opts.account ? accountChip(this.opts.account, () => this.openSettings()) : null,
       versionLink(),
     );
     setUpdateChecker(this.opts.checkUpdate); // nút "Kiểm tra cập nhật" nằm trong hộp Nhật ký thay đổi
+    this.meterBtn = h("button", { class: "meter", type: "button", title: this.ctxTip, "aria-label": "Chi tiết ngữ cảnh", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => this.toggleCtxPop() }, h("span", { class: "bar" }, this.meterBar), this.meterTxt);
     const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.input,
       // dưới ô nhập (giống Claude): trái = chế độ chạy + mẫu prompt; phải = mức ngữ cảnh, mô hình, Gửi
       h("div", { class: "bar" },
@@ -230,12 +266,26 @@ class App {
         h("button", { class: "btn sm", type: "button", title: "Chèn khung Mục tiêu – Ngữ cảnh – Ràng buộc", onclick: () => this.insertTemplate() }, "Mẫu prompt"),
         this.hintEl, h("span", { class: "grow" }),
         this.quotaEl,
-        h("div", { class: "meter", title: this.ctxTip }, h("div", { class: "bar" }, this.meterBar), this.meterTxt),
+        this.meterBtn,
         this.codeTools.modelEl, this.sendBtn)));
     const main = h("main", { class: "main" }, this.bannerHost, this.feed, composer);
     this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path), (text) => void this.submit(text));
     this.pvHost.append(this.pv.el);
-    this.shell.append(...(head ? [head] : []), h("div", { class: "neu-body" }, side, main, this.codeTools.panel, this.pvHost, this.docPane.el));
+    // cột phải: danh sách tệp, hoặc khung xem của tab (Work: tài liệu, Design: xem trước, Code: thay đổi)
+    this.filesView.append(
+      h("div", { class: "rs-head" }, h("b", {}, "Tệp"), h("span", { class: "grow" }), this.sortBtn,
+        h("button", { class: "iconbtn rs-x", type: "button", "aria-label": "Ẩn danh sách tệp", title: "Ẩn", onclick: () => this.toggleRside(false) }, "✕")),
+      this.sideActions, this.tree);
+    this.viewWrap.append(
+      h("div", { class: "rs-back" }, h("button", { class: "btn sm", type: "button", title: "Quay lại danh sách tệp", onclick: () => this.showFiles() }, "← Tệp"),
+        h("span", { class: "grow" }), h("button", { class: "iconbtn rs-x rs-x-narrow", type: "button", "aria-label": "Đóng", title: "Đóng", onclick: () => this.toggleRside(false) }, "✕")),
+      this.codeTools.panel, this.pvHost, this.docPane.el);
+    this.rside.append(this.filesView, this.viewWrap);
+    if (typeof MutationObserver !== "undefined") {
+      const mo = new MutationObserver(() => this.paintRight());
+      for (const el of [this.codeTools.panel, this.pvHost, this.docPane.el]) mo.observe(el, { attributes: true, attributeFilter: ["hidden"] });
+    }
+    this.shell.append(...(head ? [head] : []), h("div", { class: "neu-body" }, side, main, this.rside));
     if (this.sideStore.get() === "0") this.side(false);
     this.shell.append(this.fileInput);
     this.fileInput.addEventListener("change", () => {
@@ -313,6 +363,13 @@ class App {
     this.pv?.setVisible(design);
     if (design) void this.pv?.refreshFiles();
     void this.paintChats();
+    if (!this.rsInit) {
+      // lần đầu: nhớ lựa chọn của người dùng; chưa chọn thì mở khi cửa sổ đủ rộng (xem trước thiết kế là nội dung chính nên ngưỡng thấp hơn)
+      this.rsInit = true;
+      const saved = this.rsStore.get();
+      this.rsOpen = saved === "1" || saved === "0" ? saved === "1" : window.innerWidth >= (design ? 720 : 1100);
+    }
+    this.paintRight();
     this.paintMode();
     this.paintQuota();
     this.paintSideActions();
@@ -421,15 +478,27 @@ class App {
     this.cur = null;
     clear(this.feedInner);
     this.stick = true;
-    for (const it of history) {
-      if (it.kind === "user") this.append(h("div", { class: "msg-user" }, it.text));
-      else if (it.kind === "assistant") {
-        const el = h("div", { class: "msg-ai" });
-        this.md(el, it.text);
-        this.append(el);
+    this.act = null;
+    this.mid = [];
+    const assistant = (text: string): HTMLElement => {
+      const el = h("div", { class: "msg-ai" });
+      this.md(el, text);
+      return el;
+    };
+    const toolRow = (it: HistoryItem): HTMLElement => h("div", { class: "tool ok" }, h("div", { class: "tool-h" }, h("span", { class: "dot" }), h("span", { class: "nm" }, TOOL_LABEL[it.name ?? ""] ?? it.name ?? "Công cụ"), h("span", { class: "sm" }, it.text)));
+    if (isQuiet(this.state?.profile, detailSteps())) {
+      // yên lặng: mỗi lượt có công cụ thành một khối gập "N bước" (không hiện từng thẻ), lời dẫn nằm trong khối
+      for (const b of groupHistory(history)) {
+        if (b.kind === "user") this.append(h("div", { class: "msg-user" }, b.text));
+        else if (b.kind === "assistant") this.append(assistant(b.text));
+        else this.append(ActivityBlock.saved(b.items.map((it) => (it.kind === "tool" ? toolRow(it) : assistant(it.text))), b.steps, b.hasFinal).el);
       }
-      else this.append(h("div", { class: "tool ok" }, h("div", { class: "tool-h" }, h("span", { class: "dot" }), h("span", { class: "nm" }, TOOL_LABEL[it.name ?? ""] ?? it.name ?? "Công cụ"), h("span", { class: "sm" }, it.text))));
-    }
+    } else
+      for (const it of history) {
+        if (it.kind === "user") this.append(h("div", { class: "msg-user" }, it.text));
+        else if (it.kind === "assistant") this.append(assistant(it.text));
+        else this.append(toolRow(it));
+      }
     if (!history.length) this.paintWelcome();
   }
 
@@ -437,10 +506,19 @@ class App {
   private onEvent(e: SessionEvent): void {
     this.codeTools.onEvent(e);
     this.workTools.onEvent(e);
-    if (e.type === "files_changed") this.docPane.onFilesChanged(e.paths);
+    if (e.type === "files_changed") {
+      this.docPane.onFilesChanged(e.paths);
+      if (this.busy) this.turnFiles.push(...e.paths);
+      for (const p of e.paths) this.touched.set(p, Date.now());
+    }
     switch (e.type) {
       case "turn_start":
         this.busy = true;
+        this.turnQuiet = isQuiet(this.state?.profile, detailSteps());
+        this.act = null;
+        this.mid = [];
+        this.turnFiles = [];
+        this.curTool = null;
         this.paintBusy();
         break;
       case "text":
@@ -450,6 +528,7 @@ class App {
           this.cur = h("div", { class: "msg-ai" });
           this.curRaw = "";
           this.append(this.cur);
+          this.mid.push(this.cur);
         }
         this.curRaw += e.delta;
         this.queueRender();
@@ -458,6 +537,7 @@ class App {
         if (!this.curThink) {
           this.curThink = h("div", { class: "think" });
           this.append(this.curThink);
+          this.mid.push(this.curThink);
         }
         this.curThink.textContent += e.delta;
         this.scroll();
@@ -468,6 +548,7 @@ class App {
       case "tool_start":
         this.finishText();
         this.dropWelcome();
+        if (e.depth === 0) this.curTool = e.name;
         this.addTool(e);
         break;
       case "tool_result":
@@ -496,7 +577,9 @@ class App {
         const ring = this.meterBar.parentElement as HTMLElement; // vòng tròn dưới ô nhập: --p = % đã dùng, mức màu theo ngưỡng
         ring.style.setProperty("--p", String(Math.max(0, Math.min(100, e.contextPct))));
         ring.dataset.lvl = e.contextPct > 85 ? "vhi" : e.contextPct > 65 ? "hi" : "";
-        this.ctxTip = `Ngữ cảnh đã dùng ${e.contextPct}% · ${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi`;
+        this.lastUsage = { promptTokens: e.promptTokens, completionTokens: e.completionTokens, contextPct: e.contextPct, calls: e.calls, context: e.context };
+        const cv = contextView(this.lastUsage, this.state?.settings?.contextTokens ?? 0);
+        this.ctxTip = (e.context && cv ? `Ngữ cảnh ${contextTitle(cv)}` : `Ngữ cảnh đã dùng ${e.contextPct}%`) + ` · ${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi · bấm để xem chi tiết`;
         this.paintQuota();
         this.meterTxt.textContent = `${e.contextPct}%`;
         this.meterTxt.title = `${e.promptTokens} token vào · ${e.completionTokens} token ra · ${e.calls} lần gọi`;
@@ -512,7 +595,15 @@ class App {
               : h("div", { class: "notice-sub" }, h("button", { class: "btn primary sm", type: "button", onclick: () => (this.t("login_prompt"), (go ?? (() => location.reload()))()) }, "Đăng nhập lại"), " rồi gửi lại yêu cầu của bạn.")));
           break;
         }
-        this.append(h("div", { class: "notice " + e.level, role: e.level === "error" ? "alert" : "status" }, e.text));
+        {
+          const note = h("div", { class: "notice " + e.level, role: e.level === "error" ? "alert" : "status" }, e.text);
+          // yên lặng: thông báo nhẹ (info/warn) giữa chừng vào khối gập; lỗi và đăng nhập lại luôn ở dòng chính
+          if (this.quiet() && e.level !== "error" && this.act) this.act.list.append(note);
+          else {
+            this.append(note);
+            if (this.quiet() && e.level !== "error") this.mid.push(note);
+          }
+        }
         break;
       case "proc": {
         const p = this.procs.get(e.id) ?? { command: e.command, alive: true };
@@ -527,21 +618,36 @@ class App {
         void this.loadTree(e.paths);
         if (this.state?.profile === "design") void this.pv?.onFilesChanged(e.paths);
         break;
-      case "turn_end":
+      case "turn_end": {
         this.finishText();
         this.busy = false;
         this.pending = null;
+        const quiet = this.quiet();
+        if (this.act) {
+          const hasFinal = !!e.final?.trim() || this.mid.some((el) => el.isConnected && el.parentElement === this.feedInner && el.classList.contains("msg-ai") && !!el.textContent?.trim());
+          this.act.finish({ interrupted: e.interrupted, hasFinal });
+        }
+        this.act = null;
+        this.mid = [];
+        this.turnQuiet = null;
+        this.curTool = null;
         if (e.interrupted) this.append(h("div", { class: "notice warn" }, "Đã dừng theo yêu cầu."));
+        else if (quiet) this.appendFileChips(changedFiles(this.turnFiles));
+        this.turnFiles = [];
         if (!this.visible) this.opts.onAttention?.("done");
         if (!e.interrupted) this.appendFeedback();
         this.paintBusy();
         this.input.focus();
         void this.paintChats();
         break;
+      }
       case "reset":
         this.cards.clear();
         this.lastCard = null;
         this.cur = null;
+        this.act = null;
+        this.mid = [];
+        this.turnQuiet = null;
         this.pending = null;
         void this.refresh(true);
         break;
@@ -587,6 +693,172 @@ class App {
     this.curThink = null;
   }
 
+  /** Chế độ yên lặng cho lượt hiện tại (chốt lúc bắt đầu lượt để đổi công tắc giữa chừng không làm lẫn giao diện). */
+  private quiet(): boolean {
+    return this.turnQuiet ?? isQuiet(this.state?.profile, detailSteps());
+  }
+
+  // ------------------------------------------------------------------ tệp vừa làm (cuối lượt)
+  /** Hàng chip tệp dưới câu trả lời cuối. Chỗ đặt ngay (để đứng trước hàng góp ý), nội dung điền sau khi kiểm tra tệp còn tồn tại. */
+  private appendFileChips(files: string[]): void {
+    if (!files.length) return;
+    const row = h("div", { class: "file-chips", role: "group", "aria-label": "Tệp vừa làm", hidden: true });
+    this.append(row);
+    void (async () => {
+      const dirs = new Map<string, Set<string> | null>();
+      const alive: string[] = [];
+      for (const f of files) {
+        const i = f.lastIndexOf("/");
+        const dir = i < 0 ? "." : f.slice(0, i);
+        if (!dirs.has(dir)) {
+          try {
+            dirs.set(dir, new Set((await this.ctl.listDir(dir)).map((x) => x.name)));
+          } catch {
+            dirs.set(dir, null);
+          }
+        }
+        if (dirs.get(dir)?.has(f.slice(i + 1))) alive.push(f); // đã xoá hoặc không đọc được thì không hiện
+      }
+      const { shown, more } = chipSplit(alive);
+      if (!shown.length) return void row.remove();
+      for (const f of shown) {
+        const name = f.split("/").pop()!;
+        row.append(h("button", { class: "file-chip", type: "button", title: f, onclick: () => this.openChip(f) }, treeIcon(name, false, false)[1], h("span", { class: "nm" }, name)));
+      }
+      if (more) row.append(h("span", { class: "file-more", title: alive.slice(shown.length).join("\n") }, `+${more} tệp`));
+      row.hidden = false;
+      this.scroll();
+    })();
+  }
+
+  private openChip(path: string): void {
+    if (this.state.profile === "work" && this.ctl.docView && isDocViewable(path)) return this.openDoc(path);
+    this.revealInTree(path);
+  }
+
+  /** Mở thanh bên, bung thư mục chứa và tô sáng tệp trong cây. */
+  private revealInTree(path: string): void {
+    const parts = path.split("/");
+    for (let i = 1; i < parts.length; i++) this.openDirs.add(parts.slice(0, i).join("/"));
+    this.showFiles();
+    void this.loadTree([path]);
+  }
+
+  /** Mở tài liệu trong khung xem (cột phải chuyển sang chế độ Xem). */
+  private openDoc(path: string, loc?: string): void {
+    this.filesForced = false;
+    void this.docPane.open(path, loc);
+    this.paintRight();
+  }
+
+  // ------------------------------------------------------------------ cột phải
+  private viewOpen(): boolean {
+    const p = this.state?.profile;
+    return p === "work" ? !this.docPane.el.hidden : p === "design" ? !this.pvHost.hidden : p === "code" ? !this.codeTools.panel.hidden : false;
+  }
+
+  /** Cột phải = danh sách tệp, hoặc khung xem khi đang có thứ để xem (và người dùng không bấm "← Tệp"). */
+  private paintRight(): void {
+    const view = this.viewOpen();
+    if (view && !this.wasView) {
+      this.filesForced = false;
+      if (this.rsInit && this.state?.profile !== "design") this.rsOpen = true; // vừa mở tài liệu/thay đổi: cột phải tự hiện
+    }
+    this.wasView = view;
+    const showView = view && !this.filesForced;
+    this.rside.hidden = !this.rsOpen;
+    this.rside.dataset.mode = showView ? "view" : "files";
+    this.filesView.hidden = showView;
+    this.viewWrap.hidden = !showView;
+    this.rside.setAttribute("aria-label", showView ? "Xem" : "Tệp");
+    this.filesBtn.setAttribute("aria-pressed", String(this.rsOpen));
+    this.filesBtn.title = this.rsOpen ? "Ẩn danh sách tệp" : "Hiện danh sách tệp";
+  }
+
+  private toggleRside(open = !this.rsOpen): void {
+    this.rsOpen = open;
+    this.rsStore.set(open ? "1" : "0");
+    this.paintRight();
+  }
+
+  /** Hiện danh sách tệp (quay lại từ chế độ Xem, hoặc mở cột nếu đang ẩn). */
+  private showFiles(): void {
+    this.rsOpen = true;
+    this.filesForced = true;
+    this.paintRight();
+  }
+
+  private setSort(by: SortBy): void {
+    this.sortBy = by;
+    this.sortStore.set(by);
+    this.paintSort();
+    void this.loadTree();
+  }
+  private paintSort(): void {
+    this.sortBtn.textContent = this.sortBy === "recent" ? "Mới nhất" : "Theo tên";
+    this.sortBtn.title = this.sortBy === "recent" ? "Đang xếp tệp mới sửa lên đầu. Bấm để xếp theo tên." : "Đang xếp tệp theo tên. Bấm để xếp mới sửa lên đầu.";
+    this.sortBtn.setAttribute("aria-label", this.sortBtn.title);
+  }
+
+  // ------------------------------------------------------------------ bảng chi tiết ngữ cảnh
+  private ctxKey = (e: KeyboardEvent): void => {
+    // Esc chỉ đóng bảng, không đồng thời dừng agent hay từ chối yêu cầu đang chờ
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      this.closeCtxPop(true);
+    }
+  };
+  private ctxOutside = (e: MouseEvent): void => {
+    const t = e.target as Node;
+    if (this.ctxPop?.contains(t) || this.meterBtn.contains(t)) return;
+    this.closeCtxPop(false);
+  };
+
+  private toggleCtxPop(): void {
+    if (this.ctxPop) return this.closeCtxPop(true);
+    this.closeSlash();
+    this.closeMention();
+    this.closeModeMenu();
+    this.paintCtxPop();
+    this.meterBtn.setAttribute("aria-expanded", "true");
+    document.addEventListener("keydown", this.ctxKey, true);
+    document.addEventListener("click", this.ctxOutside);
+    (this.ctxPop as HTMLElement | null)?.focus({ preventScroll: true });
+  }
+
+  /** Dựng (lại) bảng với số liệu mới nhất; gọi mỗi khi có `usage`/`quota` lúc bảng đang mở. */
+  private paintCtxPop(): void {
+    const next = buildContextPanel({
+      usage: this.lastUsage,
+      fallbackLimit: this.state?.settings?.contextTokens ?? 0,
+      quota: this.state?.quota,
+      busy: this.busy,
+      onNewChat: () => {
+        this.closeCtxPop(false);
+        this.t("new_chat");
+        void this.ctl.newSession();
+      },
+    });
+    const old = this.ctxPop;
+    if (old) {
+      const hadFocus = old.contains(document.activeElement);
+      old.replaceWith(next);
+      if (hadFocus) next.focus({ preventScroll: true });
+    } else this.input.parentElement?.append(next);
+    this.ctxPop = next;
+  }
+
+  private closeCtxPop(refocus: boolean): void {
+    if (!this.ctxPop) return;
+    this.ctxPop.remove();
+    this.ctxPop = null;
+    this.meterBtn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("keydown", this.ctxKey, true);
+    document.removeEventListener("click", this.ctxOutside);
+    if (refocus) this.meterBtn.focus({ preventScroll: true });
+  }
+
   // ------------------------------------------------------------------ thẻ công cụ
   private addTool(e: Extract<SessionEvent, { type: "tool_start" }>): void {
     const res = h("span", { class: "res" });
@@ -605,15 +877,35 @@ class App {
       body.append(...previewBlock(e.preview));
       body.hidden = false;
     }
-    const card: ToolCard = { id: e.id, name: e.name, el, head, body, res, depth: e.depth };
+    const quiet = this.quiet();
+    const card: ToolCard = { id: e.id, name: e.name, el, head, body, res, depth: e.depth, inAct: quiet };
     this.cards.set(e.id, card);
     this.lastCard = card;
-    this.append(el);
+    if (quiet) this.intoActivity(card, e.name);
+    else this.append(el);
+  }
+
+  /** Yên lặng: thẻ công cụ vào khối gập của lượt (tạo khối ở chỗ lời dẫn đầu tiên), kèm các lời dẫn trước đó. */
+  private intoActivity(card: ToolCard, name: string): void {
+    const keep = keepsPrecedingText(name);
+    if (!this.act) {
+      this.act = new ActivityBlock();
+      // khối nằm ở chỗ lời dẫn đầu tiên; riêng câu hỏi/kế hoạch thì lời dẫn đứng trước khối để đọc đúng thứ tự
+      const first = keep ? null : this.mid.find((el) => el.isConnected && el.parentElement === this.feedInner);
+      if (first) this.feedInner.insertBefore(this.act.el, first);
+      else this.append(this.act.el);
+    }
+    if (!keep) for (const el of this.mid) if (el.isConnected) this.act.list.append(el);
+    this.mid = [];
+    this.act.toolStart(card.id, card.name, card.depth);
+    this.act.list.append(card.el);
+    this.scroll();
   }
 
   private finishTool(e: Extract<SessionEvent, { type: "tool_result" }>): void {
     const c = this.cards.get(e.id);
     if (!c) return;
+    if (c.inAct) this.act?.toolResult(e.id, e.ok, e.errKind, e.depth);
     c.el.classList.remove("running", "wait");
     c.el.classList.add(e.ok ? "ok" : "err");
     const lines = e.output.split("\n");
@@ -651,7 +943,14 @@ class App {
     this.finishText();
     let card = this.lastCard && this.lastCard.name === req.tool && this.lastCard.el.classList.contains("running") ? this.lastCard : null;
     let host: HTMLElement;
-    if (card) {
+    if (this.quiet() && this.act) {
+      // yên lặng: thẻ thật nằm trong khối gập nên thẻ xin quyền/câu hỏi dựng riêng ngay dưới tiêu đề khối, luôn thấy được
+      const bodyEl = req.preview ? h("div", { class: "tool-b" }, ...previewBlock(req.preview)) : null;
+      host = h("div", { class: "tool wait", "data-quiet": "1" }, h("div", { class: "tool-h" }, h("span", { class: "dot" }), h("span", { class: "nm" }, req.kind === "plan" ? "Kế hoạch" : (TOOL_LABEL[req.tool] ?? req.tool)), h("span", { class: "sm" }, req.summary)), bodyEl);
+      this.append(host);
+      this.act.setWaiting(true);
+      card = null;
+    } else if (card) {
       card.el.classList.remove("running");
       card.el.classList.add("wait");
       host = card.el;
@@ -748,7 +1047,12 @@ class App {
     const host = p.el.parentElement;
     p.el.replaceWith(verdict);
     host?.classList.remove("wait");
-    if (host && !host.classList.contains("ok") && !host.classList.contains("err")) host.classList.add("running");
+    if (host?.dataset.quiet && this.act) {
+      // yên lặng: câu hỏi/xin quyền đã trả lời thì cất vào chi tiết, tiêu đề khối quay lại trạng thái chạy
+      host.classList.add(verdict.classList.contains("no") ? "err" : "ok");
+      this.act.list.append(host);
+      this.act.setWaiting(false);
+    } else if (host && !host.classList.contains("ok") && !host.classList.contains("err")) host.classList.add("running");
     this.pending = null;
     this.paintBusy();
   }
@@ -767,7 +1071,12 @@ class App {
       const t = h("span", {}, "Đang làm việc… 0s");
       this.working = h("div", { class: "working", role: "status" }, h("span", { class: "spin" }), t, h("span", {}, "· Esc để dừng"));
       this.feedInner.append(this.working);
-      this.workTimer = window.setInterval(() => (t.textContent = (this.pending ? (this.pending.req.kind === "question" ? "Đang chờ bạn trả lời… " : "Đang chờ bạn duyệt… ") : "Đang làm việc… ") + Math.round((Date.now() - this.workStart) / 1000) + "s"), 500);
+      this.workTimer = window.setInterval(() => {
+        const wrk = this.state?.profile === "work";
+        const label = this.pending ? (this.pending.req.kind === "question" ? "Đang chờ bạn trả lời" : "Đang chờ bạn duyệt") : wrk ? activityLabel(this.curTool) : DEFAULT_LABEL;
+        t.textContent = label + "… " + Math.round((Date.now() - this.workStart) / 1000) + "s";
+        this.working?.classList.toggle("has-act", !!this.act && !this.pending); // khối hoạt động đã có biểu tượng quay riêng
+      }, 500);
       this.scroll();
     } else if (!this.busy && this.working) {
       clearInterval(this.workTimer);
@@ -1024,6 +1333,7 @@ class App {
       onReveal: (path) => {
         const parts = path.split("/");
         for (let i = 1; i <= parts.length; i++) this.openDirs.add(parts.slice(0, i).join("/"));
+        this.showFiles();
         void this.loadTree([path]);
       },
     });
@@ -1066,6 +1376,7 @@ class App {
     const fmt = (n: number) => n.toLocaleString("vi-VN");
     const detail = q && q.state !== "unlimited" && q.limit > 0 ? `\nToken hôm nay: ${fmt(q.used)} / ${fmt(q.limit)} (${q.pct ?? 0}%) · làm mới lúc 00:00 ngày mai` : "";
     if (meter) meter.title = this.ctxTip + detail;
+    if (this.ctxPop) this.paintCtxPop();
     const el = this.quotaEl;
     if (!q || q.state === "ok" || q.state === "unlimited" || !q.limit) {
       el.hidden = true;
@@ -1106,9 +1417,10 @@ class App {
   private openDirs = new Set<string>([""]);
   private async loadTree(changed: string[] = []): Promise<void> {
     const build = async (dir: string, depth: number, into: HTMLElement): Promise<void> => {
-      let items;
+      let items: { name: string; isDir: boolean; mtimeMs?: number }[];
       try {
-        items = await this.ctl.listDir(dir || ".");
+        // bỏ tệp tạm/khoá của Office; xếp theo mới sửa (hoặc theo tên)
+        items = sortEntries(visibleEntries(await this.ctl.listDir(dir || ".")) as { name: string; isDir: boolean; mtimeMs?: number }[], this.sortBy, (n) => this.touched.get(dir ? dir + "/" + n : n) ?? 0);
       } catch {
         return;
       }
@@ -1120,8 +1432,9 @@ class App {
         const acts = it.isDir ? null : h("span", { class: "acts" },
           this.state.capabilities.openExternal ? h("button", { type: "button", title: "Mở bằng ứng dụng", "aria-label": "Mở " + it.name + " bằng ứng dụng", onclick: (ev: Event) => { ev.stopPropagation(); void this.ctl.openExternally?.(path); } }, "↗") : null,
           h("button", { type: "button", title: "Tải xuống", "aria-label": "Tải " + it.name + " xuống", onclick: (ev: Event) => { ev.stopPropagation(); void this.download(path); } }, "⬇"));
+        const sp = it.isDir ? { head: it.name, tail: "" } : splitName(it.name);
         const row = h("div", { class: "row" + (hit ? " changed" : ""), role: "treeitem", style: { paddingLeft: 6 + depth * 14 + "px" }, tabindex: "0", title: path },
-          ...treeIcon(it.name, it.isDir, open), h("span", { class: "nm" }, it.name), acts);
+          ...treeIcon(it.name, it.isDir, open), h("span", { class: "nm" }, h("span", { class: "nm-h" }, sp.head), sp.tail ? h("span", { class: "nm-t" }, sp.tail) : null), acts);
         const act = () => {
           if (it.isDir) {
             if (this.openDirs.has(path)) this.openDirs.delete(path);
@@ -1142,7 +1455,12 @@ class App {
   }
 
   private async openFile(path: string): Promise<void> {
-    if (this.state.profile === "work" && this.ctl.docView && /\.(docx|xlsx|xlsm|pptx|pdf)$/i.test(path)) return void this.docPane.open(path);
+    if (this.state.profile === "work" && this.ctl.docView && /\.(docx|xlsx|xlsm|pptx|pdf)$/i.test(path)) return this.openDoc(path);
+    if (this.state.profile === "design" && this.pv && /\.(html?|svg)$/i.test(path)) {
+      this.filesForced = false; // thiết kế: mở thẳng bản xem trước thay vì hộp chữ nguồn
+      void this.pv.refreshFiles(path);
+      return this.paintRight();
+    }
     const r = await this.ctl.readFile(path);
     const dlg = h("dialog", { class: "viewer" });
     const body = "error" in r ? h("div", { class: "hint" }, r.error) : h("pre", {}, ...r.text.split("\n").slice(0, 3000).map((l, i) => h("div", {}, r.kind === "text" ? h("span", { class: "ln" }, String(i + 1)) : null, l)));
