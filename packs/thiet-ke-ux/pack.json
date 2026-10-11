@@ -1,0 +1,1 @@
+{ "id": "thiet-ke-ux", "name": "Thiết kế và trải nghiệm người dùng", "version": "1.0.0", "description": "Phê bình thiết kế, kiểm tra tiếp cận WCAG 2.1 AA, đặc tả bàn giao, rà soát hệ thống thiết kế, viết lời giao diện tiếng Việt.", "profiles": ["design", "work"] }

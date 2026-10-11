@@ -1,0 +1,1 @@
+{ "id": "tao-ky-nang", "name": "Tạo kỹ năng và lệnh riêng", "version": "1.0.0", "description": "Hướng dẫn viết lệnh /tên và kỹ năng riêng cho dự án: cấu trúc tệp, quy trình viết, checklist chất lượng, chạy thử và cải thiện.", "profiles": ["work", "code", "design"] }

@@ -15,3 +15,6 @@ Thư mục này là **bộ gói của NEU**. Triển khai cho tổ chức khác:
 | `chat-luong-web` | Code, Design | kiểm tra giao diện (a11y, responsive, hiệu năng), subagent soát giao diện |
 | `sinh-vien` | Code, Work | làm đồ án/khoá luận, giải thích lỗi, ôn tập |
 | `van-phong-tu-dong` | Work | gộp, đối chiếu, tổng hợp hàng loạt tệp; đọc ảnh/scan thành Word, bảng trong ảnh thành Excel |
+| `thiet-ke-ux` | Design, Work | phê bình thiết kế, kiểm tra tiếp cận WCAG 2.1 AA (tính tương phản từ mã), đặc tả bàn giao, rà soát hệ thống thiết kế, lời giao diện tiếng Việt; subagent soát thiết kế chỉ đọc |
+| `nghien-cuu-nguoi-dung` | Work | kế hoạch nghiên cứu người dùng; tổng hợp ghi chú phỏng vấn/khảo sát thành chủ đề, trích dẫn nguyên văn có nguồn, khuyến nghị ưu tiên (Word) |
+| `tao-ky-nang` | mọi tab | viết lệnh `/tên` và kỹ năng riêng cho dự án: cấu trúc tệp, checklist chất lượng, chạy thử và cải thiện |
