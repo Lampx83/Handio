@@ -134,6 +134,9 @@ jobs:
   publish:
     name: Gom, phát hành lên máy chủ và GitHub
     needs: [mac, win]
+    # job `test` có thể bị bỏ qua (CI đã chạy ở deploy.yml): điều kiện ngầm success() coi tổ tiên bị bỏ qua là "không thành công" nên
+    # phải nêu rõ — chỉ cần mac và win đều thành công
+    if: ${{ !cancelled() && needs.mac.result == 'success' && needs.win.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
