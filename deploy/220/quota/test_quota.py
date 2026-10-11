@@ -182,6 +182,11 @@ class CaptureTests(GatewayCase):
         db.close()
         self.assertFalse(os.path.exists(self.cap_path + "-wal"))
 
+    def test_warm_opens_db_with_group_permissions_before_any_request(self):
+        self.assertFalse(os.path.exists(self.cap_path))
+        self.ctx.capture.warm()
+        self.assertEqual(os.stat(self.cap_path).st_mode & 0o777, 0o640)
+
     def test_prefix_pattern_captures_named_accounts_but_never_emails(self):
         self.write_cfg({"tiers": {"student": 1_000_000}, "capture": {"users": ["test0*", "ab*", "*", "x*", "tes*t"]}})
         self.assertEqual(Q.load_config(self.cfg_path)["capture"]["users"], ["test0*"])   # mẫu quá ngắn / có * giữa bị bỏ

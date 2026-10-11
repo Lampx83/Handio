@@ -242,6 +242,10 @@ class CaptureStore:
             self.db.execute("CREATE INDEX IF NOT EXISTS captures_user_ts ON captures(user, ts)")
         return self.db
 
+    def warm(self):
+        with self.lock:
+            self._open()
+
     def add(self, now, user, rec, keep_days):
         with self.lock:
             db = self._open()
@@ -662,6 +666,12 @@ def main():
     )
     srv = make_server(ctx, os.environ.get("NEU_QUOTA_BIND", "127.0.0.1"), int(os.environ.get("NEU_QUOTA_PORT", "4191")))
     cfg = ctx.cfg()
+    if ctx.capture is not None and cfg["capture"]["users"]:
+        # mở CSDL ghi nội dung ngay lúc khởi động (không đợi yêu cầu đầu tiên): chuyển chế độ nhật ký, đặt quyền 640 để đọc được ngay
+        try:
+            ctx.capture.warm()
+        except (sqlite3.Error, OSError):
+            pass
     print("neu-quota listening on %s:%s mode=%s tiers=%s" % (srv.server_address[0], srv.server_address[1], cfg["mode"], cfg["tiers"]), flush=True)
     try:
         srv.serve_forever()
