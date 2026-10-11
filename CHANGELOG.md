@@ -5,6 +5,24 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thay đổi
+- **Tab Work yên lặng hơn**: các bước của agent gập vào một dòng ("Đang tạo bài trình chiếu… · 4 bước", xong thì "✓ Hoàn tất · N bước · 12 giây"); lỗi agent tự xử lý không còn hiện đỏ giữa màn hình; cuối lượt có nút mở tệp vừa tạo. Muốn xem từng bước: Cài đặt › Giao diện › "Hiện từng bước chi tiết".
+- **Danh sách tệp chuyển sang thanh bên phải** (có thể thu gọn); ẩn tệp tạm `~$…` của Office. Xem tài liệu mở ngay trong cột đó, có nút "← Tệp" để quay lại.
+- **Agent làm cho xong, không bắt gõ "tiếp tục"**: được tự đi tiếp gấp ba số bước cài đặt trong một lượt trước khi dừng an toàn.
+- **Ít bước và đỡ phải tóm tắt hơn**: các công cụ ít dùng (PDF, quản lý tệp, tiện ích, trộn thư) chỉ nạp khi cần, lời nhắc hệ thống gọn hơn (Work: chi phí cố định giảm gần một nửa; Design: giảm hơn 80%). Agent không còn bị cắt giữa chừng khi tạo tệp dài ở mức ngữ cảnh đã dùng nhiều.
+- **PowerPoint**: bạn nêu số slide thì bài được dựng đúng số đó (gồm bìa và cảm ơn), không tự thêm mục lục hay tách slide. Kết quả tạo/sửa ngắn gọn, kèm danh sách tiêu đề các slide nên agent không phải đọc lại.
+- **Kho mã chuẩn bị công khai** (Apache-2.0): cấu hình riêng của nơi triển khai tách khỏi mã; tài liệu `docs/PUBLIC.md`. Không đổi gì với người dùng.
+
+### Thêm
+- **Bấm vào vòng tròn ngữ cảnh** (cạnh nút Gửi/Dừng) để xem chi tiết: ngữ cảnh đang dùng vào việc gì (lời nhắc, công cụ, tin nhắn, kết quả công cụ) và hạn mức còn lại.
+- **Sửa PowerPoint dễ hơn**: thay cả phần thân của một slide bằng một lệnh, thêm slide mới (kết luận, cảm ơn…) đúng thiết kế của tệp mà không cần chép đúng từng chữ; thay chữ không còn cần đúng hoa/thường, dấu, gạch đầu dòng, ngoặc kép, kể cả chữ trải nhiều dòng.
+
+### Sửa
+- **Giới hạn đầu ra không còn rơi về mức thấp nhất** khiến việc tạo Word/PowerPoint dài bị cắt giữa chừng nhiều lần liên tiếp (dữ liệu thật cho thấy ngân sách bị tính cộng đôi phần công cụ).
+- **PowerPoint**: không còn slide trống khi bìa có dòng phụ; các mục `##` không có `---` tách đúng thành từng slide; nối thêm slide vào tệp đã chỉnh sửa không còn báo lỗi.
+- **Tệp đang mở trong Word/Excel/PowerPoint** (Windows): tự lưu thành "tên (đã sửa)" thay vì báo lỗi rồi thử lại nhiều lần.
+- **Không còn bước đọc lại thừa** sau khi tạo/sửa tài liệu bằng công cụ Office (kết quả đã liệt kê nội dung).
+
 ## [0.8.5] - 2026-10-11
 
 ### Thay đổi
