@@ -277,8 +277,8 @@ export function officeTools(env: Env): Tool[] {
     },
     {
       name: "create_xlsx", kind: "edit", readonly: false, pathArg: "path",
-      description: "Create an Excel workbook (.xlsx). sheets = [{name, rows: [[...], ...]}]; the first row is the header (bold, blue fill, frozen) unless header=false. Cells: numbers as real numbers (not '1.200.000' strings), text, or formulas as strings starting with '=' (English function names, comma separators, e.g. '=SUM(B2:B10)', '=IF(C2>=5,\"Đạt\",\"Không đạt\")'). ISO dates 'YYYY-MM-DD' become real dates shown dd/mm/yyyy. Formulas are calculated and returned so you can verify the numbers. number_formats e.g. {\"C\": \"#,##0\", \"D\": \"0.0%\"}. conditional colours cells: [{range: \"D2:D30\", rule: \"bars\" | \"scale\" | {op: \"lt\"|\"le\"|\"gt\"|\"ge\"|\"eq\"|\"ne\", value: 5, color: \"red\"|\"green\"|\"yellow\"}}]. Excel charts are not supported (use create_pptx for charts). BULK DATA: never type more than ~40 rows yourself (the call gets cut off). Instead give a sheet `generate` = {count, seed?, columns: [{name, type, ...}]} and the tool generates the rows: types seq {start,step,prefix,pad}, pick {values,weights?}, int {min,max}, float {min,max,decimals}, date {from,to} (ISO), name_vi {gender?: nam|nu}, email {from: column name, domain}, phone_vi, bool {true_label,false_label,p}, text {template}, formula {template}; in templates {seq} = 1..count, {row} = Excel row number, {col:Column name} = that column's value in the same row. The header row is built from the column names unless you give your own `rows` first.",
-      parameters: { type: "object", properties: { path: S, sheets: { type: "array", items: { type: "object", properties: { name: S, generate: { type: "object", description: "bulk generator {count, seed?, columns:[{name,type,...}]}: the tool generates the rows" }, rows: { type: "array", items: { type: "array", items: {} } }, header: { type: "boolean" }, widths: { type: "array", items: { type: "number" } }, freeze_header: { type: "boolean" }, autofilter: { type: "boolean" }, number_formats: { type: "object" }, conditional: { type: "array", items: { type: "object", properties: { range: S, rule: {} }, required: ["range", "rule"] } } }, required: ["name"] } } }, required: ["path", "sheets"] },
+      description: "Create an Excel workbook (.xlsx). sheets = [{name, rows: [[...], ...]}]; the first row is the header (bold, blue fill, frozen) unless header=false. Cells: numbers as real numbers (not '1.200.000' strings), text, or formulas as strings starting with '=' (English function names, comma separators, e.g. '=SUM(B2:B10)', '=IF(C2>=5,\"Đạt\",\"Không đạt\")'). ISO dates 'YYYY-MM-DD' become real dates shown dd/mm/yyyy. Formulas are calculated and returned so you can verify the numbers. number_formats e.g. {\"C\": \"#,##0\", \"D\": \"0.0%\"}. conditional colours cells: [{range: \"D2:D30\", rule: \"bars\" | \"scale\" | {op: \"lt\"|\"le\"|\"gt\"|\"ge\"|\"eq\"|\"ne\", value: 5, color: \"red\"|\"green\"|\"yellow\"}}]. Real Excel charts: pass `charts` (see its description) after the data is laid out; a chart is for 1 category column + a few numeric columns, not for raw lists. Default look is applied automatically (dark header with white bold text, banded rows, thin horizontal rules, a bold Tổng/Total row, auto number/date/% formats, frozen header, filter, landscape fit-to-width printing); theme = xanh (default) | ngoc | xanhla | cam | tim | do | den, or accent = any colour. BULK DATA: never type more than ~40 rows yourself (the call gets cut off). Instead give a sheet `generate` = {count, seed?, columns: [{name, type, ...}]} and the tool generates the rows: types seq {start,step,prefix,pad}, pick {values,weights?}, int {min,max}, float {min,max,decimals}, date {from,to} (ISO), name_vi {gender?: nam|nu}, email {from: column name, domain}, phone_vi, bool {true_label,false_label,p}, text {template}, formula {template}; in templates {seq} = 1..count, {row} = Excel row number, {col:Column name} = that column's value in the same row. The header row is built from the column names unless you give your own `rows` first.",
+      parameters: { type: "object", properties: { path: S, sheets: { type: "array", items: { type: "object", properties: { name: S, generate: { type: "object", description: "bulk generator {count, seed?, columns:[{name,type,...}]}: the tool generates the rows" }, rows: { type: "array", items: { type: "array", items: {} } }, header: { type: "boolean" }, widths: { type: "array", items: { type: "number" } }, freeze_header: { type: "boolean" }, autofilter: { type: "boolean" }, number_formats: { type: "object" }, conditional: { type: "array", items: { type: "object", properties: { range: S, rule: {} }, required: ["range", "rule"] } } }, required: ["name"] } }, charts: { type: "array", description: "REAL Excel charts: [{type, title, sheet?, data_range, position?, width_cols?, height_rows?}]. type: col (vertical columns) | bar (horizontal bars) | line | pie | doughnut | area. data_range includes the header row and the label column, e.g. \"A1:C6\" (column A = category labels, B and C = numeric series named by row 1; a last row labelled Tổng/Total is left out). Needs real numbers in the cells (formulas are fine). position = top-left cell like \"E2\" (default: right of the data, stacked); width_cols default 9, height_rows default 17. Optional x_title, y_title, labels (true/false = show/hide value labels). Max 10 charts.", items: { type: "object", properties: { type: S, title: S, sheet: S, data_range: S, position: S, width_cols: { type: "number" }, height_rows: { type: "number" }, x_title: S, y_title: S, labels: { type: "boolean" } }, required: ["type", "data_range"] } }, theme: S, accent: S }, required: ["path", "sheets"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
         try {
@@ -299,32 +299,32 @@ export function officeTools(env: Env): Tool[] {
         for (const sh of sheets) sh.rows = sh.rows.map((r) => (Array.isArray(r) ? r : [r as never]));
         let built;
         try {
-          built = await createXlsx(sheets);
+          built = await createXlsx(sheets, { charts: jsonArg<any[]>(a.charts, "charts"), theme: a.theme, accent: a.accent });
         } catch (e) {
           throw new ToolError((e as Error).message);
         }
         await commit(ctx, abs, built.bytes, existed);
-        return reportOf(`Đã ${existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(built.bytes.length)}).\n${built.dims.join("\n")}`, built.report);
+        return reportOf(`Đã ${existed ? "ghi đè" : "tạo"} ${relPath(ctx, abs)} (${kb(built.bytes.length)}).\n${built.dims.join("\n")}${built.notes.length ? "\n" + built.notes.join("\n") : ""}`, built.report);
       },
     },
     {
       name: "xlsx_edit", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || a.path,
-      description: "Edit an existing Excel file: set cells, append rows, or add a sheet. Read the file first. All formulas are recalculated and checked. set = {\"B2\": 10, \"C2\": \"=B2*2\", \"Sheet2!D5\": \"Đạt\", \"E1\": null}. Use save_as to keep the original untouched (recommended). Note: charts, pivot tables and macros in the original may be lost.",
-      parameters: { type: "object", properties: { path: S, sheet: { type: "string", description: "default sheet for set/append_rows" }, set: { type: "object" }, append_generate: { type: "object", description: "append BULK generated rows (same spec as create_xlsx generate: {count, seed?, columns}); use this instead of typing many rows" }, append_rows: { type: "array", items: { type: "array", items: {} } }, add_sheet: { type: "object", properties: { name: S, rows: { type: "array", items: { type: "array", items: {} } } } }, save_as: { type: "string" } }, required: ["path"] },
+      description: "Edit an existing Excel file: set cells, append rows, or add a sheet. Read the file first. All formulas are recalculated and checked. set = {\"B2\": 10, \"C2\": \"=B2*2\", \"Sheet2!D5\": \"Đạt\", \"E1\": null}. Use save_as to keep the original untouched (recommended). charts = add real Excel charts (see create_xlsx; data_range is on the sheet named by `sheet` inside each chart, default first sheet). Existing charts in the file are kept; pivot tables and macros may be lost.",
+      parameters: { type: "object", properties: { path: S, sheet: { type: "string", description: "default sheet for set/append_rows" }, set: { type: "object" }, append_generate: { type: "object", description: "append BULK generated rows (same spec as create_xlsx generate: {count, seed?, columns}); use this instead of typing many rows" }, append_rows: { type: "array", items: { type: "array", items: {} } }, add_sheet: { type: "object", properties: { name: S, rows: { type: "array", items: { type: "array", items: {} } } } }, charts: { type: "array", description: "REAL Excel charts: [{type, title, sheet?, data_range, position?, width_cols?, height_rows?}]. type: col (vertical columns) | bar (horizontal bars) | line | pie | doughnut | area. data_range includes the header row and the label column, e.g. \"A1:C6\" (column A = category labels, B and C = numeric series named by row 1; a last row labelled Tổng/Total is left out). Needs real numbers in the cells (formulas are fine). position = top-left cell like \"E2\" (default: right of the data, stacked); width_cols default 9, height_rows default 17. Optional x_title, y_title, labels (true/false = show/hide value labels). Max 10 charts.", items: { type: "object", properties: { type: S, title: S, sheet: S, data_range: S, position: S, width_cols: { type: "number" }, height_rows: { type: "number" }, x_title: S, y_title: S, labels: { type: "boolean" } }, required: ["type", "data_range"] } }, save_as: { type: "string" } }, required: ["path"] },
       summarize: (a) => `${a.path ?? ""}${a.save_as ? " → " + a.save_as : ""}`,
       async preview(ctx, a) {
         let n = 0;
         try { n = Object.keys(jsonArg<Record<string, unknown>>(a.set, "set") ?? {}).length; } catch { /* bỏ qua */ }
         let rows = 0;
         try { rows = (jsonArg<unknown[][]>(a.append_rows, "append_rows") ?? []).length; } catch { /* bỏ qua */ }
-        return outlinePreview(ctx, a.save_as || a.path, `Sửa ${a.path}${a.save_as ? ` (lưu thành ${a.save_as})` : " (ghi đè bản gốc)"}: ${n} ô, ${rows} hàng thêm${a.add_sheet ? ", thêm sheet “" + a.add_sheet.name + "”" : ""}.` + (n ? "\n" + Object.entries(jsonArg<Record<string, unknown>>(a.set, "set") ?? {}).slice(0, 12).map(([k, v]) => `  ${k} = ${JSON.stringify(v)}`).join("\n") : ""));
+        return outlinePreview(ctx, a.save_as || a.path, `Sửa ${a.path}${a.save_as ? ` (lưu thành ${a.save_as})` : " (ghi đè bản gốc)"}: ${n} ô, ${rows} hàng thêm${a.add_sheet ? ", thêm sheet “" + a.add_sheet.name + "”" : ""}${Array.isArray(a.charts) && a.charts.length ? ", " + a.charts.length + " biểu đồ" : ""}.` + (n ? "\n" + Object.entries(jsonArg<Record<string, unknown>>(a.set, "set") ?? {}).slice(0, 12).map(([k, v]) => `  ${k} = ${JSON.stringify(v)}`).join("\n") : ""));
       },
       async run(ctx, a) {
         const src = await resolveSafe(ctx, a.path);
         if (!ctx.readFiles.has(src)) throw new ToolError(`Hãy đọc ${a.path} bằng read_document trước khi sửa.`);
         await checkFresh(ctx, src, a.path);
         const { bytes } = await loadBinary(ctx, a.path, [".xlsx", ".xlsm"]);
-        const edit = { sheet: a.sheet, set: jsonArg<Record<string, any>>(a.set, "set"), append_rows: jsonArg<any[][]>(a.append_rows, "append_rows"), add_sheet: jsonArg<any>(a.add_sheet, "add_sheet") };
+        const edit = { sheet: a.sheet, set: jsonArg<Record<string, any>>(a.set, "set"), append_rows: jsonArg<any[][]>(a.append_rows, "append_rows"), add_sheet: jsonArg<any>(a.add_sheet, "add_sheet"), charts: jsonArg<any[]>(a.charts, "charts") };
         const gen = jsonArg<GenSpec>(a.append_generate, "append_generate");
         if (gen) {
           try {
@@ -334,7 +334,7 @@ export function officeTools(env: Env): Tool[] {
             throw new ToolError((e as Error).message);
           }
         }
-        if (!edit.set && !edit.append_rows && !edit.add_sheet) throw new ToolError("Cần ít nhất một trong set, append_rows, append_generate, add_sheet.");
+        if (!edit.set && !edit.append_rows && !edit.add_sheet && !edit.charts?.length) throw new ToolError("Cần ít nhất một trong set, append_rows, append_generate, add_sheet, charts.");
         let res;
         try {
           res = await editXlsx(bytes, edit);
@@ -345,7 +345,7 @@ export function officeTools(env: Env): Tool[] {
         let existed = true;
         if (a.save_as) ({ abs, existed } = await prepareWrite(ctx, a.save_as, extOf(src)));
         await commit(ctx, abs, res.bytes, existed);
-        return reportOf(`Đã lưu ${relPath(ctx, abs)}. Đã sửa: ${res.changed.slice(0, 20).join(", ")}${res.changed.length > 20 ? ` … (+${res.changed.length - 20})` : ""}.`, res.report);
+        return reportOf(`Đã lưu ${relPath(ctx, abs)}. Đã sửa: ${res.changed.slice(0, 20).join(", ")}${res.changed.length > 20 ? ` … (+${res.changed.length - 20})` : ""}.${res.notes.length ? "\n" + res.notes.join("\n") : ""}`, res.report);
       },
     },
     {
