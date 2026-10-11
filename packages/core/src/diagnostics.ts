@@ -25,7 +25,7 @@ export const DIAG_TOOLS: string[] = [
   "check_package", "web_fetch", "read_image", "web_search", "fetch_page", "xlsx_pivot", "merge_check", "merge_documents", "scan_pii", "redact_pii", "read_document", "find_in_documents", "create_docx", "docx_replace", "create_xlsx", "xlsx_edit", "create_pptx",
   "convert_to_pdf", "pptx_edit", "docx_edit", "ask_user",
   "copy_file", "move_file", "delete_file", "make_dir", "zip_files", "unzip_file", "file_info",
-  "pdf_info", "pdf_text", "pdf_split", "pdf_merge", "pdf_rotate", "images_to_pdf",
+  "pdf_info", "pdf_text", "pdf_split", "pdf_merge", "pdf_rotate", "images_to_pdf", "create_pdf",
   "vn_number_words", "date_calc", "lunar_convert", "vn_text", "calc", "create_eml", "create_ics", "csv_convert", "text_diff", "doc_stats",
   "skill", "task", "exit_plan_mode", "mcp", "other",
 ];

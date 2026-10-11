@@ -12,6 +12,7 @@ import { editDocx, type DocxEditOptions } from "./docx-edit";
 import { editPptx, type PptxEditOptions } from "./pptx-edit";
 import { filesTools } from "./tools-files";
 import { pdfTools } from "./tools-pdf";
+import { renderTools } from "./tools-render";
 import { utilTools } from "./tools-utils";
 import { citeToken } from "./locate";
 import { extOf, fold, formatSections, isReadableDocument, readDocumentSections } from "./readdoc";
@@ -535,7 +536,7 @@ export function officeTools(env: Env): Tool[] {
       },
     });
   }
-  tools.push(...filesTools(env), ...pdfTools(env), ...utilTools(env)); // nhóm công cụ mở rộng, mỗi nhóm một tệp
+  tools.push(...filesTools(env), ...pdfTools(env), ...utilTools(env), ...renderTools(env)); // nhóm công cụ mở rộng, mỗi nhóm một tệp
   return tools;
 }
 

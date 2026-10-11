@@ -55,6 +55,8 @@ export interface Env {
   shrinkImage?(bytes: Uint8Array, mime: string, opts: { maxSide: number; quality: number }): Promise<{ bytes: Uint8Array; mime: string } | null>;
   /** Chuyển Word/Excel/PowerPoint sang PDF (cần LibreOffice trên máy); không có thì để trống. */
   convertToPdf?(input: string, output: string, opts: { timeoutMs: number; signal?: AbortSignal }): Promise<void>;
+  /** In HTML thành PDF (Desktop: Chromium sẵn có trong Electron, không cần LibreOffice). Dùng cho create_pdf. */
+  htmlToPdf?(html: string, opts: { footer?: string; landscape?: boolean }): Promise<Uint8Array>;
 }
 
 export class EnvError extends Error {}

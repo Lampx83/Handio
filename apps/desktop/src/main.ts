@@ -182,6 +182,7 @@ const shrinkImage: NonNullable<NodeEnv["shrinkImage"]> = async (bytes, _mime, o)
 const makeEnv = (profile: Profile, dir: string) => {
   const env = new NodeEnv(dir, { allowExec: profile === "code", sandbox: process.platform === "darwin" ? { network: policy.bashNetwork !== false } : false });
   env.shrinkImage = shrinkImage;
+  if (profile === "work") env.htmlToPdf = (html, o) => renderDesign(html, { format: "pdf", width: 794, footer: o.footer ?? "" });
   return env;
 };
 
@@ -312,7 +313,7 @@ function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<st
 
 // ---------------------------------------------------------------- xuất thiết kế ra PDF/PNG
 /** Dựng HTML do agent viết trong cửa sổ ẩn: không script, không mạng, phiên riêng; chỉ trả về byte PDF/PNG. */
-async function renderDesign(html: string, o: { format: "pdf" | "png"; width: number; height?: number }): Promise<Uint8Array> {
+async function renderDesign(html: string, o: { format: "pdf" | "png"; width: number; height?: number; footer?: string }): Promise<Uint8Array> {
   if (html.length > 2_000_000) throw new Error("Tệp thiết kế quá lớn để xuất.");
   const part = "design-render";
   const ses = session.fromPartition(part); // phiên trong bộ nhớ, tách khỏi phiên giao diện
@@ -338,7 +339,11 @@ async function renderDesign(html: string, o: { format: "pdf" | "png"; width: num
       return img.toPNG();
     }
     const css = /@page\s*\{[^}]*size\s*:/i.test(html);
-    return await w.webContents.printToPDF({ printBackground: true, preferCSSPageSize: css, ...(css ? {} : { pageSize: { width: o.width / 96, height: full / 96 } }), margins: { top: 0, bottom: 0, left: 0, right: 0 } });
+    // create_pdf: chân trang "tên · trang X / Y" do Chromium vẽ trong lề dưới (lề lấy từ @page của tài liệu)
+    const footer = o.footer !== undefined
+      ? { displayHeaderFooter: true, headerTemplate: "<span></span>", footerTemplate: `<div style="width:100%;font:8px 'Segoe UI',Arial,sans-serif;color:#6b7280;padding:0 18mm;display:flex;justify-content:space-between"><span>${o.footer.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!)}</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>` }
+      : {};
+    return await w.webContents.printToPDF({ printBackground: true, preferCSSPageSize: css, ...footer, ...(css ? {} : { pageSize: { width: o.width / 96, height: full / 96 } }), margins: { top: 0, bottom: 0, left: 0, right: 0 } });
   } finally {
     clearTimeout(timer);
     if (!w.isDestroyed()) w.destroy();

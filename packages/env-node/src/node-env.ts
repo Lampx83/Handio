@@ -76,6 +76,8 @@ export class NodeEnv implements Env {
   convertToPdf?: Env["convertToPdf"];
   /** Thu nhỏ ảnh để gửi cho mô hình đọc ảnh; ứng dụng (Electron) cấp bằng nativeImage. */
   shrinkImage?: Env["shrinkImage"];
+  /** Desktop gán: in HTML thành PDF bằng Chromium của Electron. */
+  htmlToPdf?: Env["htmlToPdf"];
 
   spawn(command: string, opts: { cwd: string; onData: (chunk: string) => void; onExit: (code: number) => void }): { stop(): void; readonly pid?: number } {
     const sandboxed = !!this.sandboxProfile;
