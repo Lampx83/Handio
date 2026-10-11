@@ -147,7 +147,10 @@ class AccountsSocket(unittest.TestCase):
         s = socket.socket(socket.AF_UNIX)
         s.settimeout(10)
         s.connect(self.path)
-        s.sendall(raw if isinstance(raw, bytes) else json.dumps(raw).encode() + b"\n")
+        try:
+            s.sendall(raw if isinstance(raw, bytes) else json.dumps(raw).encode() + b"\n")
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # máy chủ từ chối (uid lạ) và đóng ngay: vẫn đọc lời từ chối bên dưới
         out = b""
         while not out.endswith(b"\n"):
             c = s.recv(4096)

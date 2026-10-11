@@ -88,7 +88,7 @@ systemctl reload nginx 2>/dev/null || nginx -s reload
 sleep 1
 H="Host: ai.neu.edu.vn"
 code() { curl -s -o /dev/null -w "%{http_code}" -H "$H" "$@"; }
-r_page=$(code http://127.0.0.1/agent/)
+r_page=$(code http://127.0.0.1/agent/index.html)  # đường dẫn đúng /agent/ nay hiện trang giới thiệu khi chưa đăng nhập; tệp ứng dụng vẫn phải đăng nhập (302)
 r_start=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" -H "$H" -H "X-Forwarded-Proto: https" "http://127.0.0.1/agent/oauth2/start?rd=/agent/")
 r_api=$(code http://127.0.0.1/agent/vllm/v1/models)
 r_apibody=$(curl -s -H "$H" http://127.0.0.1/agent/vllm/v1/models | head -c 60)

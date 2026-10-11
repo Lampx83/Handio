@@ -14,6 +14,8 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 
 ## 2. Các lớp bảo vệ đã có
 
+**Truy cập mạng:** mọi đường dẫn dưới `/agent/` bắt buộc đăng nhập (SSO/tài khoản). Ngoại lệ chủ ý và duy nhất: đường dẫn đúng `/agent/` khi **chưa** đăng nhập trả về trang giới thiệu tĩnh (cùng tệp với `/agent/guide/`, không script, CSP chặt, không nhận POST, không lộ giao diện hay dữ liệu); `e2e-sso.mjs` kiểm tra điều này và kiểm tra `/agent/index.html` vẫn chuyển tới đăng nhập.
+
 **Quyền và kiểm soát của người dùng**
 - Mọi thao tác ghi tệp/chạy lệnh/tải web đều **xin phép**, kèm phần thay đổi (diff) hoặc bản mô tả. Chế độ mặc định **Tự động** chỉ tự chạy việc thường ngày trong dự án (sửa tệp, build/test/cài gói, git cục bộ) và vẫn hỏi khi xoá, đụng mạng, tệp bí mật, lệnh lạ hoặc sau khi đọc nội dung web; chế độ “Toàn quyền” là tuỳ chọn có chủ đích, có ở cả ba tab (quản trị viên có thể tắt bằng policy.json).
 - **Phân tích lệnh shell** trước khi cho tự động: tách lệnh ghép (`&&`, `;`, `|`), từ chối cú pháp che giấu (`$()`, backtick, `$VAR`, chạy nền, brace expansion); quy tắc `allow` khớp **từng đoạn** lệnh; quy tắc `deny` bắt được lệnh nằm giữa chuỗi. Có bộ test cho từng cách lách đã biết.

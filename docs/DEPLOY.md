@@ -43,6 +43,12 @@ Mỗi script tự sao lưu, chạy `nginx -t`, **tự khôi phục nếu lỗi h
 
 Dọn OJ Judge cũ trên 220: `sudo ./remove-oj-judge.sh` (mặc định chỉ liệt kê), thêm `--yes` để xoá, `--purge-data` để xoá cả dữ liệu.
 
+### Trang chủ công khai `/agent/` và trang giới thiệu `/agent/guide/`
+
+- `/agent/` (đúng đường dẫn này): **chưa đăng nhập** → hiện trang giới thiệu có nút “Đăng nhập” (tới `/agent/oauth2/sign_in?rd=/agent/`); **đã đăng nhập** → vào thẳng ứng dụng (nginx `auth_request`, lỗi 401 chuyển sang `@neu_landing`). Mọi tệp khác của ứng dụng, API, tải về vẫn bắt buộc đăng nhập.
+- Cả hai nơi phục vụ **cùng một tệp** `deploy/220/guide-public/index.html` (tĩnh, không script, CSP `default-src 'none'; img-src 'self'`, `Cache-Control: no-store` ở `/agent/`), nên đường dẫn ảnh/liên kết trong tệp viết tuyệt đối (`/agent/guide/...`).
+- Tên hiển thị trong trang này viết thẳng “NEU Agent” (chỉ dành cho máy NEU). Bản triển khai khác: sao chép thư mục, đổi tên/ảnh, hoặc đặt `brand.json` cho ứng dụng (xem [EXTENSIONS.md](EXTENSIONS.md), mục “Tên hiển thị”).
+
 ### Công cụ web cho agent (tìm kiếm + tải trang) và đọc ảnh
 
 - **Đọc ảnh/OCR** không cần dịch vụ riêng: công cụ `read_image` gửi ảnh cho chính mô hình (Qwen3.5 đọc được ảnh, chữ tiếng Việt chính xác). Ảnh được thu nhỏ ở máy người dùng (≤ 1,4 MB, vừa giới hạn thân yêu cầu 2 MB của nginx 222) và đi qua cổng hạn mức như mọi lượt chat, nên tính vào hạn mức token. Muốn cho ảnh lớn hơn: tăng `client_max_body_size` ở 222 (đã sửa thành 4m trong `deploy/222`, cần `sudo ./install.sh` ở 222) và `VISION_MAX_SEND` trong `packages/core/src/vision.ts`. Mô hình khác không đọc được ảnh thì công cụ báo lỗi rõ.

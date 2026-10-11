@@ -6,7 +6,7 @@
 <title>NEU Agent — Cánh tay AI, làm mọi việc thay bạn</title>
 <meta name="description" content="NEU Agent: cánh tay AI của Trường Đại học Kinh tế Quốc dân. Từ thao tác máy tính, lập trình, tạo bài trình bày, thiết kế đến hàng trăm công việc khác. Xem demo trước khi đăng nhập.">
 <meta name="theme-color" content="#081020">
-<link rel="icon" href="img/handio-mark.svg" type="image/svg+xml">
+<link rel="icon" href="/agent/guide/img/handio-mark.svg" type="image/svg+xml">
 <style>
 :root{--ink:#081020;--ink2:#0d1b3a;--blue:#2d7bff;--cyan:#06e5ff;--ice:#d6f5ff;--cloud:#e8ecf5;--text:#e7eefc;--muted:#9fb2d6;--line:rgba(120,160,255,.22)}
 *{box-sizing:border-box}
@@ -49,9 +49,10 @@ header.top nav a:not(.btn):hover{color:#fff}
 .pillars li+li{border-left:1px solid var(--line);padding-left:12px}
 .pillars svg{width:34px;height:34px;color:var(--cyan)}
 /* ---- sân khấu: bàn phím vector + hai lớp tay đã tách nền + thẻ nổi ---- */
-.stage{position:relative;width:100%;aspect-ratio:1536/1000;filter:drop-shadow(0 30px 40px rgba(0,0,0,.45));-webkit-mask-image:linear-gradient(180deg,#000 86%,transparent);mask-image:linear-gradient(180deg,#000 86%,transparent)}
+.stage{position:relative;width:100%;aspect-ratio:1536/1000;filter:drop-shadow(0 30px 40px rgba(0,0,0,.45))}
+.stage .rw{-webkit-mask-image:linear-gradient(180deg,#000 86%,transparent);mask-image:linear-gradient(180deg,#000 86%,transparent)}
 .stage{cursor:pointer;-webkit-tap-highlight-color:transparent}
-.stage .kb{position:absolute;inset:0;width:100%;height:100%}
+.stage .kb,.stage .mouse{position:absolute;inset:0;width:100%;height:100%}
 .stage .part{position:absolute;height:auto;display:block;pointer-events:none;user-select:none}
 .stage .rw{position:absolute;inset:0}
 .k{animation:kd 2.8s ease-in-out infinite;animation-delay:calc(var(--n)*.17s)}
@@ -59,10 +60,11 @@ header.top nav a:not(.btn):hover{color:#fff}
 .hl{animation:tap 5.6s ease-in-out infinite}
 .hr{animation:drag 4.2s ease-in-out infinite}
 .ring{position:absolute;left:75.1%;top:36.2%;width:5.6%;aspect-ratio:1;margin:-2.8% 0 0 -2.8%;border-radius:50%;border:3px solid #ffb020;opacity:0;animation:ring 4.2s ease-out infinite;box-shadow:0 0 18px rgba(255,176,32,.6)}
-.flash{position:absolute;left:71.4%;top:21.4%;width:7.4%;height:12%;border-radius:45% 30% 30% 45%;background:radial-gradient(closest-side,rgba(127,233,255,.85),rgba(6,229,255,0));mix-blend-mode:screen;opacity:0;animation:fl 4.2s ease-out infinite;pointer-events:none}
+.wh{animation:wh 5.2s ease-in-out infinite}
+@keyframes wh{0%,38%,52%,100%{fill:#5d77a9}44%,48%{fill:#7fe9ff}}
 .pulse{position:absolute;left:75.1%;top:36.2%;width:5.6%;aspect-ratio:1;margin:-2.8% 0 0 -2.8%;border-radius:50%;border:3px solid var(--cyan);opacity:0;pointer-events:none}
 .stage:active .pulse{animation:press .5s ease-out}
-.stage:active .k rect{animation:none;fill:#7fe9ff}
+.stage:active .k rect,.stage:active .wh{animation:none;fill:#7fe9ff}
 .stage:hover{filter:drop-shadow(0 30px 44px rgba(6,229,255,.18))}
 @keyframes fl{0%,38%{opacity:0}42%{opacity:1}56%{opacity:0}100%{opacity:0}}
 @keyframes press{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(2.4)}}
@@ -71,7 +73,7 @@ header.top nav a:not(.btn):hover{color:#fff}
 @keyframes tap{0%,100%{transform:translate(0,0)}4%{transform:translate(0,.6%)}8%{transform:translate(0,0)}13%{transform:translate(0,.5%)}18%{transform:translate(0,0)}28%{transform:translate(1.43%,0)}32%{transform:translate(1.43%,.6%)}37%{transform:translate(1.43%,0)}42%{transform:translate(1.43%,.5%)}47%{transform:translate(1.43%,0)}58%{transform:translate(-1.1%,1.5%)}62%{transform:translate(-1.1%,2.1%)}67%{transform:translate(-1.1%,1.5%)}72%{transform:translate(-1.1%,2%)}78%{transform:translate(-1.1%,1.5%)}90%{transform:translate(0,0)}}
 @keyframes drag{0%,100%{transform:translate(0,0)}28%{transform:translate(.6%,1.2%)}40%{transform:translate(.6%,1.6%)}46%{transform:translate(.6%,1.2%)}78%{transform:translate(.2%,.4%)}}
 @keyframes ring{0%,36%{opacity:0;transform:scale(.2)}40%{opacity:.95;transform:scale(.5)}60%{opacity:0;transform:scale(1.7)}100%{opacity:0}}
-.chips{position:absolute;left:41%;top:66%;width:33%;margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:2.2%}
+.chips{position:absolute;left:42%;top:57%;width:28%;margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:2.2%}
 .chips li{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(13,27,58,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-size:clamp(10px,1.05vw,13px);line-height:1.25;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 .chips svg{width:clamp(16px,1.9vw,24px);height:clamp(16px,1.9vw,24px);flex:none;color:var(--cyan)}
 @media(max-width:520px){.chips{display:none}}
@@ -129,7 +131,7 @@ details p{margin:8px 0 0;color:#51607f}
 .final h2{font-size:clamp(28px,4vw,44px)}
 footer{padding:26px 0 40px;color:var(--muted);font-size:14px;text-align:center;border-top:1px solid var(--line);background:var(--ink)}
 footer a{color:var(--ice)}
-@media (prefers-reduced-motion:reduce){.k,.k rect,.hl,.hr,.ring,.flash,.stage:active .pulse{animation:none}.ring,.flash{display:none}html{scroll-behavior:auto}}
+@media (prefers-reduced-motion:reduce){.k,.k rect,.hl,.hr,.ring,.wh,.stage:active .pulse{animation:none}.ring{display:none}html{scroll-behavior:auto}}
 </style>
 </head>
 <body>
@@ -149,14 +151,14 @@ footer a{color:var(--ice)}
   <div class="wrap">
     <header class="top">
       <a class="lg" href="#top" aria-label="NEU Agent"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark"/></svg><span class="wm">NEU <b>Agent</b></span></a>
-      <nav><a href="#kha-nang">Khả năng</a><a href="#demo">Xem demo</a><a href="#hoi-dap">Hỏi đáp</a><a href="help.html">Hướng dẫn</a><a href="changelog.html">Có gì mới</a><a class="btn sm" href="/agent/">Đăng nhập</a></nav>
+      <nav><a href="#kha-nang">Khả năng</a><a href="#demo">Xem demo</a><a href="#hoi-dap">Hỏi đáp</a><a href="/agent/guide/help.html">Hướng dẫn</a><a href="/agent/guide/changelog.html">Có gì mới</a><a class="btn sm" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></nav>
     </header>
 
     <div class="hero-grid">
       <div>
         <h1>Cánh tay AI, <span>làm mọi việc thay bạn.</span></h1>
         <p class="sub">Từ thao tác máy tính, lập trình, thuyết trình, thiết kế đến hàng trăm công việc khác. Bạn nói mục tiêu, NEU Agent làm đủ việc và tự kiểm tra trước khi báo xong.</p>
-        <div class="cta"><a class="btn" href="/agent/">Đăng nhập để dùng</a><a class="btn ghost" href="#demo">Xem demo</a></div>
+        <div class="cta"><a class="btn" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập để dùng</a><a class="btn ghost" href="#demo">Xem demo</a></div>
         <small>Dùng tài khoản @neu.edu.vn hoặc @st.neu.edu.vn · Bản web và bản cài cho máy tính</small>
         <ul class="pillars">
           <li><svg><use href="#i-pc"/></svg>Thao tác<br>máy tính</li>
@@ -169,8 +171,8 @@ footer a{color:var(--ice)}
 
       <div class="stage" role="img" aria-label="Hai cánh tay rô-bốt gõ bàn phím và cầm chuột">
         <svg class="kb" viewBox="0 0 1536 1000" aria-hidden="true"><g transform="rotate(-9.3)"><rect x="46" y="190" width="940" height="406" rx="34" fill="#0F2044"/><rect x="46" y="190" width="936" height="394" rx="34" fill="#324369"/><rect x="78" y="218" width="872" height="338" rx="16" fill="#16284E"/><g class="k" style="--n:0"><rect x="93.0" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="170.7" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:1"><rect x="248.5" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="326.2" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:2"><rect x="403.9" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="481.6" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:3"><rect x="559.4" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="637.1" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="714.8" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="792.5" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="870.3" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:4"><rect x="93.0" y="296.0" width="104.6" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="209.6" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:5"><rect x="287.3" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="365.0" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:6"><rect x="442.8" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="520.5" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:7"><rect x="598.2" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="676.0" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="753.7" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="831.4" y="296.0" width="104.6" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:8"><rect x="93.0" y="360.0" width="143.5" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="248.5" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:9"><rect x="326.2" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="403.9" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:10"><rect x="481.6" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="559.4" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:11"><rect x="637.1" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="714.8" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="792.5" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="870.3" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="93.0" y="424.0" width="85.2" height="52.0" rx="9" fill="#5C74A4"/><rect x="190.2" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="267.9" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="345.6" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="423.3" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="501.1" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="578.8" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="656.5" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="734.3" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="812.0" y="424.0" width="124.0" height="52.0" rx="9" fill="#5C74A4"/><rect x="93.0" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="170.7" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="248.5" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="326.2" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="403.9" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="481.6" y="488.0" width="221.2" height="52.0" rx="9" fill="#5C74A4"/><rect x="714.8" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="792.5" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="870.3" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g></svg>
-        <div class="rw hl"><img class="part" src="img/handio-hand-left.png" width="630" height="722" alt="" style="left:.46%;top:27.8%;width:41%"></div>
-        <div class="rw hr"><img class="part" src="img/handio-hand-right.png" width="455" height="801" alt="" style="left:70.37%;top:19.9%;width:29.62%"><span class="flash"></span><span class="ring"></span></div>
+        <div class="rw hl"><img class="part" src="/agent/guide/img/handio-hand-left.png" width="630" height="722" alt="" style="left:.46%;top:27.8%;width:41%"></div>
+        <div class="rw hr"><svg class="mouse" viewBox="0 0 1536 1000" aria-hidden="true"><defs><linearGradient id="mg" gradientUnits="userSpaceOnUse" x1="1200" y1="203" x2="1230" y2="740"><stop offset="0" stop-color="#42568A"/><stop offset=".3" stop-color="#2A3C69"/><stop offset=".65" stop-color="#16264E"/><stop offset="1" stop-color="#0E1C40"/></linearGradient></defs><path d="M1228 203C1150 203 1088 258 1086 335C1085 430 1110 560 1160 650C1190 705 1245 745 1290 735C1330 700 1345 560 1346 420C1347 330 1330 250 1280 218C1262 208 1245 203 1228 203Z" fill="url(#mg)"/><path d="M1197 206L1203 246M1224 346L1246 410" stroke="#031A42" stroke-width="6" stroke-linecap="round" fill="none"/><g transform="rotate(-8 1216 296)"><rect x="1188" y="244" width="56" height="104" rx="28" fill="#0B1A3E"/><rect class="wh" x="1198" y="254" width="36" height="84" rx="18" fill="#5D77A9"/></g></svg><img class="part" src="/agent/guide/img/handio-hand-right.png" width="454" height="722" alt="" style="left:70.44%;top:27.8%;width:29.56%"><span class="ring"></span></div>
         <span class="pulse"></span>
         <ul class="chips" aria-hidden="true">
           <li><svg><use href="#i-code"/></svg>Viết code<br>nhanh hơn</li>
@@ -208,11 +210,11 @@ footer a{color:var(--ice)}
         <label for="s1">1. Chọn việc</label><label for="s2">2. Có sẵn dự án mẫu</label><label for="s3">3. Thiết kế</label><label for="s4">4. Chỉ vào để sửa</label><label for="s5">5. Học dần</label>
       </div>
       <div class="slides">
-        <div class="slide p1"><div class="shot"><img src="img/work.jpg" width="800" height="600" alt="Màn hình chính chế độ Work"></div><p class="cap2"><b>Chọn Work, Code hoặc Design</b> rồi gõ điều bạn muốn, ngắn cũng được. Ví dụ: “tóm tắt các tệp này thành báo cáo một trang”.</p></div>
-        <div class="slide p2"><div class="shot"><img src="img/tao-du-an.jpg" width="800" height="600" alt="Tạo dự án mẫu Web ghi chú"></div><p class="cap2"><b>Một cú bấm có ngay dự án mẫu</b> (web ghi chú, bảng điểm, trang giới thiệu…). Vừa học vừa thử, không cần chuẩn bị gì.</p></div>
-        <div class="slide p3"><div class="shot"><img src="img/design.jpg" width="800" height="600" alt="Bản xem trước thiết kế"></div><p class="cap2"><b>Bản xem trước hiện ngay bên phải.</b> Xuất PDF hoặc PNG, đổi kích thước màn hình máy tính, điện thoại.</p></div>
-        <div class="slide p4"><div class="shot"><img src="img/chi-vao-de-sua.jpg" width="800" height="600" alt="Chỉ vào để sửa"></div><p class="cap2"><b>Bấm vào đúng chỗ muốn đổi</b>, rồi chọn “To hơn”, “Đổi màu”… hoặc gõ vài chữ. Không cần mô tả “cái nút ở góc dưới bên phải”.</p></div>
-        <div class="slide p5"><div class="shot"><img src="img/hoc.jpg" width="800" height="600" alt="Bài học vibe coding"></div><p class="cap2"><b>Học vibe coding ngay trong ứng dụng</b>: 12 buổi, 16 bài tập, 7 dự án mẫu. Nút 💡 chứa mẹo, thủ thuật và tình huống mẫu cho từng chế độ.</p></div>
+        <div class="slide p1"><div class="shot"><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Màn hình chính chế độ Work"></div><p class="cap2"><b>Chọn Work, Code hoặc Design</b> rồi gõ điều bạn muốn, ngắn cũng được. Ví dụ: “tóm tắt các tệp này thành báo cáo một trang”.</p></div>
+        <div class="slide p2"><div class="shot"><img src="/agent/guide/img/tao-du-an.webp" width="2560" height="1600" alt="Tạo dự án mẫu Web ghi chú" loading="lazy" decoding="async"></div><p class="cap2"><b>Một cú bấm có ngay dự án mẫu</b> (web ghi chú, bảng điểm, trang giới thiệu…). Vừa học vừa thử, không cần chuẩn bị gì.</p></div>
+        <div class="slide p3"><div class="shot"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Bản xem trước thiết kế" loading="lazy" decoding="async"></div><p class="cap2"><b>Bản xem trước hiện ngay bên phải.</b> Xuất PDF hoặc PNG, đổi kích thước màn hình máy tính, điện thoại.</p></div>
+        <div class="slide p4"><div class="shot"><img src="/agent/guide/img/chi-vao-de-sua.webp" width="2560" height="1600" alt="Chỉ vào để sửa" loading="lazy" decoding="async"></div><p class="cap2"><b>Bấm vào đúng chỗ muốn đổi</b>, rồi chọn “To hơn”, “Đổi màu”… hoặc gõ vài chữ. Không cần mô tả “cái nút ở góc dưới bên phải”.</p></div>
+        <div class="slide p5"><div class="shot"><img src="/agent/guide/img/hoc.webp" width="2560" height="1600" alt="Bài học vibe coding" loading="lazy" decoding="async"></div><p class="cap2"><b>Học vibe coding ngay trong ứng dụng</b>: 12 buổi, 16 bài tập, 7 dự án mẫu. Nút 💡 chứa mẹo, thủ thuật và tình huống mẫu cho từng chế độ.</p></div>
       </div>
     </div>
   </div>
@@ -223,9 +225,9 @@ footer a{color:var(--ice)}
     <h2>Ba chế độ cho ba kiểu việc</h2>
     <p class="lead">Chuyển qua lại bất kỳ lúc nào. Mỗi chế độ có sẵn “cách làm việc” riêng, bạn chỉ cần nói mục tiêu.</p>
     <div class="grid">
-      <div class="card"><img src="img/code.jpg" width="800" height="600" alt="Chế độ Code" loading="lazy"><div class="body"><h3>Code</h3><p>Viết, sửa lỗi, chạy thử và kiểm tra mã trong thư mục của bạn.</p><ul><li>Tự chạy thử, thấy lỗi thì tự sửa tiếp</li><li>Giao diện web gọn gàng, dùng được trên điện thoại</li><li>Nhớ ngữ cảnh dự án qua lệnh <code>/init</code></li></ul></div></div>
-      <div class="card"><img src="img/work.jpg" width="800" height="600" alt="Chế độ Work" loading="lazy"><div class="body"><h3>Work</h3><p>Đọc, tóm tắt, soạn báo cáo, tổng hợp bảng từ tệp của bạn.</p><ul><li>Yêu cầu ngắn vẫn ra bản hoàn chỉnh</li><li>Hỏi lại tối đa một câu khi thật cần</li><li>Tự đọc lại kết quả trước khi trả</li></ul></div></div>
-      <div class="card"><img src="img/design.jpg" width="800" height="600" alt="Chế độ Design" loading="lazy"><div class="body"><h3>Design</h3><p>Trang giới thiệu, poster, slide, mẫu biểu có bản xem trước trực tiếp.</p><ul><li>Bố cục, màu sắc, chữ được chọn sẵn cho hài hoà</li><li>Chỉ vào phần muốn sửa là xong</li><li>Xuất PDF, PNG</li></ul></div></div>
+      <div class="card"><img src="/agent/guide/img/code.webp" width="2560" height="1600" alt="Chế độ Code" loading="lazy" decoding="async"><div class="body"><h3>Code</h3><p>Viết, sửa lỗi, chạy thử và kiểm tra mã trong thư mục của bạn.</p><ul><li>Tự chạy thử, thấy lỗi thì tự sửa tiếp</li><li>Giao diện web gọn gàng, dùng được trên điện thoại</li><li>Nhớ ngữ cảnh dự án qua lệnh <code>/init</code></li></ul></div></div>
+      <div class="card"><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Chế độ Work" loading="lazy" decoding="async"><div class="body"><h3>Work</h3><p>Đọc, tóm tắt, soạn báo cáo, tổng hợp bảng từ tệp của bạn.</p><ul><li>Yêu cầu ngắn vẫn ra bản hoàn chỉnh</li><li>Hỏi lại tối đa một câu khi thật cần</li><li>Tự đọc lại kết quả trước khi trả</li></ul></div></div>
+      <div class="card"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Chế độ Design" loading="lazy" decoding="async"><div class="body"><h3>Design</h3><p>Trang giới thiệu, poster, slide, mẫu biểu có bản xem trước trực tiếp.</p><ul><li>Bố cục, màu sắc, chữ được chọn sẵn cho hài hoà</li><li>Chỉ vào phần muốn sửa là xong</li><li>Xuất PDF, PNG</li></ul></div></div>
     </div>
   </div>
 </section>
@@ -251,9 +253,9 @@ footer a{color:var(--ice)}
       <div>
         <h2>Sau khi đăng nhập: nhiều mẹo hơn</h2>
         <p class="lead">Nút 💡 ở góc trên có hướng dẫn riêng cho từng chế độ: mẹo, thủ thuật, tình huống mẫu bấm là chạy, phím tắt, cách xử lý khi gặp sự cố. Có ô tìm kiếm (gõ không dấu cũng được) và mục “Có gì mới”.</p>
-        <a class="btn" href="help.html">Đọc hướng dẫn sử dụng</a> <a class="btn ghost" href="changelog.html">Nhật ký thay đổi</a>
+        <a class="btn" href="/agent/guide/help.html">Đọc hướng dẫn sử dụng</a> <a class="btn ghost" href="/agent/guide/changelog.html">Nhật ký thay đổi</a>
       </div>
-      <div class="shot"><img src="img/huong-dan.jpg" width="800" height="600" alt="Hộp hướng dẫn trong ứng dụng" loading="lazy"></div>
+      <div class="shot"><img src="/agent/guide/img/huong-dan.webp" width="2560" height="1600" alt="Hộp hướng dẫn trong ứng dụng" loading="lazy"></div>
     </div>
   </div>
 </section>
@@ -285,14 +287,14 @@ footer a{color:var(--ice)}
   <div class="wrap">
     <h2>Giao việc cho một cánh tay AI</h2>
     <p class="lead" style="margin-inline:auto">Đăng nhập bằng tài khoản của trường và thử ngay với dự án mẫu.</p>
-    <a class="btn" href="/agent/">Đăng nhập NEU Agent</a>
+    <a class="btn" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập NEU Agent</a>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
     <span class="lg" style="vertical-align:middle"><svg viewBox="0 0 64 64" aria-hidden="true" style="width:24px;height:24px"><use href="#mark"/></svg><span class="wm" style="font-size:20px">NEU <b>Agent</b></span></span><br>
-    Khoa Công nghệ thông tin · Trường Đại học Kinh tế Quốc dân · <a href="/agent/">Đăng nhập</a> · <a href="help.html">Hướng dẫn sử dụng</a> · <a href="changelog.html">Nhật ký thay đổi</a>
+    Khoa Công nghệ thông tin · Trường Đại học Kinh tế Quốc dân · <a href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a> · <a href="/agent/guide/help.html">Hướng dẫn sử dụng</a> · <a href="/agent/guide/changelog.html">Nhật ký thay đổi</a>
   </div>
 </footer>
 </body>

@@ -72,7 +72,7 @@ systemctl reload nginx 2>/dev/null || nginx -s reload
 # kiểm tra sau cài: gọi qua chính nginx của 222 (HTTPS, tên miền thật)
 sleep 1
 chk() { curl -sk --resolve ai.neu.edu.vn:443:127.0.0.1 "$@"; }
-r_page=$(chk -o /dev/null -w "%{http_code} %{redirect_url}" https://ai.neu.edu.vn/agent/)
+r_page=$(chk -o /dev/null -w "%{http_code} %{redirect_url}" https://ai.neu.edu.vn/agent/index.html)
 r_api=$(chk https://ai.neu.edu.vn/agent/vllm/v1/models | head -c 70)
 r_other=$(chk -o /dev/null -w "%{http_code}" https://ai.neu.edu.vn/apps/)
 echo "Kiểm tra: /agent/=$r_page | API chưa đăng nhập=$r_api | /apps/ (ứng dụng khác)=$r_other"

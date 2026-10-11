@@ -56,7 +56,7 @@ try {
   const ins = ex("neu-220", "cd /deploy/220 && bash ./install.sh testkey123");
   console.log(ins.out.split("\n").slice(-4).join("\n"));
   check("220: install.sh chạy xong và báo OK", ins.ok && /OK: NEU Agent đã chạy/.test(ins.out));
-  check("220: trang /agent/ yêu cầu đăng nhập, API trả 401 JSON", c220("/agent/") === "302" && ex("neu-220", "curl -s -H 'Host: ai.neu.edu.vn' http://127.0.0.1/agent/vllm/v1/models").out.includes("login_required"));
+  check("220: trang /agent/ yêu cầu đăng nhập, API trả 401 JSON", c220("/agent/index.html") === "302" && ex("neu-220", "curl -s -H 'Host: ai.neu.edu.vn' http://127.0.0.1/agent/vllm/v1/models").out.includes("login_required"));
   check("220: site khác (mặc định cổng 80, Judge cổng 8017) KHÔNG bị ảnh hưởng", ex("neu-220", "curl -s http://127.0.0.1/").out === "OJ-DEFAULT" && ex("neu-220", "curl -s http://127.0.0.1:8017/").out === "JUDGE");
   check("220: key chỉ nằm ở conf.d (quyền 640), không nằm trong tệp web", ex("neu-220", "stat -c %a /etc/nginx/conf.d/neu-agent.conf && grep -rl testkey123 /var/www /etc/nginx/snippets /etc/nginx/sites-available 2>/dev/null | wc -l").out === "640\n0".replace("\n", "\n"));
   check("220: bản cài được chép và kiểm mã băm", ex("neu-220", "ls /var/www/neu-agent-dl").out.includes("SHA256SUMS.txt"));
@@ -67,7 +67,7 @@ try {
   // ép lỗi sau khi sửa cấu hình để thử khôi phục: làm hỏng tệp locations rồi cài
   ex("neu-220", "cp /deploy/220/neu-agent.locations.conf /tmp/loc.bak; echo 'khong_hop_le {' >> /deploy/220/neu-agent.locations.conf");
   const broken = ex("neu-220", "cd /deploy/220 && bash ./install.sh testkey123");
-  check("220: cấu hình hỏng → script thất bại và tự KHÔI PHỤC (trang vẫn đăng nhập được, site khác vẫn chạy)", !broken.ok && /khôi phục/i.test(broken.out) && c220("/agent/") === "302" && ex("neu-220", "curl -s http://127.0.0.1:8017/").out === "JUDGE");
+  check("220: cấu hình hỏng → script thất bại và tự KHÔI PHỤC (trang vẫn đăng nhập được, site khác vẫn chạy)", !broken.ok && /khôi phục/i.test(broken.out) && c220("/agent/index.html") === "302" && ex("neu-220", "curl -s http://127.0.0.1:8017/").out === "JUDGE");
   ex("neu-220", "cp /tmp/loc.bak /deploy/220/neu-agent.locations.conf");
   // kiểm soát nguồn: container 222 (IP docker, KHÔNG nằm trong danh sách) phải bị từ chối — kể cả khi giả mạo X-Forwarded-For bằng IP của 222 thật
   const ip220x = sh("docker", ["inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", "neu-220"]).stdout.trim();

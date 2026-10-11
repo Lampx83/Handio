@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thay đổi
+- **Trang chủ `/agent/` là trang giới thiệu khi chưa đăng nhập**: có nút “Đăng nhập”; đăng nhập xong vào thẳng trang làm việc. Chuột trong hình hero vẽ lại bằng vector (nút giữa thỉnh thoảng sáng), ảnh demo chụp lại ở độ phân giải cao (2560 × 1600, định dạng WebP) nên không còn mờ.
+
 ## [0.8.1] - 2026-10-11
 
 ### Thêm

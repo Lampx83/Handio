@@ -2,7 +2,7 @@
 """Tách nền tranh "tay rô-bốt gõ phím + cầm chuột" (nền bàn cờ giả, tay trắng trên nền gần trắng) thành các lớp có kênh trong suốt:
   handio-work.png        cả tranh (bàn phím + chuột + hai tay) trên nền trong suốt
   handio-work-left.webp  tay trái + cánh tay        (cùng khung 1536x1000, để dựng chuyển động)
-  handio-work-right.webp chuột + tay phải + cánh tay
+  handio-work-right.webp tay phải + cánh tay (KHÔNG kèm chuột: chuột vẽ vector)
 Cách cắt:
   - nền = các điểm xám trung tính nối với mép trên/trái/phải (không gieo từ mép dưới, nơi cánh tay bị cắt) + các mảng nền kín có ô bàn cờ;
   - bóc viền sáng 1–2 px sát mép; tay trái = vùng sáng/đèn xanh/vòng khớp tối, loại bàn phím; cánh tay lấy lại bằng hình bao lồi;
@@ -122,4 +122,18 @@ def save(mask, name, **kw):
 
 save(full, "handio-work.png", optimize=True)
 save(L, "handio-work-left.webp", quality=92, alpha_quality=100, method=6)
-save(R, "handio-work-right.webp", quality=92, alpha_quality=100, method=6)
+# tay phải TÁCH KHỎI chuột (chuột được vẽ lại bằng vector trong build_work.py): chỉ giữ vùng sáng/đèn xanh/vòng khớp + cổ tay, cẳng tay
+yy, xx = np.mgrid[0:H, 0:W]
+hand_r = bright | cyan | (dark & ndi.binary_dilation(cyan, iterations=20))
+hand_r = ndi.binary_closing(hand_r, iterations=2)
+Rh = hand_r.copy(); Rh[:, :1070] = False
+Rh = Rh | (light & ndi.binary_dilation(Rh, iterations=5) & (xx >= 1070))
+Rh = ndi.binary_closing(Rh, iterations=3)
+Rh = ndi.binary_fill_holes(Rh) & fg
+Rh |= R & (yy >= 700)
+Rh &= (xx >= 1070)
+Rh = ndi.binary_closing(Rh, iterations=1) & (Rh | ndi.binary_dilation(Rh, iterations=1))
+lab_h, n_h = ndi.label(Rh)
+Rh = np.isin(lab_h, [i + 1 for i, sz in enumerate(ndi.sum(Rh, lab_h, range(1, n_h + 1))) if sz >= 1500])
+Rh[-2:, :] = False
+save(Rh, "handio-work-right.webp", quality=92, alpha_quality=100, method=6)

@@ -104,7 +104,10 @@ try {
   }
 
   const r1 = await req("/agent/");
-  check("chưa đăng nhập: trang /agent/ chuyển tới trang chọn cách đăng nhập (302)", r1.status === 302 && r1.headers.location.startsWith("/agent/oauth2/sign_in"), r1.headers.location);
+  check("chưa đăng nhập: /agent/ hiện trang giới thiệu (200, có nút đăng nhập, không lộ giao diện)", r1.status === 200 && /NEU-GUIDE-PUBLIC/.test(r1.body) && !/NEU-AGENT-APP/.test(r1.body), String(r1.status));
+  check("trang giới thiệu ở /agent/ không bị lưu đệm và có CSP chặt", /no-store/.test(r1.headers["cache-control"] ?? "") && /default-src 'none'/.test(r1.headers["content-security-policy"] ?? ""));
+  const r1b = await req("/agent/index.html");
+  check("chưa đăng nhập: tệp khác của ứng dụng (/agent/index.html) vẫn chuyển tới đăng nhập (302)", r1b.status === 302 && r1b.headers.location.startsWith("/agent/oauth2/sign_in"), r1b.headers.location);
   const s1 = await req("/agent/oauth2/start?rd=/agent/");
   check("/agent/oauth2/start chuyển tới nhà cấp danh tính với PKCE S256 và redirect_uri đúng", s1.status === 302 && /code_challenge_method=S256/.test(s1.headers.location) && s1.headers.location.includes(encodeURIComponent("https://ai.neu.edu.vn/agent/oauth2/callback")), s1.headers.location?.slice(0, 90));
   const api0 = await req("/agent/vllm/v1/models");
@@ -121,14 +124,14 @@ try {
   const w0 = await req("/agent/sandbox-worker.js");
   check("chưa đăng nhập: tệp web (worker) không đọc được", w0.status === 302);
   check("đường dẫn nội bộ /agent/oauth2/auth không gọi trực tiếp được từ ngoài", (await req("/agent/oauth2/auth")).status === 404);
-  check("chuyển hướng dạng tương đối (không bị đẩy sang http://)", r1.headers.location.startsWith("/agent/oauth2/sign_in"));
+  check("chuyển hướng dạng tương đối (không bị đẩy sang http://)", r1b.headers.location.startsWith("/agent/oauth2/sign_in"));
   check("máy 222 vẫn giữ ứng dụng khác (/apps/) không bị ảnh hưởng", (await req("/apps/")).body === "app-khac");
 
   const ok = await browserLogin("lan@neu.edu.vn");
   check("đăng nhập giảng viên (@neu.edu.vn): callback cấp cookie phiên rồi chuyển về /agent/", ok.cb.status === 302 && ok.cb.headers.location === "/agent/" && ok.session.some((c) => c.startsWith("_neuagent_sso")), `${ok.cb.status} ${ok.cb.headers.location}`);
   const cookie = jar(ok.session);
   const page = await req("/agent/", { headers: { Cookie: cookie } });
-  check("đã đăng nhập: vào được giao diện", page.status === 200 && /NEU-AGENT-APP/.test(page.body));
+  check("đã đăng nhập: vào được giao diện", page.status === 200 && /NEU-AGENT-APP/.test(page.body), `${page.status} ${page.headers.location ?? ""} ${String(page.body || "").slice(0, 80)}`);
   check("đã đăng nhập: tải về được SHA256SUMS", (await req("/agent/download/SHA256SUMS.txt", { headers: { Cookie: cookie } })).status === 200);
   // trang quản trị / quản lý tài khoản (collector không chạy trong bài thử này: chỉ kiểm tra lớp nginx + đăng nhập)
   const jsonH = { "Content-Type": "application/json", "X-Neu-Admin": "1" };

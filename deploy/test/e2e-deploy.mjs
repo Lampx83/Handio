@@ -89,7 +89,7 @@ try {
   mkWeb(webDir, "<html>WEB-V2</html>");
   const b2 = bundle("b2.tgz");
   const d2 = deployCmd(b2);
-  check("triển khai hợp lệ: DEPLOYED, web v2 đang chạy, /agent/ chuyển tới đăng nhập", d2.ok && /DEPLOYED \d{8}-\d{6}-/.test(d2.out) && ex("cat /var/www/neu-agent/index.html").out.includes("WEB-V2") && http("/agent/") === "302", d2.out.split("\n").slice(-4).join(" | "));
+  check("triển khai hợp lệ: DEPLOYED, web v2 đang chạy, /agent/ chuyển tới đăng nhập", d2.ok && /DEPLOYED \d{8}-\d{6}-/.test(d2.out) && ex("cat /var/www/neu-agent/index.html").out.includes("WEB-V2") && http("/agent/index.html") === "302", d2.out.split("\n").slice(-4).join(" | "));
   check("key mô hình được dùng lại từ cấu hình đang chạy (không cần gửi key)", ex("grep -c keyDeTest123 /etc/nginx/conf.d/neu-agent.conf").out === "1");
   const rel = ex("ls /opt/neu-agent-deploy/releases | head -1").out;
   check("bản đã nhận thuộc root, nhóm/ai khác không ghi được; có liên kết current", ex(`stat -c '%U:%G' /opt/neu-agent-deploy/releases/${rel}; find /opt/neu-agent-deploy/releases/${rel} -perm /022 | wc -l; readlink /opt/neu-agent-deploy/current`).out.startsWith("root:root\n0\n/opt/neu-agent-deploy/releases/"));
@@ -138,7 +138,7 @@ try {
   sh("tar", ["--no-xattrs", "-czf", path.join(stage, "web.tar.gz"), "-C", empty, "."], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
   const bBad = bundle("bbad.tgz");
   const dbad = deployCmd(bBad);
-  check("web hỏng (không có index.html): THẤT BẠI, bản đang chạy giữ nguyên, site vẫn phục vụ web v2", !dbad.ok && /THẤT BẠI/.test(dbad.out) && cur() === before && ex("cat /var/www/neu-agent/index.html").out.includes("WEB-V2") && http("/agent/") === "302", dbad.out.split("\n").slice(-3).join(" | "));
+  check("web hỏng (không có index.html): THẤT BẠI, bản đang chạy giữ nguyên, site vẫn phục vụ web v2", !dbad.ok && /THẤT BẠI/.test(dbad.out) && cur() === before && ex("cat /var/www/neu-agent/index.html").out.includes("WEB-V2") && http("/agent/index.html") === "302", dbad.out.split("\n").slice(-3).join(" | "));
   check("bản hỏng bị dọn, không để lại thư mục", ex("ls /opt/neu-agent-deploy/releases | wc -l").out === "1");
 
   // ================================================================ bản mới, rồi rollback

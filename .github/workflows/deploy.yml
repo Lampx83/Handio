@@ -86,7 +86,10 @@ jobs:
           set -euo pipefail
           for _try in 1 2 3 4 5 6; do hz=$(curl -s --max-time 15 "$SITE/agent/healthz" || true); [ "$hz" = '{"ok":true}' ] && break; sleep 10; done
           echo "healthz: $hz"; [ "$hz" = '{"ok":true}' ] || { echo "::error::healthz không báo ok sau khi triển khai"; exit 1; }
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/"); echo "/agent/ → $code"; [ "$code" = 302 ] || { echo "::error::/agent/ phải chuyển tới đăng nhập (302), nhận $code"; exit 1; }
+          # /agent/ chưa đăng nhập = trang giới thiệu có nút đăng nhập (200); tệp khác của ứng dụng vẫn phải chuyển tới đăng nhập (302)
+          home=$(curl -s --max-time 15 -w '\n%{http_code}' "$SITE/agent/"); code=${home##*$'\n'}; echo "/agent/ → $code"
+          { [ "$code" = 200 ] && printf '%s' "$home" | grep -q 'oauth2/sign_in'; } || { echo "::error::/agent/ chưa đăng nhập phải hiện trang giới thiệu có nút đăng nhập (200), nhận $code"; exit 1; }
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/index.html"); echo "/agent/index.html → $code"; [ "$code" = 302 ] || { echo "::error::/agent/index.html phải chuyển tới đăng nhập (302), nhận $code"; exit 1; }
           api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/vllm/v1/models"); echo "API chưa đăng nhập → $api"; [ "$api" = 401 ] || { echo "::error::API chưa đăng nhập phải trả 401, nhận $api"; exit 1; }
           sig=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE/agent/oauth2/sign_in"); echo "trang đăng nhập → $sig"; [ "$sig" = 200 ] || { echo "::error::trang đăng nhập không phục vụ được"; exit 1; }
       - name: Lịch sử triển khai trên máy chủ (ai, lúc nào, commit nào, kết quả)
