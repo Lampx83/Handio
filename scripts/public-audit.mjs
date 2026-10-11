@@ -23,22 +23,26 @@ const SECRET = [
 ];
 const PERSONAL_MAIL = /[A-Za-z0-9._%+-]+@(?:gmail|googlemail|yahoo|outlook|hotmail|icloud|proton(?:mail)?)\.[a-z.]{2,}/gi;
 
-/** Tiền tố địa chỉ thật của tổ chức (nội bộ/công khai): luôn bị coi là rò rỉ, kể cả khi thuộc dải riêng. Thêm khi có máy mới. */
-export const ORG_PREFIXES = ["192.0.2.", "192.0.2.", "192.0.2."];
+/**
+ * Địa chỉ riêng/CGNAT dùng làm ví dụ trong tài liệu và bài thử (không thuộc hạ tầng thật). MỌI địa chỉ riêng khác đều bị báo: công cụ
+ * không biết (và không được ghi trong mã) địa chỉ thật của tổ chức; địa chỉ thật mới xuất hiện sẽ tự bị chặn thay vì phải nhớ thêm vào đâu đó.
+ */
+const EXAMPLE_PRIVATE = new Set([
+  "10.0.0.1", "10.0.0.2", "10.0.0.51", "10.0.0.58", "10.1.2.3", "10.0.0.0",
+  "192.168.0.0", "192.168.0.5", "192.168.1.1", "172.16.0.0", "172.16.0.5", "172.17.17.240", "172.20.0.1",
+  "100.64.0.0", "100.64.0.1", "169.254.0.0", "169.254.169.254",
+]);
 
 /**
- * Địa chỉ được phép: loopback, dải tài liệu (RFC 5737), địa chỉ ví dụ quen thuộc, và các dải RIÊNG/CGNAT/link-local dùng làm ví dụ
- * trong bài thử (không lộ gì), TRỪ các tiền tố thật của tổ chức. Mọi địa chỉ công khai khác đều bị báo.
+ * Địa chỉ được phép: loopback, dải tài liệu (RFC 5737), địa chỉ công khai quen thuộc làm ví dụ, và các địa chỉ riêng trong EXAMPLE_PRIVATE.
+ * Mọi địa chỉ công khai khác và mọi địa chỉ riêng khác đều bị báo.
  */
 export function ipAllowed(ip) {
   const o = ip.split(".").map(Number);
   if (o.length !== 4 || o.some((n) => !(n >= 0 && n <= 255))) return true; // không phải IP (số phiên bản…)
-  if (ORG_PREFIXES.some((p) => ip.startsWith(p))) return false;
   const [a, b, c] = o;
   if (a === 127 || a === 0 || a === 255 || a >= 224) return true;            // loopback, "mọi địa chỉ", broadcast, multicast
-  if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return true; // RFC 1918 (ví dụ chung)
-  if (a === 100 && b >= 64 && b <= 127) return true;                          // CGNAT
-  if (a === 169 && b === 254) return true;                                    // link-local, metadata đám mây
+  if (EXAMPLE_PRIVATE.has(ip)) return true;
   if (a === 192 && b === 0 && c === 2) return true;                           // 192.0.2.0/24
   if (a === 198 && b === 51 && c === 100) return true;                        // 198.51.100.0/24
   if (a === 203 && b === 0 && c === 113) return true;                         // 203.0.113.0/24

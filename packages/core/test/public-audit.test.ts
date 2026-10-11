@@ -10,28 +10,28 @@ beforeAll(async () => {
   R = await import(pathToFileURL(path.resolve(__dirname, "../../../deploy/render-site.mjs")).href);
 });
 
-// Ghép từ mảnh: tệp này không được chứa địa chỉ/định danh thật (công cụ quét sẽ báo chính nó)
-const ORG_INTERNAL = ["10", "2", "13", "58"].join(".");
-const ORG_PUBLIC = ["101", "96", "66", "220"].join(".");
-const ORG_OTHER = ["172", "31", "15", "3"].join(".");
-const USER_IP = ["1", "53", "106", "22"].join(".");
-const ORG_GUID = ["00000000", "41a9", "4402", "9f69", "000000000001"].join("-");
+// Giá trị GIẢ hoàn toàn (không phải của tổ chức nào): đủ để kích hoạt từng luật quét
+const ip = (...o: number[]) => o.join("."); // ghép lúc chạy để chính tệp này không bị công cụ quét báo
+const FAKE_PRIVATE = ip(10, 77, 88, 99);       // địa chỉ riêng không nằm trong danh sách ví dụ
+const FAKE_PUBLIC = ip(100, 100, 100, 100);    // địa chỉ công khai lạ
+const FAKE_PUBLIC_2 = ip(198, 18, 7, 7);       // địa chỉ công khai lạ khác
+const FAKE_GUID = ["9f1c2a3b", "4d5e", "4f60", "8a7b", "0c1d2e3f4a5b"].join("-");
 const REAL_MAIL = "nguoi.that" + "@" + "gmail.com";
 
 describe("public-audit: quét thông tin hạ tầng/định danh/bí mật", () => {
   const scan = (text: string, file = "docs/x.md") => A.scan([{ path: file, text }]) as { rule: string; value: string }[];
 
-  it("báo IP máy chủ thật, kể cả địa chỉ trong dải riêng của tổ chức", () => {
-    const v = scan(`máy ${ORG_INTERNAL} và ${ORG_PUBLIC} và ${ORG_OTHER}`).map((f) => f.value);
-    expect(v).toEqual([ORG_INTERNAL, ORG_PUBLIC, ORG_OTHER]);
+  it("báo IP lạ, kể cả địa chỉ trong dải riêng không có trong danh sách ví dụ", () => {
+    const v = scan(`máy ${FAKE_PRIVATE} và ${FAKE_PUBLIC} và ${FAKE_PUBLIC_2}`).map((f) => f.value);
+    expect(v).toEqual([FAKE_PRIVATE, FAKE_PUBLIC, FAKE_PUBLIC_2]);
   });
 
   it("cho phép loopback, dải tài liệu, địa chỉ riêng ví dụ chung và số phiên bản", () => {
     expect(scan("127.0.0.1 0.0.0.0 192.0.2.10 198.51.100.7 203.0.113.9 10.0.0.1 192.168.1.1 172.16.0.5 169.254.169.254 Chrome/120.0.0.0 1.2.3")).toEqual([]);
   });
 
-  it("báo địa chỉ công khai lạ (IP người dùng thật) và GUID của tổ chức, cho phép GUID ví dụ", () => {
-    const f = scan(`khách ${USER_IP}; tenant ${ORG_GUID}; mẫu 00000000-0000-0000-0000-000000000000`);
+  it("báo địa chỉ công khai lạ (IP người dùng) và GUID định danh, cho phép GUID ví dụ", () => {
+    const f = scan(`khách ${FAKE_PUBLIC}; tenant ${FAKE_GUID}; mẫu 00000000-0000-0000-0000-000000000000`);
     expect(f.map((x) => x.rule).sort()).toEqual(["guid", "ip"]);
   });
 
