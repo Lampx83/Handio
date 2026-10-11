@@ -194,7 +194,7 @@ export function officeTools(env: Env): Tool[] {
     },
     {
       name: "create_docx", kind: "edit", readonly: false, pathArg: "path",
-      description: "Create a Word document (.docx) from Markdown. Supports # headings, paragraphs, **bold**, *italic*, bullet and numbered lists (nested by 2-space indent), tables (| a | b |), > quotes, --- rules, <<<pagebreak>>>, and <center>text</center>. style 'formal' = Vietnamese administrative format (Times New Roman 13, A4, justified, margins 3/2/2/2 cm); 'modern' = Calibri 11. For official letters pass letterhead (national motto block), title, subtitle, signature and recipients. Never overwrite an existing file unless it was read first; save under a new name instead.",
+      description: "Create a Word document (.docx) from Markdown. Supports # headings, paragraphs, **bold**, *italic*, bullet and numbered lists (nested by 2-space indent), tables (| a | b |), > quotes, --- rules, <<<pagebreak>>>, and <center>text</center>. style 'formal' = Vietnamese administrative format (Times New Roman 13, A4, justified, margins 3/2/2/2 cm); 'modern' = Calibri 11 with a designed look (big title block, coloured table headers, callouts, page header/footer): use it for reports, handouts, summaries. In modern, > **Lưu ý:** / > **Mẹo:** / > **Cảnh báo:** make coloured callout boxes, and a ```chart block (same syntax as create_pptx) is drawn as coloured bars; subtitle may have extra lines (author, date). For official letters pass letterhead (national motto block), title, subtitle, signature and recipients. Never overwrite an existing file unless it was read first; save under a new name instead.",
       parameters: { type: "object", properties: {
         path: { type: "string", description: "output path ending in .docx" },
         content: { type: "string", description: "document body in Markdown" },
@@ -203,6 +203,8 @@ export function officeTools(env: Env): Tool[] {
         letterhead: { type: "object", properties: { agency_parent: S, agency: S, doc_number: S, place_date: S } },
         signature: { type: "object", properties: { role: S, name: S, on_behalf: S }, required: ["role"] },
         recipients: { type: "array", items: S }, page_numbers: { type: "boolean" },
+        accent: { type: "string", description: "main colour of the modern style: #RRGGBB or a colour name (default dark blue)" },
+        toc: { type: "boolean", description: "true = insert an auto-updating table of contents after the title block; use for long documents (4+ sections)" },
         append: { type: "boolean", description: "true = add this content to the END of the document you created earlier at the same path with create_docx (use it when the document is longer than ~2,000 characters: send the first part without append, then each next part with append=true; title/style/letterhead/signature are kept from the first call)" },
       }, required: ["path", "content"] },
       summarize: (a) => String(a.path ?? ""),
@@ -222,7 +224,7 @@ export function officeTools(env: Env): Tool[] {
           opts = { ...(r.st.opts as object), content: r.st.content + "\n\n" + a.content } as typeof opts;
         } else {
           ({ abs, existed } = await prepareWrite(ctx, a.path, ".docx"));
-          opts = { content: a.content, title: a.title, subtitle: a.subtitle, style: a.style, orientation: a.orientation, letterhead: jsonArg<Letterhead | undefined>(a.letterhead, "letterhead"), signature: jsonArg<Signature | undefined>(a.signature, "signature"), recipients: jsonArg<string[]>(a.recipients, "recipients"), page_numbers: a.page_numbers };
+          opts = { content: a.content, title: a.title, subtitle: a.subtitle, style: a.style, orientation: a.orientation, letterhead: jsonArg<Letterhead | undefined>(a.letterhead, "letterhead"), signature: jsonArg<Signature | undefined>(a.signature, "signature"), recipients: jsonArg<string[]>(a.recipients, "recipients"), page_numbers: a.page_numbers, accent: a.accent, toc: a.toc === true || a.toc === "true" };
         }
         const bytes = await createDocx(opts);
         await commit(ctx, abs, bytes, existed);
