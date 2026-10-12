@@ -733,3 +733,41 @@ annotation, annotation-xml { display: none; }
 .msg-img.big { max-width: 100%; max-height: 70vh; cursor: zoom-out; }
 .msg-img-miss { font-size: 12px; color: var(--muted); }
 .msg-text { white-space: pre-wrap; }
+
+/* nút sao chép chỉ có biểu tượng */
+.icon-copy { display: inline-flex; align-items: center; justify-content: center; padding: 5px 8px; line-height: 0; }
+.icon-copy .ic-check, .code-h button .ic-check { display: none; }
+.icon-copy.copied .ic-copy, .code-h button.copied .ic-copy { display: none; }
+.icon-copy.copied .ic-check, .code-h button.copied .ic-check { display: inline; color: var(--ok, #2ea043); }
+.icon-copy.copy-failed { outline: 1px solid var(--danger, #e5484d); }
+.code-h button { display: inline-flex; align-items: center; line-height: 0; padding: 4px 6px; border-radius: 6px; cursor: pointer; }
+.shr-copy { display: flex; gap: 8px; align-items: stretch; }
+.shr-copy .shr-url { flex: 1; }
+
+/* nội dung đa dạng trong câu trả lời */
+.msg-ai del { opacity: .65; }
+.msg-ai kbd { font: 12px ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; background: var(--panel2); }
+.msg-ai mark { background: color-mix(in srgb, #f5c542 35%, transparent); color: inherit; padding: 0 2px; border-radius: 3px; }
+.msg-ai .task { font-size: 1.05em; margin-right: 2px; }
+.msg-ai .task.done { color: var(--ok, #2ea043); }
+.msg-ai li > ul, .msg-ai li > ol { margin: .2em 0; }
+.msg-ai .pagebreak { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.msg-ai .pagebreak::before, .msg-ai .pagebreak::after { content: ""; flex: 1; border-top: 1px dashed var(--border); }
+.msg-ai .callout { margin: .6em 0; padding: 8px 12px; border-left: 3px solid var(--accent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.msg-ai .callout > :last-child { margin-bottom: 0; }
+.msg-ai .callout-t { font-weight: 600; margin-bottom: 2px; }
+.msg-ai .callout.tip { border-color: #2ea043; background: color-mix(in srgb, #2ea043 10%, transparent); }
+.msg-ai .callout.important { border-color: #a371f7; background: color-mix(in srgb, #a371f7 12%, transparent); }
+.msg-ai .callout.warning { border-color: #d29922; background: color-mix(in srgb, #d29922 12%, transparent); }
+.msg-ai .callout.caution { border-color: #e5484d; background: color-mix(in srgb, #e5484d 12%, transparent); }
+.msg-ai blockquote > p { margin: .25em 0; }
+.md-img { max-width: min(100%, 520px); max-height: 380px; border-radius: 8px; display: block; margin: .5em 0; cursor: zoom-in; background: var(--panel2); }
+.md-img:not([src]) { display: none; }
+.md-img.big { max-width: 100%; max-height: none; cursor: zoom-out; }
+/* tô màu mã */
+.tk-c { color: var(--muted); font-style: italic; }
+.tk-s { color: color-mix(in srgb, #3fb950 70%, var(--text)); }
+.tk-n { color: color-mix(in srgb, #f08c3a 75%, var(--text)); }
+.tk-k { color: color-mix(in srgb, #c678dd 70%, var(--text)); font-weight: 500; }
+.tk-t { color: color-mix(in srgb, #4d9bff 75%, var(--text)); }
+.msg-ai li:has(> .task:first-child) { list-style: none; margin-left: -1.1em; }

@@ -1,5 +1,6 @@
 import { brandName } from "@neu/agent-core";
 import { clear, h } from "./dom";
+import { copyButton } from "./copy";
 
 interface Item {
   os: "mac-arm64" | "mac-x64" | "win";
@@ -156,7 +157,7 @@ export async function openDownload(base: string, install?: { available(): boolea
     h("details", { class: "dl-more" }, h("summary", {}, "Kiểm tra tệp (khuyến nghị)"),
       h("p", { class: "muted" }, "So mã SHA-256 của tệp đã tải với mã dưới đây (tốt nhất so với mã do giảng viên gửi qua kênh khác):"),
       h("pre", {}, h("code", {}, verify)),
-      ...files.map((f) => h("div", { class: "dl-hash" }, h("span", {}, SHORT[f.it.os]), h("code", {}, sums.get(f.name)!), h("button", { class: "btn sm", type: "button", onclick: (e: Event) => { void navigator.clipboard?.writeText(sums.get(f.name)!).then(() => { (e.target as HTMLElement).textContent = "Đã chép"; }).catch(() => undefined); } }, "Chép")))),
+      ...files.map((f) => h("div", { class: "dl-hash" }, h("span", {}, SHORT[f.it.os]), h("code", {}, sums.get(f.name)!), copyButton(() => sums.get(f.name)!, { label: "Sao chép mã băm" })))),
     h("p", { class: "dl-foot muted" }, (files.every((f) => isSigned(f.it.os)) ? "" : "Bản chưa ký số: lần đầu mở, hệ điều hành sẽ cảnh báo. "), h("a", { href: url("HUONG-DAN-CAI-DAT.md"), target: "_blank", rel: "noopener" }, "Cách mở an toàn"), " · ", h("a", { href: url("BAO-MAT.md"), target: "_blank", rel: "noopener" }, "Bảo mật")));
 }
 

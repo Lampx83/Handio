@@ -5,6 +5,13 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Câu trả lời hiển thị đầy đủ hơn**: danh sách lồng nhau và có dòng trống giữa các mục (số thứ tự không còn quay về 1), việc cần làm `- [ ]`/`- [x]` thành ô tích, chữ gạch ngang `~~…~~`, bảng canh lề trái/giữa/phải, ghi chú `> [!NOTE]`/`[!TIP]`/`[!WARNING]` có màu, trích dẫn nhiều dòng, địa chỉ web tự thành liên kết, `<br>`, `<kbd>`, `<sub>`, `<sup>`, ngắt trang `<<<pagebreak>>>`, và tô màu mã (JavaScript, Python, JSON, HTML, CSS, SQL, shell…).
+- **Ảnh trong câu trả lời**: ảnh có trong dự án (`![mô tả](charts/bieu-do.png)`) hiện ngay tại chỗ, bấm để phóng to. Ảnh từ mạng chỉ hiện thành liên kết, không tự tải (tránh bị dò thông tin qua ảnh).
+
+### Sửa
+- **Nút "Sao chép" (liên kết chia sẻ, khối mã, mã băm) bấm không được trên ứng dụng Desktop** do bị chặn quyền clipboard: nay sao chép được, và nút chỉ còn biểu tượng (đổi thành dấu ✓ khi xong).
+
 ### Sửa
 - **Thông báo "Có bản mới / Đã tải xong" không còn bị hộp Nhật ký thay đổi che**: khi bản cập nhật vừa xuất hiện hoặc vừa tải xong ở góc dưới bên phải, hộp Nhật ký đang mở tự đóng để bạn thấy nút "Cài đặt và khởi động lại".
 

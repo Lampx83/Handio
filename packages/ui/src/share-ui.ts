@@ -1,5 +1,6 @@
 import { brandName, type AgentController, type SharedChatInfo } from "@neu/agent-core";
 import { h } from "./dom";
+import { copyButton } from "./copy";
 
 const when = (ts: number): string => {
   try {
@@ -43,7 +44,7 @@ export function openShare(ctl: AgentController, opts: { track?: (a: string) => v
       list.append(h("div", { class: "shr-row" },
         h("div", { class: "shr-t" }, it.title, h("span", { class: "muted" }, ` · ${it.items} mục · ${it.views} lượt xem · ${when(it.ts)}`)),
         h("div", { class: "shr-acts" },
-          h("button", { class: "btn sm", type: "button", onclick: () => void copy(it.url) }, "Sao chép"),
+          copyButton(() => it.url, { onDone: (ok) => say(ok ? "Đã sao chép liên kết." : "Không sao chép tự động được: hãy chọn và sao chép liên kết.", ok) }),
           h("button", { class: "btn sm danger", type: "button", onclick: async (e: Event) => {
             const b = e.target as HTMLButtonElement;
             b.disabled = true;
@@ -51,15 +52,6 @@ export function openShare(ctl: AgentController, opts: { track?: (a: string) => v
             say(r.message, r.ok);
             void paintList();
           } }, "Thu hồi"))));
-    }
-  };
-
-  const copy = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
-      say("Đã sao chép liên kết.", true);
-    } catch {
-      say("Không sao chép tự động được: hãy chọn và sao chép liên kết ở trên.", false);
     }
   };
 
@@ -77,7 +69,7 @@ export function openShare(ctl: AgentController, opts: { track?: (a: string) => v
     const input = h("input", { type: "text", class: "shr-url", readonly: "", value: r.url, "aria-label": "Liên kết chia sẻ" }) as HTMLInputElement;
     result.replaceChildren(
       h("div", { class: "shr-h" }, `Liên kết (chỉ người đã đăng nhập ${brandName()} mở được):`),
-      h("div", { class: "shr-copy" }, input, h("button", { class: "btn primary sm", type: "button", onclick: () => void copy(r.url!) }, "Sao chép")));
+      h("div", { class: "shr-copy" }, input, copyButton(() => r.url!, { primary: true, onDone: (ok) => say(ok ? "Đã sao chép liên kết." : "Không sao chép tự động được: hãy chọn và sao chép liên kết ở trên.", ok) })));
     input.focus();
     input.select();
     void paintList();

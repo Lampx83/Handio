@@ -3,6 +3,7 @@ import { brandText, formatAnswers } from "@neu/agent-core";
 import { clear, h, store } from "./dom";
 import { escapeHtml, renderMarkdown } from "./markdown";
 import { mimeOfName, splitPastedRefs, thumbDataUrl } from "./image-thumb";
+import { copyText, flashCopied } from "./copy";
 import { treeIcon } from "./icons";
 import { openSettings as openSettingsDialog, type AccountInfo } from "./settings-ui";
 import { accountChip } from "./account-ui";
@@ -314,8 +315,7 @@ class App {
       const b = (e.target as HTMLElement).closest("[data-copy]");
       if (b) {
         const code = b.closest(".code")?.querySelector("code")?.textContent ?? "";
-        void navigator.clipboard?.writeText(code).then(() => ((b as HTMLElement).textContent = "Đã chép"), () => undefined);
-        setTimeout(() => ((b as HTMLElement).textContent = "Sao chép"), 1500);
+        void copyText(code).then((ok) => flashCopied(b as HTMLElement, ok));
       }
     });
     this.input.addEventListener("paste", (e) => {
@@ -694,6 +694,31 @@ class App {
   private md(el: HTMLElement, raw: string): void {
     el.innerHTML = renderMarkdown(this.workTools.prepare(raw));
     this.workTools.decorate(el);
+    this.hydrateImages(el);
+  }
+
+  /** Ảnh trong dự án được trả lời nhắc tới bằng ![mô tả](đường/dẫn.png): đọc tệp và hiện tại chỗ (ảnh từ mạng không bao giờ được tải). */
+  private hydrateImages(el: HTMLElement): void {
+    el.querySelectorAll<HTMLImageElement>("img.md-img[data-path]").forEach((img) => {
+      const path = img.dataset.path ?? "";
+      img.addEventListener("click", () => img.classList.toggle("big"));
+      const have = this.thumbs.get("md:" + path);
+      if (have) {
+        img.src = have;
+        return;
+      }
+      void this.ctl.downloadFile(path).then(async (r) => {
+        if ("error" in r) {
+          img.replaceWith(h("span", { class: "muted" }, "🖼 " + (img.alt || path.split("/").pop() || "ảnh")));
+          return;
+        }
+        const u = await thumbDataUrl(new Blob([r.data as BlobPart], { type: path.endsWith(".svg") ? "image/svg+xml" : mimeOfName(path) }), 1000).catch(() => "");
+        if (u) {
+          this.thumbs.set("md:" + path, u);
+          img.src = u;
+        }
+      });
+    });
   }
 
   private dropWelcome(): void {
