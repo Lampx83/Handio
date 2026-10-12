@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Bản triển khai tại NEU giữ tên "NEU Agent" và biểu tượng chữ N**: biểu tượng ứng dụng (Dock, thanh tác vụ), biểu tượng trình duyệt/PWA và dấu hiệu ở đầu cửa sổ là chữ N xanh như trước; bàn tay Handio chỉ hiện khi triển khai dưới tên "Handio".
 - **Tab Design hỏi lưu bản xuất vào thư mục nào** (Desktop): bấm PDF/PNG hiện hộp "Lưu bản xuất" để chọn thư mục và tên; không chọn (đóng hộp) thì lưu vào thư mục mặc định, cạnh tệp thiết kế. Nhớ thư mục vừa chọn cho lần sau.
 - **Xem ảnh (PNG/JPG/GIF/WebP) ngay trong ứng dụng**: bấm vào ảnh trong danh sách tệp (vd bản PNG vừa xuất) để xem, không cần mở bằng ứng dụng khác.
 - **Tự bật ứng dụng để kiểm tra** (tab Code, chế độ Tự động): agent sửa mã web xong mà chưa bật máy chủ thì ứng dụng tự chạy máy chủ dev của dự án, mở thử trang và để máy chủ chạy sẵn (nút "Mở localhost"), không phải nhắn "bật ứng dụng đi".

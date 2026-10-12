@@ -707,3 +707,5 @@ button.meter:hover, button.meter[aria-expanded="true"] { background: var(--panel
 .side-foot { position: relative; flex: none; display: flex; align-items: center; border-top: 1px solid var(--border); padding-right: 8px; }
 .side-foot .acct { position: static; flex: 1; min-width: 0; border-top: 0; }
 .side-foot .ver-link { margin: 0; flex: none; }
+/* chữ N của NEU Agent không vẫy tay */
+.brand-mark.neu-mark svg { animation: none !important; border-radius: 22%; }
