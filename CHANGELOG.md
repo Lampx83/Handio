@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Thông báo "Có bản mới / Đã tải xong" không còn bị hộp Nhật ký thay đổi che**: khi bản cập nhật vừa xuất hiện hoặc vừa tải xong ở góc dưới bên phải, hộp Nhật ký đang mở tự đóng để bạn thấy nút "Cài đặt và khởi động lại".
+
 ## [0.8.18] - 2026-10-12
 
 ### Thay đổi

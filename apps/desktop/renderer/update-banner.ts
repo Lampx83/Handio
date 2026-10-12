@@ -78,22 +78,44 @@ export function buildBanner(s: UpdateState, api: Pick<UpdateBridge, "download" |
   return box;
 }
 
+/** Thanh vừa chuyển sang bước cần người dùng chú ý (có bản mới, đã tải xong, lỗi): so với bước trước đó. */
+export function needsAttention(prev: UpdateState["phase"] | null, s: UpdateState): boolean {
+  const attention = s.phase === "available" || s.phase === "ready" || (s.phase === "error" && !!s.latest);
+  return attention && prev !== s.phase;
+}
+
+/** Hộp thông tin chỉ đọc (Nhật ký thay đổi) đang mở che mất thanh cập nhật ở góc dưới: đóng nó. Hộp nhập liệu (Cài đặt, Góp ý…) thì để nguyên. */
+export function closeInfoDialogs(root: ParentNode = document): number {
+  let n = 0;
+  root.querySelectorAll<HTMLDialogElement>("dialog.chlog[open]").forEach((d) => {
+    d.close();
+    n++;
+  });
+  return n;
+}
+
 /** Gắn thanh thông báo cập nhật vào trang; trả hàm gỡ. */
 export function mountUpdateBanner(api: UpdateBridge, host: HTMLElement = document.body): () => void {
   const ui = { showNotes: false, closed: false };
   let cur: UpdateState | null = null;
   let node: HTMLElement | null = null;
-  const render = () => {
+  let lastPhase: UpdateState["phase"] | null = null;
+  const render = (reveal = false) => {
     node?.remove();
-    node = cur ? buildBanner(cur, api, ui, render) : null;
-    if (node) host.append(node);
+    node = cur ? buildBanner(cur, api, ui, () => render()) : null;
+    if (node) {
+      host.append(node);
+      if (reveal) closeInfoDialogs(); // hộp modal nằm trên cùng, che thanh: đóng chủ động để người dùng thấy
+    }
   };
   const off = api.onChange((s) => {
     if (s.phase !== "ready") ui.closed = false;
     cur = s;
-    render();
+    const reveal = needsAttention(lastPhase, s);
+    lastPhase = s.phase;
+    render(reveal);
   });
-  void api.status().then((s) => { cur = s; render(); }).catch(() => undefined);
+  void api.status().then((s) => { cur = s; lastPhase = s.phase; render(); }).catch(() => undefined);
   return () => {
     off();
     node?.remove();

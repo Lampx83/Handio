@@ -237,3 +237,29 @@ describe("Updater: tự cập nhật và cài ngay", () => {
     expect(m.u.installOnQuit()).toBe(false); // thủ công: chỉ cài khi người dùng bấm
   });
 });
+
+describe("thanh cập nhật không bị hộp Nhật ký che", () => {
+  it("chỉ coi là 'cần chú ý' khi chuyển sang bước có bản mới / đã tải / lỗi, không lặp theo từng lần tiến độ", async () => {
+    const { needsAttention } = await import("../renderer/update-banner");
+    const st = (phase: string, extra: object = {}) => ({ phase, current: "0.8.15", latest: "0.8.17", ...extra }) as never;
+    expect(needsAttention("idle" as never, st("available"))).toBe(true);
+    expect(needsAttention("downloading" as never, st("ready"))).toBe(true);
+    expect(needsAttention("downloading" as never, st("downloading"))).toBe(false);
+    expect(needsAttention("ready" as never, st("ready"))).toBe(false);
+    expect(needsAttention("downloading" as never, st("error", { latest: "0.8.17" }))).toBe(true);
+    expect(needsAttention("idle" as never, st("idle"))).toBe(false);
+  });
+  it("đóng hộp Nhật ký đang mở, không đụng hộp khác", async () => {
+    const { closeInfoDialogs } = await import("../renderer/update-banner");
+    const mk = (cls: string) => {
+      const d = { cls, open: true, close() { this.open = false; } };
+      return d;
+    };
+    const a = mk("chlog");
+    const b = mk("settings");
+    const root = { querySelectorAll: (sel: string) => ({ forEach: (f: (d: unknown) => void) => [a, b].filter((d) => sel.startsWith("dialog." + d.cls) && d.open).forEach(f) }) };
+    expect(closeInfoDialogs(root as never)).toBe(1);
+    expect(a.open).toBe(false);
+    expect(b.open).toBe(true);
+  });
+});
