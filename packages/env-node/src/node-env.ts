@@ -1,5 +1,5 @@
 import { spawn as nodeSpawn, spawnSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import dns from "node:dns/promises";
 import fs from "node:fs/promises";
@@ -7,6 +7,7 @@ import net from "node:net";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import type { DirEntry, Env, ExecResult, StatInfo } from "@neu/agent-core";
+import { expandVars, findPythonDirs, mergeWindowsPath, parseRegPath } from "./win-path";
 
 const MAX_OUTPUT = 1_000_000;
 
@@ -306,6 +307,27 @@ export function userPath(): string | null {
   return cachedUserPath;
 }
 
+let winCache: { at: number; python: string[]; registry: string[] } | null = null;
+
+/** Windows: PATH trong registry (người dùng + máy) và thư mục cài Python, đọc lại mỗi ~15 giây để cài Python khi ứng dụng đang mở vẫn có hiệu lực. */
+function windowsExtraPaths(): { python: string[]; registry: string[] } {
+  if (winCache && Date.now() - winCache.at < 15_000) return winCache;
+  const reg = (key: string): string => {
+    try {
+      const r = spawnSync("reg", ["query", key, "/v", "Path"], { encoding: "utf8", timeout: 3000, windowsHide: true, stdio: ["ignore", "pipe", "ignore"] });
+      return expandVars(parseRegPath(r.stdout ?? ""), process.env);
+    } catch {
+      return "";
+    }
+  };
+  const registry = [reg("HKCU\\Environment"), reg("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment")].filter(Boolean);
+  const env = process.env;
+  const roots = [path.join(env.LOCALAPPDATA ?? "", "Programs", "Python"), env.ProgramFiles ?? "C:\\Program Files", env["ProgramFiles(x86)"] ?? "", env.SystemDrive ? env.SystemDrive + "\\" : "C:\\"].filter((r) => r && r !== "Programs\\Python");
+  const python = findPythonDirs(roots, (d) => readdirSync(d), (f) => existsSync(f));
+  winCache = { at: Date.now(), python, registry };
+  return winCache;
+}
+
 export function childEnv(base: NodeJS.ProcessEnv = process.env, extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(base)) {
@@ -314,8 +336,13 @@ export function childEnv(base: NodeJS.ProcessEnv = process.env, extra: Record<st
   }
   const extraDirs = process.platform === "darwin" ? ["/opt/homebrew/bin", "/opt/homebrew/sbin", "/usr/local/bin"] : [];
   const pathKey = Object.keys(out).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
-  const merged = [userPath(), out[pathKey], ...extraDirs].filter(Boolean).join(process.platform === "win32" ? ";" : ":");
-  out[pathKey] = [...new Set(merged.split(process.platform === "win32" ? ";" : ":"))].filter(Boolean).join(process.platform === "win32" ? ";" : ":");
+  if (process.platform === "win32") {
+    const w = windowsExtraPaths();
+    out[pathKey] = mergeWindowsPath({ pythonDirs: w.python, processPath: out[pathKey] ?? "", registryPaths: w.registry });
+  } else {
+    const merged = [userPath(), out[pathKey], ...extraDirs].filter(Boolean).join(":");
+    out[pathKey] = [...new Set(merged.split(":"))].filter(Boolean).join(":");
+  }
   return { ...out, PAGER: "cat", GIT_PAGER: "cat", TERM: "dumb", PYTHONUNBUFFERED: "1", NO_COLOR: "1", CI: "1", GIT_TERMINAL_PROMPT: "0", NPM_CONFIG_UPDATE_NOTIFIER: "false", ...extra };
 }
 

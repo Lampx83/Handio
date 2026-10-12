@@ -1,4 +1,4 @@
-import { installPitfall } from "./pitfalls";
+import { installPitfall, pythonMissingHint } from "./pitfalls";
 import { diffLines, type DiffLine } from "./diff";
 import type { DirEntry, Env } from "./env";
 import { matchGlob } from "./glob";
@@ -483,13 +483,14 @@ export function builtinTools(env: Env): Tool[] {
           }
           await ctx.procs.settle(info.id, 6000);
           const p = ctx.procs.get(info.id)!;
-          return `Đã chạy nền (id=${info.id}).${info.replaced ? ` Đã dừng ${info.replaced} (cùng loại) để không chiếm hai cổng.` : ""} ${p.info.alive ? "Đang chạy." : `Đã thoát với mã ${p.info.code}.`}${p.info.url ? ` Địa chỉ: ${p.info.url} (người dùng có thể bấm “Mở” để xem).` : ""}\n--- đầu ra ---\n${clip(p.log.trim() || "(chưa có đầu ra)")}`;
+          return `Đã chạy nền (id=${info.id}).${info.replaced ? ` Đã dừng ${info.replaced} (cùng loại) để không chiếm hai cổng.` : ""} ${p.info.alive ? "Đang chạy." : `Đã thoát với mã ${p.info.code}.`}${p.info.url ? ` Địa chỉ: ${p.info.url} (người dùng có thể bấm “Mở” để xem).` : ""}\n--- đầu ra ---\n${clip(p.log.trim() || "(chưa có đầu ra)")}${!p.info.alive && p.info.code ? (pythonMissingHint(p.log) ? "\n" + pythonMissingHint(p.log) : "") : ""}`;
         }
         const timeout = Math.max(1, Math.min(Math.floor(Number(a.timeout) || 60), 300));
         const r = await ctx.env.exec!(a.command, { cwd: ctx.root, timeoutMs: timeout * 1000, signal: ctx.signal });
         const out = clip(r.output.replace(/^\n+|\n+$/g, ""));
         if (r.timedOut) return (out ? out + "\n" : "") + `[Hết thời gian ${timeout}s, đã dừng lệnh]`;
-        return (out ? out + "\n" : "") + `[mã thoát ${r.code}]`;
+        const hint = r.code !== 0 ? pythonMissingHint(out) : null;
+        return (out ? out + "\n" : "") + (hint ? hint + "\n" : "") + `[mã thoát ${r.code}]`;
       },
     });
   }

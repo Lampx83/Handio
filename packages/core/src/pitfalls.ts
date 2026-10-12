@@ -16,3 +16,9 @@ export function installPitfall(command: string): string | null {
     );
   return null;
 }
+
+/** Gợi ý khi đầu ra lệnh cho thấy Python không có trong PATH của ứng dụng (bí danh Microsoft Store của Windows, hoặc "not recognized"). */
+export function pythonMissingHint(output: string): string | null {
+  if (!/Python was not found|Python n[aã]o foi encontrado|'(?:python|python3|pip)' is not recognized|(?:python|pip)3?: command not found/i.test(output)) return null;
+  return "Gợi ý: Python chưa có trong PATH của ứng dụng. Nếu vừa cài Python: khởi động lại ứng dụng, hoặc thử `py -3 …`. Nếu cài mà không tick “Add python.exe to PATH”: dùng đường dẫn đầy đủ tới python.exe (thường %LOCALAPPDATA%\\Programs\\Python\\Python3xx\\python.exe) rồi GHI đường dẫn đó vào AGENTS.md của dự án để các lần sau dùng lại. Đừng báo người dùng tự sửa khi chưa thử các cách này.";
+}

@@ -33,3 +33,24 @@ describe("bẫy phiên bản khi cài gói", () => {
     expect(ran).toEqual(["npm install @chakra-ui/react@2 @emotion/react"]); // lệnh mơ hồ không bao giờ chạy
   });
 });
+
+describe("Python không có trong PATH", () => {
+  it("nhận ra bí danh Microsoft Store và 'not recognized', không nhầm với lỗi khác", async () => {
+    const { pythonMissingHint } = await import("../src/pitfalls");
+    expect(pythonMissingHint("Python was not found; run without arguments to install from the Microsoft Store, or disable this shortcut")).toMatch(/AGENTS\.md/);
+    expect(pythonMissingHint("'python' is not recognized as an internal or external command")).not.toBeNull();
+    expect(pythonMissingHint("bash: python3: command not found")).not.toBeNull();
+    expect(pythonMissingHint("ModuleNotFoundError: No module named 'fastapi'")).toBeNull();
+  });
+  it("công cụ bash: thêm gợi ý vào kết quả khi lệnh thất bại vì không thấy Python", async () => {
+    const env = new MemoryEnv("/ws", { "main.py": "print(1)" });
+    env.exec = async () => ({ code: 9009, output: "Python was not found; run without arguments to install from the Microsoft Store", timedOut: false });
+    const { c, events } = await makeController([
+      { calls: [{ name: "bash", args: { command: "python main.py" } }] },
+      { text: "ok" },
+    ], { profile: "code", env });
+    await c.send("chạy");
+    const res = events.filter((e) => e.type === "tool_result") as { output: string }[];
+    expect(res[0].output).toMatch(/Gợi ý: Python chưa có trong PATH/);
+  });
+});
