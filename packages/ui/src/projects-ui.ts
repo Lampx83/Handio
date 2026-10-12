@@ -56,54 +56,43 @@ export function openNewProject(ctl: AgentController, st: UiState, done: () => vo
   name.focus();
 }
 
-/** Đổi tên một dự án (hộp thoại riêng; `window.prompt` không dùng được trong Electron). */
-export function openRenameProject(ctl: AgentController, p: { id: string; name: string }, done: () => void): void {
-  const dlg = h("dialog", { class: "proj-dlg" });
-  const name = h("input", { type: "text", maxlength: "60", "aria-label": "Tên dự án" });
-  name.value = p.name;
-  const err = h("div", { class: "res bad", role: "alert" });
-  const save = async () => {
-    const n = name.value.trim();
-    if (!n) {
-      err.textContent = "Hãy nhập tên.";
-      return;
-    }
-    if (n !== p.name) await ctl.projectRename!(p.id, n);
-    dlg.close();
-    done();
-  };
-  dlg.append(
-    h("div", { class: "dh" }, "Đổi tên dự án", h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")),
-    h("div", { class: "db" }, h("label", {}, "Tên mới", name), err),
-    h("div", { class: "df" }, h("button", { class: "btn primary", type: "button", onclick: () => void save() }, "Lưu")));
-  name.addEventListener("keydown", (e) => e.key === "Enter" && (e.preventDefault(), void save()));
-  dlg.addEventListener("close", () => dlg.remove());
-  document.body.append(dlg);
-  dlg.showModal();
-  name.focus();
-  name.select();
-}
-
 /** Sửa hướng dẫn riêng của dự án đang mở (tệp AGENTS.md ở thư mục gốc dự án). */
 export async function openInstructions(ctl: AgentController, st: UiState, done: () => void): Promise<void> {
   const cur = await ctl.instructionsGet!();
   const dlg = h("dialog", { class: "proj-dlg" });
   const ta = h("textarea", { rows: "14", maxlength: "20000", placeholder: NOUN[st.profile].ex, "aria-label": "Hướng dẫn dự án" });
   ta.value = cur;
+  const nameIn = h("input", { type: "text", maxlength: "60", "aria-label": "Tên dự án" });
+  nameIn.value = st.projectName;
   dlg.append(
-    h("div", { class: "dh" }, "Hướng dẫn của dự án: " + st.projectName, h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")),
+    h("div", { class: "dh" }, "Sửa dự án", h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng")),
     h("div", { class: "db" },
-      h("p", { class: "hint", style: { marginTop: "0" } }, "Lưu trong ", h("code", {}, "AGENTS.md"), "; agent đọc ở mọi cuộc trò chuyện của dự án."),
+      h("label", {}, "Tên dự án", nameIn),
+      h("p", { class: "hint" }, "Hướng dẫn cho agent: lưu trong ", h("code", {}, "AGENTS.md"), "; agent đọc ở mọi cuộc trò chuyện của dự án."),
       ta),
-    h("div", { class: "df" }, h("button", { class: "btn primary", type: "button", onclick: async () => { await ctl.instructionsSet!(ta.value); dlg.close(); done(); } }, "Lưu")));
+    h("div", { class: "df" }, h("button", { class: "btn primary", type: "button", onclick: async () => {
+      const n = nameIn.value.trim();
+      if (n && n !== st.projectName && st.projectId) await ctl.projectRename?.(st.projectId, n);
+      await ctl.instructionsSet!(ta.value);
+      dlg.close();
+      done();
+    } }, "Lưu")));
   dlg.addEventListener("close", () => dlg.remove());
   document.body.append(dlg);
   dlg.showModal();
   ta.focus();
 }
 
-/** Danh sách dự án (bật/tắt dưới nút tên dự án): chuyển dự án, đổi tên, bỏ khỏi danh sách (không xoá tệp). */
-export async function toggleProjectMenu(anchor: HTMLElement, ctl: AgentController, st: UiState, hooks: { changed(): void; newProject(): void }): Promise<void> {
+/** Biểu tượng trạng thái của một dự án trong danh sách: đang chạy / đã xong chưa xem / còn cuộc trò chuyện dở. */
+function statusIcon(p: { running?: boolean; finished?: boolean; unfinished?: number }): HTMLElement | null {
+  if (p.running) return h("span", { class: "pm-st run", title: "Agent đang làm việc trong dự án này", "aria-label": "Đang chạy", role: "img" });
+  if (p.finished) return h("span", { class: "pm-st done", title: "Đã làm xong khi bạn ở dự án khác. Mở ra để xem.", "aria-label": "Đã xong, chưa xem", role: "img" }, "✓");
+  if (p.unfinished) return h("span", { class: "pm-st part", title: `${p.unfinished} cuộc trò chuyện làm dở (bị dừng giữa chừng)`, "aria-label": "Có việc làm dở", role: "img" }, "⏸");
+  return null;
+}
+
+/** Danh sách dự án (bật/tắt dưới nút tên dự án): chuyển dự án (việc đang làm vẫn chạy nền), bỏ khỏi danh sách (không xoá tệp). Đổi tên: nút sửa cạnh danh sách. */
+export async function toggleProjectMenu(anchor: HTMLElement, ctl: AgentController, st: UiState, hooks: { changed(): void; newProject(): void; switched(): void }): Promise<void> {
   const open = anchor.parentElement?.querySelector(".projmenu");
   if (open) return void open.remove();
   const ps = await ctl.projectsState!();
@@ -129,15 +118,10 @@ export async function toggleProjectMenu(anchor: HTMLElement, ctl: AgentControlle
             } catch (e) {
               alert((e as Error).message);
             }
-            hooks.changed();
+            hooks.switched();
           }
         } }, p.name, p.path ? h("small", {}, p.path) : null),
-        h("button", { type: "button", class: "pm-b", title: "Đổi tên", "aria-label": "Đổi tên " + p.name, onclick: async (ev: Event) => {
-          ev.stopPropagation();
-          close();
-          // không dùng window.prompt(): Electron không hỗ trợ nên nút này từng không làm gì cả
-          openRenameProject(ctl, p, () => hooks.changed());
-        } }, "✎"),
+        statusIcon(p),
         list.length > 1 ? h("button", { type: "button", class: "pm-b", title: "Bỏ khỏi danh sách (không xoá tệp)", "aria-label": "Bỏ " + p.name + " khỏi danh sách", onclick: async (ev: Event) => {
           ev.stopPropagation();
           if (!confirm(`Bỏ “${p.name}” khỏi danh sách?\nTệp không bị xoá; lịch sử trò chuyện của dự án sẽ mất.`)) return;
@@ -153,7 +137,7 @@ export async function toggleProjectMenu(anchor: HTMLElement, ctl: AgentControlle
         close();
         const r = await ctl.projectPick!();
         if ("error" in r) alert(r.error);
-        else if (r.ok) hooks.changed();
+        else if (r.ok) hooks.switched();
       } }, "📁 Mở thư mục có sẵn…"));
   };
   paint(ps.projects);

@@ -17,7 +17,6 @@ import { openLearn } from "./learn";
 import { CodeTools } from "./code-tools";
 import { DocPane } from "./docview";
 import { WorkTools } from "./work-tools";
-import { PROMPT_TEMPLATE } from "./prompt-tips";
 import { buildQuestionCard } from "./question-card";
 import { ActivityBlock, activityLabel, changedFiles, chipSplit, DEFAULT_LABEL, detailSteps, groupHistory, isDocViewable, isQuiet, keepsPrecedingText } from "./activity";
 import { buildContextPanel, contextTitle, contextView, type UsageInfo } from "./context-info";
@@ -244,8 +243,8 @@ class App {
       this.opts.bar.left.append(toggle);
       this.opts.bar.right.append(...tools);
     } else head = h("div", { class: "neu-head" }, toggle, this.wsEl, h("span", { class: "grow" }), ...tools);
-    this.projBtn.addEventListener("click", () => void toggleProjectMenu(this.projBtn, this.ctl, this.state, { changed: () => void this.refresh(true), newProject: () => openNewProject(this.ctl, this.state, () => void this.refresh(true)) }));
-    this.projBox.append(this.projBtn, h("button", { class: "iconbtn", type: "button", title: "Hướng dẫn riêng của dự án (AGENTS.md)", "aria-label": "Hướng dẫn của dự án", onclick: () => void openInstructions(this.ctl, this.state, () => void this.refresh()) }, "📝"));
+    this.projBtn.addEventListener("click", () => void toggleProjectMenu(this.projBtn, this.ctl, this.state, { changed: () => void this.refresh(true), newProject: () => openNewProject(this.ctl, this.state, () => void this.refresh(true)), switched: () => void this.afterProjectSwitch() }));
+    this.projBox.append(this.projBtn, h("button", { class: "iconbtn", type: "button", title: "Sửa dự án: tên và hướng dẫn riêng cho agent (AGENTS.md)", "aria-label": "Sửa dự án", onclick: () => void openInstructions(this.ctl, this.state, () => void this.refresh()) }, "📝"));
     const side = h("aside", { class: "side", "aria-label": "Thanh bên" },
       this.projBox,
       h("div", { class: "newchat-wrap" }, this.newChatBtn),
@@ -259,11 +258,10 @@ class App {
     setUpdateChecker(this.opts.checkUpdate); // nút "Kiểm tra cập nhật" nằm trong hộp Nhật ký thay đổi
     this.meterBtn = h("button", { class: "meter", type: "button", title: this.ctxTip, "aria-label": "Chi tiết ngữ cảnh", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => this.toggleCtxPop() }, h("span", { class: "bar" }, this.meterBar), this.meterTxt);
     const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.input,
-      // dưới ô nhập (giống Claude): trái = chế độ chạy + mẫu prompt; phải = mức ngữ cảnh, mô hình, Gửi
+      // dưới ô nhập (giống Claude): trái = chế độ chạy; phải = mức ngữ cảnh, mô hình, Gửi
       h("div", { class: "bar" },
         h("button", { class: "cbtn plus", type: "button", title: "Đính kèm tệp", "aria-label": "Đính kèm tệp", onclick: () => (this.t("attach"), this.fileInput.click()) }, "+"),
         h("div", { class: "mode-wrap", style: { position: "relative" } }, this.modePill),
-        h("button", { class: "btn sm", type: "button", title: "Chèn khung Mục tiêu – Ngữ cảnh – Ràng buộc", onclick: () => this.insertTemplate() }, "Mẫu prompt"),
         this.hintEl, h("span", { class: "grow" }),
         this.quotaEl,
         this.meterBtn,
@@ -425,11 +423,36 @@ class App {
   }
 
   // ------------------------------------------------------------------ dự án và lịch sử trò chuyện
+  /** Chấm nhỏ cạnh tên dự án khi dự án KHÁC đang làm việc nền (xoay) hoặc đã xong mà bạn chưa xem (✓). */
+  private bgBadge(): HTMLElement | string {
+    const b = this.state.background;
+    if (!b || (!b.running && !b.finished)) return "";
+    const tip = [b.running ? `${b.running} dự án khác đang làm việc` : "", b.finished ? `${b.finished} dự án đã xong, chưa xem` : ""].filter(Boolean).join(" · ");
+    return h("span", { class: "pj-bg" + (b.running ? " run" : " done"), title: tip, "aria-label": tip, role: "img" }, b.running ? "" : "✓");
+  }
+
+  /**
+   * Sau khi chọn một dự án: nếu nó đang làm việc nền thì dựng lại phần đã làm và đang chạy; không thì mở luôn cuộc trò chuyện GẦN NHẤT của dự án
+   * (không để khung trống như một dự án mới).
+   */
+  private async afterProjectSwitch(): Promise<void> {
+    await this.refresh(true);
+    if (this.state.busy && this.state.live) {
+      this.paintHistory(this.state.live);
+      this.paintBanners();
+      this.paintBusy();
+      return;
+    }
+    const list = this.ctl.chatList ? await this.ctl.chatList() : [];
+    const latest = list.find((c) => c.turns > 0);
+    if (latest && latest.id !== this.state.chatId) await this.openChat(latest.id, true);
+  }
+
   private paintProject(): void {
     const on = !!this.state.capabilities.projects;
     this.projBox.hidden = !on;
     this.projBtn.textContent = "";
-    this.projBtn.append(h("span", { class: "pj-ic" }, this.state.profile === "code" ? "📁" : this.state.profile === "design" ? "🎨" : "🗂"), h("span", { class: "pj-nm" }, this.state.projectName), h("span", { class: "pj-ar" }, "▾"));
+    this.projBtn.append(h("span", { class: "pj-ic" }, this.state.profile === "code" ? "📁" : this.state.profile === "design" ? "🎨" : "🗂"), h("span", { class: "pj-nm" }, this.state.projectName), this.bgBadge(), h("span", { class: "pj-ar" }, "▾"));
     this.projBtn.title = "Dự án đang mở: " + this.state.projectName + " (bấm để chuyển)";
   }
 
@@ -445,15 +468,15 @@ class App {
     for (const c of list) {
       const cur = c.id === this.state.chatId;
       this.chatsEl.append(h("div", { class: "chat" + (cur ? " on" : ""), role: "listitem" },
-        h("button", { class: "ct", type: "button", title: c.title, "aria-current": cur ? "true" : undefined, onclick: () => void this.openChat(c.id) }, h("span", { class: "t" }, c.title), h("small", {}, ago(c.updated) + " · " + c.turns + " lượt")),
+        h("button", { class: "ct", type: "button", title: c.title, "aria-current": cur ? "true" : undefined, onclick: () => void this.openChat(c.id) }, h("span", { class: "t" }, c.running ? h("span", { class: "pm-st run", title: "Agent đang làm việc trong cuộc trò chuyện này", role: "img", "aria-label": "Đang chạy" }) : c.unfinished && !cur ? h("span", { class: "pm-st part", title: "Làm dở (bị dừng giữa chừng): mở ra rồi nhắn “tiếp tục”", role: "img", "aria-label": "Làm dở" }, "⏸") : "", c.title), h("small", {}, ago(c.updated) + " · " + c.turns + " lượt")),
         h("button", { class: "cx", type: "button", title: "Xoá cuộc trò chuyện này", "aria-label": "Xoá " + c.title, onclick: async () => { if (confirm(`Xoá cuộc trò chuyện “${c.title}”?`)) { await this.ctl.chatRemove!(c.id); await this.paintChats(); } } }, "×")));
     }
   }
 
   /** Mở lại một cuộc trò chuyện đã lưu: dựng lại nội dung và tiếp tục hỏi với đúng ngữ cảnh cũ. */
-  private async openChat(id: string): Promise<void> {
+  private async openChat(id: string, force = false): Promise<void> {
     this.t("open_chat");
-    if (this.busy || id === this.state.chatId) return;
+    if ((this.busy && !force) || id === this.state.chatId) return;
     const r = await this.ctl.chatOpen!(id);
     if ("error" in r) return void this.append(h("div", { class: "notice error" }, r.error));
     this.state = await this.ctl.getState();
@@ -566,6 +589,10 @@ class App {
       case "quota":
         this.state.quota = e.quota;
         this.paintQuota();
+        break;
+      case "projects":
+        this.state.background = { running: e.running, finished: e.finished };
+        this.paintProject();
         break;
       case "mode":
         this.state.mode = e.mode;
@@ -996,14 +1023,15 @@ class App {
           editBtn,
           note, h("button", { class: "btn danger", type: "button", onclick: deny }, "Chưa, tiếp tục lập kế hoạch")));
     } else {
-      allow = (always) => respond({ allow: true, always });
+      // mặc định (Enter): "Luôn cho phép trong phiên" — thêm quy tắc hẹp cho phiên này (không hỏi lại lệnh/tệp cùng loại); "Chỉ lần này" là lựa chọn phụ
+      allow = (always = true) => respond({ allow: true, always });
       deny = () => respond({ allow: false, note: note.value.trim() || undefined });
       const label = req.tool === "bash" ? "Chạy lệnh này?" : req.preview?.outline ? (req.preview.isNew ? "Tạo tài liệu này?" : /replace|edit/.test(req.tool) ? "Sửa tài liệu này?" : "Ghi đè tài liệu này?") : req.preview ? (req.preview.isNew ? "Tạo file này?" : "Áp dụng thay đổi này?") : `Cho phép ${TOOL_LABEL[req.tool] ?? req.tool}?`;
       ask.append(...([h("div", { class: "q" }, label), req.note ? h("div", { class: "note" }, req.note) : null,
         req.tool !== "bash" && !req.preview ? h("div", { class: "cmd", style: { marginBottom: "8px" } }, req.summary) : null,
         h("div", { class: "row" },
-          h("button", { class: "btn primary", type: "button", onclick: () => allow() }, "Cho phép ", h("kbd", {}, "Enter")),
-          h("button", { class: "btn", type: "button", title: "Thêm quy tắc cho phiên này", onclick: () => allow(true) }, "Luôn cho phép trong phiên"),
+          h("button", { class: "btn primary", type: "button", title: "Thêm quy tắc cho phiên này: không hỏi lại việc cùng loại", onclick: () => allow(true) }, "Luôn cho phép trong phiên ", h("kbd", {}, "Enter")),
+          h("button", { class: "btn", type: "button", title: "Chỉ cho phép lần này", onclick: () => allow(false) }, "Chỉ lần này"),
           note, h("button", { class: "btn danger", type: "button", onclick: deny }, "Từ chối ", h("kbd", {}, "Esc")))] as (HTMLElement | null)[]).filter((x): x is HTMLElement => !!x));
     }
     host.append(ask);
@@ -1299,15 +1327,6 @@ class App {
     this.mentionMenu?.remove();
     this.mentionMenu = null;
     this.mentionSel = 0;
-  }
-
-  private insertTemplate(): void {
-    this.t("template");
-    if (!this.input.value.trim()) this.input.value = PROMPT_TEMPLATE;
-    else this.input.value += (this.input.value.endsWith("\n") ? "" : "\n") + PROMPT_TEMPLATE;
-    this.autoGrow();
-    this.input.focus();
-    this.input.setSelectionRange(this.input.value.length, this.input.value.length);
   }
 
   // ------------------------------------------------------------------ tiến trình nền

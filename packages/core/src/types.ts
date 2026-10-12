@@ -88,6 +88,8 @@ export type SessionEvent =
   | { type: "turn_end"; interrupted: boolean; final: string }
   | { type: "proc"; id: string; command: string; state: "start" | "data" | "exit"; text?: string; code?: number; url?: string }
   | { type: "reset" }
+  /** Tổng quan các dự án chạy NỀN (không phải dự án đang mở): bao nhiêu đang làm việc, bao nhiêu đã xong mà bạn chưa xem. */
+  | { type: "projects"; running: number; finished: number }
   /** Sau khi cập nhật/khởi động lại: giao diện mở lại cuộc trò chuyện `chatId` rồi gửi `text` để agent làm tiếp việc đang dở. */
   | { type: "resume"; chatId: string; text: string };
 
@@ -140,6 +142,10 @@ export interface QuotaInfo {
 }
 
 export interface UiState {
+  /** Dự án khác đang chạy nền / đã xong chưa xem (chỉ khi mở nhiều dự án cùng lúc). */
+  background?: { running: number; finished: number };
+  /** Nội dung đang làm dở của cuộc trò chuyện hiện tại (chỉ khi agent đang chạy): dựng lại khung chat khi quay lại dự án đang chạy nền. */
+  live?: HistoryItem[];
   /** Hạn mức token hôm nay (null = chưa biết / không có). */
   quota?: QuotaInfo | null;
   profile: Profile;

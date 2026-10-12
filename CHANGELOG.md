@@ -6,15 +6,20 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Chạy nhiều dự án cùng lúc**: chuyển sang dự án khác thì agent ở dự án cũ **vẫn tiếp tục làm việc nền** (tối đa 3 dự án cùng lúc). Quay lại là thấy phần đã làm; yêu cầu xin quyền/câu hỏi đang chờ hiện lại; máy chủ dev của dự án cũ vẫn chạy.
+- **Biểu tượng trạng thái dự án và cuộc trò chuyện**: vòng xoay = đang làm việc, ✓ = đã xong khi bạn ở dự án khác (chưa xem), ⏸ = làm dở (bị dừng giữa chừng, mở ra rồi nhắn "tiếp tục"). Hiện trong danh sách dự án, danh sách trò chuyện và chấm nhỏ cạnh tên dự án khi dự án khác đang chạy.
 - **Sửa tệp chữ ngay trong ứng dụng**: bấm vào một tệp (AGENTS.md, .md, .json, .css, .js, .py…) trong danh sách tệp, hộp xem có nút **Sửa**; sửa rồi **Lưu** (hoặc Ctrl/Cmd+S), không phải mở bằng ứng dụng khác. Giữ nguyên kiểu xuống dòng của tệp; tệp Word/Excel/PowerPoint, nhị phân hoặc quá lớn vẫn mở bằng ứng dụng của nó.
 
 ### Sửa
 - **Kiểm tra trang (`check_page`) không còn báo lỗi giả với ứng dụng Vite**: WebSocket nội bộ (`ws://localhost`) của Vite bị chặn nhầm nên trang nào cũng "lỗi kết nối", khiến agent mất hàng chục bước sửa cấu hình vô ích.
 - **Thông báo "Đã lược bớt kết quả công cụ cũ" chỉ hiện một lần mỗi lượt** (trước đây lặp lại ở mỗi bước khi làm việc lâu).
-- **Đổi tên dự án (nút ✎) hoạt động trên Desktop**: trước đây bấm không có gì xảy ra (Electron không hỗ trợ hộp nhập `prompt`). Nay hiện hộp "Đổi tên dự án".
+- **Đổi tên dự án hoạt động trên Desktop**: trước đây nút ✎ bấm không có gì xảy ra (Electron không hỗ trợ hộp nhập `prompt`). Nay đổi tên trong hộp **Sửa dự án** (nút 📝 cạnh tên dự án), cùng chỗ sửa hướng dẫn cho agent.
 - **Tạo lại dự án trùng tên với dự án đã bỏ khỏi danh sách không còn thành "Bài 2 (2)"**: tên hiển thị là đúng tên bạn gõ (chỉ thêm "(2)" khi trùng với dự án đang có trong danh sách); thư mục cũ còn trống được dùng lại.
 
 ### Thay đổi
+- **Chọn dự án thì mở luôn cuộc trò chuyện gần nhất** của dự án đó (hoặc phần đang chạy nếu nó đang làm việc), không còn khung trống như dự án mới.
+- **"Luôn cho phép trong phiên" là lựa chọn mặc định** khi agent xin quyền (Enter); "Chỉ lần này" là lựa chọn phụ.
+- **Bỏ nút "Mẫu prompt"** dưới ô nhập.
 - **Chặn cài Chakra UI không ghi phiên bản** (tab Code): `npm install @chakra-ui/react` sẽ cài v3 có API khác hẳn v2 mà mô hình quen viết, dẫn tới hàng trăm bước loay hoay rồi trang hỏng. Agent phải chọn phiên bản có chủ ý (`@2`, hoặc `@3` kèm đọc tài liệu).
 - **Hết lượt tự sửa mà trang web vẫn lỗi thì báo thẳng cho bạn** (cảnh báo kèm lỗi đầu tiên), không để lời "xong" của agent che mất.
 

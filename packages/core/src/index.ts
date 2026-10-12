@@ -41,3 +41,4 @@ export * from "./diagnostics";
 export * from "./updates";
 export * from "./work-ctl";
 export { CITATION_RE, parseCitations, parseLoc, type DocView, type ViewBlock, type ViewSection } from "./office/locate";
+export * from "./multi";

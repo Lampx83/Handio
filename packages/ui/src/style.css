@@ -690,3 +690,15 @@ button.meter:hover, button.meter[aria-expanded="true"] { background: var(--panel
   .rside[data-mode="view"] { width: 100%; max-width: none; min-width: 0; flex: none; }
   .rs-x-narrow { display: inline-block; }
 }
+
+/* trạng thái dự án / cuộc trò chuyện: đang chạy (vòng xoay), xong chưa xem (✓), làm dở (⏸) */
+.pm-st { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; margin-right: 6px; font-size: 11px; line-height: 1; border-radius: 50%; }
+.pm-st.run { border: 2px solid var(--accent); border-right-color: transparent; animation: pm-spin .8s linear infinite; }
+.pm-st.done { color: #fff; background: #1a8f4c; }
+.pm-st.part { color: var(--warn, #b26a00); }
+.pj-bg { flex: none; width: 10px; height: 10px; margin-left: 6px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 8px; color: #fff; }
+.pj-bg.run { border: 2px solid var(--accent); border-right-color: transparent; animation: pm-spin .8s linear infinite; }
+.pj-bg.done { background: #1a8f4c; }
+.chat .t .pm-st { vertical-align: -3px; }
+@keyframes pm-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .pm-st.run, .pj-bg.run { animation: none; border-right-color: var(--accent); } }

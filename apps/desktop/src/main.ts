@@ -4,7 +4,7 @@ import os from "node:os";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
-import { brandName, buildWorkSamples, cleanProjectName, ID_RE, LocalController, newId, parsePolicy, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
+import { brandName, buildWorkSamples, cleanProjectName, createMultiProject, ID_RE, LocalController, newId, parsePolicy, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
 import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, readPackDirs, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
@@ -362,7 +362,8 @@ async function buildController(profile: Profile): Promise<LocalController> {
   const env = await host.open(st.active).catch(async () => host.open((await host.list()).projects[0].id));
   // eslint-disable-next-line prefer-const
   let ctl!: LocalController;
-  ctl = await LocalController.create({
+  // nhiều dự án chạy cùng lúc: mỗi dự án một phiên riêng, chuyển dự án không dừng việc đang làm (packages/core/src/multi.ts)
+  ctl = await createMultiProject({
     env,
     profile,
     policy,

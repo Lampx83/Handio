@@ -232,6 +232,16 @@ export class LocalController implements AgentController {
   }
 
   // ---------------------------------------------------------------- AgentController
+  /** Agent đang làm việc trong dự án này (dùng cho trình quản lý nhiều dự án). */
+  isBusy(): boolean {
+    return this.busy;
+  }
+
+  /** Mã cuộc trò chuyện hiện tại. */
+  currentChatId(): string {
+    return this.chatId;
+  }
+
   async getState(): Promise<UiState> {
     const env = this.o.env;
     await this.syncSettings();
@@ -249,6 +259,7 @@ export class LocalController implements AgentController {
       projectId: this.projectId,
       projectName: this.projectName || basename(this.session.ctx.root) || "/",
       chatId: this.chatId,
+      ...(this.busy ? { live: messagesToHistory(this.session.main.messages) } : {}),
       mode: this.session.mode,
       model: this.settings.model,
       settings: toPublic(this.settings, this.builtin),
