@@ -48,6 +48,28 @@ class StatsTest(unittest.TestCase):
             for r in rows:
                 f.write(json.dumps(r) + "\n")
 
+    def test_work_profile_by_kind_stack_and_redo(self):
+        """Hồ sơ công việc (chỉ mã) gom được theo loại việc/bộ khung, tính tỷ lệ nói chưa đạt và kiểm chứng hỏng; bản cũ không có trường thì bị bỏ qua."""
+        recs = [rec(day_ts(0, h), turn_ev(kind="build", stack="react", ui="chakra", art="web", nth=1, verify="pass", files_new=3)) for h in range(1, 4)]
+        recs += [rec(day_ts(0, 4), turn_ev(kind="fix", stack="react", ui="chakra", art="web", nth=2, redo=True, verify="fail")),
+                 rec(day_ts(0, 5), turn_ev(kind="fix", stack="react", ui="chakra", art="web", nth=3, redo=True, verify="fail")),
+                 rec(day_ts(0, 6), turn_ev())]   # bản cũ: không có hồ sơ
+        write_diag(self.diag, recs)
+        S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW)
+        j = jload(os.path.join(self.out, "stats.json"))
+        w = j["work"]
+        kind = {r["value"]: r for r in w["kind"]}
+        self.assertEqual(kind["build"]["turns"], 3)
+        self.assertEqual(kind["fix"]["turns"], 2)
+        self.assertEqual(kind["fix"]["redo_rate"], 1.0)
+        self.assertEqual(kind["build"]["verify_fail_rate"], 0.0)
+        st = {r["value"]: r for r in w["stack"]}
+        self.assertEqual((st["react"]["turns"], st["react"]["verify_n"], st["react"]["verify_fail_rate"]), (5, 5, 0.4))
+        self.assertEqual(st["react"]["files_new"], 9)
+        self.assertEqual([r["value"] for r in w["nth"]], ["1", "2", "3–5"])
+        page = slurp(os.path.join(self.out, "index.html"))
+        self.assertIn("Công việc người dùng làm", page)
+
     def test_counts_users_windows_and_new(self):
         a2 = dict(APP, install="f" * 32, version="0.2.0", platform="mac", profile="work")
         recs = [rec(day_ts(0), turn_ev(), uid="a" * 16), rec(day_ts(0), turn_ev("error"), uid="b" * 16, app=a2),   # hôm nay

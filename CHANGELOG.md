@@ -5,6 +5,10 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Nhật ký chất lượng biết người dùng làm việc gì (không thu nội dung)**: mỗi lượt kèm thêm các mã do ứng dụng tự phân loại trên máy bạn: loại việc (tạo mới/sửa/sửa lỗi…), sản phẩm (web, Word, Excel…), bộ khung dự án, và kết quả kiểm chứng cuối. Trang quản trị và báo cáo hằng ngày thêm bảng «Công việc người dùng làm» và cảnh báo khi người dùng hay phải yêu cầu làm lại. Câu hỏi, tên tệp, đường dẫn, lệnh vẫn không bao giờ rời máy bạn; tắt được ở Cài đặt như trước.
+- Bản cũ hơn **0.8.10** sẽ được yêu cầu cập nhật (hộp thoại "Cần cập nhật"), vì các bản đó thiếu nhiều sửa lỗi quan trọng.
+
 ### Sửa
 - **Sửa file bằng `edit_file` ít hỏng hơn**: khi đoạn cần thay không khớp, kết quả trả luôn vài dòng thật quanh vị trí giống nhất (kèm số dòng) để agent chép đúng ngay, không phải đọc lại cả file.
 - **Tệp đang mở trong Word/Excel/PowerPoint** (Windows): mọi công cụ ghi tệp đều báo bằng lời dễ hiểu (đóng tệp rồi thử lại hoặc ghi sang tên khác) thay vì "Lỗi nội bộ: EBUSY".

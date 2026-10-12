@@ -158,6 +158,8 @@ jobs:
           cp dist/mac/*.dmg dist/mac/*.zip dist/win/*.exe apps/desktop/release/
           # signing.json của hai máy dựng gộp thành một (trang tải dựa vào đây để nói đúng: đã ký hay chưa)
           node -e 'const fs=require("fs");const m={};for(const f of ["dist/mac/signing.json","dist/win/signing.json"]){try{Object.assign(m,JSON.parse(fs.readFileSync(f,"utf8")))}catch{}}fs.writeFileSync("apps/desktop/release/signing.json",JSON.stringify(m,null,2))'
+          # phiên bản tối thiểu còn được hỗ trợ: biến kho NEU_MIN_VERSION (Settings → Variables); bản cũ hơn bị yêu cầu cập nhật. Bỏ trống = không buộc.
+          export NEU_MIN_VERSION="${{ vars.NEU_MIN_VERSION }}"
           (cd apps/desktop && node scripts/release-info.mjs)
           cd apps/desktop/release
           cp NEU-Agent-"$VER"-*.dmg NEU-Agent-"$VER"-*.exe latest.json HUONG-DAN-CAI-DAT.md BAO-MAT.md ../../../pub/

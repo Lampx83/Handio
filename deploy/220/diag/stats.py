@@ -150,6 +150,7 @@ def _acc(t, key):
     return {"key": key, "hourly": RANGES[key][1], "t0": t0, "tp": t0 - _span(key) if has_prev else t0, "has_prev": has_prev, "D": collections.defaultdict(_pd), "heat": [[0] * 24 for _ in range(7)],
             "dist": {k: collections.defaultdict(lambda: {"users": set(), "installs": set(), "turns": 0}) for k in ("version", "platform", "profile", "model")},
             "qual": {k: collections.defaultdict(lambda: {"turns": 0, "out": collections.Counter(), "dur": [], "ttft": []}) for k in ("version", "profile", "model", "platform")},
+            "work": {k: collections.defaultdict(lambda: {"turns": 0, "out": collections.Counter(), "dur": [], "steps": [], "redo": 0, "vpass": 0, "vfail": 0, "tok": 0, "new": 0, "edit": 0}) for k in WORK_DIMS},
             "tool_v": collections.defaultdict(lambda: [0, 0, 0, 0]), "tool_err_v": collections.Counter(), "tool_dur": collections.defaultdict(collections.Counter),
             "signals": collections.Counter(), "sig_tool": collections.Counter(), "llm_err": collections.Counter(), "llm_status": collections.Counter(),
             "outcomes": collections.Counter(), "ui": collections.Counter(), "fb": collections.Counter(), "uturns": collections.Counter(), "utok": collections.Counter(),
@@ -159,6 +160,19 @@ def _acc(t, key):
 def compute(recs, daily, now, findings=None, release=None, quota=None):
     """Số liệu của khoảng mặc định (30 ngày)."""
     return compute_all(recs, daily, now, findings, release, (lambda _n: quota), keys=(DEFAULT_RANGE,))[DEFAULT_RANGE]
+
+
+WORK_DIMS = ("kind", "art", "stack", "ui", "nth")
+
+
+def _wrow(value, x):
+    """Một hàng của bảng "Công việc người dùng làm": kết quả, tỷ lệ nói chưa đạt (redo), kiểm chứng cuối hỏng, số bước và token trung bình."""
+    n, o = x["turns"], x["out"]
+    v = x["vpass"] + x["vfail"]
+    return {"value": value, "turns": n, "ok_rate": R.ratio(o.get("ok", 0), n) if n else None, "bad_rate": R.ratio(o.get("error", 0) + o.get("loop", 0) + o.get("step_limit", 0), n) if n else None,
+            "interrupt_rate": R.ratio(o.get("interrupted", 0), n) if n else None, "redo_rate": R.ratio(x["redo"], n) if n else None, "verify_n": v,
+            "verify_fail_rate": R.ratio(x["vfail"], v) if v else None, "steps_p50": R.pct(x["steps"], 50) if x["steps"] else None,
+            "tok_avg": round(x["tok"] / n) if n else None, "dur_p50": R.pct(x["dur"], 50) if x["dur"] else None, "files_new": x["new"], "files_edit": x["edit"]}
 
 
 def _qrow(value, x):
@@ -289,6 +303,25 @@ def compute_all(recs, daily, now, findings=None, release=None, quota_fn=None, ho
                 ac["utok"][uid] += e.get("prompt_tok", 0) + e.get("completion_tok", 0)
                 ac["heat"][dt.weekday()][dt.hour] += 1
                 ac["outcomes"][e.get("end", "?")] += 1
+                for k, d in ac["work"].items():
+                    v = e.get(k)
+                    if k == "nth" and v is not None:
+                        v = "1" if v == 1 else "2" if v == 2 else "3–5" if v <= 5 else "6+"
+                    if v is None:
+                        continue
+                    w = d[str(v)]
+                    w["turns"] += 1
+                    w["out"][e.get("end", "?")] += 1
+                    if "dur_s" in e:
+                        w["dur"].append(e["dur_s"])
+                    if "steps" in e:
+                        w["steps"].append(e["steps"])
+                    w["redo"] += bool(e.get("redo"))
+                    w["vpass"] += e.get("verify") == "pass"
+                    w["vfail"] += e.get("verify") == "fail"
+                    w["tok"] += e.get("prompt_tok", 0) + e.get("completion_tok", 0)
+                    w["new"] += e.get("files_new", 0)
+                    w["edit"] += e.get("files_edit", 0)
                 for k, d in ac["qual"].items():
                     q = d[str(a.get(k, "?"))]
                     q["turns"] += 1
@@ -467,6 +500,7 @@ def compute_all(recs, daily, now, findings=None, release=None, quota_fn=None, ho
             "hours": [sum(ac["heat"][w][h] for w in range(7)) for h in range(24)], "heat": ac["heat"],
             "outcomes30": {k: ac["outcomes"].get(k, 0) for k in OUTCOMES},
             "quality": {k: [_qrow(v, x) for v, x in sorted(d.items(), key=lambda kv: -kv[1]["turns"])[:10]] for k, d in ac["qual"].items()},
+            "work": {k: [_wrow(v, x) for v, x in sorted(d.items(), key=lambda kv: (kv[0] if k == "nth" else -kv[1]["turns"]))[:12]] for k, d in ac["work"].items()},
             "version_first": {v: (vn_hour(ts) if hourly_ else vn_day(ts)) for v, ts in vfirst.items()},
             "tools": tools, "tool_errors": dict(terr.most_common()), "tool_unknown": sum(x["unk"] for x in tools), "tool_unknown_versions": sorted(old),
             "tool_reasons": {nm: dict(c.most_common(3)) for nm, c in sorted(by_tool.items(), key=lambda kv: -sum(kv[1].values()))[:12]}, "tool_slow": slow[:8],
@@ -834,6 +868,22 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
         o.append('<h3>Chất lượng theo phiên bản ứng dụng</h3><p class="note">Dùng sau mỗi lần phát hành để xem bản mới có tệ hơn không. Tỷ lệ chỉ hiện khi có ≥ 10 lượt.</p>' + qtable("version", "Phiên bản"))
         o.append('<details class="sec"><summary>Chất lượng theo tab, mô hình, nền tảng</summary>%s%s%s</details>' % (
             "<h3>Theo tab</h3>" + qtable("profile", "Tab"), "<h3>Theo mô hình</h3>" + qtable("model", "Mô hình"), "<h3>Theo nền tảng</h3>" + qtable("platform", "Nền tảng")))
+    wk = S.get("work") or {}
+    if any(wk.get(k) for k in WORK_DIMS):
+        names_w = {"kind": ("Loại việc", {"build": "Tạo mới", "edit": "Sửa", "fix": "Sửa lỗi", "explain": "Giải thích", "research": "Tìm hiểu/so sánh", "convert": "Chuyển đổi", "other": "Khác"}),
+                   "art": ("Sản phẩm chính", {"web": "Web (html/css/js)", "python": "Python", "word": "Word", "excel": "Excel", "slides": "PowerPoint", "pdf": "PDF", "text": "Văn bản", "data": "Dữ liệu", "image": "Ảnh", "other": "Khác"}),
+                   "stack": ("Bộ khung dự án (tab Code)", {}), "ui": ("Thư viện giao diện", {}), "nth": ("Lượt thứ mấy của cuộc trò chuyện", {})}
+        o.append('<h3>Công việc người dùng làm</h3><p class="note">Ứng dụng tự phân loại ngay trên máy người dùng và chỉ gửi MÃ (loại việc, sản phẩm, bộ khung…), không có nội dung. '
+                 '«Nói chưa đạt» = người dùng nhắn lại rằng kết quả chưa đúng; «Kiểm chứng hỏng» = lần dựng/kiểm thử/check_page cuối của lượt không qua. Chỉ hiện tỷ lệ khi có ≥ 5 lượt.</p>')
+        for k in WORK_DIMS:
+            rows_ = wk.get(k) or []
+            if not rows_:
+                continue
+            head, vi = names_w[k]
+            rt = lambda v, n: R._p(v) if v is not None and n >= 5 else "—"
+            o.append("<h4>%s</h4>" % _e(head) + table([head, "Lượt", "Xong tốt", "Lỗi/lặp", "Bị ngắt", "Nói chưa đạt", "Kiểm chứng hỏng", "Bước p50", "Token TB"],
+                     [[vi.get(r_["value"], r_["value"]), r_["turns"], rt(r_["ok_rate"], r_["turns"]), rt(r_["bad_rate"], r_["turns"]), rt(r_["interrupt_rate"], r_["turns"]), rt(r_["redo_rate"], r_["turns"]),
+                       "—" if not r_["verify_n"] else "%s (%d)" % (R._p(r_["verify_fail_rate"]), r_["verify_n"]), "—" if r_["steps_p50"] is None else "%.0f" % r_["steps_p50"], "—" if r_["tok_avg"] is None else "{:,}".format(r_["tok_avg"])] for r_ in rows_]))
     if S.get("tool_reasons"):
         o.append("<h3>Công cụ × lý do lỗi</h3>" + table(["Công cụ", "Lỗi có mã", "Lý do hàng đầu"], [[nm, sum(rs.values()), ", ".join("%s %d" % (ERR_VI.get(c, c), n_) for c, n_ in rs.items())] for nm, rs in S["tool_reasons"].items()], "u sortable"))
     if S["findings"]:

@@ -122,6 +122,34 @@ def _last_num(s):
         return None
 
 
+WORK_DIMS = ("kind", "stack", "ui", "art")
+
+
+def work_profile(turns):
+    """Hồ sơ công việc của các lượt (trường kind/stack/ui/art/redo/verify do ứng dụng tính cục bộ, chỉ là mã): mỗi nhóm có số lượt, kết quả,
+    tỷ lệ người dùng nói chưa đạt (redo), kết quả kiểm chứng. Bản ứng dụng cũ không có các trường này: bỏ qua."""
+    out = {}
+    for dim in WORK_DIMS:
+        g = collections.defaultdict(lambda: {"turns": 0, "ok": 0, "bad": 0, "redo": 0, "v_pass": 0, "v_fail": 0, "steps": 0})
+        for t in turns:
+            v = t.get(dim)
+            if v is None:
+                continue
+            x = g[str(v)]
+            x["turns"] += 1
+            x["ok"] += t.get("end") == "ok"
+            x["bad"] += t.get("end") in ("error", "step_limit", "loop")
+            x["redo"] += bool(t.get("redo"))
+            x["v_pass"] += t.get("verify") == "pass"
+            x["v_fail"] += t.get("verify") == "fail"
+            x["steps"] += t.get("steps", 0)
+        out[dim] = dict(g)
+    nth = [t["nth"] for t in turns if "nth" in t]
+    out["chat_turns"] = {"first": sum(1 for n in nth if n == 1), "later": sum(1 for n in nth if n > 1)}
+    out["files"] = {"new": sum(t.get("files_new", 0) for t in turns), "edit": sum(t.get("files_edit", 0) for t in turns)}
+    return out
+
+
 def summarize(recs, rows):
     """Tổng hợp một khoảng thời gian."""
     S = {"events": len(recs), "lost_events": 0}
@@ -156,6 +184,7 @@ def summarize(recs, rows):
     S["reports"] = sum(1 for r in recs if r["e"].get("t") == "report")
     S["perm"] = {"allow": sum(t.get("perm_allow", 0) for t in turns), "deny": sum(t.get("perm_deny", 0) for t in turns)}
     S["ctx_high_turns"] = sum(1 for t in turns if t.get("ctx_pct", 0) >= 85)
+    S["work"] = work_profile(turns)
 
     def split(key):
         inst = collections.defaultdict(set)
@@ -353,7 +382,32 @@ def rule_intake(S, T, B=None):
         return finding("intake", "thấp", "Đường thu thập chẩn đoán có vấn đề", "; ".join(ev), "Xem log collector (journalctl -u neu-agent-diag); 429 = giới hạn tốc độ, 401 = phiên SSO hết hạn, 400 = lược đồ lệch giữa máy khách và schema.json.")
 
 
-RULES = [rule_no_data, rule_turn_errors, rule_unexpected, rule_gateway_5xx, rule_rate_limit, rule_auth, rule_context, rule_step_limit, rule_loop, rule_generation_faults, rule_tool_fail, rule_bad_tool_calls, rule_latency, rule_early_interrupt, rule_perm_denied, rule_empty, rule_retry, rule_old_versions, rule_intake]
+def rule_rework(S, T, B=None):
+    """Người dùng phải nói lại/sửa lại kết quả: dấu hiệu rõ nhất của việc agent làm chưa đạt (chỉ tính từ lượt thứ hai của cuộc trò chuyện)."""
+    W = S.get("work") or {}
+    later = (W.get("chat_turns") or {}).get("later", 0)
+    redo = sum(x["redo"] for x in (W.get("kind") or {}).values())
+    if later >= 10 and redo / later >= 0.25:
+        by = sorted(((v["redo"], k) for k, v in (W.get("kind") or {}).items() if v["redo"]), reverse=True)[:3]
+        return finding("rework", "trung bình", "Người dùng thường phải yêu cầu làm lại", "%d/%d lượt nối tiếp (%s) có lời báo chưa đạt; nhiều nhất ở loại việc: %s" % (redo, later, _p(redo / later), ", ".join("%s=%d" % (k, n) for n, k in by) or "—"),
+                       "Xem các cuộc trò chuyện có nhiều lượt làm lại: agent có kiểm chứng kết quả (dựng/chạy/check_page) trước khi báo xong không? Thêm kiểm tra tự động hoặc quy tắc trong hồ sơ tab cho loại việc/bộ khung đó.")
+
+
+def rule_verify_fail(S, T, B=None):
+    """Bộ khung/thư viện mà lần kiểm chứng cuối của lượt thường hỏng: chỗ cần thêm công thức (profiles.ts) hoặc bẫy phiên bản (pitfalls.ts)."""
+    W = S.get("work") or {}
+    bad = []
+    for dim in ("stack", "ui"):
+        for k, v in (W.get(dim) or {}).items():
+            n = v["v_pass"] + v["v_fail"]
+            if n >= 5 and v["v_fail"] / n >= 0.4:
+                bad.append("%s %s: %d/%d lần kiểm chứng cuối hỏng" % (dim, k, v["v_fail"], n))
+    if bad:
+        return finding("verify_fail", "trung bình", "Có bộ khung/thư viện mà kiểm chứng cuối thường hỏng", "; ".join(bad[:4]),
+                       "Đối chiếu với bài thử labs/code-bench: thêm công thức hoặc bẫy phiên bản cho bộ khung đó (profiles.ts / pitfalls.ts) rồi đo lại ở báo cáo sau.")
+
+
+RULES = [rule_no_data, rule_turn_errors, rule_unexpected, rule_gateway_5xx, rule_rate_limit, rule_auth, rule_context, rule_step_limit, rule_loop, rule_generation_faults, rule_tool_fail, rule_bad_tool_calls, rule_latency, rule_early_interrupt, rule_perm_denied, rule_empty, rule_retry, rule_old_versions, rule_rework, rule_verify_fail, rule_intake]
 
 
 def anomalies(W, B, T):
@@ -471,6 +525,14 @@ def tables(W):
     T.append(("Độ trễ phía ứng dụng", ["Chỉ số", "p50", "p95"], [["Token đầu tiên", fmt(W["ttft_ms"]["p50"], " ms", 0), fmt(W["ttft_ms"]["p95"], " ms", 0)], ["Cả lượt", fmt(W["dur_s"]["p50"], " s", 0), fmt(W["dur_s"]["p95"], " s", 0)]]))
     T.append(("Phiên bản", ["Phiên bản", "Máy", "Lượt"], [[k, x["installs"], x["turns"]] for k, x in sorted(W["versions"].items(), reverse=True)]))
     T.append(("Nền tảng / tab / mô hình", ["Nhóm", "Giá trị", "Máy", "Lượt"], [[g, k, x["installs"], x["turns"]] for g, d in (("nền tảng", W["platforms"]), ("tab", W["profiles"]), ("mô hình", W["models"])) for k, x in sorted(d.items())]))
+    W_ = W.get("work") or {}
+    rows = []
+    for dim, label in (("kind", "loại việc"), ("art", "sản phẩm"), ("stack", "bộ khung"), ("ui", "thư viện giao diện")):
+        for k, x in sorted((W_.get(dim) or {}).items(), key=lambda kv: -kv[1]["turns"]):
+            n = x["v_pass"] + x["v_fail"]
+            rows.append([label, k, x["turns"], _p(ratio(x["ok"], x["turns"])), _p(ratio(x["redo"], x["turns"])), (_p(ratio(x["v_fail"], n)) if n else "—")])
+    if rows:
+        T.append(("Công việc người dùng làm (chỉ mã, không nội dung)", ["Nhóm", "Giá trị", "Lượt", "Xong tốt", "Nói chưa đạt", "Kiểm chứng hỏng"], rows))
     return T
 
 

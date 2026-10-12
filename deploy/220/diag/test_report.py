@@ -139,6 +139,21 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(W["turns"], 100)
         self.assertEqual(B["turns"], 280)
 
+    def test_work_profile_rules(self):
+        """Quy tắc: làm lại nhiều → rework; bộ khung kiểm chứng hỏng nhiều → verify_fail. Không dựa vào nội dung."""
+        T = R.DEFAULT_THRESHOLDS if hasattr(R, "DEFAULT_THRESHOLDS") else None
+        turns = [turn_ev(kind="build", stack="react", ui="chakra", nth=1, verify="fail") for _ in range(6)]
+        turns += [turn_ev(kind="fix", stack="react", ui="chakra", nth=2 + i % 3, redo=True, verify="fail") for i in range(8)]
+        turns += [turn_ev(kind="edit", stack="vite", ui="none", nth=2, verify="pass") for _ in range(4)]
+        W = R.summarize([rec(T_NOW - 100, t) for t in turns], [])
+        self.assertEqual(W["work"]["kind"]["fix"]["redo"], 8)
+        self.assertEqual(W["work"]["chat_turns"], {"first": 6, "later": 12})
+        thr = T or {"min_turns": 5}
+        ids = {f["id"] for f in [x for x in (R.rule_rework(W, thr), R.rule_verify_fail(W, thr)) if x]}
+        self.assertEqual(ids, {"rework", "verify_fail"})
+        names = [t[0] for t in R.tables(W)]
+        self.assertIn("Công việc người dùng làm (chỉ mã, không nội dung)", names)
+
     def test_healthy_day_has_no_findings(self):
         rnd = random.Random(2)
         recs = healthy_baseline(rnd, days=8, per_day=60)

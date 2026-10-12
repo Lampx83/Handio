@@ -19,6 +19,7 @@ Mục tiêu: hệ thống **tự phát hiện vấn đề** (lỗi mô hình/c�
 |---|---|
 | `turn` (mỗi lượt làm việc) | `end` (ok/interrupted/error/step_limit/loop), `dur_s`, `ttft_ms`, `steps`, `tools`, `tool_fail`, `prompt_tok`, `completion_tok`, `ctx_pct`, `compactions`, `perm_allow`, `perm_deny` |
 | `turn` (bổ sung từ 0.4.0) | `calls` (số lần gọi mô hình), `peak_prompt_tok` (lời nhắc lớn nhất của một lần gọi), `cached_tok` (token lời nhắc dùng lại từ bộ nhớ đệm), `tool_out_tok` (ước lượng token của kết quả công cụ đã gửi lại), `pruned` (số lần lược bớt kết quả cũ), `first_tool_s` (giây tới công cụ đầu tiên): để biết token đi đâu |
+| `turn` (bổ sung từ 0.8.16: **hồ sơ công việc**) | `kind` (build/edit/fix/explain/research/convert/other: loại việc), `redo` (người dùng nhắn lại rằng kết quả chưa đạt; chỉ từ lượt thứ hai), `nth` (lượt thứ mấy của cuộc trò chuyện), `stack` (static/react/vue/svelte/next/vite/node/express/python/flask/fastapi/django/streamlit/other), `ui` (tailwind/chakra/mui/antd/bootstrap/shadcn/none), `art` (loại sản phẩm chính theo đuôi tệp: web/python/word/excel/slides/pdf/text/data/image/other), `files_new`, `files_edit` (số tệp tạo/sửa), `verify` (none/pass/fail: kết quả lần dựng/kiểm thử/check_page cuối của lượt) |
 | `ui` | `act`: việc người dùng làm trong giao diện, **chỉ mã** (`suggestion`, `template`, `attach`, `new_chat`, `tab_switch`, `settings_open`, `mode_change`, `run_click`…): để biết tính năng nào được dùng/bỏ qua |
 | `feedback` | `v` (`up`/`down`) và `reason` chọn sẵn (`wrong`/`incomplete`/`slow`/`confusing`/`other`): người dùng **tự bấm** 👍/👎 sau câu trả lời; không có chữ tự do |
 | `tool` | `name` (danh sách cố định, `mcp`, `other`), `ok`, `dur` (lt1s/lt5s/lt30s/lt2m/ge2m), `err` (khi lỗi; **chỉ mã** như `not_found`, `read_first`, `no_match`, `sandbox`, `program`, `denied`…; từ bản 0.2.0) |
@@ -147,6 +148,20 @@ Chẩn đoán KHÔNG chứa nội dung (ngoại lệ riêng, mặc định tắt
 | Lưu bao lâu | cho tới khi quản trị viên xoá (không tự xoá); sao lưu theo `/var/lib/neu-agent` |
 
 Mã: `deploy/220/diag/feedback.py` (kho + kiểm tra), route trong `collector.py`, trang `feedback.html`/`feedback.js`, kiểm thử `test_feedback.py`; phía ứng dụng `packages/core/src/feedback.ts`, `LocalController.sendFeedback`, `packages/ui/src/feedback-ui.ts`.
+
+## Hồ sơ công việc (0.8.16)
+
+Để biết **người dùng làm việc gì và việc nào hay hỏng** mà không thu nội dung: ứng dụng phân loại ngay trên máy (`packages/core/src/task-profile.ts`) rồi chỉ gửi **mã** trong danh sách cố định. Câu hỏi, tên tệp, đường dẫn, lệnh được đọc cục bộ để phân loại và bị bỏ; không chuỗi nào của người dùng đi ra khỏi hàm phân loại (có bài kiểm thử gài một chuỗi bí mật vào yêu cầu, tên tệp và lệnh rồi kiểm tra gói gửi đi không chứa nó).
+
+| Trường | Cách tính (cục bộ) | Dùng để |
+|---|---|---|
+| `kind` | từ khoá trong yêu cầu (tiếng Việt có/không dấu, tiếng Anh) | biết người dùng chủ yếu tạo mới, sửa, sửa lỗi, giải thích… |
+| `redo` | yêu cầu có lời báo chưa đạt ("vẫn lỗi", "chưa đúng", "làm lại") ở lượt thứ ≥ 2 | dấu hiệu rõ nhất agent làm chưa đạt: nhìn theo `kind`/`stack` |
+| `stack`, `ui` | tên gói trong `package.json`/`requirements.txt` của dự án (tab Code, Design) | thấy bộ khung/thư viện nào hay hỏng (ví dụ Chakra v3) |
+| `art`, `files_new`, `files_edit` | đuôi tệp của các lần ghi thành công | biết sản phẩm chính: web, Word, Excel, PowerPoint… |
+| `verify` | lệnh dựng/kiểm thử (`npm run build`, `vitest`, `pytest`…) hoặc `check_page`: mã thoát/kết luận cuối | tỷ lệ "báo xong nhưng kiểm chứng hỏng" theo bộ khung |
+
+Báo cáo hằng ngày thêm bảng **«Công việc người dùng làm»** và hai quy tắc: `rework` (≥ 25% lượt nối tiếp bị báo chưa đạt) và `verify_fail` (bộ khung/thư viện có ≥ 40% lần kiểm chứng cuối hỏng, từ 5 lần). Trang quản trị có mục cùng tên (loại việc, sản phẩm, bộ khung, thư viện, lượt thứ mấy). Bản ứng dụng cũ không gửi các trường này nên bị bỏ qua, không làm lệch số liệu.
 
 ## Tín hiệu lỗi sinh nội dung (0.6.2)
 

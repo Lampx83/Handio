@@ -203,6 +203,90 @@
         "k": "int",
         "min": 0,
         "max": 86400
+      },
+      "kind": {
+        "k": "enum",
+        "v": [
+          "build",
+          "edit",
+          "fix",
+          "explain",
+          "research",
+          "convert",
+          "other"
+        ]
+      },
+      "redo": {
+        "k": "bool"
+      },
+      "nth": {
+        "k": "int",
+        "min": 1,
+        "max": 1000
+      },
+      "stack": {
+        "k": "enum",
+        "v": [
+          "static",
+          "react",
+          "vue",
+          "svelte",
+          "next",
+          "vite",
+          "node",
+          "express",
+          "python",
+          "flask",
+          "fastapi",
+          "django",
+          "streamlit",
+          "other"
+        ]
+      },
+      "ui": {
+        "k": "enum",
+        "v": [
+          "tailwind",
+          "chakra",
+          "mui",
+          "antd",
+          "bootstrap",
+          "shadcn",
+          "none"
+        ]
+      },
+      "art": {
+        "k": "enum",
+        "v": [
+          "web",
+          "python",
+          "word",
+          "excel",
+          "slides",
+          "pdf",
+          "text",
+          "data",
+          "image",
+          "other"
+        ]
+      },
+      "files_new": {
+        "k": "int",
+        "min": 0,
+        "max": 1000
+      },
+      "files_edit": {
+        "k": "int",
+        "min": 0,
+        "max": 1000
+      },
+      "verify": {
+        "k": "enum",
+        "v": [
+          "none",
+          "pass",
+          "fail"
+        ]
       }
     },
     "tool": {

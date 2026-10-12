@@ -11,6 +11,7 @@
  * (deploy/220/diag/schema.json) — có test so khớp hai bên.
  */
 import type { SessionEvent } from "./types";
+import { ARTIFACTS, STACKS, TASK_KINDS, UI_LIBS, VERIFY_STATES, artifactOf, classifyPrompt, isVerifyCommand, verifyOutcome, type Artifact, type Stack, type UiLib } from "./task-profile";
 
 // ---------------------------------------------------------------- lược đồ (dữ liệu thuần, trùng schema.json)
 export type FieldSpec =
@@ -72,6 +73,17 @@ export const DIAG_SCHEMA = {
       tool_out_tok: { k: "int", min: 0, max: 1000000000 },
       pruned: { k: "int", min: 0, max: 5000 },
       first_tool_s: { k: "int", min: 0, max: 86400 },
+      /** Hồ sơ công việc (chỉ MÃ, tính cục bộ — xem task-profile.ts): loại việc, người dùng nói chưa đạt (làm lại), lượt thứ mấy của cuộc trò chuyện, bộ khung dự án,
+       *  thư viện giao diện, loại sản phẩm chính, số tệp tạo mới/sửa, kết quả kiểm chứng cuối (dựng/kiểm thử/check_page). */
+      kind: { k: "enum", v: TASK_KINDS },
+      redo: { k: "bool" },
+      nth: { k: "int", min: 1, max: 1000 },
+      stack: { k: "enum", v: STACKS },
+      ui: { k: "enum", v: UI_LIBS },
+      art: { k: "enum", v: ARTIFACTS },
+      files_new: { k: "int", min: 0, max: 1000 },
+      files_edit: { k: "int", min: 0, max: 1000 },
+      verify: { k: "enum", v: VERIFY_STATES },
     },
     tool: {
       name: { k: "tool", req: true },
@@ -306,6 +318,18 @@ interface TurnState {
   loopStop: boolean;
   emptyPending: boolean;
   signals: Set<string>;
+  /** Hồ sơ công việc (task-profile.ts): chỉ mã. */
+  kind?: string;
+  redo: boolean;
+  nth: number;
+  stack?: Stack;
+  ui?: UiLib;
+  artCount: Map<Artifact, number>;
+  filesNew: number;
+  filesEdit: number;
+  verify?: "pass" | "fail";
+  /** id lời gọi → việc cần ghi nhận khi có kết quả (ghi tệp, kiểm chứng). */
+  pend: Map<string, { w?: "new" | "edit"; art?: Artifact | null; v?: boolean }>;
 }
 
 /** FNV-1a: chỉ để so "cùng lời gọi" trong bộ nhớ; không bao giờ được ghi hay gửi. */
@@ -325,6 +349,8 @@ export class DiagnosticsRecorder {
   private buf: DiagEvent[] = [];
   private dropped = 0;
   private turn: TurnState | null = null;
+  /** Số lượt đã bắt đầu trong cuộc trò chuyện hiện tại (về 0 khi tạo cuộc mới). */
+  private chatTurns = 0;
   private lastP = 0;
   private lastC = 0;
   private lastCached = 0;
@@ -378,6 +404,47 @@ export class DiagnosticsRecorder {
     }
   }
 
+  /**
+   * Gọi ngay sau khi lượt bắt đầu: phân loại yêu cầu của người dùng (CỤC BỘ; chỉ mã loại việc được giữ, chữ của người dùng bị bỏ) và ghi bộ khung dự án.
+   */
+  noteTask(text: string, project?: { stack: Stack; ui: UiLib }): void {
+    try {
+      const t = this.turn;
+      if (!t || !this.active()) return;
+      const c = classifyPrompt(text);
+      t.kind = c.kind;
+      t.redo = c.redoCue && t.nth > 1;
+      if (project) {
+        t.stack = project.stack;
+        t.ui = project.ui;
+      }
+    } catch {
+      /* bỏ qua */
+    }
+  }
+
+  private notePending(t: TurnState, id: string, name: string, args: Record<string, unknown> | undefined): void {
+    const a = args ?? {};
+    if (name === "write_file" || /^create_(docx|xlsx|pptx|pdf)$/.test(name)) t.pend.set(id, { w: "new", art: artifactOf(a.path ?? a.output) });
+    else if (name === "edit_file" || name === "pptx_edit" || name === "docx_edit" || name === "docx_replace" || name === "xlsx_edit") t.pend.set(id, { w: "edit", art: artifactOf(a.path) });
+    else if (name === "check_page" || (name === "bash" && isVerifyCommand(a.command))) t.pend.set(id, { v: true });
+  }
+
+  private noteOutcome(t: TurnState, id: string, name: string, ok: boolean, output: string): void {
+    const p = t.pend.get(id);
+    if (!p) return;
+    t.pend.delete(id);
+    if (p.w && ok) {
+      if (p.w === "new") t.filesNew++;
+      else t.filesEdit++;
+      if (p.art) t.artCount.set(p.art, (t.artCount.get(p.art) ?? 0) + 1);
+    }
+    if (p.v) {
+      const r = ok ? verifyOutcome(name, output) : name === "check_page" ? "fail" : verifyOutcome(name, output);
+      if (r) t.verify = r;
+    }
+  }
+
   /** Người dùng bấm Dừng. */
   onInterrupt(): void {
     try {
@@ -392,7 +459,7 @@ export class DiagnosticsRecorder {
   }
 
   private newTurn(): TurnState {
-    return { start: this.now(), steps: 0, tools: 0, fails: 0, toolStart: new Map(), failBy: new Map(), repKey: "", repN: 0, p0: this.lastP, c0: this.lastC, ctx: 0, compactions: 0, calls: 0, peakP: 0, cached: 0, toolOut: 0, pruned: 0, permAllow: 0, permDeny: 0, denyBy: new Map(), permTool: new Map(), interrupted: false, err: false, stepLimit: false, loopStop: false, emptyPending: false, signals: new Set() };
+    return { start: this.now(), steps: 0, tools: 0, fails: 0, toolStart: new Map(), failBy: new Map(), repKey: "", repN: 0, p0: this.lastP, c0: this.lastC, ctx: 0, compactions: 0, calls: 0, peakP: 0, cached: 0, toolOut: 0, pruned: 0, permAllow: 0, permDeny: 0, denyBy: new Map(), permTool: new Map(), interrupted: false, err: false, stepLimit: false, loopStop: false, emptyPending: false, signals: new Set(), redo: false, nth: this.chatTurns, artCount: new Map(), filesNew: 0, filesEdit: 0, pend: new Map() };
   }
 
   private signal(code: string, tool?: string, n?: number): void {
@@ -411,6 +478,7 @@ export class DiagnosticsRecorder {
   private handle(e: SessionEvent): void {
     if (e.type === "turn_start") {
       if (this.turn) this.finishTurn(false, "");
+      this.chatTurns++;
       this.turn = this.newTurn();
       return;
     }
@@ -432,6 +500,7 @@ export class DiagnosticsRecorder {
         t.emptyPending = false;
         if (!t.firstOut && e.depth === 0) t.firstOut = this.now();
         t.toolStart.set(e.id, this.now());
+        this.notePending(t, e.id, e.name, e.args);
         if (t.firstTool === undefined && e.depth === 0) t.firstTool = this.now();
         const key = e.name + "\u0000" + fnv(safeJson(e.args));
         t.repN = key === t.repKey ? t.repN + 1 : 1;
@@ -447,6 +516,7 @@ export class DiagnosticsRecorder {
         const name = safeToolName(e.name);
         const st = t.toolStart.get(e.id);
         t.toolStart.delete(e.id);
+        this.noteOutcome(t, e.id, e.name, e.ok, e.output);
         const err = !e.ok && e.errKind && DIAG_TOOL_ERRORS.includes(e.errKind) ? e.errKind : undefined;
         this.push({ t: "tool", ts: this.ts(), name, ok: !!e.ok, dur: durBucket(st ? this.now() - st : 0), ...(err ? { err } : {}) });
         if (!e.ok) {
@@ -495,6 +565,7 @@ export class DiagnosticsRecorder {
         this.onNotice(e.text);
         return;
       case "reset":
+        this.chatTurns = 0;
         this.lastP = 0;
         this.lastC = 0;
         this.lastCached = 0;
@@ -561,6 +632,18 @@ export class DiagnosticsRecorder {
     if (t.toolOut) ev.tool_out_tok = t.toolOut;
     if (t.pruned) ev.pruned = t.pruned;
     if (t.firstTool !== undefined) ev.first_tool_s = Math.round((t.firstTool - t.start) / 1000);
+    if (t.kind) ev.kind = t.kind;
+    if (t.redo) ev.redo = true;
+    if (t.nth > 0) ev.nth = t.nth;
+    if (t.stack) ev.stack = t.stack;
+    if (t.ui) ev.ui = t.ui;
+    let top: Artifact | undefined;
+    let topN = 0;
+    for (const [a, n] of t.artCount) if (n > topN) ((top = a), (topN = n));
+    if (top) ev.art = top;
+    if (t.filesNew) ev.files_new = t.filesNew;
+    if (t.filesEdit) ev.files_edit = t.filesEdit;
+    ev.verify = t.verify ?? "none";
     this.push(ev);
     this.schedule(this.o.flushDelayMs ?? 5000);
   }

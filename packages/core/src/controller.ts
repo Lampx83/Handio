@@ -16,6 +16,7 @@ import { Session } from "./session";
 import { badCitations, docViewOf, listProcedures, removeProcedure, saveProcedure, type Procedure } from "./work-ctl";
 import type { DocView } from "./office/locate";
 import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
+import { stackOf, type Stack, type UiLib } from "./task-profile";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import type { HttpToolRuntime } from "./http-tools";
 import { feedbackProblem, type FeedbackInput, type FeedbackResult } from "./feedback";
@@ -304,6 +305,7 @@ export class LocalController implements AgentController {
     const turn = { projectId: this.projectId, chatId: this.chatId, session: this.session };
     await this.syncSettings();
     this.fire({ type: "turn_start" });
+    if (this.diag && !/^[/!]/.test(text.trim())) this.diag.noteTask(text, await this.projectTags());
     this.turnTools = [];
     for (const n of this.pendingNotices.splice(0)) this.fire({ type: "notice", level: "warn", text: n });
     let final = "";
@@ -1037,6 +1039,23 @@ export class LocalController implements AgentController {
       });
     } catch {
       /* chẩn đoán hỏng không được làm hỏng ứng dụng */
+    }
+  }
+  /** Bộ khung/thư viện giao diện của dự án (chỉ mã, cho nhật ký chất lượng). Tab Work không có khái niệm này. Không bao giờ ném lỗi. */
+  private async projectTags(): Promise<{ stack: Stack; ui: UiLib } | undefined> {
+    if ((this.o.profile ?? "code") === "work") return undefined;
+    try {
+      const env = this.o.env;
+      const read = async (name: string): Promise<string | undefined> => {
+        const p = join(env.root, name);
+        const st = await env.stat(p);
+        if (!st?.isFile || st.size > 200_000) return undefined;
+        return new TextDecoder().decode(await env.readBytes(p));
+      };
+      const [pkg, reqs, html] = await Promise.all([read("package.json"), read("requirements.txt"), env.stat(join(env.root, "index.html"))]);
+      return stackOf({ pkg, reqs, hasHtml: !!html?.isFile });
+    } catch {
+      return undefined;
     }
   }
   private diagEnabled(): boolean {
