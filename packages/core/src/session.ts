@@ -840,6 +840,7 @@ export class Agent {
   private stopWhy = "";
   private nudges = 0;
   private pageChecks = 0;
+  private pruneNoted = false;
   private lastPageProblem = "";
 
   constructor(private s: Session, private def: AgentDef | null = null, private depth = 0) {}
@@ -997,7 +998,10 @@ export class Agent {
 
   private async manageContext(): Promise<void> {
     const limit = this.s.o.getSettings().contextTokens;
-    if (this.estimateTokens() > 0.45 * limit && this.pruneToolResults()) this.s.emit({ type: "notice", level: "info", text: "Đã lược bớt kết quả công cụ cũ để tiết kiệm ngữ cảnh." });
+    if (this.estimateTokens() > 0.45 * limit && this.pruneToolResults() && !this.pruneNoted) {
+      this.pruneNoted = true; // một lần mỗi lượt: bài thử thật phát thông báo này ~20 lần liên tiếp
+      this.s.emit({ type: "notice", level: "info", text: "Đã lược bớt kết quả công cụ cũ để tiết kiệm ngữ cảnh." });
+    }
     const used = this.estimateTokens();
     // quá 75% cửa sổ, hoặc còn dưới ~3k token cho câu trả lời (lời gọi công cụ dài sẽ bị cắt giữa chừng): tóm tắt phần cũ trước
     if (used > 0.75 * limit || limit - used - 600 < 3000) await this.compact("", true);
@@ -1080,6 +1084,7 @@ export class Agent {
     this.stopWhy = "";
     this.nudges = 0;
     this.pageChecks = 0;
+    this.pruneNoted = false;
     this.lastPageProblem = "";
     this.repeats = 0;
     try {

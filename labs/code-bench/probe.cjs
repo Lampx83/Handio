@@ -4,7 +4,7 @@ const { app, BrowserWindow, session } = require("electron");
 const fs = require("node:fs");
 
 const cfg = JSON.parse(fs.readFileSync(process.argv[process.argv.length - 1], "utf8"));
-const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/|$)/i;
+const LOOPBACK = /^(https?|wss?):\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/|$)/i;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const path = require("node:path");
 const { fileURLToPath } = require("node:url");

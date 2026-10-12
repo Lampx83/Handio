@@ -46,7 +46,7 @@ export const TASKS = [
     checks: [
       { kind: "pkg", has: ["react", "@chakra-ui/react"] },
       { kind: "cmd", run: "npm run build", label: "npm run build" },
-      { kind: "page", path: "/", steps: [{ click: { text: "Đăng nhập" } }, { eval: 'document.body.innerText.includes("Email không hợp lệ")', label: "Form trống → báo lỗi email" }, { fill: { placeholder: "Email" }, value: "a@neu.edu.vn" }, { fill: { placeholder: "Mật khẩu" }, value: "123" }, { click: { text: "Đăng nhập" } }, { eval: 'document.body.innerText.includes("tối thiểu 6")', label: "Mật khẩu ngắn → báo lỗi" }, { fill: { placeholder: "Mật khẩu" }, value: "matkhau123" }, { click: { text: "Đăng nhập" } }, { wait: 600 }, { eval: 'document.body.innerText.includes("Đăng nhập thành công")', label: "Đúng → toast thành công" }] },
+      { kind: "page", path: "/", steps: [{ fill: { placeholder: "Email" }, value: "abc" }, { click: { text: "Đăng nhập" } }, { eval: 'document.body.innerText.includes("Email không hợp lệ")', label: "Email sai định dạng → báo lỗi" }, { fill: { placeholder: "Email" }, value: "a@neu.edu.vn" }, { fill: { placeholder: "Mật khẩu" }, value: "123" }, { click: { text: "Đăng nhập" } }, { eval: 'document.body.innerText.includes("tối thiểu 6")', label: "Mật khẩu ngắn → báo lỗi" }, { fill: { placeholder: "Mật khẩu" }, value: "matkhau123" }, { click: { text: "Đăng nhập" } }, { wait: 600 }, { eval: 'document.body.innerText.includes("Đăng nhập thành công")', label: "Đúng → toast thành công" }] },
     ],
   },
   {

@@ -6,6 +6,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Sửa
+- **Kiểm tra trang (`check_page`) không còn báo lỗi giả với ứng dụng Vite**: WebSocket nội bộ (`ws://localhost`) của Vite bị chặn nhầm nên trang nào cũng "lỗi kết nối", khiến agent mất hàng chục bước sửa cấu hình vô ích.
+- **Thông báo "Đã lược bớt kết quả công cụ cũ" chỉ hiện một lần mỗi lượt** (trước đây lặp lại ở mỗi bước khi làm việc lâu).
 - **Đổi tên dự án (nút ✎) hoạt động trên Desktop**: trước đây bấm không có gì xảy ra (Electron không hỗ trợ hộp nhập `prompt`). Nay hiện hộp "Đổi tên dự án".
 - **Tạo lại dự án trùng tên với dự án đã bỏ khỏi danh sách không còn thành "Bài 2 (2)"**: tên hiển thị là đúng tên bạn gõ (chỉ thêm "(2)" khi trùng với dự án đang có trong danh sách); thư mục cũ còn trống được dùng lại.
 

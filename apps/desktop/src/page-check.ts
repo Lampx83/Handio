@@ -9,7 +9,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PageReport } from "@neu/agent-core";
 
-const LOOPBACK = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/|$)/i;
+// ws/wss loopback: Vite (HMR) mở ws://localhost:<cổng>; chặn nó làm MỌI trang Vite báo lỗi "WebSocket failed" giả và agent sửa nhầm cấu hình
+const LOOPBACK = /^(https?|wss?):\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/|$)/i;
 const MAX_ERRORS = 15;
 
 /** URL được phép tải: loopback, tệp trong thư mục dự án, data:/blob:/devtools: nội bộ. */
