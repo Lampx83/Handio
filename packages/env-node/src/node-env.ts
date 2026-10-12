@@ -322,7 +322,7 @@ function windowsExtraPaths(): { python: string[]; registry: string[] } {
   };
   const registry = [reg("HKCU\\Environment"), reg("HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment")].filter(Boolean);
   const env = process.env;
-  const roots = [path.join(env.LOCALAPPDATA ?? "", "Programs", "Python"), env.ProgramFiles ?? "C:\\Program Files", env["ProgramFiles(x86)"] ?? "", env.SystemDrive ? env.SystemDrive + "\\" : "C:\\"].filter((r) => r && r !== "Programs\\Python");
+  const roots = [path.join(env.LOCALAPPDATA ?? "", "Programs", "Python"), env.ProgramFiles ?? "C:\\Program Files", env["ProgramFiles(x86)"] ?? "", env.SystemDrive ? env.SystemDrive + "\\" : "C:\\", env.USERPROFILE ?? "", env.ProgramData ?? ""].filter((r) => r && r !== "Programs\\Python");
   const python = findPythonDirs(roots, (d) => readdirSync(d), (f) => existsSync(f));
   winCache = { at: Date.now(), python, registry };
   return winCache;

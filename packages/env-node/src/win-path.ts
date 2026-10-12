@@ -16,10 +16,15 @@ export function expandVars(s: string, env: Record<string, string | undefined>): 
 }
 
 const PY_DIR = /^python(\d)(\d+)?$/i;
+/** Anaconda/Miniconda/Miniforge: python.exe nằm ngay ở gốc thư mục cài (C:\\Users\\<tên>\\Anaconda3). */
+const CONDA_DIR = /^(?:ana|mini)conda\d*$|^(?:mini|mamba)forge\d*$/i;
 
-/** Thư mục cài Python (gốc + Scripts), bản mới nhất trước. `list(dir)` trả tên mục con; `has(file)` kiểm tra tệp tồn tại. */
+/**
+ * Thư mục cài Python (gốc + Scripts, và Library\\bin với conda), bản python.org mới nhất trước rồi tới conda.
+ * `list(dir)` trả tên mục con; `has(file)` kiểm tra tệp tồn tại.
+ */
 export function findPythonDirs(roots: string[], list: (dir: string) => string[], has: (file: string) => boolean, sep = "\\"): string[] {
-  const found: { dir: string; ver: number }[] = [];
+  const found: { dirs: string[]; ver: number; dir: string }[] = [];
   for (const root of roots) {
     let names: string[] = [];
     try {
@@ -28,15 +33,14 @@ export function findPythonDirs(roots: string[], list: (dir: string) => string[],
       continue;
     }
     for (const n of names) {
-      const m = PY_DIR.exec(n);
-      if (!m) continue;
-      const dir = root.replace(/[\\/]+$/, "") + sep + n;
-      if (!has(dir + sep + "python.exe")) continue;
-      found.push({ dir, ver: Number(m[1]) * 1000 + Number(m[2] ?? 0) });
+      const base = root.replace(/[\\/]+$/, "") + sep + n;
+      const py = PY_DIR.exec(n);
+      if (py && has(base + sep + "python.exe")) found.push({ dir: base, dirs: [base, base + sep + "Scripts"], ver: 100000 + Number(py[1]) * 1000 + Number(py[2] ?? 0) });
+      else if (CONDA_DIR.test(n) && has(base + sep + "python.exe")) found.push({ dir: base, dirs: [base, base + sep + "Scripts", base + sep + "Library" + sep + "bin"], ver: 0 });
     }
   }
   found.sort((a, b) => b.ver - a.ver || a.dir.localeCompare(b.dir));
-  return found.flatMap((f) => [f.dir, f.dir + sep + "Scripts"]);
+  return found.flatMap((f) => f.dirs);
 }
 
 /** Thư mục Python đứng đầu, rồi PATH hiện có của tiến trình, rồi PATH trong registry (người dùng + máy) chưa có; bỏ trùng (không phân biệt hoa/thường). */

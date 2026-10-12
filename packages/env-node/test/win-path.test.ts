@@ -25,6 +25,13 @@ describe("PATH trên Windows (cài Python khi ứng dụng đang mở)", () => {
     expect(findPythonDirs(["C:\\nope"], () => { throw new Error("không có"); }, () => true)).toEqual([]);
   });
 
+  it("nhận cả Anaconda/Miniconda (python.exe ở gốc, kèm Scripts và Library\\bin), sau bản python.org", () => {
+    const tree: Record<string, string[]> = { "C:\\Users\\Admin": ["Anaconda3", "Documents", "miniconda3"], "C:\\Program Files": ["Python312"] };
+    const has = (f: string) => ["C:\\Users\\Admin\\Anaconda3\\python.exe", "C:\\Program Files\\Python312\\python.exe"].includes(f);
+    const dirs = findPythonDirs(Object.keys(tree), (d) => tree[d] ?? [], has);
+    expect(dirs).toEqual(["C:\\Program Files\\Python312", "C:\\Program Files\\Python312\\Scripts", "C:\\Users\\Admin\\Anaconda3", "C:\\Users\\Admin\\Anaconda3\\Scripts", "C:\\Users\\Admin\\Anaconda3\\Library\\bin"]);
+  });
+
   it("ghép PATH: thư mục Python đứng đầu (thắng bí danh WindowsApps), bỏ trùng, giữ cả PATH trong registry mới cài", () => {
     const p = mergeWindowsPath({
       pythonDirs: ["C:\\Py312", "C:\\Py312\\Scripts"],

@@ -5,6 +5,10 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Windows: nhận cả Anaconda/Miniconda** (python.exe ở gốc thư mục cài, ví dụ `C:\Users\<tên>\Anaconda3`): thư mục này (kèm Scripts và Library\bin) cũng được thêm vào PATH của lệnh agent chạy, sau bản Python từ python.org.
+- **Agent không còn "đi vòng" tốn token khi thiếu một công cụ**: thiếu Python/sqlite… sau hai lần tìm không ra thì dừng, nói rõ thiếu gì và một bước để sửa, thay vì thử hết cách khác (đã gặp: chuyển sang dựng trang HTML kiểm thử, đốt hết hạn mức ngày).
+
 ## [0.8.13] - 2026-10-12
 
 ### Sửa
