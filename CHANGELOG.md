@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.10] - 2026-10-12
+
 ### Thay đổi
 - **Chân thanh bên gọn hơn, một dòng**: tên người dùng bên trái, chỉ ghi số phiên bản (v0.9.0…) bên phải; bấm vào số phiên bản để xem nhật ký thay đổi.
 
