@@ -1,4 +1,4 @@
-import { installPitfall, pythonMissingHint } from "./pitfalls";
+import { installPitfall, pythonMissingHint, toolNameAsCommand } from "./pitfalls";
 import { diffLines, type DiffLine } from "./diff";
 import type { DirEntry, Env } from "./env";
 import { matchGlob } from "./glob";
@@ -245,21 +245,29 @@ function fuzzyReplace(text: string, oldS: string, newS: string): { text: string;
 }
 
 function closestHint(text: string, oldS: string): string {
-  const first = oldS.split("\n").map((l) => l.trim()).find(Boolean);
-  if (!first) return "";
+  const want = oldS.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6);
+  if (!want.length) return "";
   const lines = text.split("\n");
-  const words = new Set(first.split(/\W+/).filter(Boolean));
   let best = -1;
   let bestScore = 0;
-  lines.forEach((l, i) => {
-    const w = l.split(/\W+/).filter(Boolean);
-    const score = w.filter((x) => words.has(x)).length / Math.max(words.size, w.length || 1);
-    if (score > bestScore) {
-      bestScore = score;
-      best = i;
-    }
-  });
-  return best >= 0 && bestScore >= 0.5 ? ` Dòng giống nhất ở dòng ${best + 1}: ${JSON.stringify(lines[best].trim().slice(0, 120))}.` : "";
+  for (const first of want) {
+    const words = new Set(first.split(/\W+/).filter(Boolean));
+    if (!words.size) continue;
+    lines.forEach((l, i) => {
+      const w = l.split(/\W+/).filter(Boolean);
+      const score = w.filter((x) => words.has(x)).length / Math.max(words.size, w.length || 1);
+      if (score > bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    });
+  }
+  if (best < 0 || bestScore < 0.5) return "";
+  // trích luôn vài dòng quanh vị trí đó (có số dòng) để lần sau chép đúng ngay, đỡ một lượt đọc lại
+  const from = Math.max(0, best - 2);
+  const to = Math.min(lines.length, best + Math.max(want.length, 3) + 2);
+  const excerpt = lines.slice(from, to).map((l, k) => `${from + k + 1}| ${l.length > 160 ? l.slice(0, 160) + "…" : l}`).join("\n");
+  return ` Dòng giống nhất ở dòng ${best + 1}: ${JSON.stringify(lines[best].trim().slice(0, 120))}. Nội dung thật quanh đó:\n${excerpt}\n`;
 }
 
 async function applyEdit(ctx: ToolContext, args: { path: string; old_string: string; new_string: string; replace_all?: boolean }, dryRun: boolean) {
@@ -471,7 +479,7 @@ export function builtinTools(env: Env): Tool[] {
       summarize: (a) => (a.background ? "[nền] " : "") + short(a.command ?? "", 110),
       async run(ctx, a) {
         if (typeof a.command !== "string" || !a.command.trim()) throw new ToolError("Thiếu lệnh.", "bad_args");
-        const pitfall = installPitfall(a.command);
+        const pitfall = installPitfall(a.command) ?? toolNameAsCommand(a.command);
         if (pitfall) throw new ToolError(pitfall, "bad_args");
         if (a.background) {
           if (!ctx.procs) throw new ToolError("Nơi chạy này không hỗ trợ chạy nền.", "unsupported");

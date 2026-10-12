@@ -5,6 +5,10 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Sửa file bằng `edit_file` ít hỏng hơn**: khi đoạn cần thay không khớp, kết quả trả luôn vài dòng thật quanh vị trí giống nhất (kèm số dòng) để agent chép đúng ngay, không phải đọc lại cả file.
+- **Agent gõ tên công cụ vào bash** (ví dụ `kill_process p1`) không còn nhận "command not found" rồi thử lại: lệnh bị chặn kèm lời chỉ gọi thẳng công cụ.
+
 ## [0.8.15] - 2026-10-12
 
 ### Sửa

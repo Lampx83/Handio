@@ -22,3 +22,17 @@ export function pythonMissingHint(output: string): string | null {
   if (!/Python was not found|Python n[aã]o foi encontrado|'(?:python|python3|pip)' is not recognized|(?:python|pip)3?: command not found/i.test(output)) return null;
   return "Gợi ý: Python chưa có trong PATH của ứng dụng. Nếu vừa cài Python: khởi động lại ứng dụng, hoặc thử `py -3 …`. Nếu cài mà không tick “Add python.exe to PATH”: dùng đường dẫn đầy đủ tới python.exe (thường %LOCALAPPDATA%\\Programs\\Python\\Python3xx\\python.exe) rồi GHI đường dẫn đó vào AGENTS.md của dự án để các lần sau dùng lại. Đừng báo người dùng tự sửa khi chưa thử các cách này.";
 }
+
+// Mô hình đôi khi gõ TÊN CÔNG CỤ của agent như một lệnh shell (`kill_process p1`), nhận "command not found" rồi thử lại y hệt.
+const TOOL_NAMES = [
+  "kill_process", "bash_output", "read_file", "write_file", "edit_file", "list_dir", "delete_file", "move_file", "file_info", "check_page", "check_package", "todo_write",
+  "read_document", "read_image", "create_pptx", "create_docx", "create_xlsx", "pptx_edit", "docx_replace", "find_in_documents", "run_javascript", "web_search", "web_fetch", "fetch_page", "ask_user",
+];
+const TOOL_AS_COMMAND = new RegExp(`(?:^|&&|;|\\|\\|?)\\s*(${TOOL_NAMES.join("|")})(?=\\s|$)`);
+
+/** Lệnh bash bắt đầu bằng tên một công cụ của agent: chặn trước và chỉ cách gọi đúng. */
+export function toolNameAsCommand(command: string): string | null {
+  const m = TOOL_AS_COMMAND.exec(command);
+  if (!m) return null;
+  return `Chưa chạy lệnh. \`${m[1]}\` là công cụ của agent, không phải lệnh shell: hãy gọi thẳng công cụ ${m[1]} (như các công cụ khác), đừng đưa vào bash.`;
+}
