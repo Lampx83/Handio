@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Agent không còn "quên việc chính" khi sa vào sửa lỗi phụ**: làm việc A, gặp lỗi X rồi sửa mãi mà quên A. Nay cứ khoảng 8 bước (hoặc sớm hơn khi các lệnh gần nhất liên tiếp lỗi) hệ thống nhắc lại đúng câu bạn giao kèm danh sách việc cần làm; agent được dặn chỉ sửa việc phụ ở mức tối thiểu rồi quay lại việc chính, và nếu kẹt thì nói rõ thay vì sửa mãi.
+
 ## [0.8.14] - 2026-10-12
 
 ### Sửa

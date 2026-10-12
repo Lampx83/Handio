@@ -195,6 +195,22 @@ class Store:
                 "INSERT INTO usage(day,uid,tier,lim,blocked,extra) VALUES(?,?,?,?,1,?) ON CONFLICT(day,uid) DO UPDATE SET blocked=blocked+1, tier=excluded.tier, lim=excluded.lim, extra=excluded.extra",
                 (day, uid, tier, -1 if lim is None else lim, extra))
 
+    def refresh_limits(self, day, cfg, secret):
+        """Ghi lại `lim` của các dòng HÔM NAY theo cấu hình hiện tại (bậc + ngoại lệ), giữ phần cấp thêm. Dòng `lim` vốn chỉ được ghi lúc
+        yêu cầu gần nhất, nên đổi hạn mức xong trang quản trị vẫn hiện số cũ cho tới khi người đó gửi yêu cầu mới. Trả số dòng đã đổi."""
+        n = 0
+        with self.lock:
+            for tier, base in (cfg.get("tiers") or {}).items():
+                if isinstance(base, int) and not isinstance(base, bool):
+                    n += self.db.execute("UPDATE usage SET lim=?+extra WHERE day=? AND tier=? AND lim>=0", (base, day, tier)).rowcount
+            for ident, val in (cfg.get("overrides") or {}).items():
+                uid = pseudonym(secret, ident)
+                if val == "unlimited":
+                    n += self.db.execute("UPDATE usage SET lim=-1 WHERE day=? AND uid=? AND lim<>-1", (day, uid)).rowcount
+                elif isinstance(val, int) and not isinstance(val, bool):
+                    n += self.db.execute("UPDATE usage SET lim=?+extra WHERE day=? AND uid=?", (val, day, uid)).rowcount
+        return n
+
     def close(self):
         with self.lock:
             self.db.close()
@@ -666,6 +682,10 @@ def main():
     )
     srv = make_server(ctx, os.environ.get("NEU_QUOTA_BIND", "127.0.0.1"), int(os.environ.get("NEU_QUOTA_PORT", "4191")))
     cfg = ctx.cfg()
+    try:  # đổi hạn mức (quota.sh tier/set khởi động lại cổng) có hiệu lực ngay trên trang quản trị
+        ctx.store.refresh_limits(vn_day(time.time()), cfg, ctx.secret)
+    except sqlite3.Error:
+        pass
     if ctx.capture is not None and cfg["capture"]["users"]:
         # mở CSDL ghi nội dung ngay lúc khởi động (không đợi yêu cầu đầu tiên): chuyển chế độ nhật ký, đặt quyền 640 để đọc được ngay
         try:

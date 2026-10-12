@@ -226,6 +226,34 @@ class CaptureTests(GatewayCase):
         self.assertEqual(n, 1)
 
 
+class RefreshLimitsTests(unittest.TestCase):
+    """Đổi hạn mức bậc/ngoại lệ phải có hiệu lực NGAY trên trang quản trị, không đợi người dùng gửi yêu cầu kế tiếp (trước đây trang hiện hạn mức cũ)."""
+
+    def test_refresh_rewrites_today_limits(self):
+        d = tempfile.mkdtemp()
+        st = Q.Store(os.path.join(d, "u.db"))
+        self.addCleanup(st.close)
+        day = Q.vn_day(T0)
+        old = Q.vn_day(T0 - 3 * 86400)
+        sv, gv = COLL.pseudonym(SECRET, "11256857@st.neu.edu.vn"), COLL.pseudonym(SECRET, "nhungdt@neu.edu.vn")
+        st.add(day, "uid-a", "student", 1_000_000, 1_000_000, 109_751)                    # sinh viên, hạn mức cũ 1 triệu
+        st.add(day, "uid-b", "student", 3_000_000, 2_000_000, 100_000, extra=2_000_000)   # đã được cấp thêm 2 triệu
+        st.add(day, sv, "student", 1_000_000, 10, 10)                                     # có ngoại lệ riêng
+        st.add(day, gv, "staff", 10_000_000, 9_973_470, 111_748)
+        st.add(day, "uid-admin", "admin", None, 5, 5)                                     # không giới hạn: giữ nguyên
+        st.add(old, "uid-a", "student", 1_000_000, 5, 5)                                  # ngày cũ: không đụng
+        cfg = {"tiers": {"student": 5_000_000, "staff": 10_000_000}, "overrides": {"nhungdt@neu.edu.vn": 100_000_000, "11256857@st.neu.edu.vn": "unlimited"}}
+        n = st.refresh_limits(day, cfg, SECRET)
+        lim = lambda day_, uid: st.db.execute("SELECT lim FROM usage WHERE day=? AND uid=?", (day_, uid)).fetchone()[0]
+        self.assertEqual(lim(day, "uid-a"), 5_000_000)
+        self.assertEqual(lim(day, "uid-b"), 7_000_000)           # 5 triệu + 2 triệu cấp thêm
+        self.assertEqual(lim(day, gv), 100_000_000)              # ngoại lệ số
+        self.assertEqual(lim(day, sv), -1)                       # ngoại lệ unlimited
+        self.assertEqual(lim(day, "uid-admin"), -1)
+        self.assertEqual(lim(old, "uid-a"), 1_000_000)
+        self.assertGreaterEqual(n, 4)
+
+
 class PureTests(unittest.TestCase):
     def test_tiers_and_limits(self):
         cfg = Q.load_config("/không/có")

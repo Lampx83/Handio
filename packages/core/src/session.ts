@@ -846,6 +846,7 @@ export class Agent {
   private stopWhy = "";
   private nudges = 0;
   private pageChecks = 0;
+  private lastReminder = 0;
   private pruneNoted = false;
   private lastPageProblem = "";
 
@@ -914,6 +915,14 @@ export class Agent {
    * Cổng tự kiểm tra (một lần mỗi lượt): agent sắp báo cáo xong nhưng vừa tạo/sửa tệp mà chưa kiểm chứng → nhắc làm ngay.
    * Code: chưa chạy thử / lần chạy cuối bị lỗi. Work/Design: chưa đọc lại tệp vừa tạo. Không làm gì nếu môi trường không có công cụ để kiểm chứng.
    */
+  /** Các kết quả công cụ gần nhất phần lớn là lỗi (lỗi công cụ hoặc lệnh thoát khác 0). */
+  private failingStreak(): boolean {
+    const tools = this.messages.filter((m) => m.role === "tool").slice(-5);
+    if (tools.length < 4) return false;
+    const bad = tools.filter((m) => /^Lỗi/.test(m.content ?? "") || /\[mã thoát [1-9]\d*\]\s*$/.test((m.content ?? "").slice(-60))).length;
+    return bad >= 4;
+  }
+
   /**
    * Tab Code (Desktop): agent sắp báo "xong" mà vừa sửa mã/giao diện web. Đừng trông chờ mô hình tự nhớ gọi check_page (dữ liệu thật: 0 lần gọi
    * trong cả phiên dựng ứng dụng, người dùng phải chép lỗi console 6 lần): hệ thống TỰ mở thử trang; có lỗi/trang trắng thì trả báo cáo cho mô hình sửa.
@@ -1108,11 +1117,27 @@ export class Agent {
     this.pruneNoted = false;
     this.lastPageProblem = "";
     this.repeats = 0;
+    this.lastReminder = 0;
+    const goal = userText.replace(/\s+/g, " ").trim().slice(0, 300);
     try {
       for (let step = 0; step < maxSteps; step++) {
         if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
         if (this.depth === 0) for (const q of s.queue.splice(0)) this.messages.push({ role: "user", content: "[Tin nhắn mới của người dùng, gửi khi bạn đang làm việc. Hãy tính đến nó ngay từ bước này]\n" + q });
         if (maxSteps >= 10 && maxSteps - step === Math.max(3, Math.floor(maxSteps * 0.15))) this.messages.push({ role: "user", content: `[Hệ thống] Chỉ còn ${maxSteps - step} bước trong lượt này. Hãy ưu tiên hoàn thành phần quan trọng nhất, rồi tóm tắt: đã làm gì và còn thiếu gì.` });
+        // chống "quên việc chính": sa vào sửa một lỗi phụ nhiều bước thì mô hình mất mục tiêu ban đầu (người dùng phản ánh). Nhắc lại ĐÚNG câu giao việc
+        // + danh sách việc cần làm: định kỳ mỗi 8 bước, hoặc sớm hơn khi các lệnh gần nhất liên tiếp lỗi.
+        if (this.depth === 0 && step > 0) {
+          const since = step - this.lastReminder;
+          if (since >= 8 || (since >= 3 && this.failingStreak())) {
+            this.lastReminder = step;
+            const todos = s.ctx.todos ?? [];
+            const list = todos.length ? "\nViệc cần làm: " + todos.slice(0, 8).map((t) => `${t.status === "completed" ? "✓" : t.status === "in_progress" ? "▶" : "○"} ${t.content}`).join(" | ") : "";
+            this.messages.push({
+              role: "user",
+              content: `[Hệ thống] Nhắc việc chính người dùng giao: “${goal}”.${list}\nĐang xử lý việc phụ (lỗi, cài đặt…) thì chỉ làm mức tối thiểu để việc chính chạy tiếp (tối đa vài lần thử), rồi QUAY LẠI việc chính và làm cho xong. Nếu kẹt, nói rõ với người dùng thay vì sửa mãi.`,
+            });
+          }
+        }
         await this.manageContext();
         const resp = await this.callModel(signal);
         this.lastFinish = resp.finish;

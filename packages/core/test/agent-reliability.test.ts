@@ -385,3 +385,30 @@ describe("đầu ra dài bị cắt giữa chừng (lời gọi công cụ thàn
     expect(toolMsg).toMatch(/CHIA NHỎ/);
   });
 });
+
+describe("không quên việc chính khi sa vào sửa lỗi phụ", () => {
+  const steps = (n: number) => Array.from({ length: n }, (_, i) => ({ calls: [{ name: "read_file", args: { path: `khong-co-${i}.txt` } }] }));
+
+  it("sau nhiều bước (nhất là khi lỗi liên tiếp) hệ thống nhắc lại ĐÚNG việc người dùng giao, kèm danh sách việc cần làm", async () => {
+    const { makeController } = await import("./helpers");
+    const { c, llm } = await makeController([
+      { calls: [{ name: "todo_write", args: { todos: [{ content: "Làm trang giới thiệu khoá học", status: "in_progress" }, { content: "Sửa lỗi phụ", status: "pending" }] } }] },
+      ...steps(10),
+      { text: "xong" },
+    ], { profile: "code" });
+    await c.send("Làm trang giới thiệu khoá học AI cho sinh viên năm nhất");
+    const sent = llm.calls.flatMap((x) => x.messages).filter((m) => m.role === "user").map((m) => String(m.content));
+    const reminder = sent.find((m) => m.startsWith("[Hệ thống] Nhắc việc chính"));
+    expect(reminder).toBeTruthy();
+    expect(reminder).toContain("Làm trang giới thiệu khoá học AI cho sinh viên năm nhất");
+    expect(reminder).toContain("Làm trang giới thiệu khoá học"); // từ danh sách việc cần làm
+  });
+
+  it("việc ngắn (vài bước) không bị nhắc thừa", async () => {
+    const { makeController } = await import("./helpers");
+    const { c, llm } = await makeController([...steps(3), { text: "xong" }], { profile: "code" });
+    await c.send("Đọc giúp tôi vài tệp");
+    const sent = llm.calls.flatMap((x) => x.messages).filter((m) => m.role === "user").map((m) => String(m.content));
+    expect(sent.some((m) => m.startsWith("[Hệ thống] Nhắc việc chính"))).toBe(false);
+  });
+});
