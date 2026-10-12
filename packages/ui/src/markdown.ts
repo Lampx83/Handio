@@ -1,16 +1,32 @@
-const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+import { escapeHtml as esc } from "./html";
+import { findMath, renderTex } from "./math";
 
 function inline(raw: string): string {
   return raw
     .split(/(`[^`\n]+`)/g)
-    .map((part, i) => {
+    .map((part0, i) => {
+      let part = part0;
       if (i % 2 === 1) return "<code>" + esc(part.slice(1, -1)) + "</code>";
+      // công thức toán: thay bằng dấu giữ chỗ trước khi áp dụng in đậm/nghiêng (không để * _ trong công thức bị hiểu nhầm), dựng lại ở cuối
+      const maths: string[] = [];
+      const spans = findMath(part);
+      if (spans.length) {
+        let k = 0;
+        let buf = "";
+        for (const m of spans) {
+          buf += part.slice(k, m.start) + "\u0000M" + maths.length + "\u0000";
+          maths.push(renderTex(m.tex, m.display));
+          k = m.end;
+        }
+        part = buf + part.slice(k);
+      }
+      part = part.replace(/\\\$/g, "$");
       let t = esc(part);
       t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
       t = t.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
       t = t.replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, "$1<em>$2</em>");
       t = t.replace(/(^|\W)_([^_\n]+)_(?=\W|$)/g, "$1<em>$2</em>");
-      return t;
+      return maths.length ? t.replace(/\u0000M(\d+)\u0000/g, (_m, n) => maths[Number(n)] ?? "") : t;
     })
     .join("");
 }
@@ -43,6 +59,33 @@ export function renderMarkdown(src: string): string {
       i++;
       out.push(`<div class="code"><div class="code-h"><span>${esc(fence[1] || "mã")}</span><button type="button" data-copy>Sao chép</button></div><pre><code>${esc(code.join("\n"))}</code></pre></div>`);
       continue;
+    }
+    // công thức khối: $$ … $$ hoặc \[ … \] (một dòng hoặc nhiều dòng), chỉ khi có dòng đóng
+    const dm = /^\s*(\$\$|\\\[)(.*)$/.exec(line);
+    if (dm) {
+      const close = dm[1] === "$$" ? "$$" : "\\]";
+      const body: string[] = [];
+      let rest = dm[2];
+      let j = i;
+      let done = false;
+      for (let n = 0; n < 80 && !done; n++) {
+        const k = rest.indexOf(close);
+        if (k >= 0) {
+          body.push(rest.slice(0, k));
+          done = rest.slice(k + close.length).trim() === "";
+          if (!done) break; // chữ theo sau dấu đóng: để đoạn văn xử lý như công thức trong dòng
+          continue;
+        }
+        body.push(rest);
+        j++;
+        if (j >= lines.length) break;
+        rest = lines[j];
+      }
+      if (done && body.join("").trim()) {
+        out.push('<div class="math-block">' + renderTex(body.join("\n"), true) + "</div>");
+        i = j + 1;
+        continue;
+      }
     }
     const hd = /^(#{1,6})\s+(.*)$/.exec(line);
     if (hd) {
@@ -90,7 +133,7 @@ export function renderMarkdown(src: string): string {
     }
     const para: string[] = [line];
     i++;
-    while (i < lines.length && lines[i].trim() && !/^\s*(```|#{1,6}\s|>|([-*+]|\d+[.)])\s)/.test(lines[i]) && !(lines[i].includes("|") && lines[i + 1] && isTableSep(lines[i + 1]))) para.push(lines[i++]);
+    while (i < lines.length && lines[i].trim() && !/^\s*(```|\$\$|\\\[|#{1,6}\s|>|([-*+]|\d+[.)])\s)/.test(lines[i]) && !(lines[i].includes("|") && lines[i + 1] && isTableSep(lines[i + 1]))) para.push(lines[i++]);
     out.push("<p>" + para.map(inline).join("<br>") + "</p>");
   }
   return out.join("");

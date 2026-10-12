@@ -11,6 +11,7 @@
     "./style.css": "./src/style.css"
   },
   "dependencies": {
-    "@neu/agent-core": "*"
+    "@neu/agent-core": "*",
+    "katex": "^0.16.47"
   }
 }

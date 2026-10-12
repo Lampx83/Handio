@@ -712,3 +712,9 @@ button.meter:hover, button.meter[aria-expanded="true"] { background: var(--panel
 
 /* cả ứng dụng luôn đúng cao bằng cửa sổ: nội dung dài chỉ cuộn trong từng khung */
 .shell { overflow: hidden; }
+
+/* công thức toán (KaTeX → MathML) */
+math { font-family: "Latin Modern Math", "STIX Two Math", "Cambria Math", "Noto Sans Math", math, serif; font-size: 1.12em; }
+.math-block { margin: 10px 0; overflow-x: auto; padding: 4px 2px; }
+.math-block math { display: block math; }
+annotation, annotation-xml { display: none; }
