@@ -11,6 +11,8 @@ export interface ProjectInfo {
   lastUsed: number;
   /** Trạng thái lúc hỏi danh sách (không lưu): agent đang làm việc trong dự án này. */
   running?: boolean;
+  /** Đã làm xong khi bạn đang ở dự án khác và chưa mở lại xem (không lưu). */
+  finished?: boolean;
   /** Số cuộc trò chuyện của dự án bị dừng giữa chừng (dừng tay, chuyển dự án, mất kết nối) và chưa làm tiếp. */
   unfinished?: number;
 }

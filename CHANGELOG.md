@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.9] - 2026-10-12
+
 ### Thêm
 - **Máy chủ chạy nền không bị dừng khi đổi dự án hay mở cuộc trò chuyện khác**: bật máy chủ xem ứng dụng ở dự án A, sang dự án B rồi quay lại thì máy chủ vẫn chạy (nút "Mở localhost" vẫn còn); bấm "Cuộc trò chuyện mới" hay mở lại lịch sử cũng không dừng nó.
 - **Chạy nhiều dự án cùng lúc**: chuyển sang dự án khác thì agent ở dự án cũ **vẫn tiếp tục làm việc nền** (tối đa 3 dự án cùng lúc). Quay lại là thấy phần đã làm; yêu cầu xin quyền/câu hỏi đang chờ hiện lại; máy chủ dev của dự án cũ vẫn chạy.
