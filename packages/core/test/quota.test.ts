@@ -48,6 +48,13 @@ describe("hạn mức token: đọc tiêu đề và mã lỗi 402", () => {
     expect(err.message).toContain("hết hạn mức");
   });
 
+  it("402 không có mã quota_exceeded vẫn được nhận là lỗi hạn mức (không rơi vào 'khác')", async () => {
+    const fetchImpl = (async () => new Response('{"error":"payment_required"}', { status: 402 })) as unknown as typeof fetch;
+    const err = await new LlmClient(cfg, fetchImpl).chat([{ role: "user", content: "x" }]).catch((e) => e);
+    expect(err).toMatchObject({ status: 402, kind: "quota" });
+    expect(err.message).toMatch(/hạn mức|nạp thêm/);
+  });
+
   it("GET /quota: đọc được; máy chủ khác/lỗi/HTML thì null và không ném lỗi", async () => {
     let url = "";
     const ok = (async (u: string) => ((url = u), new Response(JSON.stringify({ state: "warn", limit: 1_000_000, used: 900_000, remaining: 100_000, pct: 90, reset_at: 1_800_000_000, tier: "student" }), { headers: { "content-type": "application/json" } }))) as unknown as typeof fetch;

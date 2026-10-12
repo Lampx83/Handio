@@ -36,3 +36,9 @@ export function toolNameAsCommand(command: string): string | null {
   if (!m) return null;
   return `Chưa chạy lệnh. \`${m[1]}\` là công cụ của agent, không phải lệnh shell: hãy gọi thẳng công cụ ${m[1]} (như các công cụ khác), đừng đưa vào bash.`;
 }
+
+/** macOS không có lệnh `timeout` của GNU: mô hình hay gõ `timeout 10 npm run dev`. Công cụ bash đã có tham số timeout. */
+export function timeoutMissingHint(output: string): string | null {
+  if (!/(?:(?:^|\n|: )g?timeout: (?:command )?not found|command not found: g?timeout)\b/i.test(output)) return null;
+  return "Gợi ý: máy này không có lệnh `timeout`. Bỏ nó đi và dùng tham số `timeout` (giây) của công cụ bash; với máy chủ chạy lâu thì dùng background=true.";
+}

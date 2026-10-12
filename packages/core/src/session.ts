@@ -1526,8 +1526,15 @@ export class Agent {
         errKind = e.kind;
       } else if (e instanceof LlmError && e.kind === "abort") throw e;
       else {
-        result = `Lỗi nội bộ khi chạy ${name}: ${(e as Error).name}: ${(e as Error).message}`;
-        errKind = "internal";
+        const em = `${(e as { code?: string }).code ?? ""} ${(e as Error).message}`;
+        if (/\b(EBUSY|EPERM|EACCES)\b|resource busy|being used by another process|sharing violation/i.test(em)) {
+          // thường là Word/Excel/PowerPoint đang giữ tệp (Windows): nói rõ cách xử lý thay vì lỗi kỹ thuật
+          result = `Lỗi: tệp đang mở hoặc bị khoá bởi chương trình khác (${name}). Đóng tệp trong Word/Excel/PowerPoint hoặc chương trình xem rồi thử lại, hoặc ghi sang một tên khác.`;
+          errKind = "other";
+        } else {
+          result = `Lỗi nội bộ khi chạy ${name}: ${(e as Error).name}: ${(e as Error).message}`;
+          errKind = "internal";
+        }
       }
     }
     result = String(result);

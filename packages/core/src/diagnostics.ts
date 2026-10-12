@@ -520,7 +520,7 @@ export class DiagnosticsRecorder {
     else if (/lặp lại cùng một thao tác/.test(text)) {
       if (t) t.loopStop = true;
       if (!t || ![...t.signals].some((k) => k.startsWith("loop"))) this.signal("loop", undefined, t?.repN);
-    } else if (/^Ngữ cảnh đầy, đang rút gọn/.test(text)) this.signal("context_overflow");
+    } else if (/^Ngữ cảnh đầy, đang rút gọn/.test(text)) this.signal("context_overflow", undefined, t?.ctx); // n = % ngữ cảnh ứng dụng tự ước lượng lúc bị từ chối: thấp ⇒ giới hạn thật của máy chủ nhỏ hơn cấu hình
     else if (/^Đã lược bớt kết quả công cụ cũ/.test(text)) {
       if (t) t.pruned++;
     }

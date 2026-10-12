@@ -7,6 +7,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ### Sửa
 - **Sửa file bằng `edit_file` ít hỏng hơn**: khi đoạn cần thay không khớp, kết quả trả luôn vài dòng thật quanh vị trí giống nhất (kèm số dòng) để agent chép đúng ngay, không phải đọc lại cả file.
+- **Tệp đang mở trong Word/Excel/PowerPoint** (Windows): mọi công cụ ghi tệp đều báo bằng lời dễ hiểu (đóng tệp rồi thử lại hoặc ghi sang tên khác) thay vì "Lỗi nội bộ: EBUSY".
+- **Hết hạn mức luôn hiện đúng là hết hạn mức**, kể cả khi máy chủ trả mã 402 không kèm nội dung chuẩn.
+- **Lệnh `timeout` không có trên macOS**: khi agent gõ `timeout 10 npm run dev`, kết quả gợi ý dùng tham số timeout của công cụ bash.
 - **Agent gõ tên công cụ vào bash** (ví dụ `kill_process p1`) không còn nhận "command not found" rồi thử lại: lệnh bị chặn kèm lời chỉ gọi thẳng công cụ.
 
 ## [0.8.15] - 2026-10-12

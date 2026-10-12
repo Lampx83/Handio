@@ -1,4 +1,4 @@
-import { installPitfall, pythonMissingHint, toolNameAsCommand } from "./pitfalls";
+import { installPitfall, pythonMissingHint, timeoutMissingHint, toolNameAsCommand } from "./pitfalls";
 import { diffLines, type DiffLine } from "./diff";
 import type { DirEntry, Env } from "./env";
 import { matchGlob } from "./glob";
@@ -497,7 +497,7 @@ export function builtinTools(env: Env): Tool[] {
         const r = await ctx.env.exec!(a.command, { cwd: ctx.root, timeoutMs: timeout * 1000, signal: ctx.signal });
         const out = clip(r.output.replace(/^\n+|\n+$/g, ""));
         if (r.timedOut) return (out ? out + "\n" : "") + `[Hết thời gian ${timeout}s, đã dừng lệnh]`;
-        const hint = r.code !== 0 ? pythonMissingHint(out) : null;
+        const hint = r.code !== 0 ? pythonMissingHint(out) ?? timeoutMissingHint(out) : null;
         return (out ? out + "\n" : "") + (hint ? hint + "\n" : "") + `[mã thoát ${r.code}]`;
       },
     });

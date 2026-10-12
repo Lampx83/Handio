@@ -80,7 +80,8 @@ function friendly(status: number, text: string): LlmError {
   const low = (text || "").toLowerCase();
   if (status === 400 && (low.includes("context length") || low.includes("maximum context") || low.includes("too long")))
     return new LlmError("Ngữ cảnh vượt giới hạn của mô hình.", status, "context");
-  if (status === 402 && low.includes("quota_exceeded")) {
+  if (status === 402 && !low.includes("quota_exceeded")) return new LlmError("Hạn mức sử dụng đã hết hoặc tài khoản cần nạp thêm (máy chủ trả 402).", status, "quota");
+  if (status === 402) {
     try {
       const j = JSON.parse(text) as { message?: string };
       return new LlmError(typeof j.message === "string" && j.message ? j.message.slice(0, 300) : "Bạn đã dùng hết hạn mức token hôm nay. Hạn mức làm mới lúc 00:00 ngày mai.", status, "quota", "quota_exceeded");

@@ -94,3 +94,21 @@ describe("edit_file không khớp: kèm trích đoạn thật", () => {
     expect(res[1].output).toMatch(/3\| const total = items\.reduce\(\(s, x\) => s \+ x\.price, 0\);/);
   });
 });
+
+describe("macOS không có lệnh timeout", () => {
+  it("nhận ra thông báo và gợi ý dùng tham số timeout của công cụ", async () => {
+    const { timeoutMissingHint } = await import("../src/pitfalls");
+    expect(timeoutMissingHint("/bin/sh: timeout: command not found")).toMatch(/tham số `timeout`/);
+    expect(timeoutMissingHint("zsh: command not found: timeout")).not.toBeNull();
+    expect(timeoutMissingHint("bash: line 1: gtimeout: command not found")).not.toBeNull();
+    expect(timeoutMissingHint("npm ERR! timeout while fetching")).toBeNull();
+  });
+  it("công cụ bash gắn gợi ý khi lệnh thất bại vì thiếu timeout", async () => {
+    const env = new MemoryEnv("/ws", { "package.json": "{}" });
+    env.exec = async () => ({ code: 127, output: "/bin/sh: timeout: command not found", timedOut: false });
+    const { c, events } = await makeController([{ calls: [{ name: "bash", args: { command: "timeout 10 npm run dev" } }] }, { text: "ok" }], { profile: "code", env });
+    await c.send("chạy");
+    const res = events.filter((e) => e.type === "tool_result") as { output: string }[];
+    expect(res[0].output).toMatch(/không có lệnh `timeout`/);
+  });
+});
