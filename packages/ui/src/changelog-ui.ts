@@ -89,9 +89,9 @@ export function openChangelog(): void {
   dlg.showModal();
 }
 
-/** Nút nhỏ "v0.3.0 · Nhật ký thay đổi" ở cuối thanh bên. */
+/** Nút nhỏ "v0.3.0" ở cuối thanh bên (bấm để xem nhật ký thay đổi; không có số phiên bản thì ghi "Nhật ký thay đổi"). */
 export function versionLink(): HTMLElement | null {
   const v = appVersion();
   if (!v && !changelogEntries().length) return null;
-  return h("button", { class: "ver-link", type: "button", title: "Xem mỗi phiên bản sửa gì, thêm gì", onclick: () => openChangelog() }, (v ? "v" + v + " · " : "") + "Nhật ký thay đổi");
+  return h("button", { class: "ver-link", type: "button", title: "Nhật ký thay đổi: mỗi phiên bản sửa gì, thêm gì", "aria-label": (v ? "Phiên bản " + v + ". " : "") + "Xem nhật ký thay đổi", onclick: () => openChangelog() }, v ? "v" + v : "Nhật ký thay đổi");
 }

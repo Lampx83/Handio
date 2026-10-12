@@ -252,8 +252,8 @@ class App {
       this.chatsEl,
       this.todosHead,
       this.todosEl,
-      this.opts.account ? accountChip(this.opts.account, () => this.openSettings()) : null,
-      versionLink(),
+      // một dòng: người dùng bên trái, số phiên bản bên phải
+      h("div", { class: "side-foot" }, this.opts.account ? accountChip(this.opts.account, () => this.openSettings()) : h("span", { class: "grow" }), versionLink()),
     );
     setUpdateChecker(this.opts.checkUpdate); // nút "Kiểm tra cập nhật" nằm trong hộp Nhật ký thay đổi
     this.meterBtn = h("button", { class: "meter", type: "button", title: this.ctxTip, "aria-label": "Chi tiết ngữ cảnh", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => this.toggleCtxPop() }, h("span", { class: "bar" }, this.meterBar), this.meterTxt);
