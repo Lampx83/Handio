@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.13] - 2026-10-12
+
 ### Sửa
 - **Windows: cài Python xong ứng dụng vẫn báo "Python was not found"**: PATH của ứng dụng chỉ đọc một lần lúc khởi động nên Python vừa cài (hoặc cài mà không tick "Add to PATH") không được thấy, và bí danh Microsoft Store lại hiện lỗi. Nay ứng dụng đọc lại PATH trong registry và tự thêm thư mục cài Python (Python3xx và Scripts) lên đầu PATH của lệnh agent chạy; khi vẫn không thấy, kết quả lệnh kèm gợi ý cụ thể (py -3, đường dẫn đầy đủ, ghi vào AGENTS.md) để agent tự xử lý thay vì bắt bạn sửa.
 
