@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.19] - 2026-10-12
+
 ### Thêm
 - **Câu trả lời hiển thị đầy đủ hơn**: danh sách lồng nhau và có dòng trống giữa các mục (số thứ tự không còn quay về 1), việc cần làm `- [ ]`/`- [x]` thành ô tích, chữ gạch ngang `~~…~~`, bảng canh lề trái/giữa/phải, ghi chú `> [!NOTE]`/`[!TIP]`/`[!WARNING]` có màu, trích dẫn nhiều dòng, địa chỉ web tự thành liên kết, `<br>`, `<kbd>`, `<sub>`, `<sup>`, ngắt trang `<<<pagebreak>>>`, và tô màu mã (JavaScript, Python, JSON, HTML, CSS, SQL, shell…).
 - **Ảnh trong câu trả lời**: ảnh có trong dự án (`![mô tả](charts/bieu-do.png)`) hiện ngay tại chỗ, bấm để phóng to. Ảnh từ mạng chỉ hiện thành liên kết, không tự tải (tránh bị dò thông tin qua ảnh).
