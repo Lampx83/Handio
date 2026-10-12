@@ -645,7 +645,7 @@ export class Session {
       if (/\.(png|jpe?g|webp|gif)$/i.test(rel)) {
         if (this.tools.has("read_image")) {
           blocks.push(`<image path="${rel}">Ảnh người dùng vừa dán/đính kèm${outside ? " (lưu tạm ngoài thư mục dự án; đường dẫn này dùng được nguyên văn)" : ""}. Gọi read_image với đúng path này để xem (chép chữ, đọc bảng, mô tả).</image>`);
-          names.push(`@${rel} (ảnh)`);
+          if (!outside && !/^\.neuagent\/pasted\//.test(rel)) names.push(`@${rel} (ảnh)`); // ảnh dán: giao diện đã hiện ảnh, không nhắc lại tên tệp
         }
         continue;
       }
@@ -666,7 +666,7 @@ export class Session {
       if (lines.length <= 400) this.ctx.readFiles.set(abs, st.mtimeMs); // đã "đọc": sửa được ngay
     }
     if (!blocks.length) return text;
-    this.emit({ type: "notice", level: "info", text: "Đã đính kèm: " + names.join(", ") });
+    if (names.length) this.emit({ type: "notice", level: "info", text: "Đã đính kèm: " + names.join(", ") });
     return `${text}\n\n[Nội dung các tệp được đính kèm bằng @ (tại thời điểm gửi):]\n${blocks.join("\n")}`;
   }
 

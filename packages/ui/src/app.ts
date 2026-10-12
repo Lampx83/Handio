@@ -2,6 +2,7 @@ import type { AgentController, DiffLine, HistoryItem, DiffPreview, Mode, Permiss
 import { brandText, formatAnswers } from "@neu/agent-core";
 import { clear, h, store } from "./dom";
 import { escapeHtml, renderMarkdown } from "./markdown";
+import { mimeOfName, splitPastedRefs, thumbDataUrl } from "./image-thumb";
 import { treeIcon } from "./icons";
 import { openSettings as openSettingsDialog, type AccountInfo } from "./settings-ui";
 import { accountChip } from "./account-ui";
@@ -102,6 +103,11 @@ class App {
   private feedInner = h("div", { class: "feed-inner" });
   private feed = h("div", { class: "feed", tabindex: "-1" }, this.feedInner);
   private input = h("textarea", { rows: "1", placeholder: "Nhập yêu cầu…", "aria-label": "Yêu cầu cho agent" });
+  /** Ảnh dán đang chờ gửi: hiện thành ảnh nhỏ phía trên ô nhập (không chèn tên tệp vào ô). */
+  private attached: { ref: string; thumb: string; name: string }[] = [];
+  private attachRow = h("div", { class: "att-row", hidden: true });
+  /** Ảnh nhỏ đã dựng, theo tham chiếu (dùng cho tin nhắn và lịch sử). */
+  private thumbs = new Map<string, string>();
   private sendBtn = h("button", { class: "btn primary send", type: "button", title: "Gửi (Enter)", "aria-label": "Gửi", onclick: () => this.onSendClick() }, "↑");
   private modePill = h("button", { class: "pill", type: "button", "aria-haspopup": "menu", onclick: () => this.toggleModeMenu() });
   private modeMenu: HTMLElement | null = null;
@@ -257,7 +263,7 @@ class App {
     );
     setUpdateChecker(this.opts.checkUpdate); // nút "Kiểm tra cập nhật" nằm trong hộp Nhật ký thay đổi
     this.meterBtn = h("button", { class: "meter", type: "button", title: this.ctxTip, "aria-label": "Chi tiết ngữ cảnh", "aria-haspopup": "dialog", "aria-expanded": "false", onclick: () => this.toggleCtxPop() }, h("span", { class: "bar" }, this.meterBar), this.meterTxt);
-    const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.input,
+    const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.attachRow, this.input,
       // dưới ô nhập (giống Claude): trái = chế độ chạy; phải = mức ngữ cảnh, mô hình, Gửi
       h("div", { class: "bar" },
         h("button", { class: "cbtn plus", type: "button", title: "Đính kèm tệp", "aria-label": "Đính kèm tệp", onclick: () => (this.t("attach"), this.fileInput.click()) }, "+"),
@@ -512,13 +518,13 @@ class App {
     if (isQuiet(this.state?.profile, detailSteps())) {
       // yên lặng: mỗi lượt có công cụ thành một khối gập "N bước" (không hiện từng thẻ), lời dẫn nằm trong khối
       for (const b of groupHistory(history)) {
-        if (b.kind === "user") this.append(h("div", { class: "msg-user" }, b.text));
+        if (b.kind === "user") this.append(this.userBubble(b.text));
         else if (b.kind === "assistant") this.append(assistant(b.text));
         else this.append(ActivityBlock.saved(b.items.map((it) => (it.kind === "tool" ? toolRow(it) : assistant(it.text))), b.steps, b.hasFinal).el);
       }
     } else
       for (const it of history) {
-        if (it.kind === "user") this.append(h("div", { class: "msg-user" }, it.text));
+        if (it.kind === "user") this.append(this.userBubble(it.text));
         else if (it.kind === "assistant") this.append(assistant(it.text));
         else this.append(toolRow(it));
       }
@@ -1089,7 +1095,7 @@ class App {
   private paintBusy(): void {
     const waiting = !!this.pending;
     // đang làm việc: ô nhập có chữ → nút “Gửi” (tin được xếp hàng, agent nhận ở bước kế tiếp); trống → “Dừng”
-    const stop = this.busy && !this.input.value.trim();
+    const stop = this.busy && !this.input.value.trim() && !this.attached.length;
     this.sendBtn.textContent = stop ? "■" : "↑";
     this.sendBtn.title = stop ? "Dừng (Esc)" : "Gửi (Enter)";
     this.sendBtn.setAttribute("aria-label", stop ? "Dừng" : "Gửi");
@@ -1115,12 +1121,12 @@ class App {
   }
 
   private onSendClick(): void {
-    if (this.busy && !this.input.value.trim()) (this.t("stop_click"), this.ctl.interrupt());
+    if (this.busy && !this.input.value.trim() && !this.attached.length) (this.t("stop_click"), this.ctl.interrupt());
     else void this.submit(this.input.value);
   }
 
   private async submit(text: string): Promise<void> {
-    const t = text.trim();
+    let t = text.trim();
     if (t.startsWith("/")) this.t("slash_command");
     if (t && this.codeTools.handleSlash(t)) {
       this.input.value = "";
@@ -1128,10 +1134,18 @@ class App {
       this.closeSlash();
       return;
     }
-    if (!t) return;
+    if (!t && !this.attached.length) return;
+    const plain = t;
+    if (this.attached.length) {
+      // ghép tham chiếu ảnh dán vào tin gửi cho agent (agent đọc bằng read_image); người dùng thấy ảnh nhỏ, không thấy tên tệp
+      const ments = this.attached.map((a) => "@" + a.ref).join(" ");
+      t = ments + " " + (t || "Hãy xem ảnh này.");
+      this.attached = [];
+      this.renderAttached();
+    }
     const queued = this.busy; // agent đang làm: tin này được xếp hàng, không bắt đầu lượt mới
     this.workTools.noteRequest(t);
-    this.history.unshift(t);
+    this.history.unshift(plain || t);
     this.histIdx = -1;
     this.input.value = "";
     this.autoGrow();
@@ -1139,7 +1153,7 @@ class App {
     this.closeMention();
     this.dropWelcome();
     this.stick = true;
-    this.append(h("div", { class: "msg-user" + (queued ? " queued" : "") }, t));
+    this.append(this.userBubble(t, queued));
     if (queued) {
       this.paintBusy();
       await this.ctl.send(t);
@@ -1609,20 +1623,66 @@ class App {
     }
     this.dropWelcome();
     for (const e of errors) this.append(h("div", { class: "notice warn" }, e));
-    const mentions = refs.map((n) => "@" + n);
-    if (mentions.length) {
-      const el = this.input;
-      const before = el.value.slice(0, el.selectionStart ?? el.value.length);
-      const after = el.value.slice(el.selectionEnd ?? el.value.length);
-      const ins = (before && !/\s$/.test(before) ? " " : "") + mentions.join(" ") + " ";
-      el.value = before + ins + after;
-      el.selectionStart = el.selectionEnd = before.length + ins.length;
-      this.autoGrow();
-      el.focus();
-      this.append(h("div", { class: "notice" }, inProject || /^\.neuagent\//.test(refs[0] ?? "")
-        ? "Đã lưu ảnh dán trong dự án: " + refs.join(", ")
-        : `Đã đính kèm ảnh dán: ${refs.map((r) => r.replace(/^dan\//, "")).join(", ")}. Lưu tạm ngoài dự án${dir ? " tại " + dir : ""} (giữ 30 ảnh gần nhất); agent đọc được bằng @dan/<tên>.`));
+    // ảnh hiện thành ảnh nhỏ phía trên ô nhập; tham chiếu @dan/… chỉ được ghép vào tin nhắn lúc gửi
+    let next = 0;
+    for (const f of imgs.slice(0, 5)) {
+      const failed = errors.some((e) => e.includes(f.name));
+      if (failed) continue;
+      const ref = refs[next++];
+      if (!ref) break;
+      const thumb = await thumbDataUrl(f).catch(() => "");
+      this.thumbs.set(ref, thumb);
+      this.attached.push({ ref, thumb, name: ref.split("/").pop() ?? ref });
     }
+    if (this.attached.length) {
+      this.renderAttached();
+      this.input.focus();
+      if (this.busy) this.paintBusy();
+    }
+    void inProject;
+    void dir;
+  }
+
+  private renderAttached(): void {
+    clear(this.attachRow);
+    this.attachRow.hidden = !this.attached.length;
+    for (const a of this.attached) {
+      this.attachRow.append(
+        h("div", { class: "att", title: a.name },
+          a.thumb ? h("img", { src: a.thumb, alt: a.name }) : h("span", { class: "att-name" }, a.name),
+          h("button", { class: "att-x", type: "button", "aria-label": "Bỏ ảnh này", title: "Bỏ ảnh này", onclick: () => {
+            this.attached = this.attached.filter((x) => x !== a);
+            this.renderAttached();
+            if (this.busy) this.paintBusy();
+          } }, "✕")));
+    }
+  }
+
+  /** Tin nhắn của người dùng: ảnh dán hiện thành ảnh nhỏ, phần chữ giữ nguyên (không hiện tên tệp @dan/…). */
+  private userBubble(text: string, queued = false): HTMLElement {
+    const { refs, body } = splitPastedRefs(text);
+    const cls = "msg-user" + (queued ? " queued" : "");
+    if (!refs.length) return h("div", { class: cls }, text);
+    const row = h("div", { class: "msg-imgs" });
+    for (const ref of refs) {
+      const img = h("img", { class: "msg-img", alt: ref.split("/").pop() ?? "ảnh", title: "Bấm để phóng to/thu nhỏ", onclick: () => img.classList.toggle("big") });
+      row.append(img);
+      const have = this.thumbs.get(ref);
+      if (have) img.src = have;
+      else
+        void this.ctl.downloadFile(ref).then(async (r) => {
+          if ("error" in r) {
+            img.replaceWith(h("span", { class: "msg-img-miss" }, "🖼 " + (ref.split("/").pop() ?? ref)));
+            return;
+          }
+          const u = await thumbDataUrl(new Blob([r.data as BlobPart], { type: mimeOfName(ref) }), 720).catch(() => "");
+          if (u) {
+            this.thumbs.set(ref, u);
+            img.src = u;
+          }
+        });
+    }
+    return h("div", { class: cls }, row, body ? h("div", { class: "msg-text" }, body) : false);
   }
 
   private async download(path: string): Promise<void> {

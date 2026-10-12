@@ -947,7 +947,7 @@ export class LocalController implements AgentController {
         continue;
       }
       let name = clean;
-      for (let n = 2; await this.o.env.stat(join(dir, name)); n++) name = clean.replace(/(\.[^./]+)?$/, ` (${n})$1`);
+      for (let n = 2; await this.o.env.stat(join(dir, name)); n++) name = clean.replace(/(\.[^./]+)?$/, `-${n}$1`);
       await this.o.env.writeBytes(join(dir, name), f.data);
       refs.push(inProject ? ".neuagent/pasted/" + name : "dan/" + name);
     }

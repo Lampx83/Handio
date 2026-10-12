@@ -150,7 +150,7 @@ describe("ảnh dán Ctrl+V lưu tạm ngoài dự án", () => {
     const a = await c.pasteImages!([{ name: "x.png", data: PNG }]);
     const b = await c.pasteImages!([{ name: "x.png", data: PNG }]);
     expect(a.refs).toEqual(["dan/x.png"]);
-    expect(b.refs).toEqual(["dan/x (2).png"]);
+    expect(b.refs).toEqual(["dan/x-2.png"]);
     for (let i = 0; i < 35; i++) await c.pasteImages!([{ name: `n${i}.png`, data: PNG }]);
     expect((await env.readdir(env.scratchDir!)).length).toBeLessThanOrEqual(30);
   });
