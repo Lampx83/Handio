@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.18] - 2026-10-12
+
 ### Thay đổi
 - **Dán ảnh vào ô chat giờ hiện ngay ảnh** (ảnh nhỏ phía trên ô nhập, có nút ✕ để bỏ), thay vì chèn chữ kiểu `@dan/anh-dan-….png`. Khi gửi, ảnh hiện trong tin nhắn của bạn (bấm để phóng to), kể cả khi mở lại cuộc trò chuyện cũ. Chỉ gửi ảnh không kèm chữ cũng được.
 
