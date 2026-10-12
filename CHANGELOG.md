@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.15] - 2026-10-12
+
 ### Sửa
 - **Agent không còn đọc đi đọc lại cùng một bộ tệp mãi** (phiên làm từ 5 tệp trở lên): cơ chế rút gọn ngữ cảnh chỉ giữ 4 kết quả gần nhất nên tệp đọc sớm nhất bị lược, agent đọc lại nó, lại lược tệp kế tiếp… thành vòng lặp tốn token. Nay kết quả đọc tệp gần đây được giữ (tới một phần tư cửa sổ ngữ cảnh), và vòng lặp chuỗi 3–6 thao tác giống hệt bị cảnh báo rồi dừng.
 - **Cuộc trò chuyện mới ở tab Code không phải khám phá lại thư mục**: lời nhắc kèm sẵn cây thư mục dự án hai cấp (bỏ thư mục sinh ra và tệp ẩn), nên agent vào việc ngay thay vì gọi list_dir/đọc nhiều tệp để biết dự án có gì.
