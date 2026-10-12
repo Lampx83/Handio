@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.12] - 2026-10-12
+
 ### Sửa
 - **Trang "Nhật ký thay đổi" công khai tự cập nhật** (/agent/guide/changelog.html): trước đây dừng ở bản 0.6.0 vì chỉ được dựng lại khi triển khai tay; nay dựng lại từ CHANGELOG.md mỗi lần triển khai.
 - **Tab Design: thiết kế cao không còn kéo cả trang lên**: trước đây thiết kế dài (landing page, slide cao) làm cuộn cả cửa sổ, đẩy chân thanh bên (tên người dùng, phiên bản) lên giữa màn hình. Nay chỉ khung xem trước cuộn.
