@@ -141,3 +141,64 @@ describe("hết lượt tự sửa mà trang vẫn lỗi", () => {
     expect(warns.some((w) => /vẫn còn lỗi sau 3 lần/.test(w.text) && /Grid is not defined/.test(w.text))).toBe(true);
   });
 });
+
+describe("tự bật máy chủ dev để kiểm tra trang (chế độ Tự động)", () => {
+  const mkEnv = () => {
+    const env = new MemoryEnv("/ws", { "package.json": JSON.stringify({ scripts: { dev: "vite" }, dependencies: { vite: "^5" } }) });
+    const spawned: string[] = [];
+    (env as { exec?: unknown }).exec = async () => ({ code: 0, output: "", timedOut: false });
+    (env as { spawn?: unknown }).spawn = (cmd: string, o: { onData: (s: string) => void }) => {
+      spawned.push(cmd);
+      o.onData("  Local:   http://localhost:5173/\n");
+      return { stop: () => undefined };
+    };
+    const seen: string[] = [];
+    (env as { checkPage?: unknown }).checkPage = async (url: string) => (seen.push(url), base({ url, text: "Xin chào" }));
+    return { env, spawned, seen };
+  };
+
+  it("agent sửa mã mà chưa bật máy chủ: hệ thống tự bật `npm run dev`, kiểm tra trang và để máy chủ chạy", async () => {
+    const { env, spawned, seen } = mkEnv();
+    const { c, events } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "src/App.jsx", content: "export default () => null" } }] },
+      { text: "Xong" },
+    ], { profile: "code", env, settings: { mode: "auto" } });
+    await c.send("làm app");
+    expect(spawned.length).toBe(1);
+    expect(seen).toEqual(["http://localhost:5173/"]);
+    expect(events.some((e) => e.type === "notice" && /Đã bật ứng dụng để kiểm tra: http:\/\/localhost:5173\//.test((e as { text: string }).text))).toBe(true);
+  });
+
+  it("chế độ Hỏi trước: không tự chạy lệnh nào", async () => {
+    const { env, spawned, seen } = mkEnv();
+    const { c } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "src/App.jsx", content: "export default () => null" } }] },
+      { text: "Xong" },
+    ], { profile: "code", env, settings: { mode: "default" }, decide: () => ({ allow: true }) });
+    await c.send("làm app");
+    expect(spawned).toHaveLength(0);
+    expect(seen).toHaveLength(0);
+  });
+});
+
+describe("nút ▶ chạy nền không qua mô hình (startBackground)", () => {
+  it("chỉ chạy lệnh có trong gợi ý của dự án", async () => {
+    const env = new MemoryEnv("/ws", { "package.json": JSON.stringify({ scripts: { dev: "vite" }, dependencies: { vite: "^5" } }) });
+    const spawned: string[] = [];
+    (env as { spawn?: unknown }).spawn = (cmd: string, o: { onData: (s: string) => void }) => {
+      spawned.push(cmd);
+      o.onData("Local: http://localhost:5173/\n");
+      return { stop: () => undefined };
+    };
+    const { c } = await makeController([{ text: "ok" }], { profile: "code", env });
+    const sug = await c.runSuggestions();
+    const dev = sug.find((s) => s.background)!;
+    expect(dev).toBeTruthy();
+    const r = await c.startBackground(dev.command);
+    expect("error" in r).toBe(false);
+    expect((r as { url?: string }).url).toBe("http://localhost:5173/");
+    expect(spawned).toEqual([dev.command]);
+    expect(await c.startBackground("rm -rf /")).toHaveProperty("error"); // lệnh ngoài gợi ý bị từ chối
+    expect(spawned).toHaveLength(1);
+  });
+});

@@ -5,6 +5,15 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Tự bật ứng dụng để kiểm tra** (tab Code, chế độ Tự động): agent sửa mã web xong mà chưa bật máy chủ thì ứng dụng tự chạy máy chủ dev của dự án, mở thử trang và để máy chủ chạy sẵn (nút "Mở localhost"), không phải nhắn "bật ứng dụng đi".
+
+### Sửa
+- **Hết "lỗi giả" khi kiểm tra trang Vite**: lỗi `[vite] failed to connect to websocket` (do kết nối HMR bị chặn) từng khiến agent bị bắt "sửa lỗi" không có thật nhiều lần liên tiếp; nay được bỏ qua.
+
+### Thay đổi
+- **Nút ▶ chạy máy chủ nền chạy thẳng, không qua mô hình**: trước đây nút gửi một yêu cầu cho agent ("Chạy … ở chế độ nền…") nên tốn vài chục giây và một lượt gọi mô hình; nay máy chủ bật ngay, địa chỉ hiện ở thanh tiến trình.
+
 ## [0.8.10] - 2026-10-12
 
 ### Thay đổi

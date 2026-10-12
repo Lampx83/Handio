@@ -173,6 +173,7 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   rewindPoints: (a) => a.length === 0,
   rewind: (a) => a.length === 2 && Number.isInteger(a[0]) && (a[0] as number) >= 0 && (a[0] as number) < 10_000 && typeof a[1] === "boolean",
   runSuggestions: (a) => a.length === 0,
+  startBackground: (a) => a.length === 1 && str(a[0], 500),
   // Work: xem tài liệu (chỉ đọc; lõi tự resolveSafe + chặn tệp nhạy cảm) và "Quy trình của tôi" (tên là slug, lõi tự kiểm tra lại)
   docView: (a) => (a.length === 1 || a.length === 2) && str(a[0], 1000) && (a[1] === undefined || str(a[1], 200)),
   procedureList: (a) => a.length === 0,

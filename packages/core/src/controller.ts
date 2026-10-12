@@ -579,6 +579,22 @@ export class LocalController implements AgentController {
     return detectRun(this.o.env, this.session.ctx.root);
   }
 
+  async startBackground(command: string): Promise<{ id: string; url?: string; alive: boolean; code?: number } | { error: string }> {
+    const procs = this.session.ctx.procs;
+    if (!procs) return { error: "Nơi chạy này không hỗ trợ chạy nền." };
+    // chỉ chạy lệnh do chính ứng dụng gợi ý (nút ▶): giao diện không nhờ chạy lệnh tuỳ ý qua đường này
+    const ok = (await this.runSuggestions()).some((s) => s.background && s.command === command);
+    if (!ok) return { error: "Lệnh này không nằm trong danh sách gợi ý chạy của dự án." };
+    try {
+      const info = procs.start(command, this.session.ctx.root);
+      await procs.settle(info.id, 8000);
+      const p = procs.get(info.id)!;
+      return { id: info.id, url: p.info.url, alive: p.info.alive, code: p.info.code };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  }
+
   async stopProcess(id: string): Promise<void> {
     this.session.ctx.procs?.stop(id);
   }

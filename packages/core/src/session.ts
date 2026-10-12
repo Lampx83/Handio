@@ -17,6 +17,7 @@ import { workTools } from "./office/work-tools";
 import { PROFILES, type Profile } from "./profiles";
 import { allowedModes, type Policy } from "./policy";
 import { ProcessManager } from "./processes";
+import { detectRun } from "./run-detect";
 import { HookRunner, mergeHooks, countHooks } from "./hooks";
 import { McpManager, type McpServerSpec } from "./mcp";
 import { mergePackParts, packsFor, type LoadedPack } from "./packs";
@@ -932,7 +933,22 @@ export class Agent {
       }
       return null;
     }
-    const server = s.ctx.procs?.list().filter((p) => p.alive && p.url).pop();
+    let server = s.ctx.procs?.list().filter((p) => p.alive && p.url).pop();
+    // chưa có máy chủ chạy (agent quên bật, hoặc người dùng phải nhắn "bật ứng dụng đi"): ở chế độ Tự động thì tự bật máy chủ dev của dự án
+    // để kiểm tra trang và để nút "Mở localhost" sẵn cho người dùng
+    if (!server && !L.htmlFile && s.ctx.procs && (s.perms.mode === "auto" || s.perms.mode === "bypass")) {
+      const cmd = (await detectRun(s.o.env, s.ctx.root).catch(() => [])).find((x) => x.kind === "run" && x.background)?.command;
+      if (cmd) {
+        try {
+          const info = s.ctx.procs.start(cmd, s.ctx.root);
+          await s.ctx.procs.settle(info.id, 8000);
+          server = s.ctx.procs.get(info.id)?.info.alive ? s.ctx.procs.get(info.id)!.info : undefined;
+          if (server?.url) s.emit({ type: "notice", level: "info", text: `Đã bật ứng dụng để kiểm tra: ${server.url}` });
+        } catch {
+          /* không bật được: bỏ qua, không chặn việc báo cáo */
+        }
+      }
+    }
     const url = server?.url ?? (L.htmlFile ? relPath(s.ctx, L.htmlFile) : "");
     if (!url) return null;
     let text: string;

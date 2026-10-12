@@ -12,6 +12,8 @@ import type { PageReport } from "@neu/agent-core";
 // ws/wss loopback: Vite (HMR) mở ws://localhost:<cổng>; chặn nó làm MỌI trang Vite báo lỗi "WebSocket failed" giả và agent sửa nhầm cấu hình
 const LOOPBACK = /^(https?|wss?):\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?(\/|$)/i;
 const MAX_ERRORS = 15;
+/** Lỗi console không ảnh hưởng ứng dụng đang làm (công cụ dựng báo về chính nó): không để agent đi "sửa" chúng. */
+export const BENIGN = [/\[vite\] failed to connect to websocket/i, /\[vite\] server connection lost/i];
 
 /** URL được phép tải: loopback, tệp trong thư mục dự án, data:/blob:/devtools: nội bộ. */
 export function allowedUrl(url: string, root?: string): boolean {
@@ -92,6 +94,7 @@ export async function checkPage(url: string, o: { waitMs: number; root?: string;
   const addError = (msg: string) => {
     const m = shorten(msg);
     if (!m || seen.has(m) || rep.errors.length >= MAX_ERRORS) return;
+    if (BENIGN.some((re) => re.test(m))) return;
     seen.add(m);
     rep.errors.push(m);
   };

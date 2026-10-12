@@ -14,3 +14,12 @@ describe("check_page: địa chỉ được phép tải", () => {
     expect(allowedUrl("file:///ws-evil/x.html", "/ws")).toBe(false);
   });
 });
+
+import { BENIGN } from "../src/page-check";
+describe("check_page: lỗi lành tính của công cụ dựng không bị báo", () => {
+  it("bỏ qua '[vite] failed to connect to websocket' (HMR), vẫn báo lỗi thật", () => {
+    const m = (s: string) => BENIGN.some((re) => re.test(s));
+    expect(m("[vite] failed to connect to websocket. your current setup: (browser) localhost:5173/ <--[HTTP]-->")).toBe(true);
+    expect(m("Uncaught ReferenceError: Grid is not defined")).toBe(false);
+  });
+});

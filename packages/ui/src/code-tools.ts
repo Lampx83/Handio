@@ -293,13 +293,21 @@ export class CodeTools {
     this.runBtn.hidden = !s.length;
   }
 
+  /** ▶ với máy chủ nền: chạy thẳng (không tốn một lượt gọi mô hình); địa chỉ hiện ở thanh tiến trình, lỗi hiện ngay. */
+  private async runDirect(command: string): Promise<void> {
+    this.closePop();
+    const r = await this.ctl.startBackground!(command);
+    if ("error" in r) return this.host.append(h("div", { class: "notice warn" }, r.error));
+    if (!r.alive) this.host.append(h("div", { class: "notice warn" }, `Lệnh \`${command}\` đã thoát ngay (mã ${r.code ?? "?"}). Nhờ agent xem lỗi nếu cần.`));
+  }
+
   private async toggleRun(): Promise<void> {
     this.ctl.track?.("run_click");
     if (this.pop?.classList.contains("runmenu")) return this.closePop();
     this.showPop(this.suggestions.map((s) => ({
       label: (s.kind === "test" ? "✓ " : "▶ ") + s.command,
       title: s.background ? "Chạy nền" : s.kind === "test" ? "Chạy kiểm thử" : "Chạy",
-      on: () => this.host.submit(s.kind === "test" ? `Chạy \`${s.command}\`. Nếu có test lỗi, tìm nguyên nhân và sửa mã (đừng sửa test cho khớp lỗi), rồi chạy lại.` : s.background ? `Chạy \`${s.command}\` ở chế độ nền, rồi cho tôi biết địa chỉ để mở hoặc lỗi nếu có.` : `Chạy \`${s.command}\` và cho tôi biết kết quả. Nếu lỗi, tìm nguyên nhân và sửa.`),
+      on: () => (s.kind === "run" && s.background && this.ctl.startBackground ? void this.runDirect(s.command) : this.host.submit(s.kind === "test" ? `Chạy \`${s.command}\`. Nếu có test lỗi, tìm nguyên nhân và sửa mã (đừng sửa test cho khớp lỗi), rồi chạy lại.` : s.background ? `Chạy \`${s.command}\` ở chế độ nền, rồi cho tôi biết địa chỉ để mở hoặc lỗi nếu có.` : `Chạy \`${s.command}\` và cho tôi biết kết quả. Nếu lỗi, tìm nguyên nhân và sửa.`)),
     })), "runmenu");
   }
 }

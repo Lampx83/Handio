@@ -94,6 +94,7 @@ class IpcController implements AgentController {
   rewindPoints = () => this.call<any>("rewindPoints");
   rewind = (i: number, files: boolean) => this.call<any>("rewind", i, files);
   runSuggestions = () => this.call<any>("runSuggestions");
+  startBackground = (c: string) => this.call<any>("startBackground", c);
   docView = (p: string, loc?: string) => this.call<any>("docView", ...(loc === undefined ? [p] : [p, loc]));
   procedureList = () => this.call<any>("procedureList");
   procedureSave = (n: string, d?: string) => this.call<any>("procedureSave", ...(d === undefined ? [n] : [n, d]));

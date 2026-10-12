@@ -250,6 +250,8 @@ export interface AgentController {
   rewind?(index: number, files: boolean): Promise<{ history: HistoryItem[]; reverted: string[]; skipped: string[]; text: string } | { error: string }>;
   /** Gợi ý lệnh chạy/kiểm thử dự án. */
   runSuggestions?(): Promise<RunSuggestion[]>;
+  /** Bấm ▶ với lệnh chạy nền (máy chủ web…): chạy thẳng, không qua mô hình. Chỉ nhận lệnh có trong `runSuggestions`. */
+  startBackground?(command: string): Promise<{ id: string; url?: string; alive: boolean; code?: number } | { error: string }>;
   /** Work: xem tài liệu (chỉ đọc) và đánh dấu vị trí trích dẫn; "Quy trình của tôi" = lệnh / lưu trong dự án. */
   docView?(path: string, loc?: string): Promise<DocView | { error: string }>;
   procedureList?(): Promise<Procedure[]>;
