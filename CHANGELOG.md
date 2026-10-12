@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.14] - 2026-10-12
+
 ### Sửa
 - **Bỏ con số hạn mức cố định khỏi hướng dẫn và trang giới thiệu** ("sinh viên 5 triệu, giảng viên 10 triệu"): mức thực tế do quản trị đặt theo từng nơi nên có thể khác; mức của bạn luôn hiện ở thanh dưới ô nhập.
 - **Windows: nhận cả Anaconda/Miniconda** (python.exe ở gốc thư mục cài, ví dụ `C:\Users\<tên>\Anaconda3`): thư mục này (kèm Scripts và Library\bin) cũng được thêm vào PATH của lệnh agent chạy, sau bản Python từ python.org.
