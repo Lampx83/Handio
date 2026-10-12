@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Sửa
+- **Bỏ con số hạn mức cố định khỏi hướng dẫn và trang giới thiệu** ("sinh viên 5 triệu, giảng viên 10 triệu"): mức thực tế do quản trị đặt theo từng nơi nên có thể khác; mức của bạn luôn hiện ở thanh dưới ô nhập.
 - **Windows: nhận cả Anaconda/Miniconda** (python.exe ở gốc thư mục cài, ví dụ `C:\Users\<tên>\Anaconda3`): thư mục này (kèm Scripts và Library\bin) cũng được thêm vào PATH của lệnh agent chạy, sau bản Python từ python.org.
 - **Agent không còn "đi vòng" tốn token khi thiếu một công cụ**: thiếu Python/sqlite… sau hai lần tìm không ra thì dừng, nói rõ thiếu gì và một bước để sửa, thay vì thử hết cách khác (đã gặp: chuyển sang dựng trang HTML kiểm thử, đốt hết hạn mức ngày).
 
