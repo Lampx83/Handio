@@ -45,7 +45,10 @@ header.top nav a:not(.btn):hover{color:#fff}
 .cta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
 .hero small{color:var(--muted);display:block}
 .pillars{display:flex;flex-wrap:wrap;margin:30px 0 0;padding:0;list-style:none}
-.pillars li{display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 12px 6px 0;margin-right:12px;font-size:13px;color:var(--ice);text-align:center;line-height:1.3;min-width:70px}
+.pillars li{display:block;padding:6px 12px 6px 0;margin-right:12px;font-size:13px;color:var(--ice);text-align:center;line-height:1.3;min-width:70px}
+.pillars a{display:flex;flex-direction:column;align-items:center;gap:8px;white-space:nowrap;color:inherit;text-decoration:none;border-radius:10px;padding:4px 6px;margin:-4px -6px;transition:background .15s,transform .15s}
+.pillars a:hover{background:rgba(66,215,255,.1);transform:translateY(-1px)}
+.pillars a:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 .pillars li+li{border-left:1px solid var(--line);padding-left:12px}
 .pillars svg{width:34px;height:34px;color:var(--cyan)}
 /* ---- sân khấu: bàn phím vector + hai lớp tay đã tách nền + thẻ nổi ---- */
@@ -73,10 +76,6 @@ header.top nav a:not(.btn):hover{color:#fff}
 @keyframes tap{0%,100%{transform:translate(0,0)}4%{transform:translate(0,.6%)}8%{transform:translate(0,0)}13%{transform:translate(0,.5%)}18%{transform:translate(0,0)}28%{transform:translate(1.43%,0)}32%{transform:translate(1.43%,.6%)}37%{transform:translate(1.43%,0)}42%{transform:translate(1.43%,.5%)}47%{transform:translate(1.43%,0)}58%{transform:translate(-1.1%,1.5%)}62%{transform:translate(-1.1%,2.1%)}67%{transform:translate(-1.1%,1.5%)}72%{transform:translate(-1.1%,2%)}78%{transform:translate(-1.1%,1.5%)}90%{transform:translate(0,0)}}
 @keyframes drag{0%,100%{transform:translate(0,0)}28%{transform:translate(.6%,1.2%)}40%{transform:translate(.6%,1.6%)}46%{transform:translate(.6%,1.2%)}78%{transform:translate(.2%,.4%)}}
 @keyframes ring{0%,36%{opacity:0;transform:scale(.2)}40%{opacity:.95;transform:scale(.5)}60%{opacity:0;transform:scale(1.7)}100%{opacity:0}}
-.chips{position:absolute;left:42%;top:57%;width:28%;margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:2.2%}
-.chips li{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(13,27,58,.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);font-size:clamp(10px,1.05vw,13px);line-height:1.25;color:#fff;box-shadow:0 8px 24px rgba(0,0,0,.35)}
-.chips svg{width:clamp(16px,1.9vw,24px);height:clamp(16px,1.9vw,24px);flex:none;color:var(--cyan)}
-@media(max-width:520px){.chips{display:none}}
 /* ---- phần sáng / tối ---- */
 section{padding:62px 0}
 section h2{margin:0 0 8px;font-size:clamp(26px,3.4vw,38px);line-height:1.2;letter-spacing:-.015em}
@@ -143,29 +142,28 @@ footer a{color:var(--ice)}
 <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3M4 20l4-1"/></symbol>
 <symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 10v10"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
-<symbol id="i-data" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M10 19V5M16 19v-7M21 19H3"/></symbol>
-<symbol id="mark" viewBox="0 0 64 64"><rect x="8" y="4" width="14" height="56" rx="7" fill="url(#hg)"/><path d="M22 34c0-14 24-16 24-1v26" fill="none" stroke="url(#hg)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/><path d="M23 52l16-22" stroke="#fff" stroke-opacity=".85" stroke-width="5" stroke-linecap="round"/></symbol>
+<symbol id="mark" viewBox="0 0 64 64"><defs><linearGradient id="nm-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1665d8"/><stop offset="1" stop-color="#0a2f6e"/></linearGradient></defs><rect x="4" y="4" width="56" height="56" rx="13" fill="url(#nm-g)"/><path d="M19.5 44.1V19.9h4.6l13.4 16.1V19.9h4.6v24.3h-4.6L24.1 28v16.1z" fill="#fff"/><rect x="19.5" y="48.4" width="25" height="1.6" rx=".8" fill="#f2b134"/></symbol>
 </defs></svg>
 
 <section class="hero" id="top" style="padding:0">
   <div class="wrap">
     <header class="top">
       <a class="lg" href="#top" aria-label="NEU Agent"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark"/></svg><span class="wm">NEU <b>Agent</b></span></a>
-      <nav><a href="#kha-nang">Khả năng</a><a href="#demo">Xem demo</a><a href="#hoi-dap">Hỏi đáp</a><a href="/agent/guide/help.html">Hướng dẫn</a><a href="/agent/guide/changelog.html">Có gì mới</a><a class="btn sm" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></nav>
+      <nav><a href="#demo">Xem demo</a><a href="#hoi-dap">Hỏi đáp</a><a href="/agent/guide/help.html">Hướng dẫn</a><a href="/agent/guide/changelog.html">Có gì mới</a><a class="btn sm" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></nav>
     </header>
 
     <div class="hero-grid">
       <div>
         <h1>Cánh tay AI, <span>làm mọi việc thay bạn.</span></h1>
-        <p class="sub">Từ thao tác máy tính, lập trình, thuyết trình, thiết kế đến hàng trăm công việc khác. Bạn nói mục tiêu, NEU Agent làm đủ việc và tự kiểm tra trước khi báo xong.</p>
+        <p class="sub">Từ thao tác máy tính, lập trình, thuyết trình đến thiết kế: bạn nói mục tiêu, NEU Agent làm đủ việc và tự kiểm tra trước khi báo xong.</p>
         <div class="cta"><a class="btn" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập để dùng</a><a class="btn ghost" href="#demo">Xem demo</a></div>
-        <small>Dùng tài khoản @neu.edu.vn hoặc @st.neu.edu.vn · Bản web và bản cài cho máy tính</small>
+        <small>Tài khoản @neu.edu.vn hoặc @st.neu.edu.vn · Bản web, cài cho macOS và Windows</small>
         <ul class="pillars">
-          <li><svg><use href="#i-pc"/></svg>Thao tác<br>máy tính</li>
-          <li><svg><use href="#i-code"/></svg>Lập trình</li>
-          <li><svg><use href="#i-slide"/></svg>Tạo bài<br>trình bày</li>
-          <li><svg><use href="#i-pen"/></svg>Thiết kế<br>và sáng tạo</li>
-          <li><svg><use href="#i-plus"/></svg>Nhiều hơn<br>thế nữa</li>
+          <li><a href="#work"><svg aria-hidden="true"><use href="#i-pc"/></svg>Thao tác<br>máy tính</a></li>
+          <li><a href="#code"><svg aria-hidden="true"><use href="#i-code"/></svg>Lập trình</a></li>
+          <li><a href="#work"><svg aria-hidden="true"><use href="#i-slide"/></svg>Tạo bài<br>trình bày</a></li>
+          <li><a href="#design"><svg aria-hidden="true"><use href="#i-pen"/></svg>Thiết kế<br>và sáng tạo</a></li>
+          <li><a href="#noi-bat"><svg aria-hidden="true"><use href="#i-plus"/></svg>Nhiều hơn<br>thế nữa</a></li>
         </ul>
       </div>
 
@@ -174,28 +172,7 @@ footer a{color:var(--ice)}
         <div class="rw hl"><img class="part" src="/agent/guide/img/handio-hand-left.png" width="630" height="722" alt="" style="left:.46%;top:27.8%;width:41%"></div>
         <div class="rw hr"><svg class="mouse" viewBox="0 0 1536 1000" aria-hidden="true"><defs><linearGradient id="mg" gradientUnits="userSpaceOnUse" x1="1200" y1="203" x2="1230" y2="740"><stop offset="0" stop-color="#42568A"/><stop offset=".3" stop-color="#2A3C69"/><stop offset=".65" stop-color="#16264E"/><stop offset="1" stop-color="#0E1C40"/></linearGradient></defs><path d="M1228 203C1150 203 1088 258 1086 335C1085 430 1110 560 1160 650C1190 705 1245 745 1290 735C1330 700 1345 560 1346 420C1347 330 1330 250 1280 218C1262 208 1245 203 1228 203Z" fill="url(#mg)"/><path d="M1197 206L1203 246M1224 346L1246 410" stroke="#031A42" stroke-width="6" stroke-linecap="round" fill="none"/><g transform="rotate(-8 1216 296)"><rect x="1188" y="244" width="56" height="104" rx="28" fill="#0B1A3E"/><rect class="wh" x="1198" y="254" width="36" height="84" rx="18" fill="#5D77A9"/></g></svg><img class="part" src="/agent/guide/img/handio-hand-right.png" width="454" height="722" alt="" style="left:70.44%;top:27.8%;width:29.56%"><span class="ring"></span></div>
         <span class="pulse"></span>
-        <ul class="chips" aria-hidden="true">
-          <li><svg><use href="#i-code"/></svg>Viết code<br>nhanh hơn</li>
-          <li><svg><use href="#i-slide"/></svg>Tạo slide chỉ<br>với 1 câu lệnh</li>
-          <li><svg><use href="#i-pen"/></svg>Thiết kế<br>dễ dàng hơn</li>
-          <li><svg><use href="#i-data"/></svg>Xử lý dữ liệu<br>tự động</li>
-        </ul>
       </div>
-    </div>
-  </div>
-</section>
-
-<section class="light" id="kha-nang">
-  <div class="wrap">
-    <h2>Làm được nhiều hơn với một cánh tay AI</h2>
-    <p class="lead">NEU Agent đọc, sửa và tạo tệp ngay trong thư mục của bạn, chạy thử rồi mới báo kết quả. Một câu ngắn là đủ.</p>
-    <div class="caps">
-      <div class="cap"><div class="ic"><svg><use href="#i-pc"/></svg></div><h3>Thao tác máy tính</h3><p>Đọc, tóm tắt, sửa tệp và chạy lệnh theo từng bước bạn giao.</p></div>
-      <div class="cap"><div class="ic"><svg><use href="#i-code"/></svg></div><h3>Lập trình</h3><p>Viết, chạy thử và sửa lỗi ngay trong dự án; học vibe coding từng buổi.</p></div>
-      <div class="cap"><div class="ic"><svg><use href="#i-slide"/></svg></div><h3>Tạo bài trình bày</h3><p>Một câu lệnh ra bộ slide hoàn chỉnh, xuất PowerPoint hoặc PDF.</p></div>
-      <div class="cap"><div class="ic"><svg><use href="#i-pen"/></svg></div><h3>Thiết kế</h3><p>Poster, trang giới thiệu, mẫu biểu; sửa bằng cách chỉ vào đúng chỗ.</p></div>
-      <div class="cap"><div class="ic"><svg><use href="#i-table"/></svg></div><h3>Làm việc với bảng tính</h3><p>Tổng hợp, làm sạch, sinh dữ liệu mẫu hàng loạt ra Excel.</p></div>
-      <div class="cap"><div class="ic"><svg><use href="#i-plus"/></svg></div><h3>Và nhiều hơn nữa…</h3><p>Mở rộng bằng gói của đơn vị: mẫu văn bản, quy trình, công cụ riêng.</p></div>
     </div>
   </div>
 </section>
@@ -203,7 +180,7 @@ footer a{color:var(--ice)}
 <section id="demo">
   <div class="wrap">
     <h2>Xem NEU Agent hoạt động</h2>
-    <p class="lead">Bấm từng bước. Đây là ảnh chụp từ ứng dụng thật, không cần đăng nhập để xem.</p>
+    <p class="lead">Ảnh chụp từ ứng dụng thật, xem không cần đăng nhập.</p>
     <div class="demo">
       <input type="radio" name="d" id="s1" checked><input type="radio" name="d" id="s2"><input type="radio" name="d" id="s3"><input type="radio" name="d" id="s4"><input type="radio" name="d" id="s5">
       <div class="tabs">
@@ -211,10 +188,10 @@ footer a{color:var(--ice)}
       </div>
       <div class="slides">
         <div class="slide p1"><div class="shot"><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Màn hình chính chế độ Work"></div><p class="cap2"><b>Chọn Work, Code hoặc Design</b> rồi gõ điều bạn muốn, ngắn cũng được. Ví dụ: “tóm tắt các tệp này thành báo cáo một trang”.</p></div>
-        <div class="slide p2"><div class="shot"><img src="/agent/guide/img/tao-du-an.webp" width="2560" height="1600" alt="Tạo dự án mẫu Web ghi chú" loading="lazy" decoding="async"></div><p class="cap2"><b>Một cú bấm có ngay dự án mẫu</b> (web ghi chú, bảng điểm, trang giới thiệu…). Vừa học vừa thử, không cần chuẩn bị gì.</p></div>
-        <div class="slide p3"><div class="shot"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Bản xem trước thiết kế" loading="lazy" decoding="async"></div><p class="cap2"><b>Bản xem trước hiện ngay bên phải.</b> Xuất PDF hoặc PNG, đổi kích thước màn hình máy tính, điện thoại.</p></div>
-        <div class="slide p4"><div class="shot"><img src="/agent/guide/img/chi-vao-de-sua.webp" width="2560" height="1600" alt="Chỉ vào để sửa" loading="lazy" decoding="async"></div><p class="cap2"><b>Bấm vào đúng chỗ muốn đổi</b>, rồi chọn “To hơn”, “Đổi màu”… hoặc gõ vài chữ. Không cần mô tả “cái nút ở góc dưới bên phải”.</p></div>
-        <div class="slide p5"><div class="shot"><img src="/agent/guide/img/hoc.webp" width="2560" height="1600" alt="Bài học vibe coding" loading="lazy" decoding="async"></div><p class="cap2"><b>Học vibe coding ngay trong ứng dụng</b>: 12 buổi, 16 bài tập, 7 dự án mẫu. Nút 💡 chứa mẹo, thủ thuật và tình huống mẫu cho từng chế độ.</p></div>
+        <div class="slide p2"><div class="shot"><img src="/agent/guide/img/tao-du-an.webp" width="2560" height="1600" alt="Tạo dự án mẫu Web ghi chú" loading="lazy" decoding="async"></div><p class="cap2"><b>Một cú bấm có ngay dự án mẫu</b> (web ghi chú, bảng điểm, trang giới thiệu…) để thử, không cần chuẩn bị gì.</p></div>
+        <div class="slide p3"><div class="shot"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Bản xem trước thiết kế" loading="lazy" decoding="async"></div><p class="cap2"><b>Bản xem trước hiện ngay bên phải.</b> Xuất PDF hoặc PNG vào thư mục bạn chọn, đổi khổ máy tính hoặc điện thoại.</p></div>
+        <div class="slide p4"><div class="shot"><img src="/agent/guide/img/chi-vao-de-sua.webp" width="2560" height="1600" alt="Chỉ vào để sửa" loading="lazy" decoding="async"></div><p class="cap2"><b>Bấm vào đúng chỗ muốn đổi</b>, rồi chọn “To hơn”, “Đổi màu”… hoặc gõ vài chữ.</p></div>
+        <div class="slide p5"><div class="shot"><img src="/agent/guide/img/hoc.webp" width="2560" height="1600" alt="Bài học vibe coding" loading="lazy" decoding="async"></div><p class="cap2"><b>Học vibe coding ngay trong ứng dụng</b>: 12 buổi, 16 bài tập, 7 dự án mẫu.</p></div>
       </div>
     </div>
   </div>
@@ -223,11 +200,11 @@ footer a{color:var(--ice)}
 <section id="che-do" style="padding-top:0">
   <div class="wrap">
     <h2>Ba chế độ cho ba kiểu việc</h2>
-    <p class="lead">Chuyển qua lại bất kỳ lúc nào. Mỗi chế độ có sẵn “cách làm việc” riêng, bạn chỉ cần nói mục tiêu.</p>
+    <p class="lead">Chuyển qua lại bất kỳ lúc nào; mỗi chế độ có sẵn cách làm việc riêng.</p>
     <div class="grid">
-      <div class="card"><img src="/agent/guide/img/code.webp" width="2560" height="1600" alt="Chế độ Code" loading="lazy" decoding="async"><div class="body"><h3>Code</h3><p>Viết, sửa lỗi, chạy thử và kiểm tra mã trong thư mục của bạn.</p><ul><li>Tự chạy thử, thấy lỗi thì tự sửa tiếp</li><li>Giao diện web gọn gàng, dùng được trên điện thoại</li><li>Nhớ ngữ cảnh dự án qua lệnh <code>/init</code></li></ul></div></div>
-      <div class="card"><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Chế độ Work" loading="lazy" decoding="async"><div class="body"><h3>Work</h3><p>Đọc, tóm tắt, soạn báo cáo, tổng hợp bảng từ tệp của bạn.</p><ul><li>Yêu cầu ngắn vẫn ra bản hoàn chỉnh</li><li>Hỏi lại tối đa một câu khi thật cần</li><li>Tự đọc lại kết quả trước khi trả</li></ul></div></div>
-      <div class="card"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Chế độ Design" loading="lazy" decoding="async"><div class="body"><h3>Design</h3><p>Trang giới thiệu, poster, slide, mẫu biểu có bản xem trước trực tiếp.</p><ul><li>Bố cục, màu sắc, chữ được chọn sẵn cho hài hoà</li><li>Chỉ vào phần muốn sửa là xong</li><li>Xuất PDF, PNG</li></ul></div></div>
+      <div class="card" id="code"><img src="/agent/guide/img/code.webp" width="2560" height="1600" alt="Chế độ Code" loading="lazy" decoding="async"><div class="body"><h3>Code</h3><p>Viết, sửa lỗi, chạy thử và kiểm tra mã trong thư mục của bạn.</p><ul><li>Tự mở thử trang web đang làm, thấy lỗi thì tự sửa</li><li>Nhiều dự án chạy cùng lúc, chuyển dự án việc vẫn chạy nền</li><li>Nhớ ngữ cảnh dự án qua lệnh <code>/init</code></li></ul></div></div>
+      <div class="card" id="work"><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Chế độ Work" loading="lazy" decoding="async"><div class="body"><h3>Work</h3><p>Đọc, tóm tắt, soạn báo cáo, tổng hợp bảng từ tệp của bạn.</p><ul><li>Yêu cầu ngắn vẫn ra bản hoàn chỉnh</li><li>Hỏi lại tối đa một câu khi thật cần</li><li>Đọc lại kết quả trước khi trả</li></ul></div></div>
+      <div class="card" id="design"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Chế độ Design" loading="lazy" decoding="async"><div class="body"><h3>Design</h3><p>Trang giới thiệu, poster, slide, mẫu biểu có bản xem trước trực tiếp.</p><ul><li>Bố cục, màu sắc, chữ được chọn sẵn cho hài hoà</li><li>Chỉ vào phần muốn sửa là xong</li><li>Xuất PDF, PNG vào thư mục bạn chọn</li></ul></div></div>
     </div>
   </div>
 </section>
@@ -237,12 +214,12 @@ footer a{color:var(--ice)}
     <h2>Điểm nổi bật</h2>
     <p class="lead">Những thứ làm NEU Agent khác một khung chat thông thường.</p>
     <div class="grid">
-      <div class="feat"><h3>Nói ít, hiểu nhiều</h3><p>Một câu ngắn được hiểu thành yêu cầu đầy đủ: có bố cục, xử lý lỗi, trình bày đẹp. Bạn không phải viết bản mô tả dài.</p></div>
-      <div class="feat"><h3>Tự kiểm tra trước khi báo xong</h3><p>Với mã thì chạy thử; với tài liệu và thiết kế thì đọc lại. Thấy sai thì sửa luôn.</p></div>
-      <div class="feat"><h3>Chỉ vào để sửa</h3><p>Bấm vào phần tử trên bản xem trước thiết kế, chỉ sửa đúng chỗ đó, không đụng phần còn lại.</p></div>
-      <div class="feat"><h3>Riêng tư</h3><p>Tệp của bạn nằm trên máy bạn. Số liệu cải tiến chỉ gồm con số và mã lỗi, tuyệt đối không có nội dung trò chuyện hay tệp, và bạn tắt được trong phần Cài đặt.</p></div>
-      <div class="feat"><h3>Hạn mức công bằng</h3><p>Mỗi người có hạn mức token mỗi ngày (sinh viên 5 triệu, giảng viên 10 triệu), có thêm 10% để hoàn tất lượt đang làm.</p></div>
-      <div class="feat"><h3>Web và Desktop</h3><p>Dùng ngay trên trình duyệt, hoặc cài bản cho macOS và Windows để làm việc trực tiếp trong thư mục của bạn.</p></div>
+      <div class="feat"><h3>Nói ít, hiểu nhiều</h3><p>Một câu ngắn được hiểu thành yêu cầu đầy đủ: có bố cục, xử lý lỗi, trình bày đẹp.</p></div>
+      <div class="feat"><h3>Tự kiểm tra trước khi báo xong</h3><p>Mã thì chạy thử và mở trang web xem lỗi; tài liệu và thiết kế thì đọc lại. Thấy sai thì sửa luôn.</p></div>
+      <div class="feat"><h3>Nhiều dự án cùng lúc</h3><p>Giao việc ở dự án này rồi sang dự án khác; việc cũ vẫn chạy nền, có dấu hiệu đang chạy / đã xong.</p></div>
+      <div class="feat"><h3>Sửa tệp ngay trong ứng dụng</h3><p>Bấm vào tệp chữ trong danh sách để xem và sửa, không cần mở ứng dụng khác.</p></div>
+      <div class="feat"><h3>Riêng tư</h3><p>Tệp nằm trên máy bạn. Số liệu cải tiến chỉ là con số và mã lỗi, không có nội dung, và tắt được trong Cài đặt.</p></div>
+      <div class="feat"><h3>Hạn mức công bằng</h3><p>Mỗi người có hạn mức token mỗi ngày (sinh viên 5 triệu, giảng viên 10 triệu), thêm 10% để hoàn tất lượt đang làm.</p></div>
     </div>
   </div>
 </section>
@@ -252,7 +229,7 @@ footer a{color:var(--ice)}
     <div class="two">
       <div>
         <h2>Sau khi đăng nhập: nhiều mẹo hơn</h2>
-        <p class="lead">Nút 💡 ở góc trên có hướng dẫn riêng cho từng chế độ: mẹo, thủ thuật, tình huống mẫu bấm là chạy, phím tắt, cách xử lý khi gặp sự cố. Có ô tìm kiếm (gõ không dấu cũng được) và mục “Có gì mới”.</p>
+        <p class="lead">Nút 💡 ở góc trên có hướng dẫn riêng cho từng chế độ: mẹo, tình huống mẫu bấm là chạy, phím tắt, xử lý sự cố. Có ô tìm kiếm, gõ không dấu cũng được.</p>
         <a class="btn" href="/agent/guide/help.html">Đọc hướng dẫn sử dụng</a> <a class="btn ghost" href="/agent/guide/changelog.html">Nhật ký thay đổi</a>
       </div>
       <div class="shot"><img src="/agent/guide/img/huong-dan.webp" width="2560" height="1600" alt="Hộp hướng dẫn trong ứng dụng" loading="lazy"></div>
@@ -266,18 +243,17 @@ footer a{color:var(--ice)}
       <div>
         <h2>Bắt đầu trong 3 bước</h2>
         <ol class="steps">
-          <li><b>Đăng nhập</b> bằng tài khoản Microsoft của trường (@neu.edu.vn hoặc @st.neu.edu.vn).</li>
-          <li><b>Chọn chế độ</b> Work, Code hoặc Design, hoặc bấm “Dự án mẫu” để thử ngay.</li>
-          <li><b>Gõ điều bạn muốn</b>, càng ngắn càng tốt. Cần thêm thì nói tiếp, nó nhớ phần trước.</li>
+          <li><b>Đăng nhập</b> bằng tài khoản Microsoft của trường.</li>
+          <li><b>Chọn chế độ</b> Work, Code hoặc Design, hoặc mở dự án mẫu để thử.</li>
+          <li><b>Gõ điều bạn muốn</b>, càng ngắn càng tốt; cần thêm thì nói tiếp.</li>
         </ol>
       </div>
       <div>
         <h2>Hỏi nhanh đáp gọn</h2>
-        <details><summary>Ai dùng được?</summary><p>Cán bộ, giảng viên và sinh viên có tài khoản @neu.edu.vn hoặc @st.neu.edu.vn.</p></details>
-        <details><summary>Dữ liệu của tôi có bị gửi đi đâu không?</summary><p>Nội dung bạn trao đổi với mô hình được gửi tới máy chủ mô hình của trường để trả lời. Tệp trong thư mục làm việc chỉ được đọc khi cần cho yêu cầu của bạn. Số liệu cải tiến ứng dụng chỉ gồm con số, không có nội dung, và có thể tắt.</p></details>
-        <details><summary>Nên dùng bản web hay bản cài?</summary><p>Bản web mở là dùng. Bản cài (macOS, Windows) làm việc trực tiếp với thư mục trên máy và nhận thông báo khi có bản mới. Tải bản cài sau khi đăng nhập, có kèm mã băm SHA-256 để kiểm tra.</p></details>
-        <details><summary>Gặp cảnh báo “nhà phát hành không xác định” khi cài?</summary><p>Bản cài hiện chưa ký số nên macOS và Windows sẽ cảnh báo. Hãy so mã băm SHA-256 trên trang tải với tệp bạn vừa tải rồi mới mở.</p></details>
-        <details><summary>Báo hết hạn mức thì sao?</summary><p>Hạn mức tính lại mỗi ngày. Thanh trạng thái cho biết bạn đã dùng bao nhiêu và khi nào được làm mới.</p></details>
+        <details><summary>Dữ liệu của tôi có bị gửi đi đâu không?</summary><p>Nội dung trao đổi được gửi tới máy chủ mô hình của trường để trả lời; tệp chỉ được đọc khi cần cho yêu cầu của bạn.</p></details>
+        <details><summary>Nên dùng bản web hay bản cài?</summary><p>Bản web mở là dùng. Bản cài (macOS, Windows) làm việc trực tiếp với thư mục trên máy và tự báo khi có bản mới; tải sau khi đăng nhập, kèm mã băm SHA-256.</p></details>
+        <details><summary>Gặp cảnh báo “nhà phát hành không xác định” khi cài?</summary><p>Bản cài chưa ký số nên macOS và Windows cảnh báo. So mã băm SHA-256 trên trang tải với tệp vừa tải rồi mới mở.</p></details>
+        <details><summary>Báo hết hạn mức thì sao?</summary><p>Hạn mức tính lại mỗi ngày; thanh trạng thái cho biết bạn đã dùng bao nhiêu.</p></details>
       </div>
     </div>
   </div>

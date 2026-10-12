@@ -72,6 +72,8 @@ jobs:
           # mọi thứ của deploy/220 trừ tệp nặng/sinh ra: downloads/ (bản cài Desktop do release.yml lo), gói oauth2-proxy
           tar -C deploy/220 --exclude='./downloads' --exclude='./auth/*.tar.gz' --exclude='./web.tar.gz' --exclude='__pycache__' --exclude='.unittest.log' -cf - . | tar -C stage -xf -
           tar -C apps/web/dist -czf stage/web.tar.gz .
+          # trang nhật ký thay đổi công khai (/agent/guide/changelog.html) dựng LẠI từ CHANGELOG.md mỗi lần triển khai (bản commit sẵn bị cũ)
+          node scripts/version.mjs changelog-html stage/guide-public/changelog.html
           # Mã công khai chỉ có dấu giữ chỗ @@SITE_…@@; giá trị thật của nơi triển khai nằm ở secret SITE_CONF (docs/PUBLIC.md).
           # Thiếu biến thì dừng TẠI ĐÂY, trước khi gửi gì lên máy chủ.
           node deploy/render-site.mjs stage --mask     # che từng giá trị (IP…) trong mọi nhật ký sau đó
