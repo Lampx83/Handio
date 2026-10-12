@@ -40,6 +40,8 @@ let win: BrowserWindow | null = null;
 let updater: Updater | null = null;
 let policy: Policy = {};
 const controllers = new Map<Profile, LocalController>();
+/** Thư mục lần xuất PDF/PNG gần nhất (gợi ý cho hộp "Lưu thành…"). */
+let lastExportDir = "";
 let mockServer: Server | null = null;
 let mockUrl = "";
 
@@ -379,6 +381,15 @@ async function buildController(profile: Profile): Promise<LocalController> {
     projects: host,
     chats: chatStore(),
     renderDesign: profile === "design" ? renderDesign : undefined,
+    // xuất PDF/PNG: hỏi lưu vào thư mục nào (đóng hộp thoại = lưu vào thư mục mặc định cạnh tệp thiết kế). Nhớ thư mục vừa chọn cho lần sau.
+    pickSavePath: profile === "design" && !SMOKE ? async ({ defaultPath, format }) => {
+      const start = lastExportDir ? path.join(lastExportDir, path.basename(defaultPath)) : defaultPath;
+      const opts = { title: "Lưu bản xuất", defaultPath: start, buttonLabel: "Lưu", filters: [{ name: format.toUpperCase(), extensions: [format] }], properties: ["createDirectory" as const, "showOverwriteConfirmation" as const] };
+      const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+      if (r.canceled || !r.filePath) return null;
+      lastExportDir = path.dirname(r.filePath);
+      return r.filePath;
+    } : undefined,
     store: new JsonSettingsStore(path.join(userData(), "settings.json"), codec(), { persistKeyWithoutCodec: false }),
     trust: new JsonTrustStore(path.join(userData(), "trusted-folders.json")),
     presets: [

@@ -8,7 +8,7 @@ import { changeDiff, listChanges, revertChanges, type ChangeDiff, type ChangeFil
 import { detectRun, type RunSuggestion } from "./run-detect";
 import { mergeHooks } from "./hooks";
 import { extOf, formatSections, isOfficeFile, readDocumentSections } from "./office/readdoc";
-import { basename, join, relative } from "./path";
+import { basename, isInside, join, relative } from "./path";
 import { sniffImage } from "./vision";
 import type { Mode } from "./permissions";
 import { chatTitle, cleanProjectName, countTurns, ID_RE, messagesToHistory, newId, trimForSave, type ChatMeta, type ChatStore, type HistoryItem, type ProjectHost, type ProjectsState } from "./projects";
@@ -61,6 +61,8 @@ export interface ControllerOptions {
   chats?: ChatStore;
   /** Dựng một trang HTML thành PDF/PNG (Desktop, trong cửa sổ ẩn không script, không mạng). */
   renderDesign?: (html: string, opts: { format: "pdf" | "png"; width: number; height?: number }) => Promise<Uint8Array>;
+  /** Hộp "Lưu thành…" của hệ điều hành (Desktop): hỏi người dùng muốn xuất vào thư mục nào. Trả null nếu huỷ. Không có = lưu cạnh tệp thiết kế. */
+  pickSavePath?: (o: { defaultPath: string; format: "pdf" | "png" }) => Promise<string | null>;
   /** Tiêu đề đăng nhập (SSO/tài khoản) và các máy chủ (host[:cổng]) được phép nhận nó. */
   authHeaders?: () => Promise<Record<string, string> | null>;
   authHosts?: string[];
@@ -831,9 +833,17 @@ export class LocalController implements AgentController {
       const stem = basename(p).replace(/\.[^.]+$/, "");
       let name = `${stem}.${format}`;
       for (let n = 2; await this.o.env.stat(join(dir, name)); n++) name = `${stem} (${n}).${format}`;
-      await this.o.env.writeBytes(join(dir, name), data);
-      const rel = relPath(this.session.ctx, join(dir, name));
-      this.fire({ type: "files_changed", paths: [rel] });
+      let target = join(dir, name);
+      if (this.o.pickSavePath) {
+        // hỏi người dùng lưu vào thư mục nào (hộp "Lưu thành…" của hệ điều hành; nó tự hỏi nếu trùng tên)
+        // không chọn (đóng hộp thoại) thì xuất vào thư mục mặc định: cạnh tệp thiết kế
+        const chosen = await this.o.pickSavePath({ defaultPath: target, format });
+        if (chosen) target = chosen.toLowerCase().endsWith("." + format) ? chosen : `${chosen}.${format}`;
+      }
+      await this.o.env.writeBytes(target, data);
+      const inside = isInside(this.session.ctx.root, target);
+      const rel = inside ? relPath(this.session.ctx, target) : target;
+      if (inside) this.fire({ type: "files_changed", paths: [rel] });
       return { saved: rel };
     } catch (e) {
       return { error: (e as Error).message };

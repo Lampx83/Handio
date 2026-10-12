@@ -44,7 +44,7 @@ export class DesignPreview {
         h("button", { class: "btn sm", type: "button", title: "Tải lại", "aria-label": "Tải lại bản xem trước", onclick: () => void this.show(this.path, false) }, "↻")),
       h("div", { class: "pv-tools" },
         h("button", { class: "btn sm", type: "button", onclick: () => this.path && this.download(this.path) }, "⬇ Tải tệp"),
-        h("button", { class: "btn sm", type: "button", title: "Xuất PDF cạnh tệp thiết kế (cần bản Desktop)", onclick: () => void this.exp("pdf") }, "PDF"),
+        h("button", { class: "btn sm", type: "button", title: "Xuất PDF: chọn thư mục lưu (không chọn thì lưu cạnh tệp thiết kế). Cần bản Desktop", onclick: () => void this.exp("pdf") }, "PDF"),
         h("button", { class: "btn sm", type: "button", title: "Xuất ảnh PNG cạnh tệp thiết kế (cần bản Desktop)", onclick: () => void this.exp("png") }, "PNG"),
         this.pickBtn, this.note),
       this.stage, this.pickBar);

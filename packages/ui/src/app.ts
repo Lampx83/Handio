@@ -1480,6 +1480,7 @@ class App {
       void this.pv.refreshFiles(path);
       return this.paintRight();
     }
+    if (/\.(png|jpe?g|gif|webp|bmp)$/i.test(path)) return this.openImage(path);
     const r = await this.ctl.readFile(path);
     const dlg = h("dialog", { class: "viewer" });
     const view = "error" in r ? h("div", { class: "hint" }, r.error) : h("pre", {}, ...r.text.split("\n").slice(0, 3000).map((l, i) => h("div", {}, r.kind === "text" ? h("span", { class: "ln" }, String(i + 1)) : null, l)));
@@ -1530,6 +1531,33 @@ class App {
     dlg.append(h("div", { class: "dh" }, h("span", { class: "mono" }, path), acts), db);
     paintView();
     dlg.style.width = "min(860px, 96vw)";
+    dlg.addEventListener("close", () => dlg.remove());
+    document.body.append(dlg);
+    dlg.showModal();
+  }
+
+  /** Xem ảnh (PNG/JPG/GIF/WebP) ngay trong ứng dụng, vd bản PNG vừa xuất từ tab Design. Ảnh nạp qua data: URI (CSP chỉ cho img-src 'self' data:). */
+  private async openImage(path: string): Promise<void> {
+    const r = await this.ctl.downloadFile(path);
+    const dlg = h("dialog", { class: "viewer" });
+    let body: HTMLElement;
+    if ("error" in r) body = h("div", { class: "hint" }, r.error);
+    else if (r.data.length > 12 * 1024 * 1024) body = h("div", { class: "hint" }, "Ảnh quá lớn để xem trước. Dùng nút Tải xuống hoặc Mở bằng ứng dụng.");
+    else {
+      let bin = "";
+      for (let i = 0; i < r.data.length; i += 0x8000) bin += String.fromCharCode(...r.data.subarray(i, i + 0x8000));
+      const ext = (/\.([a-z0-9]+)$/i.exec(path)?.[1] ?? "png").toLowerCase();
+      const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/" + ext;
+      body = h("img", { src: `data:${mime};base64,${btoa(bin)}`, alt: path, style: { maxWidth: "100%", height: "auto", display: "block", margin: "0 auto" } });
+    }
+    dlg.append(
+      h("div", { class: "dh" }, h("span", { class: "mono" }, path),
+        h("span", { class: "acts-h" },
+          this.state.capabilities.openExternal ? h("button", { class: "btn sm", type: "button", onclick: () => void this.ctl.openExternally?.(path) }, "Mở bằng ứng dụng") : null,
+          h("button", { class: "btn sm", type: "button", onclick: () => void this.download(path) }, "Tải xuống"),
+          h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng"))),
+      h("div", { class: "db" }, body));
+    dlg.style.width = "min(960px, 96vw)";
     dlg.addEventListener("close", () => dlg.remove());
     document.body.append(dlg);
     dlg.showModal();
