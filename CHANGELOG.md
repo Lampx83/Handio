@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.17] - 2026-10-12
+
 ### Sửa
 - **Công thức toán hiện đẹp thay vì mã thô**: câu trả lời có `$k \ge 2$`, `$$\frac{a}{b}$$`, `\begin{cases}…\end{cases}`, `\sqrt`, tổng, tích phân… được vẽ thành công thức (phân số, căn, hệ phương trình có ngoặc nhọn…). Tiền như "$5" hay "10$" không bị nhận nhầm; công thức lỗi cú pháp hiện nguyên mã.
 
