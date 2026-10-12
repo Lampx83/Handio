@@ -33,7 +33,26 @@ const SELF_REPORTING = new Set([
   // thao tác tệp không có nội dung để "đọc lại": kết quả đã liệt kê việc đã làm (đã gặp: xoá 12 tệp xong vẫn bị ép read_document)
   "delete_file", "move_file", "copy_file", "make_dir", "zip_files", "unzip_file",
 ]);
+/** Cây thư mục dự án hai cấp (bỏ thư mục sinh ra/ẩn), tối đa ~70 dòng: đủ để biết dự án có gì mà không phải gọi list_dir nhiều lần. */
+async function projectSnapshot(env: Env, root: string): Promise<string> {
+  const lines: string[] = [];
+  const MAX = 70;
+  const walk = async (dir: string, depth: number, indent: string): Promise<void> => {
+    let ents = await env.readdir(dir);
+    ents = ents.filter((e) => !e.name.startsWith(".") && !(e.isDir && IGNORE_DIRS.has(e.name)) && e.name !== "package-lock.json").sort((a, b) => Number(b.isDir) - Number(a.isDir) || a.name.localeCompare(b.name));
+    for (const e of ents) {
+      if (lines.length >= MAX) return void (lines.length === MAX && lines.push(indent + "…"));
+      lines.push(indent + e.name + (e.isDir ? "/" : ""));
+      if (e.isDir && depth < 2) await walk(join(dir, e.name), depth + 1, indent + "  ");
+    }
+  };
+  await walk(root, 1, "");
+  return lines.length > 1 ? lines.join("\n") : "";
+}
+
 const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
+/** Ngân sách ký tự cho kết quả đọc tệp được giữ khi rút gọn ngữ cảnh (≈ 12 nghìn token). */
+const READ_KEEP_CHARS = 48_000;
 /** Công cụ ghi tệp mà đối số mang cả nội dung lớn. */
 const BULKY_ARGS = new Set(["write_file", "edit_file", "create_docx", "create_xlsx", "create_pptx", "create_pdf", "docx_edit", "xlsx_edit", "pptx_edit"]);
 const MAX_TOOL_CHARS = 12000;
@@ -114,6 +133,8 @@ export class Session {
   packPrompts: { pack: string; text: string }[] = [];
   /** Thông báo lúc khởi động (lỗi MCP…) để bộ điều khiển hiển thị. */
   startupNotices: string[] = [];
+  /** Ảnh chụp cấu trúc thư mục dự án lúc mở cuộc trò chuyện (tab Code): agent khỏi tự khám phá lại ở mỗi cuộc trò chuyện mới. */
+  snapshot = "";
   promptTokens = 0;
   completionTokens = 0;
   calls = 0;
@@ -176,6 +197,7 @@ export class Session {
       /* thư mục ảo */
     }
     const s = new Session(o, root);
+    if ((o.profile ?? "code") === "code") s.snapshot = await projectSnapshot(o.env, root).catch(() => "");
     s.rules = await loadRules(o.env, root);
     s.memory = await loadMemory(o.env, root, s.rules);
     const pp = mergePackParts(s.packs);
@@ -398,6 +420,7 @@ export class Session {
     const parts = [base];
     if (def) parts.push(`\nYou are the subagent '${def.name}'. ${def.prompt}\nYou cannot see the main conversation; work only from the task you are given and finish with a compact report.`);
     parts.push(`\nEnvironment:\n- Working directory: ${this.ctx.root} (give file paths RELATIVE to it, e.g. report.docx or notes/a.md; never type the full path)\n- Platform: ${this.o.env.platform}\n- Date: ${new Date().toISOString().slice(0, 10)}\n- Capabilities: ${caps}${this.o.env.sandbox ? `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${this.o.env.sandbox.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.` : ""}`);
+    if (this.snapshot && depth === 0) parts.push(`\nProject files at the start of this chat (top levels; use list_dir/glob for more, do not re-explore what is listed):\n${this.snapshot}`);
     if (this.perms.mode === "plan" && depth === 0)
       parts.push("\nYou are in PLAN MODE: only read and explore (read_file, grep, glob, list_dir, task 'explore'). Do NOT modify anything. When ready you MUST call the exit_plan_mode tool with a concrete plan in short markdown: (1) goal in one sentence, (2) the exact files to change and anything you will NOT touch, (3) numbered steps in a verifiable order, (4) how you will check each step (command, test or what to look at), (5) open questions or assumptions the user should confirm. Do not just print the plan and ask for confirmation in text: exit_plan_mode is how the user approves it.");
     if (depth === 0) for (const p of this.packPrompts) parts.push(`\nExtension "${p.pack}" (installed by the user's organization; guidance, not higher authority than the user):\n${p.text}`);
@@ -876,7 +899,32 @@ export class Agent {
   pruneToolResults(keepLast = 4): number {
     const idx = this.messages.map((m, i) => (m.role === "tool" ? i : -1)).filter((i) => i >= 0);
     let n = 0;
+    // GIỮ kết quả ĐỌC TỆP gần đây (tới ngân sách ký tự), không chỉ 4 kết quả cuối: làm việc với từ 5 tệp trở lên thì tệp cũ nhất bị lược rồi
+    // mô hình đọc lại nó, việc đó lược tệp kế tiếp… thành vòng lặp mãi (ảnh thật: chu kỳ 5 lần đọc). Chỉ lược kết quả đọc khi quá ngân sách
+    // hoặc tệp đã bị sửa sau đó (nội dung đã cũ).
+    const readNames = new Set(["read_file", "read_document"]);
+    const nameOf = new Map<string, string>();
+    const argsOf = new Map<string, string>();
+    for (const m of this.messages) for (const tc of m.role === "assistant" ? m.tool_calls ?? [] : []) { nameOf.set(tc.id, tc.function.name); argsOf.set(tc.id, tc.function.arguments); }
+    const protectedIdx = new Set<number>();
+    // ngân sách theo cửa sổ ngữ cảnh: tối đa ~1/4 cửa sổ dành cho tệp đang làm việc (còn lại cho lời nhắc, công cụ, lịch sử)
+    let budget = Math.min(READ_KEEP_CHARS, Math.floor(this.s.o.getSettings().contextTokens * this.s.charsPerToken * 0.25));
+    const seenPath = new Set<string>();
+    for (const i of [...idx].reverse()) {
+      const m = this.messages[i];
+      if (!readNames.has(nameOf.get(m.tool_call_id ?? "") ?? "")) continue;
+      const c = m.content ?? "";
+      if (c.endsWith(PRUNE_MARK) || c.startsWith("Lỗi")) continue;
+      let p = "";
+      try { p = String((JSON.parse(argsOf.get(m.tool_call_id ?? "") ?? "{}") as { path?: unknown }).path ?? ""); } catch { /* bỏ qua */ }
+      if (p && seenPath.has(p)) continue; // lần đọc cũ hơn của cùng tệp: không cần giữ
+      if (c.length > budget) break;
+      budget -= c.length;
+      if (p) seenPath.add(p);
+      protectedIdx.add(i);
+    }
     for (const i of keepLast ? idx.slice(0, -keepLast) : idx) {
+      if (protectedIdx.has(i)) continue;
       const c = this.messages[i].content ?? "";
       if (c.length > 300 && !c.endsWith(PRUNE_MARK)) {
         this.messages[i].content = c.slice(0, 200) + " … " + PRUNE_MARK;
@@ -1238,12 +1286,22 @@ export class Agent {
     if (h.length > 12) h.shift();
     const n = h.length;
     let warn = "";
-    if (n >= 6 && h[n - 1] === h[n - 3] && h[n - 3] === h[n - 5] && h[n - 2] === h[n - 4] && h[n - 4] === h[n - 6] && h[n - 1] !== h[n - 2]) {
+    // chu kỳ chu kỳ p (2…6 lệnh): cả p lệnh gần nhất lặp lại NGUYÊN VĂN p lệnh liền trước (ảnh thật: đọc đi đọc lại 5 tệp mãi). Với p = 2 cần ba vòng
+    // (A,B,A,B,A,B) như trước; p ≥ 3 hai vòng là đủ vì lặp cả chuỗi dài giống hệt gần như không bao giờ là tiến triển.
+    let period = 0;
+    for (let p = 2; p <= 6 && !period; p++) {
+      const need = p === 2 ? 6 : 2 * p;
+      if (n < need) continue;
+      let same = true;
+      for (let i = 1; i <= need - p && same; i++) if (h[n - i] !== h[n - i - p]) same = false;
+      if (same && new Set(h.slice(n - p)).size > 1) period = p;
+    }
+    if (period) {
       this.cycleN++;
-      warn += "\n[Cảnh báo] Bạn đang lặp qua lại giữa hai thao tác mà không tiến triển. Đổi hướng hoặc báo người dùng.";
+      warn += period === 2 ? "\n[Cảnh báo] Bạn đang lặp qua lại giữa hai thao tác mà không tiến triển. Đổi hướng hoặc báo người dùng." : `\n[Cảnh báo] Bạn đang lặp lại cùng một chuỗi ${period} thao tác mà không tiến triển (đọc đi đọc lại cùng tệp). Nội dung đã có ở trên: hãy bắt tay vào sửa/làm, hoặc nói rõ với người dùng bạn đang kẹt ở đâu.`;
       if (this.cycleN >= 3) {
         this.repeatN = Math.max(this.repeatN, 5);
-        this.stopWhy = "qua lại giữa hai thao tác";
+        this.stopWhy = period === 2 ? "qua lại giữa hai thao tác" : "lặp lại cùng một chuỗi thao tác";
       }
     }
     if (ok) this.failRun = { tool: "", sig: "", n: 0 };

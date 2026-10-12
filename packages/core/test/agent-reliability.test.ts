@@ -276,8 +276,10 @@ describe("giảm token: không gửi lại nội dung tệp đã được đọc
     const { c, llm } = await makeController(calls, { seed, settings: { contextTokens: 12000 } as any });
     await c.send("đọc nhiều");
     const last = llm.calls.at(-1)!.messages.filter((m: any) => m.role === "tool").map((m: any) => String(m.content));
-    expect(last.some((m: string) => m.endsWith("[đã lược để tiết kiệm ngữ cảnh]"))).toBe(true);
-    expect(last.at(-1)).not.toContain("[đã lược để tiết kiệm ngữ cảnh]");   // kết quả mới nhất luôn đầy đủ
+    // cửa sổ rất nhỏ so với 8 tệp lớn: phần đọc cũ phải bị lược hoặc đã được tóm tắt; kết quả mới nhất luôn đầy đủ.
+    // (Kết quả đọc tệp gần đây được GIỮ tới ngân sách ~1/4 cửa sổ để không rơi vào vòng đọc lại.)
+    expect(last.length < 8 || last.some((m: string) => m.endsWith("[đã lược để tiết kiệm ngữ cảnh]"))).toBe(true);
+    expect(last.at(-1)).not.toContain("[đã lược để tiết kiệm ngữ cảnh]");
   });
 });
 
@@ -410,5 +412,60 @@ describe("không quên việc chính khi sa vào sửa lỗi phụ", () => {
     await c.send("Đọc giúp tôi vài tệp");
     const sent = llm.calls.flatMap((x) => x.messages).filter((m) => m.role === "user").map((m) => String(m.content));
     expect(sent.some((m) => m.startsWith("[Hệ thống] Nhắc việc chính"))).toBe(false);
+  });
+});
+
+describe("vòng lặp đọc cùng một bộ tệp (chu kỳ dài)", () => {
+  it("lặp lại cùng 5 lệnh đọc nhiều vòng thì bị cảnh báo rồi dừng, không đọc mãi", async () => {
+    const { makeController } = await import("./helpers");
+    const files = ["a.py", "b.py", "c.py", "d.jsx", "e.jsx"];
+    const seed = Object.fromEntries(files.map((f) => [f, "x = 1\n".repeat(30)]));
+    // chu kỳ 5 (như ảnh thật: UploadSection, models, main, main, Home rồi lại từ đầu); a.py và c.py KHÁC nhau nhưng có 2 lệnh trùng liền kề
+    const cycle = ["a.py", "b.py", "c.py", "c.py", "d.jsx"];
+    const { c, llm, events } = await makeController((_m, n) => (n < 40 ? { calls: [{ name: "read_file", args: { path: cycle[n % cycle.length] } }] } : { text: "xong" }), { profile: "code", seed });
+    await c.send("Sửa lỗi tải tệp lên");
+    expect(llm.calls.length).toBeLessThan(25); // không chạy hết 40 bước
+    const seen = llm.calls.flatMap((x) => x.messages).map((m) => String(m.content ?? "")).join("\n"); // cái mô hình nhìn thấy
+    expect(seen).toMatch(/lặp lại cùng một chuỗi 5 thao tác/);
+    expect(events.some((e) => e.type === "turn_end")).toBe(true);
+  });
+});
+
+describe("rút gọn ngữ cảnh không làm mất tệp đang làm việc", () => {
+  it("kết quả ĐỌC TỆP gần đây được giữ (kể cả khi đọc nhiều hơn 4 tệp), kết quả lệnh dài cũ vẫn bị lược", async () => {
+    const { makeController } = await import("./helpers");
+    const files = ["a.py", "b.py", "c.py", "d.jsx", "e.jsx", "f.jsx"];
+    const seed = Object.fromEntries(files.map((f, i) => [f, `# ${f}\n` + `x${i} = 1\n`.repeat(120)]));
+    const { c } = await makeController([
+      ...files.map((f) => ({ calls: [{ name: "read_file", args: { path: f } }] })),
+      { text: "xong" },
+    ], { profile: "code", seed });
+    await c.send("đọc các tệp");
+    const loop = c.currentSession.main;
+    // thêm một kết quả lệnh dài cũ đứng TRƯỚC các lần đọc
+    loop.messages.unshift({ role: "assistant", content: null, tool_calls: [{ id: "old1", type: "function", function: { name: "bash", arguments: "{\"command\":\"ls\"}" } }] }, { role: "tool", tool_call_id: "old1", content: "x".repeat(5000) });
+    loop.pruneToolResults();
+    const tools = loop.messages.filter((m) => m.role === "tool");
+    const reads = tools.filter((m) => m.tool_call_id !== "old1");
+    expect(reads.length).toBeGreaterThanOrEqual(6);
+    expect(reads.every((m) => !(m.content ?? "").includes("đã lược"))).toBe(true); // không tệp nào bị lược: mô hình không phải đọc lại
+    expect(tools.find((m) => m.tool_call_id === "old1")!.content!.length).toBeLessThan(400);
+  });
+});
+
+describe("cuộc trò chuyện mới không phải khám phá lại thư mục", () => {
+  it("tab Code: lời nhắc có ảnh chụp cây thư mục (bỏ thư mục sinh ra); tab Work thì không", async () => {
+    const { makeController } = await import("./helpers");
+    const seed = { "README.md": "# x", "exam-app-backend/main.py": "print(1)", "exam-app-backend/models.py": "x", "exam-app-frontend/src/pages/Home.jsx": "x", "node_modules/a/index.js": "x", ".env": "SECRET=1" };
+    const code = await makeController([{ text: "ok" }], { profile: "code", seed });
+    const sys = code.c.currentSession.systemPrompt(null, 0);
+    expect(sys).toContain("Project files at the start of this chat");
+    expect(sys).toContain("exam-app-backend/");
+    expect(sys).toContain("main.py");
+    const snap = sys.slice(sys.indexOf("Project files at the start"));
+    expect(snap).not.toContain("node_modules/");
+    expect(snap).not.toContain(".env");
+    const work = await makeController([{ text: "ok" }], { profile: "work", seed });
+    expect(work.c.currentSession.systemPrompt(null, 0)).not.toContain("Project files at the start");
   });
 });
