@@ -24,6 +24,11 @@ export class ProcessManager {
   private seq = 0;
   constructor(private env: Env, private emit: (e: ProcEvent) => void, private max = 5) {}
 
+  /** Đổi nơi nhận sự kiện (phiên mới của cùng dự án thay phiên cũ: tiến trình nền vẫn chạy). */
+  setEmit(emit: (e: ProcEvent) => void): void {
+    this.emit = emit;
+  }
+
   start(command: string, cwd: string): ProcInfo {
     if (!this.env.spawn) throw new Error("Nơi chạy này không hỗ trợ chạy nền.");
     // chạy lại đúng lệnh cũ (hoặc một máy chủ dev khác trong cùng thư mục): dừng cái cũ trước, nếu không hai máy chủ sẽ chiếm hai cổng

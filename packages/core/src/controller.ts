@@ -1,4 +1,5 @@
 import type { DirEntry, Env } from "./env";
+import { ProcessManager } from "./processes";
 import { LlmClient, LlmError } from "./llm";
 import { PROFILES, type Profile } from "./profiles";
 import { allowedModes, type Policy } from "./policy";
@@ -195,8 +196,13 @@ export class LocalController implements AgentController {
     return { base, fetch: this.o.fetchImpl ?? ((...a) => fetch(...a)), headers: mayAuth ? this.o.authHeaders : undefined };
   }
 
+  /** Tiến trình nền (máy chủ dev…) của dự án đang mở: sống qua "cuộc trò chuyện mới", mở lại lịch sử, chuyển sang rồi quay về dự án. */
+  private procs?: ProcessManager;
+
   private makeSessionWith(packs: LoadedPack[]): Promise<Session> {
+    if (this.o.env.spawn && !this.procs) this.procs = new ProcessManager(this.o.env, () => undefined);
     return Session.create({
+      procs: this.procs,
       env: this.o.env,
       profile: this.o.profile ?? "code",
       policy: this.o.policy,
@@ -592,6 +598,8 @@ export class LocalController implements AgentController {
   dispose(): void {
     this.interrupt();
     this.session.dispose();
+    this.procs?.stopAll();
+    this.procs = undefined;
   }
 
   async newSession(): Promise<void> {
@@ -625,6 +633,8 @@ export class LocalController implements AgentController {
   /** Chuyển sang một thư mục khác: dừng việc đang chạy, mở phiên mới ở thư mục đó. */
   private async attach(env: Env, projectId: string, name: string): Promise<void> {
     this.interrupt();
+    this.procs?.stopAll(); // đổi dự án trong CÙNG bộ điều khiển (không dùng nhiều dự án): dừng tiến trình của dự án cũ
+    this.procs = undefined;
     this.session.dispose();
     this.o.env = env;
     this.projectId = projectId;

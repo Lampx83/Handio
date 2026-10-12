@@ -65,6 +65,8 @@ const AGENTS: Record<string, AgentDef> = {
 };
 
 export interface SessionOptions {
+  /** Tiến trình nền của DỰ ÁN (do bộ điều khiển giữ): phiên mới/cuộc trò chuyện khác vẫn thấy và không dừng máy chủ đang chạy. */
+  procs?: ProcessManager;
   env: Env;
   profile?: Profile;
   policy?: Policy;
@@ -131,7 +133,10 @@ export class Session {
 
   private constructor(readonly o: SessionOptions, root: string) {
     this.ctx = { env: o.env, root, extraDirs: o.env.scratchDir ? [o.env.scratchDir] : [], readFiles: new Map(), undoStack: [], todos: [], onTodos: (t) => o.emit({ type: "todos", todos: t }) };
-    if (o.env.spawn) this.ctx.procs = new ProcessManager(o.env, (e) => o.emit({ type: "proc", ...e }));
+    if (o.procs) {
+      this.ctx.procs = o.procs;
+      o.procs.setEmit((e) => o.emit({ type: "proc", ...e }));
+    } else if (o.env.spawn) this.ctx.procs = new ProcessManager(o.env, (e) => o.emit({ type: "proc", ...e }));
     const s = o.getSettings();
     const proj = o.project ?? { deny: [], allow: [] };
     const trusted = !!o.trustProject;
@@ -195,7 +200,7 @@ export class Session {
 
   /** Dừng mọi tiến trình nền và máy chủ MCP khi phiên kết thúc. */
   dispose(): void {
-    this.ctx.procs?.stopAll();
+    if (!this.o.procs) this.ctx.procs?.stopAll(); // tiến trình của dự án (do bộ điều khiển giữ) không dừng khi chỉ đổi phiên/cuộc trò chuyện
     this.mcp?.close();
   }
 

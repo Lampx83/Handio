@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMultiProject, KvChatStore, KvProjectHost, MemoryEnv, type ChatMessage, type ChatOptions, type ChatResult, type Env, type LlmClient, type LocalController, type SessionEvent } from "../src";
+import { createMultiProject, KvChatStore, KvProjectHost, MemoryEnv, type ChatMessage, type ChatOptions, type ChatResult, type Env, type LlmClient, type LocalController, type SessionEvent, type Settings } from "../src";
 
 const kv = () => {
   const m = new Map<string, string>();
@@ -117,5 +117,61 @@ describe("nhiều dự án chạy cùng lúc", () => {
     expect(events.filter((e) => e.type === "notice" && /tối đa/.test(String((e as { text?: string }).text))).length).toBe(0);
     llms.get(ids[0])!.open();
     await Promise.all(sends);
+  });
+});
+
+describe("máy chủ nền sống qua việc đổi dự án và đổi cuộc trò chuyện", () => {
+  it("chuyển sang dự án khác rồi quay lại: máy chủ dev của dự án vẫn chạy (không bị dừng); 'Cuộc trò chuyện mới' cũng không dừng nó", async () => {
+    const store = kv();
+    const host = new KvProjectHost(store, "reg", { id: "default", name: "Mặc định" }, async () => {
+      const e = new MemoryEnv("/ws", {});
+      (e as { exec?: unknown }).exec = async () => ({ code: 0, output: "", timedOut: false });
+      (e as { spawn?: unknown }).spawn = (_cmd: string, o: { onData: (s: string) => void }) => {
+        o.onData("  Local:   http://localhost:5173/\n");
+        return { stop: () => stopped.push(1) };
+      };
+      return e as Env;
+    });
+    const stopped: number[] = [];
+    let saved: Partial<Settings> = { mode: "auto" };
+    const calls = [{ name: "bash", args: { command: "npm run dev", background: true } }];
+    let n = 0;
+    const c = await createMultiProject({
+      env: await host.open("default"), profile: "code", realFs: false, projects: host, chats: new KvChatStore(store, "chats"),
+      store: { load: async () => saved, save: async (s) => void (saved = s) },
+      trust: { isTrusted: async () => true, setTrusted: async () => undefined },
+      onChild: (child: LocalController) => {
+        const llm = {
+          async models() { return ["fake"]; },
+          async chat(_m: ChatMessage[], opts: ChatOptions = {}): Promise<ChatResult> {
+            const first = n++ === 0;
+            if (!first) opts.onContent?.("ok");
+            return { content: first ? "" : "ok", reasoning: "", toolCalls: first ? [{ id: "t1", name: "bash", arguments: JSON.stringify(calls[0].args) }] : [], usage: { prompt_tokens: 5, completion_tokens: 5 }, finish: first ? "tool_calls" : "stop" };
+          },
+        };
+        (child as unknown as { llm: LlmClient }).llm = llm as unknown as LlmClient;
+        (child.currentSession.o as { llm: LlmClient }).llm = llm as unknown as LlmClient;
+      },
+    });
+    const events: SessionEvent[] = [];
+    c.onEvent((e) => events.push(e));
+    const first = (await c.projectsState!()).active;
+    await c.send("chạy máy chủ");
+    expect(events.some((e) => e.type === "proc" && e.state === "start")).toBe(true);
+
+    await c.projectCreate!({ name: "Dự án B" });
+    await c.newSession(); // đổi cuộc trò chuyện ở dự án B không ảnh hưởng dự án 1
+    expect(stopped).toHaveLength(0);
+
+    events.length = 0;
+    await c.projectOpen!(first);
+    expect(stopped).toHaveLength(0); // máy chủ của dự án 1 vẫn chạy
+    // giao diện được báo lại tiến trình đang chạy (kèm địa chỉ) để hiện nút "Mở localhost"
+    const replay = events.filter((e) => e.type === "proc") as Extract<SessionEvent, { type: "proc" }>[];
+    expect(replay.length).toBeGreaterThan(0);
+    expect(replay.some((e) => e.url === "http://localhost:5173/")).toBe(true);
+
+    await c.newSession(); // "Cuộc trò chuyện mới" ở chính dự án 1 cũng không dừng máy chủ
+    expect(stopped).toHaveLength(0);
   });
 });

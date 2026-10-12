@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Máy chủ chạy nền không bị dừng khi đổi dự án hay mở cuộc trò chuyện khác**: bật máy chủ xem ứng dụng ở dự án A, sang dự án B rồi quay lại thì máy chủ vẫn chạy (nút "Mở localhost" vẫn còn); bấm "Cuộc trò chuyện mới" hay mở lại lịch sử cũng không dừng nó.
 - **Chạy nhiều dự án cùng lúc**: chuyển sang dự án khác thì agent ở dự án cũ **vẫn tiếp tục làm việc nền** (tối đa 3 dự án cùng lúc). Quay lại là thấy phần đã làm; yêu cầu xin quyền/câu hỏi đang chờ hiện lại; máy chủ dev của dự án cũ vẫn chạy.
 - **Biểu tượng trạng thái dự án và cuộc trò chuyện**: vòng xoay = đang làm việc, ✓ = đã xong khi bạn ở dự án khác (chưa xem), ⏸ = làm dở (bị dừng giữa chừng, mở ra rồi nhắn "tiếp tục"). Hiện trong danh sách dự án, danh sách trò chuyện và chấm nhỏ cạnh tên dự án khi dự án khác đang chạy.
 - **Sửa tệp chữ ngay trong ứng dụng**: bấm vào một tệp (AGENTS.md, .md, .json, .css, .js, .py…) trong danh sách tệp, hộp xem có nút **Sửa**; sửa rồi **Lưu** (hoặc Ctrl/Cmd+S), không phải mở bằng ứng dụng khác. Giữ nguyên kiểu xuống dòng của tệp; tệp Word/Excel/PowerPoint, nhị phân hoặc quá lớn vẫn mở bằng ứng dụng của nó.
