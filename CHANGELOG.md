@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.11] - 2026-10-12
+
 ### Thêm
 - **Bản triển khai tại NEU giữ tên "NEU Agent" và biểu tượng chữ N**: biểu tượng ứng dụng (Dock, thanh tác vụ), biểu tượng trình duyệt/PWA và dấu hiệu ở đầu cửa sổ là chữ N xanh như trước; bàn tay Handio chỉ hiện khi triển khai dưới tên "Handio".
 - **Tab Design hỏi lưu bản xuất vào thư mục nào** (Desktop): bấm PDF/PNG hiện hộp "Lưu bản xuất" để chọn thư mục và tên; không chọn (đóng hộp) thì lưu vào thư mục mặc định, cạnh tệp thiết kế. Nhớ thư mục vừa chọn cho lần sau.
