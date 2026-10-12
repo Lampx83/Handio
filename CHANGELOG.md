@@ -10,7 +10,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Tab Design: thiết kế cao không còn kéo cả trang lên**: trước đây thiết kế dài (landing page, slide cao) làm cuộn cả cửa sổ, đẩy chân thanh bên (tên người dùng, phiên bản) lên giữa màn hình. Nay chỉ khung xem trước cuộn.
 
 ### Thay đổi
-- **Trang giới thiệu công khai gọn và cập nhật**: bỏ các thẻ chữ đè lên hình hai cánh tay và mục "Làm được nhiều hơn…" (trùng phần đầu trang), rút gọn câu thừa và lặp, thêm các tính năng mới (nhiều dự án cùng lúc, sửa tệp trong ứng dụng, tự mở thử trang web). Năm mục dưới tiêu đề bấm được, dẫn tới phần giải thích. Biểu tượng trang là chữ N của NEU Agent.
+- **Trang giới thiệu công khai gọn và cập nhật**: bỏ các thẻ chữ đè lên hình hai cánh tay và mục "Làm được nhiều hơn…" (trùng phần đầu trang), rút gọn câu thừa và lặp, thêm các tính năng mới (nhiều dự án cùng lúc, sửa tệp trong ứng dụng, tự mở thử trang web). Năm mục dưới tiêu đề bấm được, dẫn tới phần giải thích. Ảnh demo chụp lại từ bản hiện tại (giao diện tối, có chữ N). Biểu tượng trang là chữ N của NEU Agent.
 
 ## [0.8.11] - 2026-10-12
 
