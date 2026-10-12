@@ -184,6 +184,9 @@ export async function runSmoke(c: Ctx): Promise<number> {
     await js(`window.__csp = []; document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI)); document.querySelector('#tab-design').click(); 1`);
     check("Design: khung xem trước hiện poster mẫu trong iframe cách ly (không cho chạy script)", await waitFor(`(() => { const f = document.querySelector('#panel-design .pv-frame'); return !!f && (f.getAttribute('sandbox') ?? '').split(' ').every((x) => x === '' || x === 'allow-same-origin') && f.srcdoc.includes('Trí tuệ nhân tạo'); })()`, 10000));
     await sleep(600);
+    // thiết kế rất cao: chỉ khung xem trước cuộn, cả trang (và chân thanh bên) không bị kéo lên
+    const tall = await js<{ grow: number; stage: boolean }>(`(() => { const w = document.querySelector('#panel-design .pv-wrap'); const fr = document.querySelector('#panel-design .pv-frame'); const before = document.documentElement.scrollHeight; if (w) w.style.height = '6000px'; if (fr) fr.style.height = '6000px'; const st = document.querySelector('#panel-design .pv-stage'); return { grow: document.documentElement.scrollHeight - Math.max(before, innerHeight), stage: !!st && st.scrollHeight > st.clientHeight }; })()`);
+    check("Design: thiết kế rất cao cuộn trong khung xem trước, không kéo cả trang lên", tall.grow <= 0 && tall.stage, JSON.stringify(tall));
     await shot("05-design");
     // đợi tới khi poster hiện trên màn hình (chụp sớm quá sẽ thấy nền)
     let top = { r: 0, g: 0, b: 0 };

@@ -331,9 +331,9 @@ dialog.proj-dlg textarea { width: 100%; box-sizing: border-box; resize: vertical
 dialog.proj-dlg input[type="text"] { width: 100%; box-sizing: border-box; }
 
 /* xem trước thiết kế (tab Design) */
-.pv-host { flex: 0 0 46%; min-width: 320px; max-width: 760px; display: flex; border-left: 1px solid var(--border); background: var(--panel2); }
+.pv-host { flex: 0 0 46%; min-width: 320px; max-width: 760px; min-height: 0; display: flex; border-left: 1px solid var(--border); background: var(--panel2); }
 .pv-host[hidden] { display: none; }
-.pv { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pv { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; } /* min-height:0: thiết kế cao thì cuộn BÊN TRONG khung xem trước, không kéo cả trang (và chân thanh bên) lên */
 .pv[hidden] { display: none; }
 .pv-head { display: flex; gap: 6px; padding: 8px 10px 4px; }
 .pv-head select { flex: 1; min-width: 0; padding: 4px 6px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: inherit; font: inherit; font-size: 12.5px; }
@@ -709,3 +709,6 @@ button.meter:hover, button.meter[aria-expanded="true"] { background: var(--panel
 .side-foot .ver-link { margin: 0; flex: none; }
 /* chữ N của NEU Agent không vẫy tay */
 .brand-mark.neu-mark svg { animation: none !important; border-radius: 22%; }
+
+/* cả ứng dụng luôn đúng cao bằng cửa sổ: nội dung dài chỉ cuộn trong từng khung */
+.shell { overflow: hidden; }

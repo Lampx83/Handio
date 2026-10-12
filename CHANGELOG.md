@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Tab Design: thiết kế cao không còn kéo cả trang lên**: trước đây thiết kế dài (landing page, slide cao) làm cuộn cả cửa sổ, đẩy chân thanh bên (tên người dùng, phiên bản) lên giữa màn hình. Nay chỉ khung xem trước cuộn.
+
 ## [0.8.11] - 2026-10-12
 
 ### Thêm
