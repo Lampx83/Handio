@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Sửa tệp chữ ngay trong ứng dụng**: bấm vào một tệp (AGENTS.md, .md, .json, .css, .js, .py…) trong danh sách tệp, hộp xem có nút **Sửa**; sửa rồi **Lưu** (hoặc Ctrl/Cmd+S), không phải mở bằng ứng dụng khác. Giữ nguyên kiểu xuống dòng của tệp; tệp Word/Excel/PowerPoint, nhị phân hoặc quá lớn vẫn mở bằng ứng dụng của nó.
+
 ### Sửa
 - **Kiểm tra trang (`check_page`) không còn báo lỗi giả với ứng dụng Vite**: WebSocket nội bộ (`ws://localhost`) của Vite bị chặn nhầm nên trang nào cũng "lỗi kết nối", khiến agent mất hàng chục bước sửa cấu hình vô ích.
 - **Thông báo "Đã lược bớt kết quả công cụ cũ" chỉ hiện một lần mỗi lượt** (trước đây lặp lại ở mỗi bước khi làm việc lâu).

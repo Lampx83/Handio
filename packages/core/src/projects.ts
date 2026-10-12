@@ -9,6 +9,10 @@ export interface ProjectInfo {
   path?: string;
   created: number;
   lastUsed: number;
+  /** Trạng thái lúc hỏi danh sách (không lưu): agent đang làm việc trong dự án này. */
+  running?: boolean;
+  /** Số cuộc trò chuyện của dự án bị dừng giữa chừng (dừng tay, chuyển dự án, mất kết nối) và chưa làm tiếp. */
+  unfinished?: number;
 }
 
 export interface ProjectsState {
@@ -36,6 +40,10 @@ export interface ChatMeta {
   updated: number;
   /** Số lượt người dùng đã hỏi. */
   turns: number;
+  /** Lượt cuối bị dừng giữa chừng (dừng tay, chuyển dự án, mất kết nối): chưa xong, có thể làm tiếp. */
+  unfinished?: boolean;
+  /** Agent đang làm việc trong cuộc trò chuyện này (không lưu). */
+  running?: boolean;
 }
 export interface SavedChat extends ChatMeta {
   messages: ChatMessage[];

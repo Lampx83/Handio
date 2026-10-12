@@ -1463,14 +1463,53 @@ class App {
     }
     const r = await this.ctl.readFile(path);
     const dlg = h("dialog", { class: "viewer" });
-    const body = "error" in r ? h("div", { class: "hint" }, r.error) : h("pre", {}, ...r.text.split("\n").slice(0, 3000).map((l, i) => h("div", {}, r.kind === "text" ? h("span", { class: "ln" }, String(i + 1)) : null, l)));
-    dlg.append(
-      h("div", { class: "dh" }, h("span", { class: "mono" }, path),
-        h("span", { class: "acts-h" },
-          this.state.capabilities.openExternal ? h("button", { class: "btn sm", type: "button", onclick: () => void this.ctl.openExternally?.(path) }, "Mở bằng ứng dụng") : null,
-          h("button", { class: "btn sm", type: "button", onclick: () => void this.download(path) }, "Tải xuống"),
-          h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng"))),
-      h("div", { class: "db" }, body, ...("text" in r && r.kind === "document" ? [h("div", { class: "hint" }, "Bản chữ trích xuất. Mở tệp gốc để xem đúng định dạng.")] : []), ...("text" in r && r.truncated ? [h("div", { class: "hint" }, "(đã cắt bớt phần cuối)")] : [])));
+    const view = "error" in r ? h("div", { class: "hint" }, r.error) : h("pre", {}, ...r.text.split("\n").slice(0, 3000).map((l, i) => h("div", {}, r.kind === "text" ? h("span", { class: "ln" }, String(i + 1)) : null, l)));
+    const db = h("div", { class: "db" }, view, ...("text" in r && r.kind === "document" ? [h("div", { class: "hint" }, "Bản chữ trích xuất. Mở tệp gốc để xem đúng định dạng.")] : []), ...("text" in r && r.truncated ? [h("div", { class: "hint" }, "(đã cắt bớt phần cuối)")] : []));
+    const acts = h("span", { class: "acts-h" });
+    // mọi tệp chữ đều sửa được ngay trong ứng dụng (tệp bị cắt bớt khi xem thì không: lưu lại sẽ mất phần cuối)
+    const canEdit = !("error" in r) && r.kind === "text" && !r.truncated && !!this.ctl.writeTextFile;
+    const paintView = (): void => {
+      clear(acts);
+      clear(db);
+      db.append(view, ...("text" in r && r.kind === "document" ? [h("div", { class: "hint" }, "Bản chữ trích xuất. Mở tệp gốc để xem đúng định dạng.")] : []), ...("text" in r && r.truncated ? [h("div", { class: "hint" }, "(đã cắt bớt phần cuối)")] : []));
+      if (canEdit) acts.append(h("button", { class: "btn sm primary", type: "button", onclick: () => paintEdit() }, "Sửa"));
+      if (this.state.capabilities.openExternal) acts.append(h("button", { class: "btn sm", type: "button", onclick: () => void this.ctl.openExternally?.(path) }, "Mở bằng ứng dụng"));
+      acts.append(
+        h("button", { class: "btn sm", type: "button", onclick: () => void this.download(path) }, "Tải xuống"),
+        h("button", { class: "btn sm", type: "button", onclick: () => dlg.close() }, "Đóng"));
+    };
+    const paintEdit = (): void => {
+      if ("error" in r) return;
+      const ta = h("textarea", { class: "ed", spellcheck: "false", "aria-label": "Nội dung tệp " + path, style: { width: "100%", minHeight: "55vh", fontFamily: "var(--mono, ui-monospace, monospace)", fontSize: "13px", lineHeight: "1.5", resize: "vertical" } });
+      ta.value = r.text;
+      const err = h("div", { class: "res bad", role: "alert" });
+      const save = async (): Promise<void> => {
+        err.textContent = "";
+        const w = await this.ctl.writeTextFile!(path, ta.value);
+        if ("error" in w) {
+          err.textContent = w.error;
+          return;
+        }
+        dlg.close();
+        void this.loadTree();
+        void this.openFile(path); // mở lại để xem bản đã lưu
+      };
+      ta.addEventListener("keydown", (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+          e.preventDefault();
+          void save();
+        }
+      });
+      clear(acts);
+      clear(db);
+      db.append(ta, err);
+      acts.append(
+        h("button", { class: "btn sm primary", type: "button", onclick: () => void save() }, "Lưu"),
+        h("button", { class: "btn sm", type: "button", onclick: () => paintView() }, "Huỷ"));
+      ta.focus();
+    };
+    dlg.append(h("div", { class: "dh" }, h("span", { class: "mono" }, path), acts), db);
+    paintView();
     dlg.style.width = "min(860px, 96vw)";
     dlg.addEventListener("close", () => dlg.remove());
     document.body.append(dlg);

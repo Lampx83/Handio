@@ -289,6 +289,7 @@ export class LocalController implements AgentController {
     for (const n of this.pendingNotices.splice(0)) this.fire({ type: "notice", level: "warn", text: n });
     let final = "";
     let interrupted = false;
+    let failed = false; // lượt kết thúc vì lỗi (mất kết nối, hết hạn mức…) chứ không phải vì xong việc
     let ranTurn = false;
     try {
       const modelCmd = /^\/model(?:\s+(.+))?$/.exec(text.trim());
@@ -316,7 +317,10 @@ export class LocalController implements AgentController {
     } catch (e) {
       if (!(e instanceof ToolError)) this.diag?.onError(e);
       if (e instanceof LlmError && e.kind === "abort") interrupted = true;
-      else if (e instanceof LlmError) this.fire({ type: "notice", level: "error", text: e.message, ...(e.code === "login_required" ? { action: "login" as const } : {}) });
+      else if (e instanceof LlmError) {
+        failed = true;
+        this.fire({ type: "notice", level: "error", text: e.message, ...(e.code === "login_required" ? { action: "login" as const } : {}) });
+      }
       else if (e instanceof ToolError) this.fire({ type: "notice", level: "error", text: e.message });
       else this.fire({ type: "notice", level: "error", text: "Lỗi không mong muốn: " + (e as Error).message });
     } finally {
@@ -326,7 +330,7 @@ export class LocalController implements AgentController {
         resolve({ allow: false, note: "Bị ngắt." });
         this.pending.delete(id);
       }
-      if (ranTurn || turn.chatId === this.chatId) await this.persistChat(turn); // lệnh như /branch đã đổi cuộc trò chuyện thì không ghi đè bản cũ
+      if (ranTurn || turn.chatId === this.chatId) await this.persistChat(turn, ranTurn && (interrupted || failed)); // lệnh như /branch đã đổi cuộc trò chuyện thì không ghi đè bản cũ
       // tổng kết lượt (tab Code): các tệp đã đổi + đã chạy kiểm tra chưa
       if (ranTurn && turn.session === this.session && (this.o.profile ?? "code") === "code") {
         const sm = await this.session.turnSummary().catch(() => null);
@@ -367,14 +371,14 @@ export class LocalController implements AgentController {
   }
 
   /** Lưu cuộc trò chuyện sau mỗi lượt (dùng giá trị chụp lúc bắt đầu lượt, phòng khi người dùng đã chuyển dự án). */
-  private async persistChat(t: { projectId: string; chatId: string; session: Session }): Promise<void> {
+  private async persistChat(t: { projectId: string; chatId: string; session: Session }, unfinished = false): Promise<void> {
     const store = this.o.chats;
     if (!store || !t.projectId) return;
     const msgs = t.session.main.messages;
     const turns = countTurns(msgs);
     if (!turns) return;
     try {
-      await store.save(t.projectId, { id: t.chatId, title: chatTitle(msgs) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined });
+      await store.save(t.projectId, { id: t.chatId, title: chatTitle(msgs) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, ...(unfinished ? { unfinished: true } : {}), messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined });
     } catch {
       /* không lưu được lịch sử (đầy bộ nhớ…): bỏ qua, không ảnh hưởng công việc */
     }
@@ -626,7 +630,15 @@ export class LocalController implements AgentController {
 
   async projectsState(): Promise<ProjectsState> {
     const st = await this.requireHost().list();
-    return { ...st, active: this.projectId || st.active };
+    const active = this.projectId || st.active;
+    // trạng thái từng dự án: đang chạy (chỉ dự án đang mở, vì chuyển dự án thì dừng việc đang làm) và số cuộc trò chuyện còn dở
+    const projects = await Promise.all(
+      st.projects.map(async (p) => {
+        const unfinished = this.o.chats ? (await this.o.chats.list(p.id).catch(() => [])).filter((c) => c.unfinished && !(this.busy && p.id === active && c.id === this.chatId)).length : 0;
+        return { ...p, ...(this.busy && p.id === active ? { running: true } : {}), ...(unfinished ? { unfinished } : {}) };
+      }),
+    );
+    return { ...st, projects, active };
   }
 
   async projectOpen(id: string): Promise<void> {
@@ -736,7 +748,13 @@ export class LocalController implements AgentController {
   // ---------------------------------------------------------------- lịch sử trò chuyện
   async chatList(): Promise<ChatMeta[]> {
     if (!this.o.chats || !this.projectId) return [];
-    return (await this.o.chats.list(this.projectId)).sort((a, b) => b.updated - a.updated);
+    const list = (await this.o.chats.list(this.projectId)).sort((a, b) => b.updated - a.updated);
+    if (!this.busy) return list;
+    // đang làm việc: đánh dấu cuộc trò chuyện hiện tại (chưa lưu nếu mới) để giao diện hiện biểu tượng "đang chạy"
+    const cur = list.find((c) => c.id === this.chatId);
+    if (cur) cur.running = true;
+    else list.unshift({ id: this.chatId, title: chatTitle(this.session.main.messages), updated: Date.now(), turns: countTurns(this.session.main.messages), running: true });
+    return list;
   }
 
   async chatOpen(id: string): Promise<{ id: string; title: string; history: HistoryItem[] } | { error: string }> {
@@ -804,6 +822,31 @@ export class LocalController implements AgentController {
       if (data.subarray(0, 8000).includes(0)) return { error: "File nhị phân, không xem được. Dùng nút Tải xuống để lấy về." };
       const truncated = data.length > MAX_VIEW_BYTES;
       return { text: new TextDecoder().decode(truncated ? data.subarray(0, MAX_VIEW_BYTES) : data), truncated, kind: "text" };
+    } catch (e) {
+      return { error: (e as Error).message };
+    }
+  }
+
+  /**
+   * Người dùng sửa tệp chữ trong ứng dụng (hộp xem tệp → Sửa → Lưu). Chỉ tệp ĐÃ CÓ, trong dự án, là chữ và nhỏ hơn giới hạn xem (xem bị cắt thì
+   * không cho sửa: lưu lại sẽ làm mất phần cuối). Giữ kiểu xuống dòng CRLF của tệp gốc.
+   */
+  async writeTextFile(path: string, text: string): Promise<{ ok: true } | { error: string }> {
+    try {
+      if (typeof text !== "string") return { error: "Nội dung không hợp lệ." };
+      if (text.length > MAX_VIEW_BYTES) return { error: `Nội dung quá lớn để lưu tại đây (giới hạn ${Math.round(MAX_VIEW_BYTES / 1000)} KB).` };
+      const p = await resolveSafe(this.session.ctx, path);
+      const st = await this.o.env.stat(p);
+      if (!st || st.isDir) return { error: "Chỉ sửa được tệp đã có." };
+      if (isOfficeFile(p)) return { error: "Tệp Word/Excel/PowerPoint/PDF không sửa được ở đây: hãy mở bằng ứng dụng của nó." };
+      const data = await this.o.env.readBytes(p);
+      if (data.subarray(0, 8000).includes(0)) return { error: "Tệp nhị phân, không sửa được." };
+      if (data.length > MAX_VIEW_BYTES) return { error: "Tệp quá lớn để sửa tại đây. Hãy dùng trình soạn thảo của bạn." };
+      const crlf = new TextDecoder().decode(data).includes("\r\n");
+      const out = crlf && !text.includes("\r") ? text.replace(/\n/g, "\r\n") : text;
+      await this.o.env.writeText(p, out);
+      this.fire({ type: "files_changed", paths: [relPath(this.session.ctx, p)] });
+      return { ok: true };
     } catch (e) {
       return { error: (e as Error).message };
     }

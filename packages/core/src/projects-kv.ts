@@ -36,7 +36,7 @@ export class KvChatStore implements ChatStore {
     this.kv.set(this.key(projectId), json);
   }
   async list(projectId: string): Promise<ChatMeta[]> {
-    return this.all(projectId).map(({ id, title, updated, turns }) => ({ id, title, updated, turns }));
+    return this.all(projectId).map(({ id, title, updated, turns, unfinished }) => ({ id, title, updated, turns, ...(unfinished ? { unfinished: true } : {}) }));
   }
   async load(projectId: string, id: string): Promise<SavedChat | null> {
     return this.all(projectId).find((c) => c.id === id) ?? null;

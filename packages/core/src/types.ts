@@ -181,6 +181,8 @@ export interface AgentController {
   newSession(): Promise<void>;
   listDir(path: string): Promise<DirEntry[]>;
   readFile(path: string): Promise<{ text: string; truncated: boolean; kind: "text" | "document" } | { error: string }>;
+  /** Sửa tệp chữ ĐÃ CÓ trong dự án ngay trong ứng dụng (không tạo tệp mới, không sửa tệp nhị phân/Office/quá lớn). */
+  writeTextFile?(path: string, text: string): Promise<{ ok: true } | { error: string }>;
   /** Thêm tệp từ máy người dùng vào thư mục làm việc (tự đổi tên nếu trùng). Trả về đường dẫn đã lưu. */
   uploadFiles(files: { name: string; data: Uint8Array }[]): Promise<{ saved: string[]; errors: string[] }>;
   /** Ảnh dán (Ctrl+V): lưu TẠM ngoài thư mục dự án; trả về tham chiếu `dan/<tên>` để nhắc bằng @. */

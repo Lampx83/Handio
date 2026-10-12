@@ -108,6 +108,11 @@ describe("kiểm tra yêu cầu IPC", () => {
   });
   it("tải tệp lên: giới hạn số lượng, kích thước, kiểu", () => {
     const f = (name: string, n: number) => ({ name, data: new Uint8Array(n) });
+    expect(ok("writeTextFile", "AGENTS.md", "nội dung")).toBe(true);
+    expect(ok("writeTextFile", "a.txt")).toBe(false);
+    expect(ok("writeTextFile", "a.txt", 5)).toBe(false);
+    expect(ok("writeTextFile", "a.txt", "x".repeat(500_001))).toBe(false);
+    expect(ok("writeTextFile", "a\0.txt", "x")).toBe(false);
     expect(ok("uploadFiles", [f("a.txt", 10)])).toBe(true);
     expect(ok("uploadFiles", Array.from({ length: 51 }, (_, i) => f(`a${i}`, 1)))).toBe(false);
     expect(ok("uploadFiles", [f("big.bin", 51 * 1024 * 1024)])).toBe(false);

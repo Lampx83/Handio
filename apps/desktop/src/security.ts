@@ -103,6 +103,7 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   newSession: (a) => a.length === 0,
   listDir: (a) => a.length === 1 && str(a[0], 1000),
   readFile: (a) => a.length === 1 && str(a[0], 1000),
+  writeTextFile: (a) => a.length === 2 && str(a[0], 1000) && str(a[1], 500_000),
   uploadFiles: (a) => {
     if (a.length !== 1 || !Array.isArray(a[0]) || a[0].length > 50) return false;
     let total = 0;
