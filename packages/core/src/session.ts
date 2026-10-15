@@ -55,6 +55,9 @@ const PRUNE_MARK = "[đã lược để tiết kiệm ngữ cảnh]";
 const READ_KEEP_CHARS = 48_000;
 /** Công cụ ghi tệp mà đối số mang cả nội dung lớn. */
 const BULKY_ARGS = new Set(["write_file", "edit_file", "create_docx", "create_xlsx", "create_pptx", "create_pdf", "docx_edit", "xlsx_edit", "pptx_edit"]);
+/** Dấu vết thay cho đối số lớn của lời gọi cũ. Mô hình yếu hay chép lại nó làm nội dung (đã gặp: styles.css 16k ký tự bị ghi đè còn một dòng). */
+const prunedArgNote = (n: number) => `[${n} ký tự đã ghi vào tệp; lược bớt khỏi lịch sử để tiết kiệm ngữ cảnh, đọc lại bằng read_file nếu cần]`;
+const PRUNED_ARG_RE = /ký tự đã ghi vào tệp; lược bớt khỏi lịch sử/;
 const MAX_TOOL_CHARS = 12000;
 /** Hạn chờ người dùng trả lời một câu hỏi của `ask_user` (không ai trả lời thì agent tự quyết, không treo phiên). */
 const QUESTION_TIMEOUT_MS = 15 * 60_000;
@@ -943,7 +946,7 @@ export class Agent {
           for (const k of Object.keys(o)) {
             const v = o[k];
             if (typeof v === "string" && v.length > 400) {
-              o[k] = `[${v.length} ký tự đã ghi vào tệp; lược bớt khỏi lịch sử để tiết kiệm ngữ cảnh, đọc lại bằng read_file nếu cần]`;
+              o[k] = prunedArgNote(v.length);
               changed = true;
             }
           }
@@ -1465,6 +1468,14 @@ export class Agent {
       s.emit({ type: "tool_start", id: tc.id, name, summary, args, depth: this.depth });
       const out = `Lỗi: không có công cụ '${name}'. Công cụ hiện có: ${[...allowed].sort().join(", ")}`;
       this.done(tc, name, false, out, "unknown_tool");
+      return out;
+    }
+    const copied = BULKY_ARGS.has(name) ? Object.keys(args).find((k) => typeof args[k] === "string" && PRUNED_ARG_RE.test(args[k] as string)) : undefined;
+    if (copied) {
+      s.emit({ type: "tool_start", id: tc.id, name, summary, args, depth: this.depth });
+      const p = typeof args.path === "string" ? ` ${args.path}` : "";
+      const out = `Lỗi: \`${copied}\` là dấu vết hệ thống để lại khi lược bớt lịch sử, KHÔNG phải nội dung thật (ghi vào sẽ xoá mất tệp). Hãy read_file${p} để lấy nội dung thật rồi chép đúng, hoặc viết lại đầy đủ.`;
+      this.done(tc, name, false, out, "bad_args");
       return out;
     }
 

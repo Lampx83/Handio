@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Agent không còn xoá mất nội dung tệp khi làm việc lâu** (tab Code): trước đây trong cuộc trò chuyện dài, agent đôi khi ghi một dòng kiểu `[16547 ký tự đã ghi vào tệp…]` đè lên tệp thật (ví dụ toàn bộ CSS biến mất) hoặc sửa mã mãi không khớp. Nay việc ghi như vậy bị chặn và agent được nhắc đọc lại tệp trước khi sửa.
+
 ## [0.8.19] - 2026-10-12
 
 ### Thêm
