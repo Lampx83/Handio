@@ -45,6 +45,43 @@ class Evaluate(unittest.TestCase):
         self.assertNotIn("@", txt)
 
 
+    def test_health_json_format_names_failed_checks(self):
+        h = {"ts": 1, "ok": False, "checks": {"disk": {"ok": False, "detail": "x"}, "oauth2": {"ok": True}}, "warn": []}
+        a = A.evaluate(stats(), h, NOW)
+        self.assertEqual([x["key"] for x in a], ["health"])
+        self.assertIn("disk", a[0]["text"])
+        self.assertNotIn("không rõ", a[0]["text"])
+
+
+class Backup(unittest.TestCase):
+    """Sao lưu dữ liệu: healthz ghi checks.backup (chỉ số), alerts báo theo nguyên nhân; không lẫn vào cảnh báo "health"."""
+
+    def ev(self, b):
+        return A.evaluate(stats(), {"ok": True, "checks": {"disk": {"ok": True}, "backup": b}, "warn": [] if b["ok"] else ["backup"]}, NOW)
+
+    def test_ok_no_alert(self):
+        self.assertEqual(self.ev({"ok": True, "reason": "ok", "age_h": 5.0}), [])
+
+    def test_reasons(self):
+        for reason, key, needle in (("failed", "backup_failed", "26 giờ"), ("stale", "backup_stale", "40 giờ"),
+                                    ("push_failed", "backup_push", "máy ngoài"), ("unreadable", "backup_status", "trạng thái")):
+            with self.subTest(reason=reason):
+                age = 40.2 if reason == "stale" else 26.0
+                a = self.ev({"ok": False, "reason": reason, "age_h": age})
+                self.assertEqual([x["key"] for x in a], [key])
+                self.assertIn(needle, a[0]["text"])
+
+    def test_failed_never_succeeded(self):
+        a = self.ev({"ok": False, "reason": "failed", "age_h": None})
+        self.assertIn("chưa có bản nào", a[0]["text"])
+
+    def test_resolves_when_backup_ok_again(self):
+        fire, done, st = A.decide(self.ev({"ok": False, "reason": "stale", "age_h": 40}), {}, NOW)
+        self.assertEqual(len(fire), 1)
+        fire, done, st = A.decide(self.ev({"ok": True, "reason": "ok", "age_h": 1}), st, NOW + 600)
+        self.assertEqual([d["key"] for d in done], ["backup_stale"])
+
+
 class Decide(unittest.TestCase):
     def test_first_repeat_after_cooldown_and_resolve(self):
         a = [{"key": "turn_errors", "sev": "cao", "text": "x"}]

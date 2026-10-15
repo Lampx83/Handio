@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """NEU Agent - cảnh báo chủ động (máy 220). Chỉ dùng thư viện chuẩn của Python 3.
 
-Đọc stats.json (số liệu TỔNG HỢP do stats.py tạo) và health.json, so với ngưỡng, rồi gửi một tin ngắn tới webhook
+Đọc stats.json (số liệu TỔNG HỢP do stats.py tạo) và health.json (gồm cả kết quả sao lưu dữ liệu), so với ngưỡng, rồi gửi một tin ngắn tới webhook
 (Microsoft Teams / Slack / Mattermost… nhận {"text": "..."}) khi có vấn đề, và một tin khi vấn đề hết. KHÔNG có webhook thì không làm gì.
 
 Tin chỉ có số liệu tổng hợp: không nội dung hội thoại, không mã người dùng, không email, không đường dẫn.
@@ -19,6 +19,13 @@ import urllib.error
 import urllib.request
 
 COOLDOWN_S = 6 * 3600
+WARN_ONLY = ("backup",)  # healthz: chỉ cảnh báo, báo riêng bên dưới (không gộp vào "health")
+BACKUP_ALERTS = {
+    "failed": ("backup_failed", "cao", "Sao lưu dữ liệu lần gần nhất THẤT BẠI (%s). Xem: sudo neu-agent-backup list; journalctl -u neu-agent-backup."),
+    "stale": ("backup_stale", "cao", "Đã %s chưa có bản sao lưu dữ liệu mới (lịch neu-agent-backup.timer có thể đã dừng)."),
+    "push_failed": ("backup_push", "trung bình", "Bản sao lưu dữ liệu mới chưa đẩy được sang máy ngoài (bản trên máy vẫn có; %s)."),
+    "unreadable": ("backup_status", "trung bình", "Không đọc được trạng thái sao lưu dữ liệu (tệp hỏng hoặc sai quyền). Xem: sudo neu-agent-backup list."),
+}
 TH = {"turns_min": 20, "error_rate": 0.20, "chat_min": 50, "gateway_5xx": 0.05, "blocked_users": 5, "stale_events_s": 6 * 3600, "stats_stale_s": 3600, "health_stale_s": 900}
 
 
@@ -52,9 +59,18 @@ def evaluate(stats, health, now, health_age=None, stats_age=None):
     if stats_age is not None and stats_age > TH["stats_stale_s"]:
         out.append({"key": "stats_stale", "sev": "trung bình", "text": "Trang quản trị không được làm mới trong %d phút (timer thống kê có thể đã dừng)." % (stats_age // 60)})
     if isinstance(health, dict):
-        bad = [str(x)[:24] for x in (health.get("failed") or [])][:6]
+        checks = health.get("checks") if isinstance(health.get("checks"), dict) else {}
+        bad = [str(k)[:24] for k, v in checks.items() if isinstance(v, dict) and not v.get("ok") and k not in WARN_ONLY][:6] \
+            or [str(x)[:24] for x in (health.get("failed") or [])][:6]
         if health.get("ok") is False or bad:
             out.append({"key": "health", "sev": "cao", "text": "Kiểm tra sức khoẻ hệ thống có lỗi: %s." % (", ".join(bad) or "không rõ thành phần")})
+        b = checks.get("backup")
+        if isinstance(b, dict) and not b.get("ok"):
+            key, sev, text = BACKUP_ALERTS.get(b.get("reason"), BACKUP_ALERTS["unreadable"])
+            age = b.get("age_h")
+            age = "%d giờ" % age if isinstance(age, (int, float)) and not isinstance(age, bool) else None
+            arg = (age or "nhiều giờ") if b.get("reason") == "stale" else ("bản tốt gần nhất cách " + age) if age else "chưa có bản nào thành công"
+            out.append({"key": key, "sev": sev, "text": text % arg if "%s" in text else text})
     if health_age is not None and health_age > TH["health_stale_s"]:
         out.append({"key": "health_stale", "sev": "trung bình", "text": "Dữ liệu kiểm tra sức khoẻ đã cũ (%d phút): dịch vụ healthz có thể đã dừng." % (health_age // 60)})
     return out

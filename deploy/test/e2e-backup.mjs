@@ -34,6 +34,9 @@ const FB = "/var/lib/neu-agent/feedback/feedback.db";
 const OUT = "/var/backups/neu-agent-data";
 const newest = () => ex(N, `ls -1 ${OUT} | grep -E '^neu-agent-data-.*\\.age$' | tail -1`).out;
 const notOwned = () => ex(N, "find /var/lib/neu-agent ! -user neu-diag | wc -l").out;
+const PUB = "/var/lib/neu-agent-backup/status.json";
+// healthz chạy bằng neu-diag: đọc kết quả sao lưu như trên máy thật
+const hz = () => { try { return JSON.parse(ex(N, `runuser -u neu-diag -- python3 -c 'import sys, json; sys.path.insert(0, "/deploy/220/diag"); import healthz; print(json.dumps(healthz.backup_check()))'`).out.split("\n").pop()); } catch { return null; } };
 
 try {
   sh("docker", ["network", "create", NET]);
@@ -91,6 +94,9 @@ runuser -u neu-diag -- sh -c 'umask 077; echo "{\\"days\\":{}}" > /var/lib/neu-a
   check("bản sao lưu không chứa bí mật/băm mật khẩu ở dạng rõ", !!arc && !ex(N, `grep -aqF "$(cat /etc/neu-agent/diag-secret)" ${OUT}/${arc} || grep -aqF khach01 ${OUT}/${arc}`).ok);
   check("chạy bằng root trong sandbox nhưng KHÔNG để lại tệp root trong thư mục dữ liệu (-shm của SQLite trả về neu-diag)", !!arc && notOwned() === "0", notOwned());
   check("dịch vụ đang chạy không bị ảnh hưởng", ex(N, "systemctl is-active neu-agent-quota neu-agent-diag").ok);
+  const st = ex(N, `stat -c %a /var/lib/neu-agent-backup ${PUB} && runuser -u neu-diag -- cat ${PUB}`);
+  check("trạng thái cho healthz: 0644 trong thư mục 0755, neu-diag đọc được, chỉ có số", st.ok && /^755\n644\n\{/.test(st.out) && !/neu-agent-data-|rsync|ssh/.test(st.out), st.out.replace(/\n/g, " "));
+  check("healthz (neu-diag) báo: chưa đẩy được sang máy ngoài", hz()?.reason === "push_failed", JSON.stringify(hz()));
   check("nhật ký dịch vụ không in bí mật", !ex(N, `journalctl -u neu-agent-backup --no-pager | grep -qF "$(cat /etc/neu-agent/diag-secret)"`).ok);
 
   // ---- máy đích: chỉ cho ghi (rrsync -wo -no-del), khoá máy đích đã ghim lúc cài
@@ -99,6 +105,7 @@ runuser -u neu-diag -- sh -c 'umask 077; echo "{\\"days\\":{}}" > /var/lib/neu-a
   sh("sleep", ["1.1"]);
   const pushed = ex(N, "systemctl start neu-agent-backup.service && cat /var/backups/neu-agent-data/last.json");
   check("đẩy sang máy đích qua rsync/SSH (chỉ mở mạng tới đúng máy đó)", pushed.ok && /"pushed": true/.test(pushed.out) && Number(ex(K, `ls /srv/neu-agent-backup | grep -c '\\.age$'`).out) >= 1, ex(K, "ls /srv/neu-agent-backup").out.replace(/\n/g, " "));
+  check("healthz (neu-diag) báo sao lưu tốt sau khi đẩy được", hz()?.ok === true, JSON.stringify(hz()));
   check("drop-in mạng chỉ cho phép máy đích", /IPAddressAllow=localhost \d/.test(ex(N, "cat /etc/systemd/system/neu-agent-backup.service.d/remote.conf").out));
   check("máy đích không cho 220 đọc lại bản sao (rrsync chỉ-ghi)", pushed.ok && !ex(N, `rsync -e "ssh -F none -i /etc/neu-agent/backup-ssh-key -o BatchMode=yes -o UserKnownHostsFile=/etc/neu-agent/backup-known_hosts" bk@${K}:${newest()} /tmp/x`).ok);
 
@@ -133,6 +140,11 @@ runuser -u neu-diag -- sh -c 'umask 077; echo "{\\"days\\":{}}" > /var/lib/neu-a
   const local = ex(N, `ls ${OUT} | grep -c '\\.age$'`).out, remote = ex(K, `ls /srv/neu-agent-backup | grep -c '\\.age$'`).out;
   check("giữ đúng KEEP=3 bản trên máy, máy đích vẫn còn các bản cũ", local === "3" && Number(remote) >= 5, `máy: ${local}, đích: ${remote}`);
 
+  // ---- lần chạy lỗi → healthz báo "failed", bản tốt gần nhất vẫn tính từ lần thành công trước
+  ex(N, "sed -i 's/^KEEP=.*/KEEP=khong-phai-so/' /etc/neu-agent/backup.conf; systemctl start neu-agent-backup.service; sed -i 's/^KEEP=.*/KEEP=3/' /etc/neu-agent/backup.conf");
+  const hf = hz();
+  check("lần sao lưu lỗi → healthz (neu-diag) báo lỗi, vẫn biết bản tốt gần nhất", hf?.reason === "failed" && typeof hf?.age_h === "number" && hf.age_h < 1, JSON.stringify(hf));
+
   // ---- chạy lại, cấu hình xấu, gỡ
   const again = ex(N, "cd /deploy/220 && bash ./backup/install-backup.sh");
   check("chạy lại không tham số: OK, giữ cấu hình (idempotent)", again.ok && /Đã đẩy sang/.test(again.out) && /KEEP=3/.test(ex(N, "cat /etc/neu-agent/backup.conf").out));
@@ -147,6 +159,7 @@ runuser -u neu-diag -- sh -c 'umask 077; echo "{\\"days\\":{}}" > /var/lib/neu-a
   check("--no-remote: bỏ drop-in, dịch vụ quay về không có mạng", nr.ok && ex(N, "! test -e /etc/systemd/system/neu-agent-backup.service.d/remote.conf && systemctl show neu-agent-backup -p PrivateNetwork | grep -q yes").ok);
   const un = ex(N, "cd /deploy/220 && bash ./backup/install-backup.sh --uninstall");
   check("--uninstall: gỡ lịch, GIỮ các bản sao lưu", un.ok && !ex(N, "systemctl is-enabled neu-agent-backup.timer").ok && Number(ex(N, `ls ${OUT} | grep -c '\\.age$'`).out) >= 1);
+  check("--uninstall: bỏ trạng thái sao lưu, healthz thôi theo dõi (không cảnh báo quá hạn mãi)", un.ok && !ex(N, `test -e ${PUB}`).ok && hz() === null);
 } catch (e) {
   console.error("LỖI:", e.stack ?? e);
   results.push(false);
