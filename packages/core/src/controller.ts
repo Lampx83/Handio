@@ -627,11 +627,28 @@ export class LocalController implements AgentController {
     this.session.dispose();
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.chatId = newId();
     this.rawInputs = [];
     this.fire({ type: "reset" });
+  }
+
+  /**
+   * Thay phiên bằng phiên mới (đọc lại cấu hình). `keepMode`: giữ chế độ quyền người dùng vừa chọn (cùng dự án) thay vì quay về mặc định.
+   * Luôn báo chế độ thật cho giao diện: đã gặp nhãn vẫn ghi "Toàn quyền" trong khi phiên mới ở chế độ mặc định và cứ hỏi từng lệnh.
+   */
+  private async replaceSession(keepMode: boolean): Promise<void> {
+    const prev = keepMode ? this.session.mode : undefined;
+    this.session = await this.makeSession();
+    if (prev && prev !== this.session.mode) {
+      try {
+        this.session.setMode(prev);
+      } catch {
+        /* tab/chính sách không cho chế độ đó: giữ mặc định */
+      }
+    }
+    this.fire({ type: "mode", mode: this.session.mode });
   }
 
   /** Tạo lại phiên (đọc lại AGENTS.md, cấu hình dự án…) nhưng giữ nguyên hội thoại đang có. */
@@ -639,7 +656,7 @@ export class LocalController implements AgentController {
     const messages = this.session.main.messages;
     this.session.dispose();
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.session.main.messages = messages;
   }
@@ -662,7 +679,7 @@ export class LocalController implements AgentController {
     this.trusted = await this.o.trust.isTrusted(env.root);
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(false);
     this.pendingNotices.push(...this.session.startupNotices);
     this.chatId = newId();
     this.rawInputs = [];
@@ -806,7 +823,7 @@ export class LocalController implements AgentController {
     this.session.dispose();
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.session.main.messages = saved.messages;
     this.chatId = saved.id;
     if (saved.title.endsWith(" (nhánh)")) this.branches.add(saved.id);
@@ -1235,7 +1252,7 @@ export class LocalController implements AgentController {
     this.trusted = trust;
     const messages = this.session.main.messages;
     this.session.dispose();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.session.main.messages = messages;
     this.fire({ type: "notice", level: "info", text: trust ? "Đã tin cậy dự án này: quy tắc allow trong .neuagent/settings.json có hiệu lực." : "Không tin cậy dự án: chỉ áp dụng quy tắc cấm." });
