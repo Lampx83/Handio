@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MemoryEnv, type Env, type PageReport } from "../src";
-import { formatPageReport } from "../src/page-check";
+import { formatPageReport, parsePageSteps } from "../src/page-check";
 import { makeController } from "./helpers";
 
 const base = (o: Partial<PageReport>): PageReport => ({ url: "http://localhost:5173/", title: "Đồng hồ", loaded: true, errors: [], failedRequests: [], text: "", blank: false, ...o });
@@ -200,5 +200,146 @@ describe("nút ▶ chạy nền không qua mô hình (startBackground)", () => {
     expect(spawned).toEqual([dev.command]);
     expect(await c.startBackground("rm -rf /")).toHaveProperty("error"); // lệnh ngoài gợi ý bị từ chối
     expect(spawned).toHaveLength(1);
+  });
+});
+
+describe("check_page: các bước tương tác (steps)", () => {
+  it("đọc dạng đầy đủ, dạng gọn và mảng bị mã hoá thành chuỗi; phân biệt bộ chọn CSS với chữ trên nút", () => {
+    expect(parsePageSteps([{ action: "click", text: "Bắt đầu làm bài" }, { action: "type", selector: "#ten", value: "An" }, { action: "wait", ms: 99999 }, { action: "expect_text", text: "Câu 1" }])).toEqual([
+      { action: "click", text: "Bắt đầu làm bài" },
+      { action: "type", selector: "#ten", value: "An" },
+      { action: "wait", ms: 3000 },
+      { action: "expect_text", text: "Câu 1" },
+    ]);
+    expect(parsePageSteps([{ click: "#start" }, { click: "A. 12" }, { click: "A." }, { click: "button.primary" }, { wait: 200 }, { expect: "Điểm" }, { fill: "input[name=x]", value: 3 }])).toEqual([
+      { action: "click", selector: "#start" },
+      { action: "click", text: "A. 12" },
+      { action: "click", text: "A." },
+      { action: "click", selector: "button.primary" },
+      { action: "wait", ms: 200 },
+      { action: "expect_text", text: "Điểm" },
+      { action: "type", selector: "input[name=x]", value: "3" },
+    ]);
+    expect(parsePageSteps('[{"action":"click","text":"Nộp bài"}]')).toEqual([{ action: "click", text: "Nộp bài" }]);
+    expect(parsePageSteps(undefined)).toEqual([]);
+  });
+
+  it("từ chối: quá 8 bước, thiếu đích bấm, action lạ, không phải mảng", () => {
+    expect(() => parsePageSteps(Array.from({ length: 9 }, () => ({ action: "wait", ms: 1 })))).toThrow(/Tối đa 8 bước/);
+    expect(() => parsePageSteps([{ action: "click" }])).toThrow(/Bước 1 \(click\) cần selector/);
+    expect(() => parsePageSteps([{ action: "wait" }, { action: "hover", text: "x" }])).toThrow(/Bước 2: action 'hover'/);
+    expect(() => parsePageSteps({ action: "click", text: "x" })).toThrow(/phải là mảng/);
+    expect(() => parsePageSteps([{ action: "expect_text" }])).toThrow(/cần text/);
+  });
+
+  it("báo cáo: lỗi phát sinh SAU bước nào thì ghi rõ số bước; trang tải sạch vẫn là CÓ VẤN ĐỀ", () => {
+    const out = formatPageReport(base({
+      text: "Câu 1: 2 + 3 = ?",
+      steps: [
+        { label: "bấm “Bắt đầu làm bài”", ok: true, errors: ["Uncaught ReferenceError: questions is not defined (App.jsx:42)"] },
+        { label: "bấm “Nộp bài”", ok: false, note: "không tìm thấy nút “Nộp bài”; nút đang hiện: “Bắt đầu làm bài”", errors: [] },
+      ],
+    }));
+    expect(out).toMatch(/KẾT QUẢ: CÓ VẤN ĐỀ — LỖI KHI THAO TÁC/);
+    expect(out).toContain("Bước 1: bấm “Bắt đầu làm bài” — làm được nhưng PHÁT SINH LỖI");
+    expect(out).toContain("1. lỗi sau bước 1: Uncaught ReferenceError: questions is not defined");
+    expect(out).toMatch(/Bước 2: bấm “Nộp bài” — KHÔNG LÀM ĐƯỢC: không tìm thấy nút/);
+    expect(out).toContain("Chữ trên trang sau bước cuối (đầu): Câu 1");
+    expect(out).toMatch(/HỎNG KHI BẤM/);
+    expect(out).not.toMatch(/KẾT QUẢ: ổn/);
+  });
+
+  it("báo cáo sạch có bước: vẫn là 'KẾT QUẢ: ổn' (cổng tự kiểm tra nhận ra); trang có nút mà chưa bấm thì gợi ý steps", () => {
+    const ok = formatPageReport(base({ text: "Điểm: 10/10", steps: [{ label: "bấm “Bắt đầu”", ok: true, errors: [], dialogs: ["confirm: Nộp bài?"] }] }));
+    expect(ok).toMatch(/^KẾT QUẢ: ổn \(.*1 bước tương tác/m);
+    expect(ok).toContain("hộp thoại: “confirm: Nộp bài?”");
+    const hint = formatPageReport(base({ text: "Trắc nghiệm", buttons: ["Bắt đầu làm bài"] }));
+    expect(hint).toMatch(/KẾT QUẢ: ổn/);
+    expect(hint).toContain("Nút đang hiện: “Bắt đầu làm bài”");
+    expect(hint).toMatch(/gọi lại check_page với steps[\s\S]*"text":"Bắt đầu làm bài"/);
+  });
+
+  it("công cụ chuyển steps đã chuẩn hoá xuống môi trường; steps sai thì báo lỗi, không mở trang", async () => {
+    const seen: { url: string; steps?: unknown }[] = [];
+    const env = new MemoryEnv("/ws", { "index.html": "<h1>x</h1>" });
+    (env as { checkPage?: unknown }).checkPage = async (url: string, o: { steps?: unknown }) => (seen.push({ url, steps: o.steps }), base({ url }));
+    const { c, events } = await makeController([
+      { calls: [{ name: "check_page", args: { url: "http://localhost:5173/", steps: [{ click: "Bắt đầu" }, { action: "expect_text", text: "Câu 1" }] } }] },
+      { calls: [{ name: "check_page", args: { url: "http://localhost:5173/", steps: [{ action: "click" }] } }] },
+      { text: "xong" },
+    ], { profile: "code", env });
+    await c.send("kiểm tra");
+    const res = events.filter((e) => e.type === "tool_result") as { ok: boolean; output: string }[];
+    expect(res.map((r) => r.ok)).toEqual([true, false]);
+    expect(seen).toEqual([{ url: "http://localhost:5173/", steps: [{ action: "click", text: "Bắt đầu" }, { action: "expect_text", text: "Câu 1" }] }]);
+    expect(res[1].output).toMatch(/cần selector/);
+  });
+});
+
+describe("cổng tự kiểm tra: bấm thử luồng chính trước khi báo xong", () => {
+  const quiz = (o: Partial<PageReport>) => base({ url: "http://localhost:5173/", text: "Trắc nghiệm Toán 6", buttons: ["Bắt đầu làm bài"], ...o });
+  const mkEnv = (fn: (url: string, o: { steps?: unknown[] }) => PageReport) => {
+    const env = new MemoryEnv("/ws", {});
+    const seen: { url: string; steps?: unknown[] }[] = [];
+    (env as { checkPage?: unknown }).checkPage = async (url: string, o: { steps?: unknown[] }) => (seen.push({ url, steps: o.steps }), fn(url, o));
+    return { env, seen };
+  };
+  const userMsgs = (llm: { calls: { messages: { role: string; content?: unknown }[] }[] }) =>
+    llm.calls.at(-1)!.messages.filter((m) => m.role === "user").map((m) => String(m.content));
+
+  it("trang tải sạch, có nút, chưa ai bấm: nhắc MỘT lần dùng steps; agent bấm thấy lỗi, sửa xong thì hệ thống chạy lại đúng luồng đó", async () => {
+    let fixed = false;
+    const { env, seen } = mkEnv((_u, o) => {
+      if (!o.steps?.length) return quiz({});
+      return fixed
+        ? quiz({ text: "Câu 1: 2 + 3 = ?", steps: [{ label: "bấm “Bắt đầu làm bài”", ok: true, errors: [] }] })
+        : quiz({ steps: [{ label: "bấm “Bắt đầu làm bài”", ok: true, errors: ["Uncaught ReferenceError: questions is not defined"] }] });
+    });
+    const steps = [{ action: "click", text: "Bắt đầu làm bài" }];
+    const { c, llm, events } = await makeController((_m, n) => {
+      if (n === 0) return { calls: [{ name: "write_file", args: { path: "src/App.jsx", content: "x" } }] };
+      if (n === 1) return { calls: [{ name: "check_page", args: { url: "http://localhost:5173/" } }] };
+      if (n === 2) return { text: "Xong rồi" }; // trang tải sạch → cổng nhắc bấm thử
+      if (n === 3) return { calls: [{ name: "check_page", args: { url: "http://localhost:5173/", steps } }] }; // thấy lỗi sau bước 1
+      if (n === 4) return { calls: [{ name: "write_file", args: { path: "src/App.jsx", content: "y" } }] };
+      if (n === 5) { fixed = true; return { text: "Đã sửa lỗi questions" }; }
+      return { text: "?" };
+    }, { profile: "code", env });
+    await c.send("làm ứng dụng trắc nghiệm");
+    const nudges = llm.calls.flatMap((x) => x.messages).filter((m) => m.role === "user" && String(m.content).includes("CHƯA ai bấm thử"));
+    expect(nudges.length).toBeGreaterThan(0);
+    expect(new Set(nudges.map((m) => String(m.content))).size).toBe(1); // chỉ một lời nhắc
+    // lần cuối: hệ thống tự chạy lại luồng agent đã viết (không chỉ tải trang)
+    expect(seen.at(-1)).toEqual({ url: "http://localhost:5173/", steps });
+    expect(seen).toHaveLength(3);
+    const end = events.filter((e) => e.type === "turn_end").at(-1) as { final: string };
+    expect(end.final).toContain("Đã sửa lỗi questions");
+    expect(userMsgs(llm).some((m) => m.includes("Bạn chưa tự kiểm tra trang"))).toBe(false);
+  });
+
+  it("sửa xong mà luồng bấm vẫn lỗi: hệ thống chạy lại luồng, đưa lỗi cho agent, không cho kết thúc ở lời 'xong'", async () => {
+    const { env, seen } = mkEnv((_u, o) => (o.steps?.length ? quiz({ steps: [{ label: "bấm “Bắt đầu làm bài”", ok: true, errors: ["Uncaught TypeError: x is undefined"] }] }) : quiz({})));
+    const steps = [{ action: "click", text: "Bắt đầu làm bài" }];
+    const { c, llm } = await makeController([
+      { calls: [{ name: "check_page", args: { url: "http://localhost:5173/", steps } }] },
+      { calls: [{ name: "write_file", args: { path: "src/App.jsx", content: "y" } }] },
+      { text: "Xong" },
+      { text: "Xong lần 2" },
+    ], { profile: "code", env });
+    await c.send("sửa nút");
+    expect(seen.length).toBeGreaterThanOrEqual(2);
+    expect(seen.slice(1).every((x) => JSON.stringify(x.steps) === JSON.stringify(steps))).toBe(true);
+    expect(llm.calls.flatMap((x) => x.messages).some((m) => m.role === "user" && String(m.content).includes("chạy lại luồng bấm") && String(m.content).includes("x is undefined"))).toBe(true);
+  });
+
+  it("trang không có nút nào: không nhắc bấm thử", async () => {
+    const { env, seen } = mkEnv(() => base({ text: "Đồng hồ 22:59" }));
+    const { c, llm } = await makeController([
+      { calls: [{ name: "write_file", args: { path: "index.html", content: "<h1>x</h1>" } }] },
+      { text: "Xong" },
+    ], { profile: "code", env });
+    await c.send("làm đồng hồ");
+    expect(seen).toHaveLength(1);
+    expect(llm.calls).toHaveLength(2);
   });
 });

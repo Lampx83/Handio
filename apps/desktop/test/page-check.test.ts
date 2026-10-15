@@ -23,3 +23,16 @@ describe("check_page: lỗi lành tính của công cụ dựng không bị báo
     expect(m("Uncaught ReferenceError: Grid is not defined")).toBe(false);
   });
 });
+
+import { stepScript } from "../src/page-check";
+describe("check_page: mã chạy từng bước", () => {
+  it("giá trị của mô hình chỉ đi vào dưới dạng JSON: chuỗi có dấu nháy/backtick/${} không phá được mã", () => {
+    const evil = '"); window.__pwned = 1; ("`${x}`</script>';
+    for (const st of [{ action: "click", text: evil }, { action: "type", selector: "#a", value: evil }, { action: "expect_text", text: evil }] as const) {
+      const code = stepScript(st);
+      expect(() => new Function("return " + code)).not.toThrow(); // vẫn là một biểu thức hợp lệ
+      expect(code).toContain(JSON.stringify(st));
+      expect(code.split(JSON.stringify(st)).join("")).not.toContain("__pwned");
+    }
+  });
+});
