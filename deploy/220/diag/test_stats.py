@@ -443,6 +443,16 @@ class StatsTest(unittest.TestCase):
         self.assertFalse(S.read_health(p, os.path.getmtime(p) + 5000)[0])   # quá cũ
         self.assertIsNone(S.read_health(p + ".x", 0)[0])
 
+    def test_health_warning_is_shown(self):
+        p = os.path.join(self.tmp.name, "h.json")
+        jdump({"ok": True, "warn": ["tls"], "checks": {"tls": {"ok": True, "warn": True, "days": 12, "detail": "chứng chỉ HTTPS còn 12 ngày"}, "disk": {"ok": True}}}, p)
+        os.utime(p, (NOW.timestamp() - 10, NOW.timestamp() - 10))
+        S.run(self.diag, self.log, self.out, p, NOW)
+        h = slurp(os.path.join(self.out, "index.html"))
+        self.assertIn("hoạt động tốt", h)
+        self.assertIn("cảnh báo: tls", h)
+        self.assertIn("⚠ cảnh báo", h)
+
     def test_main(self):
         write_diag(self.diag, [rec(day_ts(0), turn_ev())])
         self.assertEqual(S.main(["--diag-dir", self.diag, "--nginx-log", self.log, "--out", self.out, "--health", os.path.join(self.tmp.name, "h"), "--now", str(T_NOW)]), 0)
