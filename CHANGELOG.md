@@ -7,6 +7,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ### Sửa
 - **Agent không còn xoá mất nội dung tệp khi làm việc lâu** (tab Code): trước đây trong cuộc trò chuyện dài, agent đôi khi ghi một dòng kiểu `[16547 ký tự đã ghi vào tệp…]` đè lên tệp thật (ví dụ toàn bộ CSS biến mất) hoặc sửa mã mãi không khớp. Nay việc ghi như vậy bị chặn và agent được nhắc đọc lại tệp trước khi sửa.
+- **Agent sửa tệp ít bị trượt "Không tìm thấy old_string" hơn**: khi đoạn agent chép lại lệch tệp thật chỉ vì thụt dòng, dấu cách thừa, dòng trống thiếu/thừa, lỡ kèm số dòng, kiểu xuống dòng Windows (CRLF) hay dạng gõ dấu tiếng Việt khác nhau, agent vẫn sửa được, nhưng chỉ khi đoạn đó là duy nhất trong tệp (và báo rõ là đã khớp gần đúng). Tệp CRLF giữ nguyên kiểu xuống dòng sau khi sửa. Khi vẫn không khớp, agent được chỉ ra đúng dòng nào khác với tệp, nên lần sửa sau trúng ngay.
 
 ## [0.8.19] - 2026-10-12
 
