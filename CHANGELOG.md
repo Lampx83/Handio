@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thay đổi
+- **Tab Code tự bấm thử ứng dụng web trước khi báo xong** (Desktop): trước đây agent chỉ mở trang xem có lỗi lúc tải, nên có khi báo "xong" mà bạn vừa bấm "Bắt đầu làm bài" là ứng dụng hỏng. Nay agent bấm các nút chính, gõ vào ô nhập và kiểm tra kết quả hiện ra trong một cửa sổ ẩn; lỗi phát sinh ở bước nào thì tự sửa rồi chạy lại đúng luồng đó. Hộp thoại của trang (alert/confirm) không bật lên màn hình của bạn.
+
 ## [0.8.19] - 2026-10-12
 
 ### Thêm
