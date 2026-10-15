@@ -14,6 +14,9 @@ ProtectSystem=strict
 ReadWritePaths=/var/backups/neu-agent-data
 # SQLite cần khoá/tạo -shm cạnh CSDL khi đọc (CSDL mở chỉ đọc, nội dung không bị sửa)
 ReadWritePaths=-/var/lib/neu-agent/feedback -/var/lib/neu-agent/quota
+# /var/lib/neu-agent-backup/status.json: kết quả CHỈ CÓ SỐ (0644) cho healthz/cảnh báo chạy bằng neu-diag
+StateDirectory=neu-agent-backup
+StateDirectoryMode=0755
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes

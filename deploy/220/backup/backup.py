@@ -46,6 +46,9 @@ AGE_RECIPIENTS = ETC + "/backup-recipients.txt"
 GPG_KEY = ETC + "/backup-recipient.asc"
 SSH_KEY = ETC + "/backup-ssh-key"
 KNOWN_HOSTS = ETC + "/backup-known_hosts"
+# Trạng thái CHỈ CÓ SỐ (0644) cho healthz/cảnh báo chạy bằng neu-diag (không đọc được OUT): không tên tệp, không lỗi chi tiết.
+# Thư mục riêng của root (StateDirectory trong neu-agent-backup.service), không nằm trong thư mục của neu-diag.
+PUBLIC_STATUS = "/var/lib/neu-agent-backup/status.json"
 
 # (tên trong gói, đường dẫn, loại, quyền khi tệp chưa có lúc khôi phục, dịch vụ dùng tệp — dừng khi khôi phục)
 # Chủ sở hữu khi khôi phục: giữ như tệp hiện có; chưa có thì lấy chủ của thư mục chứa (KHÔNG lấy từ gói).
@@ -273,6 +276,39 @@ def write_status(out, st):
         json.dump(st, f, ensure_ascii=False)
     os.chmod(tmp, 0o640)
     os.replace(tmp, os.path.join(out, "last.json"))
+    write_public_status(st)
+
+
+def write_public_status(st):
+    """Ghi PUBLIC_STATUS: time, ok, pushed, size, files, last_ok (lần thành công gần nhất, giữ qua các lần lỗi). Lỗi ghi không làm hỏng sao lưu
+    (healthz sẽ thấy trạng thái cũ và báo quá hạn)."""
+    path = P(PUBLIC_STATUS)
+    d = os.path.dirname(path)
+    last_ok = None
+    try:
+        prev = json.loads(read_text(path))
+        if isinstance(prev, dict) and isinstance(prev.get("last_ok"), int) and not isinstance(prev.get("last_ok"), bool):
+            last_ok = prev["last_ok"]
+    except (OSError, ValueError):
+        pass
+    ok = st.get("ok") is True
+    num = lambda v: v if isinstance(v, int) and not isinstance(v, bool) else None  # noqa: E731
+    pub = {"time": int(st["time"]), "ok": ok, "pushed": st.get("pushed") if isinstance(st.get("pushed"), bool) else None,
+           "size": num(st.get("size")), "files": num(st.get("files")), "last_ok": int(st["time"]) if ok else last_ok}
+    try:
+        os.makedirs(d, mode=0o755, exist_ok=True)
+        os.chmod(d, 0o755)
+        fd, tmp = tempfile.mkstemp(prefix=".status-", dir=d)     # tên ngẫu nhiên, O_EXCL: không đi theo liên kết ai đó đặt sẵn
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(pub, f)
+            os.chmod(tmp, 0o644)
+            os.replace(tmp, path)                                 # thay chính tên (kể cả nếu đó là liên kết), không ghi vào đích của nó
+        except BaseException:
+            os.unlink(tmp)
+            raise
+    except OSError as e:
+        log("Không ghi được %s: %s" % (PUBLIC_STATUS, e.strerror or e))
 
 
 def cmd_run(args):
@@ -284,6 +320,7 @@ def cmd_run(args):
         kind = encryption_kind()
     except ConfError as e:
         log("Cấu hình sao lưu SAI: %s" % e)
+        write_public_status({"time": int(time.time()), "ok": False})
         return 2
     out = P(OUT)
     os.makedirs(out, mode=0o700, exist_ok=True)
