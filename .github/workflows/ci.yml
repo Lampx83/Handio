@@ -61,6 +61,11 @@ jobs:
       - name: Kiểm thử
         working-directory: deploy/220/diag
         run: python3 -W ignore -m unittest discover -s . -p 'test_*.py'
+      - name: Kiểm thử sao lưu dữ liệu (gpg có sẵn; cài thêm age để thử cả hai)
+        working-directory: deploy/220/backup
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq age >/dev/null || echo "::warning::không cài được age: bỏ qua bài age"
+          python3 -W ignore -m unittest discover -s . -p 'test_*.py'
 
   shell:
     name: Script triển khai (cú pháp + shellcheck)
@@ -81,12 +86,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     strategy:
-      fail-fast: false            # ba bài độc lập, chạy song song: thời gian = bài chậm nhất thay vì cộng dồn
+      fail-fast: false            # các bài độc lập, chạy song song: thời gian = bài chậm nhất thay vì cộng dồn
       matrix:
         include:
           - { name: "đăng nhập SSO (nginx thật + oauth2-proxy thật + máy chủ OIDC giả)", script: e2e-sso.mjs }
           - { name: "script cài đặt 220/222 (nginx thật, có kiểm tra tự khôi phục)", script: e2e-install.mjs }
           - { name: "máy chủ nhận bản triển khai (khoá SSH hạn chế, gói xấu, rollback)", script: e2e-deploy.mjs }
+          - { name: "sao lưu dữ liệu 220 (systemd thật, age, rsync/SSH chỉ-ghi, khôi phục)", script: e2e-backup.mjs }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

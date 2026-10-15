@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Máy chủ tự sao lưu dữ liệu mỗi đêm**: góp ý, liên kết chia sẻ, hạn mức, tài khoản được sao lưu mã hoá (chỉ quản trị viên giữ khoá giải mã) và có thể gửi sang máy khác, để không mất khi hỏng ổ đĩa.
+
 ## [0.8.19] - 2026-10-12
 
 ### Thêm

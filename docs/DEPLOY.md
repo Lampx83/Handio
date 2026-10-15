@@ -72,8 +72,38 @@ Cách hoạt động (tách quyền): trang quản trị chạy bằng tài kho�
 
 Cài/cập nhật: `sudo ./install.sh <key>` (nginx cho phép POST vào `/agent/admin/`) rồi `sudo ./diag/install-diag.sh --admin <email quản trị>` (cài dịch vụ phụ, tự thử tạo + xoá một tài khoản `zz-kiem-tra-cai`, tự khôi phục nếu lỗi).
 
+### Sao lưu dữ liệu (hằng đêm, mã hoá)
+
+Các script cài chỉ sao lưu *cấu hình* lúc cài. Dữ liệu sau không tái tạo được và trước đây chỉ nằm trên một ổ của máy 220: góp ý + liên kết chia sẻ (`feedback/*.db`), CSDL hạn mức + `grants.json`, sổ "ai đã dùng", tệp mật khẩu tài khoản, `diag-secret` (mất = mọi mã giả danh lệch), `admins.txt`, `quota.json`, nhật ký thao tác tài khoản. `backup/` sao lưu đúng các tệp đó.
+
+Cài (cặp khoá tạo trên máy quản trị; **khoá riêng không bao giờ lên máy 220**, cất 2 bản ở nơi an toàn):
+```bash
+age-keygen -o neu-agent-backup.key && age-keygen -y neu-agent-backup.key        # trên máy quản trị; dòng in ra là khoá công khai age1…
+ssh -t 220 'sudo apt-get install -y age && cd ~/neu-agent-220 && sudo ./backup/install-backup.sh --recipient age1… --keep 14 --remote bk@may-khac:'
+```
+Dùng gpg thay age: `--gpg-key quan-tri.asc` (`gpg --armor --export <khoá>`). Không đẩy ra ngoài: bỏ `--remote`. Script tự kiểm thử, chạy thật một lần, tự khôi phục nếu lỗi; chạy lại không tham số để cập nhật mã (giữ cấu hình). CD chưa tự cài/cập nhật phần này.
+
+- **Hằng đêm ~2:30** (`neu-agent-backup.timer`, máy tắt thì chạy bù): SQLite chép bằng API backup (nhất quán khi dịch vụ đang ghi, gồm cả phần còn trong `-wal`), JSON kiểm cú pháp; nén, mã hoá bằng khoá công khai → `/var/backups/neu-agent-data/neu-agent-data-<ngày>-<giờ>.tar.gz.age` (root, 0600); giữ `KEEP` bản (`/etc/neu-agent/backup.conf`). Từ chối chạy nếu tệp khoá có khoá riêng hoặc tệp ra không ở dạng mã hoá.
+- **Ra ngoài máy** (`--remote`): khoá SSH riêng `/etc/neu-agent/backup-ssh-key`, khoá máy đích ghim trong `backup-known_hosts` (script in vân tay: đối chiếu với máy đích), dịch vụ chỉ được mở mạng tới IP máy đích. Trên máy đích dùng dòng `authorized_keys` chỉ-cho-ghi mà script in ra: `command="rrsync -wo -no-del /srv/neu-agent-backup",restrict ssh-ed25519 …` (máy 220 bị chiếm cũng không đọc/xoá được bản cũ; máy đích tự dọn bản cũ). Với rrsync, đường dẫn trong `--remote` tính từ thư mục đó, thường để trống (`bk@may-khac:`).
+- **Sandbox:** chạy bằng root nhưng chỉ giữ quyền đọc/ghi tệp, hệ thống tệp chỉ đọc trừ thư mục sao lưu (và chỗ SQLite cần khoá), không mạng (trừ drop-in tới máy đích). Nhật ký chỉ có tên tệp cố định, kích thước, số dòng.
+- **Theo dõi:** `sudo neu-agent-backup list` (các bản + kết quả lần gần nhất), `journalctl -u neu-agent-backup`, `systemctl --failed`. Đẩy ra ngoài lỗi: bản trên máy vẫn còn, dịch vụ báo lỗi (mã 3).
+
+**Thử khôi phục** (nên làm mỗi học kỳ; không đụng hệ thống): giải mã vào thư mục tạm, kiểm mã băm từng tệp, `integrity_check` SQLite, JSON, băm bcrypt, in số bảng/dòng, rồi xoá thư mục tạm.
+```bash
+python3 deploy/220/backup/backup.py verify neu-agent-data-….tar.gz.age --identity neu-agent-backup.key   # trên máy quản trị (cần age)
+```
+
+**Khôi phục thật** trên 220: chép khoá riêng tạm lên (dùng xong `shred -u`), hoặc giải mã ở máy quản trị (`age -d -i khoá tệp.age > goi.tar.gz`) rồi chép `goi.tar.gz` lên.
+```bash
+sudo neu-agent-backup restore <tệp> --identity /root/tam.key                       # in kế hoạch, chưa đổi gì
+sudo neu-agent-backup restore <tệp> --identity /root/tam.key --only feedback/feedback.db,feedback/shares.db --yes
+```
+Dừng đúng các dịch vụ dùng tệp đó, giữ dữ liệu hiện tại ở `/var/backups/neu-agent-data/before-restore-<giờ>/`, thay tệp nguyên tử (giữ chủ/quyền, bỏ `-wal`/`-shm` cũ), chạy lại dịch vụ; dịch vụ không chạy lại thì tự trả dữ liệu cũ. Gói coi là không tin cậy: chỉ nhận đúng các tên đã biết, tệp thường (không liên kết, không `..`).
+
+Không sao lưu: `captures.db` (nội dung hội thoại tạm, tự xoá theo hạn), báo cáo, `health.json` (sinh lại được), secret Entra / cookie / key mô hình (lấy lại từ Entra/Kong; đổi cookie secret chỉ làm người dùng đăng nhập lại).
+
 ### Đã kiểm thử thế nào
-`node deploy/test/e2e-sso.mjs` (nginx 222 → nginx 220 thật → `oauth2-proxy` thật → máy chủ OIDC giả; 27 kiểm tra: chưa đăng nhập bị chặn ở mọi đường, đăng nhập giảng viên/sinh viên, miền lạ bị từ chối, Bearer của Desktop đúng/sai audience/hết hạn/bị sửa, key do máy chủ gắn và token không chuyển sang gateway) và `node deploy/test/e2e-install.mjs` (chạy hai script cài trong Ubuntu 24.04 có nginx thật cùng site "khác", kể cả ép lỗi để thử tự khôi phục). Chưa thử với Microsoft thật: lần đầu cần một người đăng nhập thử.
+`node deploy/test/e2e-sso.mjs` (nginx 222 → nginx 220 thật → `oauth2-proxy` thật → máy chủ OIDC giả; 27 kiểm tra: chưa đăng nhập bị chặn ở mọi đường, đăng nhập giảng viên/sinh viên, miền lạ bị từ chối, Bearer của Desktop đúng/sai audience/hết hạn/bị sửa, key do máy chủ gắn và token không chuyển sang gateway) và `node deploy/test/e2e-install.mjs` (chạy hai script cài trong Ubuntu 24.04 có nginx thật cùng site "khác", kể cả ép lỗi để thử tự khôi phục). Sao lưu: `node deploy/test/e2e-backup.mjs` (Ubuntu 24.04 có systemd thật để thử cả sandbox, age thật, máy đích rsync/SSH chỉ-cho-ghi; 27 kiểm tra: dữ liệu trong `-wal`, không lộ bí mật, không để lại tệp root trong thư mục dữ liệu, thử khôi phục, khôi phục thật + tự trả lại khi dịch vụ không chạy lại, khoá riêng bị từ chối) và `deploy/220/backup/test_backup.py` (gói xấu: `..`, đường dẫn tuyệt đối, liên kết, tên lạ, sai mã băm). Chưa thử với Microsoft thật: lần đầu cần một người đăng nhập thử.
 
 ### Việc nên làm thêm
 - **Giới hạn gateway:** cổng `232:8037` chỉ cho máy 220 truy cập và đổi key `neuagent`; nếu không, ai biết key vẫn vòng qua SSO được.

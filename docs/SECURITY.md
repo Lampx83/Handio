@@ -66,6 +66,8 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 - Chưa đăng nhập thì ứng dụng Desktop từ chối **mọi** lệnh nghiệp vụ (không chỉ ẩn giao diện). Đăng nhập chỉ là cổng truy cập mô hình; tệp của người dùng vẫn nằm trên máy họ.
 - Hạn chế: cổng gateway 232:8037 còn mở với ai biết key (xem docs/DEPLOY.md); mã bí mật của ứng dụng Entra nằm trên máy 220 (`/etc/neu-agent/oauth2-proxy.env`, quyền 600).
 
+**Sao lưu dữ liệu máy chủ** (`deploy/220/backup/`): hằng đêm, mã hoá bằng **khoá công khai** age/gpg (máy 220 không có khoá giải mã; từ chối chạy nếu lỡ để khoá riêng), tệp root 0600. Dịch vụ chạy root nhưng chỉ giữ quyền đọc/ghi tệp, hệ thống tệp chỉ đọc, không mạng; đẩy ra ngoài máy chỉ tới IP máy đích, khoá máy đích ghim sẵn, khuyến nghị `rrsync -wo -no-del` (220 bị chiếm cũng không đọc/xoá được bản cũ). Khôi phục coi gói là không tin cậy: chỉ nhận đúng các tên đã biết, tệp thường, chủ/quyền lấy theo máy chứ không theo gói; có bài thử gói xấu (`test_backup.py`) và `e2e-backup.mjs`.
+
 **Quản trị**: tệp `policy.json` ở vị trí chỉ quản trị viên ghi được có thể **khoá** địa chỉ máy chủ, cấm HTTP, cấm chế độ “Toàn quyền”, tắt công cụ chạy lệnh, tắt mạng cho lệnh, **tắt chẩn đoán** (`diagnostics:false`) (xem `docs/INSTALL.md`).
 
 ## 3. Điều CHƯA bảo vệ được (nói thẳng)
