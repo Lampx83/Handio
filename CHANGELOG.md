@@ -5,6 +5,12 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thay đổi
+- **Chia sẻ cuộc trò chuyện đầy đủ hơn để nhóm phát triển hiểu và sửa lỗi**: bản chia sẻ nay gồm cả các thao tác của agent (lệnh, tệp đã ghi/sửa) kèm phần đầu kết quả, chỗ nào bị lỗi, lời nhắc của hệ thống, cùng phiên bản, mô hình và chế độ đang dùng. Khoá/mật khẩu và dữ liệu cá nhân vẫn được tự che; tệp bạn đính kèm bằng @ không được gửi.
+
+### Sửa
+- **Chia sẻ báo "Cuộc trò chuyện chưa có nội dung để chia sẻ" dù đã trò chuyện nhiều lượt**: xảy ra sau khi agent tự tóm tắt hội thoại để giải phóng ngữ cảnh. Nay phần trước khi tóm tắt được giữ lại, nên vẫn chia sẻ được toàn bộ và lịch sử đã lưu không mất phần đầu.
+
 ## [0.8.20] - 2026-10-15
 
 ### Sửa

@@ -4,8 +4,10 @@ Người dùng chủ động bấm "Chia sẻ" một cuộc trò chuyện: ứng
 (/agent/share/<mã ngẫu nhiên 22 ký tự>) để đưa cho người khác ĐÃ ĐĂNG NHẬP đọc. Cùng bản chụp đó giúp nhóm phát triển hiểu người dùng
 gặp gì để cải tiến (hộp chia sẻ nói rõ điều này). Chỉ quản trị viên xem được toàn bộ ở /agent/admin/shares.
 
-Bảng shares: id (mã công khai khó đoán), owner (email/tên đăng nhập người chia sẻ), ts, title, profile, version, platform,
-items (JSON: [{k: user|assistant|tool, t: chữ, n: tên công cụ}]), nitems, bytes, views, last_view, revoked, redactions.
+Bảng shares: id (mã công khai khó đoán), owner (email/tên đăng nhập người chia sẻ), ts, title, profile, version, platform, model, mode,
+items (JSON: [{k: user|assistant|tool|system|summary, t: chữ, n: tên công cụ, r: kết quả công cụ, e: lỗi?}]), nitems, bytes, views,
+last_view, revoked, redactions. Bản v2 (từ 0.8.21) kèm đối số + kết quả công cụ, lời nhắc của Handio và bản tóm tắt ngữ cảnh để nhóm phát
+triển hiểu VÌ SAO agent làm đúng/sai; đọc bằng lệnh chỉ đọc share_read.py (neu-share-read) mà không cần trang quản trị.
 """
 import html
 import json
@@ -17,11 +19,13 @@ import time
 
 MAX_ITEMS = 400
 MAX_ITEM_CHARS = 6000
-MAX_TOTAL_BYTES = 300 * 1024
+MAX_TOTAL_BYTES = 450 * 1024   # dưới giới hạn thân yêu cầu 512k của nginx
 MAX_TITLE = 120
 PER_DAY, ACTIVE_MAX = 20, 200
 PROFILES = ("work", "code", "design")
-KINDS = ("user", "assistant", "tool")
+MODES = ("default", "acceptEdits", "auto", "plan", "bypass")
+KINDS = ("user", "assistant", "tool", "system", "summary")
+KINDS_V1 = ("user", "assistant", "tool")
 CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{22}$")
 VERSION_RE = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}(-[0-9A-Za-z.]{1,16})?$")
@@ -48,8 +52,9 @@ def scrub(text):
 
 def clean_payload(raw):
     """Kiểm tra bản chụp từ ứng dụng. Trả về (dict sạch, None) hoặc (None, mã lỗi)."""
-    if not isinstance(raw, dict) or raw.get("v") != 1:
+    if not isinstance(raw, dict) or raw.get("v") not in (1, 2):
         return None, "bad_request"
+    kinds = KINDS if raw["v"] == 2 else KINDS_V1
     items_in = raw.get("items")
     if not isinstance(items_in, list) or not items_in:
         return None, "empty"
@@ -57,14 +62,20 @@ def clean_payload(raw):
         return None, "too_many"
     items, total = [], 0
     for it in items_in:
-        if not isinstance(it, dict) or it.get("k") not in KINDS or not isinstance(it.get("t"), str):
+        if not isinstance(it, dict) or it.get("k") not in kinds or not isinstance(it.get("t"), str):
             return None, "bad_item"
         t = scrub(CTRL.sub("", it["t"]))[:MAX_ITEM_CHARS]
         n = it.get("n")
         rec = {"k": it["k"], "t": t}
         if it["k"] == "tool" and isinstance(n, str) and TOOL_RE.match(n):
             rec["n"] = n
-        total += len(t.encode("utf-8")) + 24
+        if it["k"] == "tool" and "r" in it:
+            if not isinstance(it["r"], str):
+                return None, "bad_item"
+            rec["r"] = scrub(CTRL.sub("", it["r"]))[:MAX_ITEM_CHARS]
+            if it.get("e") is True:
+                rec["e"] = True
+        total += len(t.encode("utf-8")) + len(rec.get("r", "").encode("utf-8")) + 24
         if total > MAX_TOTAL_BYTES:
             return None, "too_big"
         items.append(rec)
@@ -79,7 +90,7 @@ def clean_payload(raw):
     ver = raw.get("version")
     red = raw.get("redactions")
     return {"title": title, "profile": raw.get("profile") if raw.get("profile") in PROFILES else "", "version": ver if isinstance(ver, str) and VERSION_RE.match(ver) else "",
-            "platform": short("platform"), "items": items, "bytes": total,
+            "platform": short("platform"), "model": short("model"), "mode": raw.get("mode") if raw.get("mode") in MODES else "", "items": items, "bytes": total,
             "redactions": red if isinstance(red, int) and not isinstance(red, bool) and 0 <= red <= 100000 else 0}, None
 
 
@@ -101,6 +112,10 @@ class ShareDB:
                 id TEXT PRIMARY KEY, owner TEXT NOT NULL, ts INTEGER NOT NULL, title TEXT NOT NULL, profile TEXT NOT NULL DEFAULT '',
                 version TEXT NOT NULL DEFAULT '', platform TEXT NOT NULL DEFAULT '', items TEXT NOT NULL, nitems INTEGER NOT NULL, bytes INTEGER NOT NULL,
                 redactions INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, last_view INTEGER NOT NULL DEFAULT 0, revoked INTEGER NOT NULL DEFAULT 0)""")
+            cols = {r[1] for r in c.execute("PRAGMA table_info(shares)")}
+            for col in ("model", "mode"):   # CSDL tạo trước 0.8.21
+                if col not in cols:
+                    c.execute("ALTER TABLE shares ADD COLUMN %s TEXT NOT NULL DEFAULT ''" % col)
             c.execute("CREATE INDEX IF NOT EXISTS idx_sh_owner ON shares(owner, ts)")
             c.execute("CREATE INDEX IF NOT EXISTS idx_sh_ts ON shares(ts)")
 
@@ -118,8 +133,8 @@ class ShareDB:
             if c.execute("SELECT COUNT(*) FROM shares WHERE owner=? AND revoked=0", (owner,)).fetchone()[0] >= ACTIVE_MAX:
                 return {"ok": False, "error": "too_many_active"}
             sid = secrets.token_urlsafe(16)[:22]
-            c.execute("INSERT INTO shares (id, owner, ts, title, profile, version, platform, items, nitems, bytes, redactions) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                      (sid, owner, now, p["title"], p["profile"], p["version"], p["platform"], json.dumps(p["items"], ensure_ascii=False, separators=(",", ":")), len(p["items"]), p["bytes"], p["redactions"]))
+            c.execute("INSERT INTO shares (id, owner, ts, title, profile, version, platform, model, mode, items, nitems, bytes, redactions) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                      (sid, owner, now, p["title"], p["profile"], p["version"], p["platform"], p.get("model", ""), p.get("mode", ""), json.dumps(p["items"], ensure_ascii=False, separators=(",", ":")), len(p["items"]), p["bytes"], p["redactions"]))
             return {"ok": True, "id": sid}
 
     def get(self, sid, count_view=True):
@@ -166,7 +181,7 @@ class ShareDB:
     def export(self, limit=1000):
         """JSONL cho phân tích cải tiến: KHÔNG kèm tên người chia sẻ (chỉ mã giả danh do bên gọi tạo)."""
         with self.lock, self._conn() as c:
-            rows = [dict(r) for r in c.execute("SELECT id, owner, ts, title, profile, version, platform, items, redactions FROM shares ORDER BY ts DESC LIMIT ?", (max(1, min(limit, 5000)),))]
+            rows = [dict(r) for r in c.execute("SELECT id, owner, ts, title, profile, version, platform, model, mode, items, redactions FROM shares ORDER BY ts DESC LIMIT ?", (max(1, min(limit, 5000)),))]
         for r in rows:
             r["items"] = json.loads(r["items"])
         return rows
@@ -181,9 +196,16 @@ def render_page(d):
             parts.append('<div class="m u"><div class="r">Người dùng</div><div class="t">%s</div></div>' % e(it["t"]))
         elif it["k"] == "assistant":
             parts.append('<div class="m a"><div class="r">NEU Agent</div><div class="t">%s</div></div>' % e(it["t"]))
+        elif it["k"] == "tool":
+            res = ""
+            if it.get("r"):
+                res = '<details%s><summary>%s</summary><div class="t">%s</div></details>' % (" open" if it.get("e") else "", "Kết quả (lỗi)" if it.get("e") else "Kết quả", e(it["r"]))
+            parts.append('<div class="m c%s"><div class="r">Công cụ <code>%s</code></div><div class="t">%s</div>%s</div>' % (" err" if it.get("e") else "", e(it.get("n", "")), e(it["t"]), res))
+        elif it["k"] == "summary":
+            parts.append('<div class="m s"><div class="r">Tóm tắt ngữ cảnh (agent không còn thấy phần trước)</div><div class="t">%s</div></div>' % e(it["t"]))
         else:
-            parts.append('<div class="m c"><div class="r">Công cụ <code>%s</code></div><div class="t">%s</div></div>' % (e(it.get("n", "")), e(it["t"])))
-    meta = " · ".join(x for x in [owner_label(d["owner"]), "tab " + d["profile"] if d["profile"] else "", "v" + d["version"] if d["version"] else "", time.strftime("%d/%m/%Y", time.gmtime(d["ts"] + 7 * 3600))] if x)
+            parts.append('<div class="m s"><div class="r">Nhắc của hệ thống</div><div class="t">%s</div></div>' % e(it["t"]))
+    meta = " · ".join(x for x in [owner_label(d["owner"]), "tab " + d["profile"] if d["profile"] else "", "v" + d["version"] if d["version"] else "", d.get("model") or "", time.strftime("%d/%m/%Y", time.gmtime(d["ts"] + 7 * 3600))] if x)
     note = ("Đã tự che %d thông tin nhạy cảm (khoá, mật khẩu, CCCD, số điện thoại…). " % d["redactions"]) if d["redactions"] else ""
     return ("""<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>%s · NEU Agent</title>
@@ -193,7 +215,8 @@ def render_page(d):
 main{max-width:820px;margin:0 auto;padding:20px 16px 60px}h1{font-size:21px;margin:4px 0}.meta{color:var(--muted);font-size:13px;margin-bottom:6px}
 .note{border:1px solid var(--line);background:var(--soft);border-radius:10px;padding:8px 12px;font-size:13px;margin:10px 0 16px}
 .m{border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin:10px 0;background:var(--panel)}.m.u{background:var(--soft)}
-.m.c{font-size:13px;color:var(--muted)}.r{font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600}
+.m.c{font-size:13px;color:var(--muted)}.m.c.err{border-color:#c0392b}.m.s{font-size:13px;color:var(--muted);border-style:dashed}
+details{margin-top:6px}summary{cursor:pointer;font-size:12px}.r{font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600}
 .t{white-space:pre-wrap;word-break:break-word}code{font-family:ui-monospace,Menlo,Consolas,monospace}footer{color:var(--muted);font-size:12.5px;margin-top:24px}</style></head>
 <body><main><h1>%s</h1><div class="meta">Chia sẻ bởi %s</div>
 <div class="note">%sĐây là bản chụp tại thời điểm chia sẻ, chỉ người đã đăng nhập NEU Agent mới xem được. Nội dung do AI tạo ra có thể chưa chính xác.</div>

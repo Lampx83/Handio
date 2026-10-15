@@ -51,6 +51,8 @@ export interface SavedChat extends ChatMeta {
   messages: ChatMessage[];
   /** Nội dung người dùng gõ (trước khi mở rộng lệnh / và đính kèm @tệp), theo thứ tự các lượt hỏi. */
   inputs?: string[];
+  /** Tin nhắn trước các lần tóm tắt ngữ cảnh (mô hình không còn thấy): để lịch sử và bản chia sẻ không mất phần đầu. */
+  archived?: ChatMessage[];
 }
 
 /** Lưu lịch sử trò chuyện theo dự án (Desktop: thư mục dữ liệu ứng dụng; Web: localStorage). Không ghi vào thư mục dự án của người dùng. */
@@ -102,6 +104,9 @@ const MAX_TOOL_OUT = 1500;
 export function trimForSave(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((m) => (m.role === "tool" && m.content && m.content.length > MAX_TOOL_OUT ? { ...m, content: m.content.slice(0, MAX_TOOL_OUT) + "\n… (đã cắt khi lưu)" } : m));
 }
+
+/** Phần trước các lần tóm tắt khi lưu: rút gọn và chỉ giữ ~600 tin cuối (bản web lưu ở localStorage, dung lượng có hạn). */
+export const archiveForSave = (old: ChatMessage[]): ChatMessage[] => trimForSave(old.slice(-600));
 
 function briefArgs(json: string): string {
   try {

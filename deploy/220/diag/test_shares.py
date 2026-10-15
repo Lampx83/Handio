@@ -32,7 +32,7 @@ class Clean(unittest.TestCase):
         self.assertEqual((p["profile"], p["version"]), ("work", "0.7.0"))
 
     def test_rejects_bad(self):
-        for raw in [None, {}, payload(v=2), payload(items=[]), payload(items=[{"k": "assistant", "t": "chỉ trả lời"}]), payload(items=[{"k": "evil", "t": "x"}]),
+        for raw in [None, {}, payload(v=3), payload(items=[]), payload(items=[{"k": "assistant", "t": "chỉ trả lời"}]), payload(items=[{"k": "evil", "t": "x"}]),
                     payload(items=[{"k": "user", "t": 5}]), payload(items=[{"k": "user", "t": "x"}] * (SH.MAX_ITEMS + 1))]:
             self.assertIsNone(SH.clean_payload(raw)[0], repr(raw)[:60])
         big = payload(items=[{"k": "user", "t": "a" * SH.MAX_ITEM_CHARS}] * 80)
@@ -203,3 +203,118 @@ class Routes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def payload_v2(**kw):
+    p = {"v": 2, "title": "App trắc nghiệm", "profile": "code", "version": "0.8.20", "platform": "darwin arm64", "model": "qwen3.5-35b-a3b-int4", "mode": "bypass",
+         "redactions": 1, "items": [
+             {"k": "user", "t": "Làm app trắc nghiệm"},
+             {"k": "tool", "n": "read_file", "t": '{"path":"khong-co.js"}', "r": "Lỗi: Không có file khong-co.js", "e": True},
+             {"k": "tool", "n": "write_file", "t": '{"path":"app.js","content":"<script>alert(1)</script>"}', "r": "Đã tạo app.js"},
+             {"k": "system", "t": "[Hệ thống] Bạn vừa tạo hoặc sửa tệp nhưng CHƯA chạy thử."},
+             {"k": "summary", "t": "Người dùng muốn app trắc nghiệm."},
+             {"k": "assistant", "t": "Xong rồi."}]}
+    p.update(kw)
+    return p
+
+
+class V2(unittest.TestCase):
+    """Bản chia sẻ v2: đủ thông tin (đối số + kết quả công cụ, lời nhắc hệ thống, tóm tắt, mô hình, chế độ) để cải tiến Handio."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(dir="/tmp")
+        self.path = os.path.join(self.tmp, "s.db")
+        self.db = SH.ShareDB(self.path, now=lambda: 2_000_000)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, True)
+
+    def test_clean_keeps_results_and_meta(self):
+        p, e = SH.clean_payload(payload_v2())
+        self.assertIsNone(e)
+        self.assertEqual([i["k"] for i in p["items"]], ["user", "tool", "tool", "system", "summary", "assistant"])
+        self.assertEqual(p["items"][1], {"k": "tool", "n": "read_file", "t": '{"path":"khong-co.js"}', "r": "Lỗi: Không có file khong-co.js", "e": True})
+        self.assertNotIn("e", p["items"][2])
+        self.assertEqual((p["model"], p["mode"]), ("qwen3.5-35b-a3b-int4", "bypass"))
+
+    def test_clean_scrubs_results_and_rejects_bad_fields(self):
+        p, _ = SH.clean_payload(payload_v2(items=[{"k": "user", "t": "x"}, {"k": "tool", "n": "bash", "t": "env", "r": "API_KEY=sk-abcdefghijklmnop1234", "e": "yes"}]))
+        self.assertNotIn("sk-abcdef", p["items"][1]["r"])
+        self.assertNotIn("e", p["items"][1])          # e không phải bool → bỏ
+        self.assertIsNone(SH.clean_payload(payload_v2(items=[{"k": "user", "t": "x"}, {"k": "tool", "n": "bash", "t": "x", "r": 5}]))[0])
+        p, _ = SH.clean_payload(payload_v2(model="<script>", mode="hack mode !!"))
+        self.assertEqual((p["model"], p["mode"]), ("", ""))
+
+    def test_store_and_render_v2(self):
+        sid = self.db.create("sv@st.neu.edu.vn", SH.clean_payload(payload_v2())[0])["id"]
+        d = self.db.get(sid, count_view=False)
+        self.assertEqual((d["model"], d["mode"]), ("qwen3.5-35b-a3b-int4", "bypass"))
+        page = SH.render_page(d)
+        self.assertIn("<details", page)
+        self.assertIn("Lỗi: Không có file khong-co.js", page)
+        self.assertNotIn("<script>alert", page)
+        self.assertIn("&lt;script&gt;", page)
+
+    def test_old_db_gets_new_columns(self):
+        import sqlite3
+        old = os.path.join(self.tmp, "old.db")
+        c = sqlite3.connect(old)
+        c.execute("""CREATE TABLE shares (id TEXT PRIMARY KEY, owner TEXT NOT NULL, ts INTEGER NOT NULL, title TEXT NOT NULL, profile TEXT NOT NULL DEFAULT '',
+            version TEXT NOT NULL DEFAULT '', platform TEXT NOT NULL DEFAULT '', items TEXT NOT NULL, nitems INTEGER NOT NULL, bytes INTEGER NOT NULL,
+            redactions INTEGER NOT NULL DEFAULT 0, views INTEGER NOT NULL DEFAULT 0, last_view INTEGER NOT NULL DEFAULT 0, revoked INTEGER NOT NULL DEFAULT 0)""")
+        c.commit(); c.close()
+        db = SH.ShareDB(old)
+        sid = db.create("a@neu.edu.vn", SH.clean_payload(payload_v2())[0])["id"]
+        self.assertEqual(db.get(sid, count_view=False)["mode"], "bypass")
+
+
+class Reader(unittest.TestCase):
+    """neu-share-read: lệnh CHỈ ĐỌC để nhóm phát triển (và Claude) đọc một bản chia sẻ theo mã/liên kết, không lộ người chia sẻ."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(dir="/tmp")
+        self.path = os.path.join(self.tmp, "s.db")
+        db = SH.ShareDB(self.path, now=lambda: 2_000_000)
+        self.sid = db.create("lan.nguyen@neu.edu.vn", SH.clean_payload(payload_v2())[0])["id"]
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, True)
+
+    def run_reader(self, *args):
+        import io
+        import share_read as R
+        out = io.StringIO()
+        code = R.main(list(args) + ["--db", self.path], out=out)
+        return code, out.getvalue()
+
+    def test_reads_by_id_or_url_as_markdown(self):
+        for ref in (self.sid, "https://ai.neu.edu.vn/agent/share/" + self.sid):
+            code, text = self.run_reader(ref)
+            self.assertEqual(code, 0)
+            self.assertIn("Làm app trắc nghiệm", text)
+            self.assertIn("read_file", text)
+            self.assertIn("Lỗi: Không có file khong-co.js", text)
+            self.assertIn("qwen3.5-35b-a3b-int4", text)
+            self.assertIn("CHƯA chạy thử", text)
+            self.assertNotIn("lan.nguyen", text)
+
+    def test_json_and_list_without_owner(self):
+        code, text = self.run_reader(self.sid, "--json")
+        d = json.loads(text)
+        self.assertEqual(d["id"], self.sid)
+        self.assertNotIn("owner", d)
+        code, text = self.run_reader("--list", "5")
+        self.assertEqual(code, 0)
+        self.assertIn(self.sid, text)
+        self.assertNotIn("lan.nguyen", text)
+
+    def test_rejects_bad_ref_and_missing(self):
+        self.assertNotEqual(self.run_reader("../../etc/passwd")[0], 0)
+        self.assertNotEqual(self.run_reader("A" * 22)[0], 0)
+        self.assertNotEqual(self.run_reader("--list", "abc")[0], 0)
+
+    def test_does_not_count_views_or_write(self):
+        before = os.path.getmtime(self.path)
+        self.run_reader(self.sid)
+        db = SH.ShareDB(self.path)
+        self.assertEqual(db.get(self.sid, count_view=False)["views"], 0)
