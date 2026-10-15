@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Chọn "Toàn quyền" rồi mà agent vẫn hỏi từng lệnh**: khi mở lại cuộc trò chuyện (kể cả sau khi ứng dụng tự cập nhật), tạo cuộc trò chuyện mới hay lưu hướng dẫn dự án, chế độ bị trả về mặc định nhưng nhãn dưới ô nhập vẫn ghi "Toàn quyền". Nay chế độ bạn chọn được giữ trong cùng dự án, và nhãn luôn đúng với chế độ thật.
+
 ## [0.8.20] - 2026-10-15
 
 ### Sửa
