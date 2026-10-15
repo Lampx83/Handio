@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Agent sửa tệp ít bị trượt "Không tìm thấy old_string" hơn**: khi đoạn agent chép lại lệch tệp thật chỉ vì thụt dòng, dấu cách thừa, dòng trống thiếu/thừa, lỡ kèm số dòng, kiểu xuống dòng Windows (CRLF) hay dạng gõ dấu tiếng Việt khác nhau, agent vẫn sửa được, nhưng chỉ khi đoạn đó là duy nhất trong tệp (và báo rõ là đã khớp gần đúng). Tệp CRLF giữ nguyên kiểu xuống dòng sau khi sửa. Khi vẫn không khớp, agent được chỉ ra đúng dòng nào khác với tệp, nên lần sửa sau trúng ngay.
+
 ## [0.8.19] - 2026-10-12
 
 ### Thêm
