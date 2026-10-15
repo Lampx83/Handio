@@ -8,6 +8,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ### Thay đổi
 - **Tab Code tự bấm thử ứng dụng web trước khi báo xong** (Desktop): trước đây agent chỉ mở trang xem có lỗi lúc tải, nên có khi báo "xong" mà bạn vừa bấm "Bắt đầu làm bài" là ứng dụng hỏng. Nay agent bấm các nút chính, gõ vào ô nhập và kiểm tra kết quả hiện ra trong một cửa sổ ẩn; lỗi phát sinh ở bước nào thì tự sửa rồi chạy lại đúng luồng đó. Hộp thoại của trang (alert/confirm) không bật lên màn hình của bạn.
 
+### Sửa
+- **Agent không còn xoá mất nội dung tệp khi làm việc lâu** (tab Code): trước đây trong cuộc trò chuyện dài, agent đôi khi ghi một dòng kiểu `[16547 ký tự đã ghi vào tệp…]` đè lên tệp thật (ví dụ toàn bộ CSS biến mất) hoặc sửa mã mãi không khớp. Nay việc ghi như vậy bị chặn và agent được nhắc đọc lại tệp trước khi sửa.
+
 ## [0.8.19] - 2026-10-12
 
 ### Thêm
