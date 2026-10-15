@@ -631,11 +631,28 @@ export class LocalController implements AgentController {
     this.session.dispose();
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.chatId = newId();
     this.rawInputs = [];
     this.fire({ type: "reset" });
+  }
+
+  /**
+   * Thay phiên bằng phiên mới (đọc lại cấu hình). `keepMode`: giữ chế độ quyền người dùng vừa chọn (cùng dự án) thay vì quay về mặc định.
+   * Luôn báo chế độ thật cho giao diện: đã gặp nhãn vẫn ghi "Toàn quyền" trong khi phiên mới ở chế độ mặc định và cứ hỏi từng lệnh.
+   */
+  private async replaceSession(keepMode: boolean): Promise<void> {
+    const prev = keepMode ? this.session.mode : undefined;
+    this.session = await this.makeSession();
+    if (prev && prev !== this.session.mode) {
+      try {
+        this.session.setMode(prev);
+      } catch {
+        /* tab/chính sách không cho chế độ đó: giữ mặc định */
+      }
+    }
+    this.fire({ type: "mode", mode: this.session.mode });
   }
 
   /** Tạo lại phiên (đọc lại AGENTS.md, cấu hình dự án…) nhưng giữ nguyên hội thoại đang có. */
@@ -643,7 +660,7 @@ export class LocalController implements AgentController {
     const { messages, archived } = this.session.main;
     this.session.dispose();
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.session.main.messages = messages;
     this.session.main.archived = archived;
@@ -667,7 +684,7 @@ export class LocalController implements AgentController {
     this.trusted = await this.o.trust.isTrusted(env.root);
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(false);
     this.pendingNotices.push(...this.session.startupNotices);
     this.chatId = newId();
     this.rawInputs = [];
@@ -811,7 +828,7 @@ export class LocalController implements AgentController {
     this.session.dispose();
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.session.main.messages = saved.messages;
     this.session.main.archived = saved.archived ?? [];
     this.chatId = saved.id;
@@ -1250,7 +1267,7 @@ export class LocalController implements AgentController {
     this.trusted = trust;
     const { messages, archived } = this.session.main;
     this.session.dispose();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.session.main.messages = messages;
     this.session.main.archived = archived;
