@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Kiểm tra sức khoẻ máy chủ thử chat thật** (quản trị viên): mỗi 15 phút gửi một câu rất ngắn tới mô hình và đo thời gian ra chữ đầu, nên mô hình treo không còn bị báo "tốt". Trang quản trị và tin cảnh báo nhắc trước 30 ngày khi chứng chỉ HTTPS hoặc mã bí mật đăng nhập Microsoft sắp hết hạn (khai ngày ở `/etc/neu-agent/entra-secret-expires`, rồi chạy lại `install-diag.sh`).
+
 ## [0.8.19] - 2026-10-12
 
 ### Thêm

@@ -687,7 +687,7 @@ def read_health(path, t):
             h = json.load(f)
         age = t - os.path.getmtime(path)
         failed = [k for k, v in (h.get("checks") or {}).items() if isinstance(v, dict) and not v.get("ok")] or [str(x) for x in h.get("failed", [])][:10]
-        checks = {str(k): {"ok": bool(v.get("ok")), "ms": v.get("ms"), "detail": str(v.get("detail", ""))[:80]} for k, v in (h.get("checks") or {}).items() if isinstance(v, dict)}
+        checks = {str(k): {"ok": bool(v.get("ok")), "warn": bool(v.get("warn")), "ms": v.get("ms"), "detail": str(v.get("detail", ""))[:80]} for k, v in (h.get("checks") or {}).items() if isinstance(v, dict)}
         return bool(h.get("ok")) and age < 900, failed[:10], age, checks
     except (OSError, ValueError, AttributeError):
         return None, [], None, {}
@@ -732,6 +732,9 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
         hs = '<span class="bad">chưa có dữ liệu kiểm tra sức khoẻ</span>'
     elif ok:
         hs = '<span class="ok">hoạt động tốt</span> (kiểm tra %d phút trước)' % max(age // 60, 0)
+        warn = [nm for nm, v in checks.items() if v.get("warn")]
+        if warn:
+            hs += ' · <span class="bad">cảnh báo: %s</span>' % _e(", ".join(warn))
     else:
         hs = '<span class="bad">có sự cố: %s</span>' % _e(", ".join(failed) or "kiểm tra đã cũ")
     ret, e7, p = k["returning_7d"], k["error_rate_7d"], k["prev"]
@@ -971,7 +974,7 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
     # ---- hệ thống & dữ liệu
     o.append('<h2 id="he-thong">Hệ thống &amp; dữ liệu</h2><div class="grid">')
     if checks:
-        o.append('<div class="card"><h3>Kiểm tra sức khoẻ (5 phút/lần)</h3>%s</div>' % table(["Thành phần", "Tình trạng", "ms", "Chi tiết"], [[nm, "✓ tốt" if v["ok"] else "✗ lỗi", v["ms"] if v["ms"] is not None else "—", v["detail"]] for nm, v in checks.items()]))
+        o.append('<div class="card"><h3>Kiểm tra sức khoẻ (5 phút/lần)</h3>%s</div>' % table(["Thành phần", "Tình trạng", "ms", "Chi tiết"], [[nm, ("⚠ cảnh báo" if v.get("warn") else "✓ tốt") if v["ok"] else "✗ lỗi", v["ms"] if v["ms"] is not None else "—", v["detail"]] for nm, v in checks.items()]))
     if sysinfo:
         fresh = sysinfo["newest_event_age_s"]
         o.append('<div class="card"><h3>Dữ liệu chẩn đoán</h3>%s</div>' % table(["Chỉ số", "Giá trị"], [

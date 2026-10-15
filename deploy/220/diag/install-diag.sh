@@ -14,6 +14,11 @@
 #   NEU_DIAG_SKIP_TESTS=1 ...                            bỏ qua bộ kiểm thử trước khi cài (không khuyến nghị)
 #
 # Bản nháp gợi ý bằng mô hình cho báo cáo (tuỳ chọn): đặt key mô hình vào /etc/neu-agent/llm-key (quyền 600) rồi chạy lại script này.
+# Kiểm tra sức khoẻ (drop-in neu-agent-healthz.service.d/probe.conf, tạo lại mỗi lần chạy):
+#   - chat thật qua cổng mô hình: key lấy từ tệp conf.d của nginx (install.sh giữ ở đó) qua LoadCredential, không chép đi đâu;
+#   - hạn client secret Entra: echo 2027-04-30 | sudo tee /etc/neu-agent/entra-secret-expires (YYYY-MM-DD) rồi chạy lại script này;
+#   - hạn chứng chỉ HTTPS: tên miền lấy từ server_name của site nginx đã cài, kết nối tới máy 222 qua địa chỉ nội bộ.
+#     Muốn khác: /etc/neu-agent/tls-hosts, mỗi dòng "tên.miền@ip:cổng".
 # An toàn: sao lưu tệp cũ, kiểm tra sau cài, tự khôi phục nếu lỗi; không đụng tới site/cấu hình nginx khác.
 set -euo pipefail
 
@@ -32,6 +37,12 @@ LLMKEY=$ETC/llm-key
 DROPIN_DIR=$UNITDIR/neu-agent-diag-report.service.d
 ALERT_DROPIN=$UNITDIR/neu-agent-diag-alert.service.d
 WEBHOOK=$ETC/alert-webhook
+HEALTH_DROPIN=$UNITDIR/neu-agent-healthz.service.d
+NGINX_CONFD=/etc/nginx/conf.d/neu-agent.conf     # install.sh giữ key mô hình ở đây (640, root)
+NGINX_SITE=/etc/nginx/sites-available/neu-agent
+ENTRA_EXP=$ETC/entra-secret-expires
+TLS_FILE=$ETC/tls-hosts
+FRONT_IP=@@SITE_222_INTERNAL_IP@@                # máy 222 (giữ tên miền, HTTPS)
 VAR=/var/lib/neu-agent
 USER_NAME=neu-diag
 SNIP=/etc/nginx/snippets/neu-agent-locations.conf
@@ -49,7 +60,7 @@ if [ "${1:-}" = "--uninstall" ]; then
   for t in $TIMERS; do systemctl disable --now "$t" 2>/dev/null || true; done
   for s in $SERVICES; do systemctl disable --now "$s" 2>/dev/null || true; done
   for u in $UNITS; do rm -f "$UNITDIR/$u"; done
-  rm -rf "$DROPIN_DIR" "$ALERT_DROPIN" "$LIB" "$LROT"; systemctl daemon-reload
+  rm -rf "$DROPIN_DIR" "$ALERT_DROPIN" "$HEALTH_DROPIN" "$LIB" "$LROT"; systemctl daemon-reload
   echo "Đã gỡ dịch vụ chẩn đoán. Còn lại (xoá tay nếu muốn): $VAR, $ETC/diag-secret, $ETC/admins.txt, người dùng $USER_NAME."
   exit 0
 fi
@@ -84,7 +95,7 @@ fi
 MANAGED=()
 for c in $CODE; do MANAGED+=("$LIB/$c"); done
 for u in $UNITS; do MANAGED+=("$UNITDIR/$u"); done
-MANAGED+=("$LROT" "$DROPIN_DIR/llm.conf" "$ALERT_DROPIN/net.conf" "$LIB/users.sh")
+MANAGED+=("$LROT" "$DROPIN_DIR/llm.conf" "$ALERT_DROPIN/net.conf" "$HEALTH_DROPIN/probe.conf" "$LIB/users.sh")
 mkdir -p "$BAK"
 declare -A EXISTED
 for f in "${MANAGED[@]}"; do
@@ -166,6 +177,36 @@ EOT
 else
   rm -f "$ALERT_DROPIN/net.conf"; rmdir "$ALERT_DROPIN" 2>/dev/null || true
 fi
+# kiểm tra sức khoẻ: chat thật (key), hạn secret Entra, hạn chứng chỉ HTTPS — chỉ nạp những gì đang có
+HP=()
+if [ -s "$NGINX_CONFD" ]; then HP+=("LoadCredential=model-key:$NGINX_CONFD")
+else echo "Lưu ý: chưa có $NGINX_CONFD (chạy ./install.sh <key> trước): healthz chưa kiểm được chat thật (sẽ cảnh báo)."; fi
+if [ -f "$ENTRA_EXP" ]; then
+  _d=$(grep -m1 -vE '^[[:space:]]*(#|$)' "$ENTRA_EXP" | tr -d '[:space:]' || true)
+  [[ "$_d" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || echo "Lưu ý: $ENTRA_EXP cần một dòng dạng YYYY-MM-DD (healthz sẽ cảnh báo)."
+  HP+=("LoadCredential=entra-secret-expires:$ENTRA_EXP")
+else
+  echo "Lưu ý: chưa khai hạn client secret Entra. Ví dụ: echo 2027-04-30 | sudo tee $ENTRA_EXP rồi chạy lại script này (nhắc trước 30 ngày)."
+fi
+TLS=""
+if [ -s "$TLS_FILE" ]; then TLS=$(grep -vE '^[[:space:]]*(#|$)' "$TLS_FILE" | tr -d '[:blank:]' | paste -sd, - || true)
+elif [ -f "$NGINX_SITE" ]; then
+  _h=$(sed -nE 's/^[[:space:]]*server_name[[:space:]]+([A-Za-z0-9.-]+)[[:space:];].*/\1/p' "$NGINX_SITE" | head -1)
+  [ -n "$_h" ] && TLS="$_h@$FRONT_IP:443"
+fi
+if [ -n "$TLS" ] && { [ ${#TLS} -gt 1000 ] || ! [[ "$TLS" =~ ^[A-Za-z0-9.,:@-]+$ ]]; }; then echo "Lưu ý: $TLS_FILE sai định dạng (mỗi dòng tên.miền@ip:cổng): bỏ qua kiểm tra chứng chỉ."; TLS=""; fi
+if [ -n "$TLS" ]; then
+  HP+=("Environment=NEU_HEALTH_TLS_HOSTS=$TLS")
+  _ips=$(printf '%s\n' "$TLS" | tr ',' '\n' | sed -nE 's/^[^@]+@([0-9.]+)(:[0-9]+)?$/\1/p' | sort -u | tr '\n' ' ')
+  [ -n "${_ips// }" ] && HP+=("IPAddressAllow=$_ips")   # cộng thêm vào IPAddressAllow của đơn vị (chỉ máy 222)
+fi
+if [ ${#HP[@]} -gt 0 ]; then
+  mkdir -p "$HEALTH_DROPIN"
+  { echo "# Tạo bởi install-diag.sh (đừng sửa tay: chạy lại script). Key chỉ nằm trong thư mục credential riêng của dịch vụ."; echo "[Service]"; printf '%s\n' "${HP[@]}"; } > "$HEALTH_DROPIN/probe.conf"
+  chmod 644 "$HEALTH_DROPIN/probe.conf"
+else
+  rm -f "$HEALTH_DROPIN/probe.conf"; rmdir "$HEALTH_DROPIN" 2>/dev/null || true
+fi
 if command -v systemd-analyze >/dev/null; then
   for u in $UNITS; do systemd-analyze verify "$UNITDIR/$u" 2>&1 | grep -v '^$' | sed "s/^/  [systemd-analyze] /" || true; done   # chỉ cảnh báo; khởi động dịch vụ bên dưới mới là phép thử thật
 fi
@@ -185,6 +226,13 @@ c_bad=$(code -X POST -H 'X-User-Email: install-check@neu.edu.vn' -H 'Content-Typ
 c_noid=$(code -X POST -d '{}' http://127.0.0.1:4190/diag || true)                                                                              # thiếu danh tính: 401
 c_admin=$(code http://127.0.0.1:4190/admin/ || true)                                                                                           # không phải quản trị viên: 403
 systemctl start neu-agent-healthz.service 2>/dev/null || true       # tạo health.json (có thể báo lỗi nếu oauth2/cổng mô hình đang lỗi; không chặn cài)
+h_sum=$(python3 - "$VAR/health.json" 2>/dev/null <<'PY' || echo "chưa có health.json"
+import json, sys
+h = json.load(open(sys.argv[1], encoding="utf-8"))
+print(" | ".join("%s=%s%s" % (k, "lỗi" if not v.get("ok") else ("cảnh báo" if v.get("warn") else "tốt"), " (%s)" % v["detail"] if k in ("chat", "tls", "entra_secret") and v.get("detail") else "") for k, v in h["checks"].items()))
+PY
+)
+echo "Sức khoẻ: $h_sum"
 rep_ok=1; systemctl start neu-agent-diag-report.service || rep_ok=0 # báo cáo đầu tiên (trống) để trang quản trị có nội dung
 [ -s "$VAR/reports/latest.html" ] || rep_ok=0
 systemctl start neu-agent-diag-stats.service || rep_ok=0            # trang tổng quan quản trị (index.html)
