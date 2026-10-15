@@ -34,6 +34,7 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 
 **Ứng dụng Desktop (Electron)**
 - Phiên bản Electron **mới nhất** tại thời điểm đóng gói (44.x); `npm audit` cho phần mã chạy thực tế: 0 lỗ hổng đã biết.
+- Công cụ dev/đóng gói (vitest, vite, esbuild, electron-builder) **không vào gói cài** (gói chỉ có `dist/` đã gộp). Cảnh báo còn mở có chủ đích: `sprintf-js` (electron-builder → @electron/get → global-agent → roarr), chưa có bản vá, chỉ chạy lúc đóng gói trên máy CI/nhà phát triển, không nhận dữ liệu từ người dùng.
 - Giao diện chạy trong cửa sổ cách ly: `sandbox`, `contextIsolation`, không Node, CSP `default-src 'none'; connect-src 'none'`; giao diện phục vụ qua giao thức riêng `app://` (không `file://`) với kiểm tra đường dẫn chống thoát thư mục; **mọi yêu cầu mạng của giao diện bị huỷ**; điều hướng/cửa sổ mới/webview bị chặn; DevTools tắt trong bản phát hành; mọi quyền (camera, mic, vị trí…) bị từ chối.
 - **IPC** giữa giao diện và tiến trình chính: danh sách lệnh cố định, kiểm tra người gửi, kiểm tra kiểu/kích thước từng tham số, giới hạn tần suất, không lộ chi tiết lỗi nội bộ; giao diện **không thể** đặt quy tắc quyền hay chế độ qua IPC.
 - **Electron Fuses** tắt `RunAsNode`, `NODE_OPTIONS`, `--inspect`; chỉ nạp ứng dụng từ **asar có kiểm tra toàn vẹn**; mã hoá cookie.

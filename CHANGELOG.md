@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Sửa
+- **Vá lỗ hổng bảo mật (mức thấp) của thư viện hiển thị công thức toán** (KaTeX), cập nhật lên bản 0.18.2. Công thức hiển thị như cũ.
+
 ## [0.8.20] - 2026-10-15
 
 ### Sửa
