@@ -87,7 +87,7 @@ export function openShare(ctl: AgentController, opts: { track?: (a: string) => v
           h("li", {}, `Bất kỳ ai đã đăng nhập ${brandName()} và có liên kết đều đọc được toàn bộ cuộc trò chuyện này.`),
           h("li", {}, "Nhóm phát triển cũng đọc được các cuộc trò chuyện được chia sẻ để hiểu người dùng gặp gì và cải thiện hệ thống."),
           h("li", {}, "Khoá/mật khẩu, CCCD, số điện thoại, email, số tài khoản được tự che, nhưng bạn vẫn nên tự kiểm tra, đừng chia sẻ thông tin riêng tư của người khác."),
-          h("li", {}, "Nội dung các tệp không được chia sẻ, chỉ có chữ trao đổi và tóm tắt thao tác."),
+          h("li", {}, "Kèm theo các thao tác của agent (lệnh, tệp đã ghi/sửa) và phần đầu kết quả của chúng, nên có thể lộ một đoạn ngắn nội dung tệp. Tệp bạn đính kèm bằng @ không được gửi."),
           h("li", {}, "Bạn thu hồi được bất cứ lúc nào: liên kết sẽ hết hiệu lực và bản chia sẻ bị xoá."))),
       h("label", { class: "shr-chk", for: "shr-agree" }, agree, " Tôi đã hiểu và đồng ý chia sẻ cuộc trò chuyện này."),
       status,

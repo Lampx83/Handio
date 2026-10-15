@@ -11,7 +11,7 @@ import { extOf, formatSections, isOfficeFile, readDocumentSections } from "./off
 import { basename, isInside, join, relative } from "./path";
 import { sniffImage } from "./vision";
 import type { Mode } from "./permissions";
-import { chatTitle, cleanProjectName, countTurns, ID_RE, messagesToHistory, newId, trimForSave, type ChatMeta, type ChatStore, type HistoryItem, type ProjectHost, type ProjectsState } from "./projects";
+import { archiveForSave, chatTitle, cleanProjectName, countTurns, ID_RE, messagesToHistory, newId, trimForSave, type ChatMeta, type ChatStore, type HistoryItem, type ProjectHost, type ProjectsState } from "./projects";
 import { Session } from "./session";
 import { badCitations, docViewOf, listProcedures, removeProcedure, saveProcedure, type Procedure } from "./work-ctl";
 import type { DocView } from "./office/locate";
@@ -20,7 +20,7 @@ import { stackOf, type Stack, type UiLib } from "./task-profile";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import type { HttpToolRuntime } from "./http-tools";
 import { feedbackProblem, type FeedbackInput, type FeedbackResult } from "./feedback";
-import { buildSharePayload, type SharedChatInfo, type SharePayload, type SharePreview, type ShareResult } from "./share";
+import { buildShareV2, type SharedChatInfo, type SharePayloadV2, type SharePreview, type ShareResult } from "./share";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
 import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk } from "./tools";
 import type { AgentController, PermissionRequest, PermissionResponse, QuotaInfo, RewindPoint, SessionEvent, Settings, UiState } from "./types";
@@ -396,10 +396,12 @@ export class LocalController implements AgentController {
     const store = this.o.chats;
     if (!store || !t.projectId) return;
     const msgs = t.session.main.messages;
-    const turns = countTurns(msgs);
+    const old = t.session.main.archived;
+    const all = old.length ? [...old, ...msgs] : msgs;
+    const turns = countTurns(all);
     if (!turns) return;
     try {
-      await store.save(t.projectId, { id: t.chatId, title: chatTitle(msgs) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, ...(unfinished ? { unfinished: true } : {}), messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined });
+      await store.save(t.projectId, { id: t.chatId, title: chatTitle(all) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, ...(unfinished ? { unfinished: true } : {}), messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined, ...(old.length ? { archived: archiveForSave(old) } : {}) });
     } catch {
       /* không lưu được lịch sử (đầy bộ nhớ…): bỏ qua, không ảnh hưởng công việc */
     }
@@ -570,7 +572,9 @@ export class LocalController implements AgentController {
     const store = this.o.chats;
     if (store && this.projectId) {
       try {
-        if (countTurns(msgs)) await store.save(this.projectId, { id: this.chatId, title: chatTitle(msgs), updated: Date.now(), turns: countTurns(msgs), messages: trimForSave(msgs), inputs: aligned ? [...this.rawInputs] : undefined });
+        const old = this.session.main.archived;
+        const all = old.length ? [...old, ...msgs] : msgs;
+        if (countTurns(all)) await store.save(this.projectId, { id: this.chatId, title: chatTitle(all), updated: Date.now(), turns: countTurns(all), messages: trimForSave(msgs), inputs: aligned ? [...this.rawInputs] : undefined, ...(old.length ? { archived: archiveForSave(old) } : {}) });
         else await store.remove(this.projectId, this.chatId);
       } catch {
         /* không lưu được: bỏ qua */
@@ -653,12 +657,13 @@ export class LocalController implements AgentController {
 
   /** Tạo lại phiên (đọc lại AGENTS.md, cấu hình dự án…) nhưng giữ nguyên hội thoại đang có. */
   private async rebuildSession(): Promise<void> {
-    const messages = this.session.main.messages;
+    const { messages, archived } = this.session.main;
     this.session.dispose();
     await this.loadProject();
     await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.session.main.messages = messages;
+    this.session.main.archived = archived;
   }
 
   // ---------------------------------------------------------------- dự án
@@ -825,6 +830,7 @@ export class LocalController implements AgentController {
     await this.loadProject();
     await this.replaceSession(true);
     this.session.main.messages = saved.messages;
+    this.session.main.archived = saved.archived ?? [];
     this.chatId = saved.id;
     if (saved.title.endsWith(" (nhánh)")) this.branches.add(saved.id);
     this.rawInputs = saved.inputs && saved.inputs.length === countTurns(saved.messages) ? [...saved.inputs] : [];
@@ -1138,21 +1144,30 @@ export class LocalController implements AgentController {
     return e && /\/diag\/?$/.test(e) ? e.replace(/\/diag\/?$/, "/") : null;
   }
 
-  private async sharePayloadFor(chatId?: string, title?: string): Promise<{ payload: SharePayload } | { error: string }> {
-    let messages = this.session.main.messages;
-    let inputs: string[] | undefined = this.rawInputs.length === countTurns(messages) ? this.rawInputs : undefined;
+  private async sharePayloadFor(chatId?: string, title?: string): Promise<{ payload: SharePayloadV2 } | { error: string }> {
+    // cả phần trước các lần tóm tắt ngữ cảnh: trước đây sau khi tóm tắt chỉ còn tin nội bộ → báo "chưa có nội dung"
+    let messages = [...this.session.main.archived, ...this.session.main.messages];
+    let inputs: string[] | undefined = this.rawInputs.length === countTurns(this.session.main.messages) ? this.rawInputs : undefined;
     let t = "";
     if (chatId && chatId !== this.chatId) {
       if (!this.o.chats || !ID_RE.test(chatId)) return { error: "Không tìm thấy cuộc trò chuyện." };
       const saved = await this.o.chats.load(this.projectId, chatId);
       if (!saved) return { error: "Cuộc trò chuyện đã bị xoá." };
-      messages = saved.messages;
+      messages = [...(saved.archived ?? []), ...saved.messages];
       inputs = saved.inputs && saved.inputs.length === countTurns(saved.messages) ? saved.inputs : undefined;
       t = saved.title;
     }
     if (!countTurns(messages)) return { error: "Cuộc trò chuyện chưa có nội dung để chia sẻ." };
     const d = this.o.diagnostics;
-    const payload = buildSharePayload(messagesToHistory(messages, inputs), { title: (title ?? "").trim() || t || chatTitle(messages), profile: this.o.profile ?? "code", version: d?.version ?? "", platform: d?.platform ?? "" });
+    const payload = buildShareV2(messages, {
+      title: (title ?? "").trim() || t || chatTitle(messages),
+      profile: this.o.profile ?? "code",
+      version: d?.version ?? "",
+      platform: d?.platform ?? "",
+      model: this.settings.model,
+      mode: this.session.mode,
+      inputs,
+    });
     return { payload };
   }
 
@@ -1250,11 +1265,12 @@ export class LocalController implements AgentController {
   async trustProject(trust: boolean): Promise<void> {
     await this.o.trust.setTrusted(this.o.env.root, trust);
     this.trusted = trust;
-    const messages = this.session.main.messages;
+    const { messages, archived } = this.session.main;
     this.session.dispose();
     await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.session.main.messages = messages;
+    this.session.main.archived = archived;
     this.fire({ type: "notice", level: "info", text: trust ? "Đã tin cậy dự án này: quy tắc allow trong .neuagent/settings.json có hiệu lực." : "Không tin cậy dự án: chỉ áp dụng quy tắc cấm." });
   }
 
