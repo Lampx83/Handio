@@ -337,6 +337,9 @@ class Push(Base):
         st = json.loads(B.read_text(os.path.join(self.path(B.OUT), "last.json")))
         self.assertTrue(st["ok"])
         self.assertIs(st["pushed"], False)
+        pub = B.read_text(self.path(B.PUBLIC_STATUS))
+        self.assertIs(json.loads(pub)["pushed"], False)
+        self.assertNotIn("rsync", pub, "trạng thái công khai không chứa lỗi chi tiết")
 
     def test_push_without_known_hosts_refused(self):
         os.unlink(self.path(B.KNOWN_HOSTS))
@@ -478,6 +481,70 @@ class Restore(Base):
         self.assertFalse(os.path.exists(self.path("/var/lib/neu-agent/diag/users-seen.json")))
 
 
+class PublicStatus(Base):
+    """Tệp trạng thái CHỈ CÓ SỐ cho healthz/cảnh báo (chạy bằng neu-diag, không đọc được thư mục sao lưu 0700)."""
+
+    def pub(self):
+        p = self.path(B.PUBLIC_STATUS)
+        self.assertEqual(os.stat(p).st_mode & 0o777, 0o644)
+        self.assertEqual(os.stat(os.path.dirname(p)).st_mode & 0o777, 0o755)
+        raw = B.read_text(p)
+        self.assertNotIn("neu-agent-data-", raw, "không có tên tệp")
+        st = json.loads(raw)
+        self.assertEqual(set(st), {"time", "ok", "pushed", "size", "files", "last_ok"})
+        for k, v in st.items():
+            self.assertTrue(v is None or isinstance(v, (bool, int)), (k, v))
+        return st
+
+    def test_ok_run(self):
+        self.gpg_keys()
+        self.seed()
+        self.assertEqual(self.run_cmd("run")[0], 0)
+        st = self.pub()
+        self.assertIs(st["ok"], True)
+        self.assertIsNone(st["pushed"], "không có REMOTE")
+        self.assertEqual(st["files"], len(B.SOURCES))
+        self.assertGreater(st["size"], 0)
+        self.assertEqual(st["last_ok"], st["time"])
+
+    def test_failure_keeps_last_ok_and_no_error_text(self):
+        self.gpg_keys()
+        self.seed()
+        self.assertEqual(self.run_cmd("run")[0], 0)
+        first = self.pub()["last_ok"]
+        for _arc, src, *_ in B.SOURCES:
+            if os.path.exists(self.path(src)):
+                os.unlink(self.path(src))
+        rc, out = self.run_cmd("run")
+        self.assertEqual(rc, 1, out)
+        st = self.pub()
+        self.assertIs(st["ok"], False)
+        self.assertEqual(st["last_ok"], first)
+        self.assertNotIn("không tìm thấy", B.read_text(self.path(B.PUBLIC_STATUS)))
+
+    def test_conf_error_is_reported(self):
+        self.seed()
+        self.assertEqual(self.run_cmd("run")[0], 2)
+        st = self.pub()
+        self.assertIs(st["ok"], False)
+        self.assertIsNone(st["last_ok"])
+
+    def test_does_not_follow_planted_symlink(self):
+        self.gpg_keys()
+        self.seed()
+        victim = os.path.join(self.tmp, "nan-nhan.txt")
+        with open(victim, "w") as f:
+            f.write("giu nguyen")
+        d = os.path.dirname(self.path(B.PUBLIC_STATUS))
+        os.makedirs(d)
+        os.symlink(victim, self.path(B.PUBLIC_STATUS))
+        os.symlink(victim, os.path.join(d, ".status.json.tmp"))
+        self.assertEqual(self.run_cmd("run")[0], 0)
+        self.assertEqual(B.read_text(victim), "giu nguyen")
+        self.assertFalse(os.path.islink(self.path(B.PUBLIC_STATUS)))
+        self.pub()
+
+
 class Manifest(unittest.TestCase):
     """Đường dẫn trong SOURCES phải trùng đường dẫn các dịch vụ thật đang dùng (đổi chỗ lưu mà quên sửa ở đây = âm thầm không sao lưu)."""
 
@@ -504,6 +571,8 @@ class Manifest(unittest.TestCase):
                      "CapabilityBoundingSet=CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_CHOWN CAP_FOWNER", "ReadWritePaths=/var/backups/neu-agent-data"):
             self.assertIn(line + "\n", u)
         self.assertNotIn("captures.db", B.read_text(os.path.join(HERE, "backup.py")).split('"""', 2)[2])
+        self.assertIn("StateDirectory=neu-agent-backup\nStateDirectoryMode=0755\n", u, "trạng thái công khai: chỉ thư mục này, đọc được bởi neu-diag")
+        self.assertEqual(os.path.dirname(B.PUBLIC_STATUS), "/var/lib/neu-agent-backup")
 
 
 if __name__ == "__main__":

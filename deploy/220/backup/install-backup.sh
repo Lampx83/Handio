@@ -29,6 +29,7 @@ GPG_K=$ETC/backup-recipient.asc
 SSH_K=$ETC/backup-ssh-key
 KNOWN=$ETC/backup-known_hosts
 OUT=/var/backups/neu-agent-data
+PUB=/var/lib/neu-agent-backup          # status.json chỉ có số cho healthz/cảnh báo (neu-diag đọc)
 TS=$(date +%Y%m%d%H%M%S)
 BAK=/var/backups/neu-agent-backup/$TS
 
@@ -37,7 +38,7 @@ command -v python3 >/dev/null && command -v systemctl >/dev/null || { echo "Thi�
 
 if [ "${1:-}" = "--uninstall" ]; then
   systemctl disable --now "$TIMER" 2>/dev/null || true
-  rm -f "$UNITDIR/$SVC" "$UNITDIR/$TIMER" "$BIN"; rm -rf "$DROPIN" "$LIB"; systemctl daemon-reload
+  rm -f "$UNITDIR/$SVC" "$UNITDIR/$TIMER" "$BIN"; rm -rf "$DROPIN" "$LIB" "$PUB"; systemctl daemon-reload   # bỏ trạng thái: healthz thôi theo dõi
   echo "Đã gỡ lịch sao lưu. Còn lại (xoá tay nếu muốn): $OUT (các bản sao lưu), $CONF, khoá công khai và khoá SSH sao lưu ở $ETC."
   exit 0
 fi
@@ -189,6 +190,10 @@ esac
 NEWEST=$(echo "$STATE" | cut -d' ' -f2)
 [[ "$NEWEST" =~ ^neu-agent-data-[0-9]{8}-[0-9]{6}\.tar\.gz\.(age|gpg)$ ]] && [ -s "$OUT/$NEWEST" ] || { echo "Không thấy bản sao lưu vừa tạo."; exit 1; }
 if [ -s "$ETC/diag-secret" ] && grep -qF -- "$(head -c 64 "$ETC/diag-secret")" "$OUT/$NEWEST"; then echo "Bản sao lưu chứa bí mật ở dạng rõ: huỷ."; exit 1; fi
+
+if [ ! -s "$PUB/status.json" ] || { id neu-diag >/dev/null 2>&1 && ! runuser -u neu-diag -- test -r "$PUB/status.json"; }; then
+  echo "CẢNH BÁO: healthz (neu-diag) không đọc được $PUB/status.json: sao lưu lỗi sẽ không được cảnh báo."
+fi
 
 trap - EXIT
 echo "OK: sao lưu hằng đêm (~2:30) đã bật. Bản đầu tiên: $OUT/$NEWEST ($(du -h "$OUT/$NEWEST" | cut -f1))."

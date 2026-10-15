@@ -7,6 +7,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ### Thêm
 - **Máy chủ tự sao lưu dữ liệu mỗi đêm**: góp ý, liên kết chia sẻ, hạn mức, tài khoản được sao lưu mã hoá (chỉ quản trị viên giữ khoá giải mã) và có thể gửi sang máy khác, để không mất khi hỏng ổ đĩa.
+- **Quản trị viên được cảnh báo khi sao lưu có vấn đề**: lần sao lưu gần nhất lỗi, quá 36 giờ chưa có bản mới, hoặc chưa gửi được sang máy khác đều hiện ở trang quản trị và gửi tin cảnh báo.
 
 ## [0.8.19] - 2026-10-12
 
