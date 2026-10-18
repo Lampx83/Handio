@@ -1,0 +1,11 @@
+[Unit]
+Description=NEU Agent - sao luu du lieu hang dem
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=20min
+# máy tắt lúc 2:30 thì chạy bù khi bật lại
+Persistent=true
+
+[Install]
+WantedBy=timers.target

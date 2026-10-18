@@ -70,6 +70,8 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 - Hạn chế: cổng gateway 232:8037 còn mở với ai biết key (xem docs/DEPLOY.md); mã bí mật của ứng dụng Entra nằm trên máy 220 (`/etc/neu-agent/oauth2-proxy.env`, quyền 600).
 - Kiểm tra sức khoẻ (`neu-agent-healthz`, chạy bằng `neu-diag`) nhận key mô hình qua `LoadCredential` từ tệp conf.d của nginx (chỉ dịch vụ đó đọc được, không chép ra tệp khác, không ghi vào `health.json`/nhật ký) để gửi một lệnh chat `max_tokens: 1` mỗi 15 phút; mạng của nó chỉ mở tới loopback, gateway và máy 222 (kiểm hạn chứng chỉ). Hạn secret Entra chỉ là **ngày** do quản trị viên khai (`/etc/neu-agent/entra-secret-expires`), không phải secret. Tin cảnh báo chỉ có số ngày, không tên miền/IP. Kiểm thử: `deploy/220/diag/test_healthz.py`, `test_alerts.py`.
 
+**Sao lưu dữ liệu máy chủ** (`deploy/220/backup/`): hằng đêm, mã hoá bằng **khoá công khai** age/gpg (máy 220 không có khoá giải mã; từ chối chạy nếu lỡ để khoá riêng), tệp root 0600. Dịch vụ chạy root nhưng chỉ giữ quyền đọc/ghi tệp, hệ thống tệp chỉ đọc, không mạng; đẩy ra ngoài máy chỉ tới IP máy đích, khoá máy đích ghim sẵn, khuyến nghị `rrsync -wo -no-del` (220 bị chiếm cũng không đọc/xoá được bản cũ). Khôi phục coi gói là không tin cậy: chỉ nhận đúng các tên đã biết, tệp thường, chủ/quyền lấy theo máy chứ không theo gói; có bài thử gói xấu (`test_backup.py`) và `e2e-backup.mjs`.
+
 **Quản trị**: tệp `policy.json` ở vị trí chỉ quản trị viên ghi được có thể **khoá** địa chỉ máy chủ, cấm HTTP, cấm chế độ “Toàn quyền”, tắt công cụ chạy lệnh, tắt mạng cho lệnh, **tắt chẩn đoán** (`diagnostics:false`) (xem `docs/INSTALL.md`).
 
 ## 3. Điều CHƯA bảo vệ được (nói thẳng)
