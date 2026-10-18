@@ -1,0 +1,60 @@
+# Dựng gói MSIX cho Microsoft Store trên máy Windows của GitHub (không cần máy Windows riêng). Xem docs/RELEASE-SIGNING.md, mục Microsoft Store.
+#   - Chạy tay (Actions → Store (MSIX) → Run workflow): cần biến repo STORE_IDENTITY_NAME, STORE_PUBLISHER, STORE_PUBLISHER_DISPLAY_NAME
+#     (Partner Center → sản phẩm → Product identity; không phải bí mật). Tải tệp .appx ở mục Artifacts rồi nộp ở Partner Center.
+#   - Pull request đụng tới phần đóng gói Store: dựng THỬ (thiếu STORE_* thì dùng danh tính giả) để biết còn đóng gói được.
+name: Store (MSIX)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/store.yml
+      - apps/desktop/scripts/store.mjs
+      - apps/desktop/scripts/store-identity.mjs
+      - apps/desktop/build/appx/**
+      - apps/desktop/electron-builder.yml
+permissions:
+  contents: read
+env:
+  NEU_DEFAULT_BASE_URL: https://ai.neu.edu.vn/agent/vllm/v1
+  NEU_AUTH_TENANT: ${{ vars.NEU_AUTH_TENANT }}
+  NEU_AUTH_CLIENT_ID: ${{ vars.NEU_AUTH_CLIENT_ID }}
+  NEU_LAN_GATEWAY: ${{ vars.NEU_LAN_GATEWAY }}
+
+jobs:
+  msix:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Đệm tệp tải của Electron/electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+      - name: Dựng gói MSIX
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          STORE_IDENTITY_NAME: ${{ vars.STORE_IDENTITY_NAME }}
+          STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.STORE_PUBLISHER_DISPLAY_NAME }}
+        # chạy tay: bắt buộc có NEU_AUTH_* (GUID) như workflow Release và danh tính thật; pull request: dựng thử
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            for v in NEU_AUTH_TENANT NEU_AUTH_CLIENT_ID; do
+              echo "${!v:-}" | grep -Eq '^[0-9a-fA-F-]{36}$' || { echo "::error::Thiếu biến repo $v (GUID Entra), xem docs/PUBLIC.md"; exit 1; }
+            done
+            node scripts/store.mjs
+          else
+            node scripts/store.mjs --test
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msix${{ github.event_name == 'pull_request' && '-thu' || '' }}
+          path: apps/desktop/release/*.appx
+          if-no-files-found: error

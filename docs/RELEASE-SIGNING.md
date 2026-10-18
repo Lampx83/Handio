@@ -21,10 +21,26 @@ Ký số cần danh tính pháp lý và thanh toán của **người đứng tê
 |---|---|---|---|
 | **Cài từ trình duyệt (PWA)** | Mở trang web → Chrome/Edge → *Cài đặt Handio* (nút trong hộp “Tải ứng dụng” hoặc biểu tượng trên thanh địa chỉ) | Miễn phí, **dùng ngay** | Không tải tệp thực thi nên không có cảnh báo nào. Chạy bản web (thư mục ảo, không terminal) |
 | **macOS** | Đăng ký [Apple Developer Program](https://developer.apple.com/programs/enroll/) **cá nhân** (không cần số D-U-N-S, xác minh bằng giấy tờ tuỳ thân), lấy chứng chỉ *Developer ID Application* + khoá API để notarize. Notarize nhận cả tài khoản cá nhân | 99 USD/năm, thường vài ngày | Hộp cảnh báo của macOS sẽ ghi tên cá nhân người đăng ký. Sau này đổi sang tổ chức khi trường có D-U-N-S |
-| **Windows** | Phát hành qua **Microsoft Store** dạng MSIX: Microsoft ký, không có SmartScreen. Từ 2025 tài khoản nhà phát triển cá nhân [miễn phí](https://alternativeto.net/news/2025/9/microsoft-finally-drops-microsoft-store-publishing-fee-for-individual-developers-globally) (chưa xác nhận được Việt Nam có trong danh sách quốc gia hỗ trợ: hãy thử đăng ký ở Partner Center) | Miễn phí, qua kiểm duyệt của Microsoft | Cần thêm mục tiêu `appx` (tên/nhà phát hành lấy từ Partner Center). Tôi làm phần này khi bạn có tài khoản |
+| **Windows** | Phát hành qua **Microsoft Store** dạng MSIX: Microsoft ký, không có SmartScreen. Từ 2025 tài khoản nhà phát triển cá nhân [miễn phí](https://alternativeto.net/news/2025/9/microsoft-finally-drops-microsoft-store-publishing-fee-for-individual-developers-globally) (chưa xác nhận được Việt Nam có trong danh sách quốc gia hỗ trợ: hãy thử đăng ký ở Partner Center) | Miễn phí, qua kiểm duyệt của Microsoft | Đã có sẵn: workflow **Store (MSIX)**, xem mục “Microsoft Store” bên dưới |
 | Windows (ngoài Store) | Mua chứng chỉ code-signing OV loại ký đám mây (SSL.com eSigner, DigiCert KeyLocker…) | khoảng 200–400 USD/năm | Cá nhân cũng mua được ở một số nhà cấp; vẫn cần thời gian để SmartScreen tin tưởng |
 
 Có thông tin đăng nhập cho các dịch vụ trên thì đặt vào **GitHub Secrets** (bảng bên dưới), không gửi qua chat; sau đó chạy workflow **Release**.
+
+## Microsoft Store (Windows, không cần máy Windows)
+
+Store ký lại gói nên người dùng không gặp SmartScreen; Store cũng tự cập nhật (bản cài từ Store tắt tự cập nhật của ứng dụng: `selfUpdateAllowed`). Mọi bước làm được từ máy Mac, phần dựng gói chạy trên máy Windows của GitHub Actions.
+
+1. **Đăng ký** (người đứng tên tự làm, trên web): [storedeveloper.microsoft.com](https://storedeveloper.microsoft.com) → *Individual developer* (miễn phí; xác minh giấy tờ tuỳ thân + ảnh chân dung bằng camera máy Mac/điện thoại) → đăng nhập bằng tài khoản Microsoft cá nhân. Ứng dụng chính thức của trường nên dùng tài khoản *Company* (cũng miễn phí, cần D-U-N-S); tài khoản cá nhân không chuyển sang tổ chức được.
+2. **Tạo sản phẩm**: Partner Center → *Apps and games* → *New product* → *MSIX or PWA app* → đặt tên “NEU Agent”. Mở *Product identity*, chép 3 giá trị (không phải bí mật) vào biến repo:
+   ```bash
+   gh variable set STORE_IDENTITY_NAME --body "<Package/Identity/Name>"
+   gh variable set STORE_PUBLISHER --body "<Package/Identity/Publisher, bắt đầu bằng CN=>"
+   gh variable set STORE_PUBLISHER_DISPLAY_NAME --body "<Package/Properties/PublisherDisplayName>"
+   ```
+3. **Dựng gói**: GitHub → Actions → **Store (MSIX)** → *Run workflow*. Xong thì tải tệp `NEU-Agent-<phiên bản>-win-x64.appx` ở mục *Artifacts*. Pull request đụng tới phần đóng gói Store tự dựng thử bằng danh tính giả (gói thử không nộp được).
+4. **Nộp**: Partner Center → sản phẩm → *Submission* → tải tệp `.appx` lên, điền mô tả, ảnh chụp, chính sách riêng tư, độ tuổi → gửi kiểm duyệt.
+
+Chạy thử trước khi nộp (nên làm, vì MSIX chạy trong môi trường đóng gói): đăng nhập tài khoản trường, mở dự án, tab Code chạy lệnh, xuất tệp. Không có máy Windows thì mượn máy phòng thực hành, hoặc dùng máy ảo Windows 11 ARM trên Mac (UTM, Parallels). Gói thử dựng bằng danh tính giả chưa ký nên phải bật *Developer Mode* và cài bằng `Add-AppxPackage -AllowUnsigned` (PowerShell, Windows 11).
 
 ## Cách chắc chắn nhất cho máy của trường
 - **Triển khai bằng Intune/GPO** (Company Portal) kèm chứng chỉ ký của trường được IT đưa vào kho tin cậy: máy do trường quản lý chạy ngay, không cảnh báo.
