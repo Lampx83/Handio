@@ -125,7 +125,10 @@ runuser -u neu-diag -- sh -c 'umask 077; echo "{\\"days\\":{}}" > /var/lib/neu-a
   // ---- khôi phục lỗi giữa chừng (dịch vụ không chạy lại) → tự trả lại dữ liệu trước khi khôi phục
   ex(N, "echo truoc-khi-khoi-phuc > /etc/neu-agent/diag-secret; touch /run/fail-quota");
   const rb = ex(N, `neu-agent-backup restore ${OUT}/${arc} --identity /root/tam.age --yes`);
-  check("dịch vụ không chạy lại sau khôi phục → tự trả lại dữ liệu cũ", !rb.ok && /trả lại/.test(rb.out) && ex(N, "grep -qx truoc-khi-khoi-phuc /etc/neu-agent/diag-secret").ok);
+  const rbOk = !rb.ok && /trả lại/.test(rb.out) && ex(N, "grep -qx truoc-khi-khoi-phuc /etc/neu-agent/diag-secret").ok;
+  // chập chờn trên CI: in đủ thông tin để biết vế nào sai (mã thoát, đuôi đầu ra, trạng thái dịch vụ, bí mật hiện tại)
+  if (!rbOk) console.log("  [chẩn đoán] mã thoát:", rb.code, "| đuôi:", JSON.stringify(rb.out.slice(-600)), "| quota:", ex(N, "systemctl is-active neu-agent-quota; systemctl show -p NRestarts,Result neu-agent-quota").out.replace(/\n/g, " "), "| bí mật:", JSON.stringify(ex(N, "head -c 40 /etc/neu-agent/diag-secret").out));
+  check("dịch vụ không chạy lại sau khôi phục → tự trả lại dữ liệu cũ", rbOk);
   ex(N, "rm -f /run/fail-quota; systemctl start neu-agent-quota; shred -u /root/tam.age /root/khac.age 2>/dev/null; rm -f /root/tam.age /root/khac.age");
 
   // ---- giữ N bản trên máy; máy đích giữ hết (không xoá được)
