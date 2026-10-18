@@ -19,6 +19,7 @@ import glob
 import html
 import json
 import os
+import re
 import sqlite3
 import sys
 
@@ -536,6 +537,11 @@ def release_info(rel, versions, users30):
     return {**rel, "on_latest": on_latest, "adoption": R.ratio(on_latest, users30) if users30 else None, "below_min": below_min}
 
 
+DENY_CODE_RE = re.compile(r"^[a-z_]{1,32}$")
+DENY_VI = {"quota_exceeded": "Hết hạn mức ngày", "tab_quota_exceeded": "Hết hạn mức của tab", "tab_not_allowed": "Tab không được phép",
+           "tab_required": "Thiếu tab (ứng dụng cũ)", "model_not_allowed": "Mô hình không được phép", "busy": "Quá nhiều yêu cầu đồng thời"}
+
+
 def read_quota(db_path, now, ndays=DAYS):
     """Mức dùng token theo người (mã giả danh) do cổng hạn mức đếm (deploy/220/quota). None nếu chưa cài/chưa có dữ liệu."""
     try:
@@ -562,7 +568,17 @@ def read_quota(db_path, now, ndays=DAYS):
         for u in users:
             tiers[u["tier"]]["users"] += 1
             tiers[u["tier"]]["tokens"] += u["tokens"]
+        denials = {"today": {}, "period": {}}   # số lần cổng từ chối theo mã lỗi (chỉ mã + số; không người dùng, không nhóm)
+        try:
+            for day, code, n in db.execute("SELECT day,code,sum(n) FROM denials WHERE day>=? GROUP BY day,code", (since,)):
+                if isinstance(code, str) and DENY_CODE_RE.match(code):
+                    denials["period"][code] = denials["period"].get(code, 0) + (n or 0)
+                    if day == today:
+                        denials["today"][code] = denials["today"].get(code, 0) + (n or 0)
+        except sqlite3.OperationalError:   # cổng bản cũ chưa có bảng denials
+            pass
         return {
+            "denials": denials,
             "today": today, "users": users[:30], "users_today": len(users), "tokens_today": sum(u["tokens"] for u in users),
             "near": sum(1 for u in users if u["pct"] is not None and 80 <= u["pct"] < 100), "over": sum(1 for u in users if u["pct"] is not None and u["pct"] >= 100),
             "blocked_users": sum(1 for u in users if u["blocked"]), "blocked_requests": sum(u["blocked"] for u in users), "series": series, "tiers": dict(tiers), "pct_hist": list(pct_hist.items()),
@@ -943,13 +959,17 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
         o.append('<div class="card"><h3>Người dùng gần/hết hạn mức mỗi ngày</h3><p class="sub">đỏ: số yêu cầu bị từ chối</p>%s</div>' % bars([x["near"] for x in qs], ql, [x["blocked"] for x in qs]))
         tiers = qt["tiers"]
         o.append('<div class="card"><h3>Theo bậc (hôm nay)</h3>%s</div>' % table(["Bậc", "Người", "Token"], [[k, v["users"], format(v["tokens"], ",").replace(",", ".")] for k, v in sorted(tiers.items())] or [["—", 0, 0]]))
+        dn = qt.get("denials") or {}
+        if dn.get("period"):
+            o.append('<div class="card"><h3>Yêu cầu bị cổng từ chối theo lý do</h3><p class="sub">số lần; %d ngày gần nhất (chỉ mã lỗi, không người dùng)</p>%s</div>' % (len(qs), table(
+                ["Lý do", "Hôm nay", "%d ngày" % len(qs)], [[DENY_VI.get(k, k), dn["today"].get(k, 0), v] for k, v in sorted(dn["period"].items(), key=lambda kv: -kv[1])])))
         o.append("</div>")
         hot = [u for u in qt["users"] if (u["pct"] or 0) >= 50 or u["blocked"]][:15]
         o.append("<h3>Người dùng đang dùng nhiều hạn mức hôm nay <small>(từ 50% trở lên; mã giả danh)</small></h3>")
         o.append(table(["Mã", "Bậc", "Token", "Hạn mức", "Đã dùng", "Yêu cầu", "Bị chặn"], [[u["id"], u["tier"], format(u["tokens"], ",").replace(",", "."), "không giới hạn" if u["limit"] is None else format(u["limit"], ",").replace(",", "."),
                                                                                               "—" if u["pct"] is None else "%s%%" % u["pct"], u["requests"], u["blocked"]] for u in hot] or [["—", "", "", "", "", "", ""]]))
         o.append('<p class="note"><a href="quota">Xem ai đã hết hạn mức và cấp thêm cho hôm nay →</a></p>')
-        o.append('<p class="note">Đổi hạn mức trên máy 220: <code>sudo ~/neu-agent-220/quota/quota.sh show | mode | tier | set</code>. Mặc định sinh viên 5 triệu, giảng viên 10 triệu token/ngày; vượt thêm 10%% để hoàn tất việc đang làm. Tra mã ứng với ai: <code>quota.sh uid &lt;email&gt;</code>.</p>')
+        o.append('<p class="note">Đổi hạn mức trên máy 220: <code>sudo ~/neu-agent-220/quota/quota.sh show | mode | tier | set | group</code> (nhóm tuỳ tạo sửa được ở trang <a href="quota">Hạn mức</a>). Mặc định sinh viên 5 triệu, giảng viên 10 triệu token/ngày; vượt thêm 10%% để hoàn tất việc đang làm. Tra mã ứng với ai: <code>quota.sh uid &lt;email&gt;</code>.</p>')
 
     # ---- người dùng
     o.append('<h2 id="nguoi-dung">Người dùng <small>%d người đứng đầu theo số lượt %s · bấm mã để xem chi tiết từng người</small></h2>' % (S["users_listed"], lbl))

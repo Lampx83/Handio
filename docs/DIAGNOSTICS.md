@@ -77,7 +77,7 @@ Chỉ email (hoặc tên đăng nhập) trong `/etc/neu-agent/admins.txt` mới 
 - **Chất lượng theo phiên bản / tab / mô hình / nền tảng** (bảng sắp xếp được): lượt, % lỗi, % lặp/hết bước, % bị ngắt, p50/p95 thời gian một lượt và tới token đầu. Dùng sau mỗi lần phát hành.
 - **Công cụ**: tỷ lệ lỗi chỉ tính trên các phiên bản ứng dụng đã gắn mã lý do lỗi (bản cũ không phân biệt "chương trình/test lỗi" nên bị loại và ghi riêng "chưa phân loại"); công cụ × lý do lỗi; công cụ chạy chậm (≥ 5 giây); tín hiệu theo công cụ; lỗi gọi mô hình theo mã HTTP.
 - **Ngữ cảnh, bước, quyền**: % lượt ngữ cảnh ≥ 85% và số lần nén; số bước mỗi lượt p50/p95; số lần được cho phép/bị từ chối.
-- **Hạn mức**: mức tập trung (10% người dùng nhiều nhất chiếm bao nhiêu % token) và phân bố % hạn mức đã dùng hôm nay.
+- **Hạn mức**: mức tập trung (10% người dùng nhiều nhất chiếm bao nhiêu % token) và phân bố % hạn mức đã dùng hôm nay; **số yêu cầu bị cổng hạn mức từ chối theo lý do** (hết hạn mức ngày/tab, tab hoặc mô hình không được phép, thiếu tab, quá nhiều yêu cầu đồng thời). Số này do máy chủ đếm (bảng `denials` của cổng: chỉ ngày + mã lỗi + số lần; không mã người dùng, không nhóm, không email), không phải từ ứng dụng gửi lên.
 - **Cơ cấu**: phiên bản, nền tảng, tab Work/Code/Design, mô hình (người dùng, máy, lượt).
 - **Bảng người dùng** (100 người đầu theo số lượt 30 ngày): *mã giả danh* 8 ký tự, lần đầu/gần nhất, số ngày dùng, lượt, tab/nền tảng/phiên bản chính.
 - Tình trạng hệ thống (`health.json`) và đường dẫn tới báo cáo chất lượng hằng ngày (`latest.html`) cùng `stats.json`.

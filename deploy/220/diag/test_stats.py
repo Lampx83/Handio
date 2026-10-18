@@ -353,6 +353,26 @@ class StatsTest(unittest.TestCase):
         j2 = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW, None, os.path.join(self.tmp.name, "khong-co.db"))
         self.assertIsNone(j2["quota"])
         self.assertIn("Chưa có dữ liệu hạn mức", slurp(os.path.join(self.out, "index.html")))
+        self.assertEqual(q["denials"], {"today": {}, "period": {}})        # cổng bản cũ (chưa có bảng denials): không lỗi
+
+    def test_quota_denials_by_code(self):
+        import sqlite3
+        db = os.path.join(self.tmp.name, "usage2.db")
+        c = sqlite3.connect(db)
+        c.execute("CREATE TABLE usage(day TEXT, uid TEXT, tier TEXT, lim INTEGER, tokens INTEGER, prompt INTEGER, completion INTEGER, requests INTEGER, estimated INTEGER, blocked INTEGER, PRIMARY KEY(day,uid))")
+        c.execute("CREATE TABLE denials(day TEXT, code TEXT, n INTEGER, PRIMARY KEY(day, code))")
+        today, yday = S.vn_day(T_NOW), S.vn_day(T_NOW - 86400)
+        c.execute("INSERT INTO usage VALUES(?,?,?,?,?,?,?,?,?,?)", (today, "a" * 16, "student", 1_000_000, 10, 0, 0, 1, 0, 0))
+        c.executemany("INSERT INTO denials VALUES(?,?,?)", [(today, "tab_not_allowed", 4), (today, "model_not_allowed", 1), (yday, "tab_not_allowed", 2), (today, "<b>lạ</b>", 9)])
+        c.commit()
+        c.close()
+        write_diag(self.diag, [rec(day_ts(0), turn_ev())])
+        j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW, None, db)
+        self.assertEqual(j["quota"]["denials"], {"today": {"tab_not_allowed": 4, "model_not_allowed": 1}, "period": {"tab_not_allowed": 6, "model_not_allowed": 1}})
+        h = slurp(os.path.join(self.out, "index.html"))
+        self.assertIn("Yêu cầu bị cổng từ chối theo lý do", h)
+        self.assertIn("Tab không được phép", h)
+        self.assertNotIn("<b>lạ</b>", h)
 
     def test_detail_pages_csv_and_links(self):
         a2 = dict(APP, version="0.2.0", platform="win", profile="work")

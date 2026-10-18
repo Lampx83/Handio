@@ -8,5 +8,7 @@
   "max_concurrent": 6,
   "overrides": {},
   "tabs": {},
+  "models": {},
+  "tab_limits": {},
   "capture": { "users": [], "keep_days": 90 }
 }

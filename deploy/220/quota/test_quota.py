@@ -343,6 +343,222 @@ class TabAccessTests(GatewayCase):
         self.assertNotIn("x-neu-tab", {k.lower() for k in self.up.requests[-1]["headers"]})
 
 
+import quota_admin as QA  # noqa: E402  (nơi ghi groups.json duy nhất: trang quản trị + quota.sh group)
+
+
+class GroupTests(GatewayCase):
+    """Nhóm tuỳ tạo (groups.json) ghi đè bậc; phân quyền mô hình; hạn mức theo tab; bộ đếm từ chối. Ghi bằng chính mã của trang quản trị (QA)."""
+
+    def setUp(self):
+        super().setUp()
+        self.groups_path = os.path.join(self.tmp.name, "q", "groups.json")
+        self.policy_path = os.path.join(self.tmp.name, "q", "policy.json")
+        self.ctx.group_file = Q.Groups(self.groups_path)
+        self.ctx.policy_path = self.policy_path
+
+    def op(self, op, name, **kw):
+        res = QA.group_op(self.groups_path, T0, "admin@neu.edu.vn", op, name, **kw)
+        self.assertTrue(res["ok"], res)
+        return res
+
+    def q(self, ident=SV, **kw):
+        return json.loads(self.get("/quota", ident=ident, **kw)[1])
+
+    def chat(self, ident=SV, tab="work", model="m", **kw):
+        h = {"X-Neu-Tab": tab} if tab is not None else {}
+        h.update(kw.pop("headers", {}))
+        body = {"messages": [{"role": "user", "content": "chào"}], "stream": True}
+        if model is not None:
+            body["model"] = model
+        return self.post(ident, body=body, headers=h, **kw)
+
+    def denials(self):
+        with self.store.lock:
+            return dict(self.store.db.execute("select code, n from denials").fetchall())
+
+    def test_no_groups_file_keeps_old_behavior(self):
+        j = self.q()
+        self.assertEqual((j["limit"], j["group"], j["tabs"], j["models"], j["tab_quota"]), (1_000_000, None, ["work", "code", "design"], None, {}))
+        self.assertEqual(self.chat(tab=None, model="bat-ky")[0], 200)          # ứng dụng cũ, mô hình bất kỳ: như trước
+        self.assertFalse(os.path.exists(self.groups_path))
+
+    def test_group_overrides_tier_for_limit_tabs_and_models(self):
+        self.op("create", "lop-k66-cntt")
+        self.op("add", "lop-k66-cntt", idents=[SV.upper(), "khach01"])
+        self.op("set", "lop-k66-cntt", field="limit", value=2_000_000)
+        self.op("set", "lop-k66-cntt", field="tabs", value=["work"])
+        self.op("set", "lop-k66-cntt", field="models", value=["m"])
+        j = self.q()
+        self.assertEqual((j["limit"], j["group"], j["tabs"], j["models"], j["tier"]), (2_000_000, "lop-k66-cntt", ["work"], ["m"], "student"))
+        self.assertEqual(self.q("khach01")["group"], "lop-k66-cntt")
+        n = len(self.up.requests)
+        st, out, _ = self.chat(tab="code")
+        self.assertEqual((st, json.loads(out)["error"]), (403, "tab_not_allowed"))
+        st, out, _ = self.chat(model="qwen-khac")
+        j = json.loads(out)
+        self.assertEqual((st, j["error"], j["models"]), (403, "model_not_allowed", ["m"]))
+        self.assertIn("không được dùng mô hình qwen-khac", j["message"])
+        for bad in (None, "M", " m", "m\n", ["m"], 5):                       # so khớp đúng nguyên chuỗi; thiếu/sai kiểu = từ chối
+            self.assertEqual(self.chat(model=bad)[0], 403, bad)
+        self.assertEqual(len(self.up.requests), n)                           # không yêu cầu nào tới mô hình
+        self.assertEqual(self.chat()[0], 200)
+        self.assertEqual(self.q(GV)["group"], None)                          # người ngoài nhóm: theo bậc
+        self.assertEqual(self.chat(GV, tab="code", model="khac")[0], 200)
+
+    def test_group_change_applies_without_restart_and_refreshes_admin_view(self):
+        self.op("create", "giang-vien-fit")
+        self.op("add", "giang-vien-fit", idents=[SV])
+        self.op("set", "giang-vien-fit", field="limit", value="unlimited")
+        self.assertEqual(self.chat()[0], 200)
+        self.assertEqual(self.row("select lim from usage")[0], -1)
+        self.op("set", "giang-vien-fit", field="limit", value=3_000_000)
+        self.assertEqual(self.q()["limit"], 3_000_000)
+        self.assertEqual(self.row("select lim from usage")[0], 3_000_000)     # CSDL cập nhật ngay khi tệp nhóm đổi (trang quản trị hiện đúng)
+        self.op("remove", "giang-vien-fit", idents=[SV])
+        self.assertEqual((self.q()["limit"], self.q()["group"]), (1_000_000, None))
+        self.op("add", "giang-vien-fit", idents=[SV])
+        self.op("delete", "giang-vien-fit")
+        self.assertEqual(self.q()["limit"], 1_000_000)
+
+    def test_override_beats_group_and_admin_own_key_are_exempt(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "overrides": {SV: 50}})
+        self.op("create", "lop-a")
+        self.op("add", "lop-a", idents=[SV, "admin@neu.edu.vn"])
+        self.op("set", "lop-a", field="limit", value=9_000_000)
+        self.op("set", "lop-a", field="tabs", value=[])
+        self.op("set", "lop-a", field="models", value=["m"])
+        self.assertEqual(self.q()["limit"], 50)                              # đặt riêng từng người thắng nhóm
+        a = self.q("admin@neu.edu.vn")
+        self.assertEqual((a["unlimited"], a["tabs"], a["models"], a["group"]), (True, ["work", "code", "design"], None, None))
+        self.assertEqual(self.chat("admin@neu.edu.vn", tab="design", model="khac")[0], 200)
+        self.assertEqual(self.chat(tab="design", model="khac", headers={"X-Neu-Own-Key": "1"})[0], 200)
+        self.assertEqual(self.chat(tab="work")[0], 403)                      # nhóm không được tab nào
+
+    def test_group_can_loosen_tier_and_star_means_any_model(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "tabs": {"student": ["work"]}, "models": {"student": ["m"]}})
+        self.assertEqual(self.chat(tab="code")[0], 403)
+        self.assertEqual(self.chat(model="lon")[0], 403)
+        self.op("create", "lop-chuyen")
+        self.op("add", "lop-chuyen", idents=[SV])
+        self.op("set", "lop-chuyen", field="tabs", value=["work", "code", "design"])
+        self.op("set", "lop-chuyen", field="models", value=["*"])
+        self.assertEqual(self.chat(tab="code", model="lon")[0], 200)
+        self.assertEqual(self.q()["models"], None)
+        self.op("set", "lop-chuyen", field="models", value=None)             # trở về theo bậc
+        self.assertEqual(self.chat(tab="code", model="lon")[0], 403)
+
+    def test_broken_groups_file_keeps_last_good_and_health_reports_it(self):
+        self.op("create", "lop-a")
+        self.op("add", "lop-a", idents=[SV])
+        self.op("set", "lop-a", field="tabs", value=["work"])
+        self.assertEqual(self.chat(tab="code")[0], 403)
+        with open(self.groups_path, "w") as f:
+            f.write("{hỏng")
+        self.assertEqual(self.chat(tab="code")[0], 403)                      # tệp hỏng: vẫn dùng bản đúng gần nhất (không nới quyền)
+        self.assertEqual(json.loads(self.get("/healthz", ident=None)[1]).get("groups_error"), True)
+        self.assertEqual(QA.group_op(self.groups_path, T0, "a", "add", "lop-a", idents=[GV])["error"], "broken")   # không ghi đè tệp hỏng
+        os.remove(self.groups_path)                                           # xoá hẳn = không còn nhóm
+        self.assertEqual(self.chat(tab="code")[0], 200)
+        self.assertNotIn("groups_error", json.loads(self.get("/healthz", ident=None)[1]))
+
+    def test_symlinked_groups_file_is_not_followed(self):
+        target = os.path.join(self.tmp.name, "khac.json")
+        with open(target, "w") as f:
+            json.dump({"groups": {"lop-a": {"members": [SV], "tabs": []}}}, f)
+        os.symlink(target, self.groups_path)
+        self.assertEqual(self.chat()[0], 200)                                 # không đọc qua liên kết tượng trưng
+        self.assertTrue(self.ctx.group_file.error)
+        self.assertEqual(QA.group_op(self.groups_path, T0, "a", "create", "lop-b")["error"], "broken")
+        with open(target) as f:
+            self.assertNotIn("lop-b", f.read())
+
+    def test_bad_values_fail_closed(self):
+        g = Q.parse_groups({"groups": {
+            "b-nhom": {"members": [SV, "x y", 5, "KHACH01"], "limit": "nhiều", "tabs": "work", "models": "m", "tab_limits": "x"},
+            "a-nhom": {"members": [SV], "limit": None, "tabs": ["wrok"], "models": ["", "bad model"], "tab_limits": {"code": -1, "khac": 5, "work": 10}},
+            "Sai Ten": {"members": [GV]}, "c": {"members": [GV]}, "d-nhom": "x"}})
+        self.assertEqual(sorted(g["groups"]), ["a-nhom", "b-nhom"])
+        self.assertEqual(g["groups"]["b-nhom"], {"limit": 0, "tabs": [], "models": [], "tab_limits": {"work": 0, "code": 0, "design": 0}, "members": ["khach01"]})
+        self.assertEqual(g["groups"]["a-nhom"], {"tabs": [], "models": [], "tab_limits": {"code": 0, "work": 10}, "members": [SV]})
+        self.assertEqual(g["index"], {SV: "a-nhom", "khach01": "b-nhom"})   # trùng: nhóm tên đứng trước thắng
+        for bad in ([], {"groups": []}, "x", {"khac": {}}):
+            with self.assertRaises(ValueError):
+                Q.parse_groups(bad)
+
+    def test_config_models_and_tab_limits_fail_closed(self):
+        self.write_cfg({"models": {"student": "m", "staff": ["m", "bad model", "m"], "x": ["*"], "y": None}, "tab_limits": {"student": [1], "staff": {"code": "x", "design": 5, "zz": 1}}})
+        cfg = Q.load_config(self.cfg_path)
+        self.assertEqual(cfg["models"], {"student": [], "staff": ["m"], "x": None})
+        self.assertEqual(cfg["tab_limits"], {"student": {"work": 0, "code": 0, "design": 0}, "staff": {"code": 0, "design": 5}})
+        self.assertEqual(Q.load_config("/không/có")["models"], {})
+
+    def test_tier_models_restrict_and_observe_mode_does_not(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "models": {"student": ["qwen3.5-35b-a3b-int4"]}})
+        self.assertEqual(self.chat(model="qwen3.5-35b-a3b-int4")[0], 200)
+        st, out, _ = self.chat(model="<script>")
+        self.assertEqual(st, 403)
+        self.assertIn("(không hợp lệ)", json.loads(out)["message"])          # không vọng lại chuỗi lạ
+        self.assertEqual(self.chat(GV, model="khac")[0], 200)
+        self.write_cfg({"mode": "observe", "tiers": {"student": 1_000_000}, "models": {"student": []}})
+        self.assertEqual(self.chat(model="khac")[0], 200)
+
+    def test_tab_limit_blocks_only_that_tab_and_requires_declared_tab(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "tab_limits": {"student": {"code": 100}}})
+        for _ in range(8):                                                    # mỗi lượt 15 token → 120 ≥ 100 × 110%
+            self.assertEqual(self.chat(tab="code")[0], 200)
+        tq = self.q()["tab_quota"]["code"]
+        self.assertEqual((tq["limit"], tq["used"], tq["state"]), (100, 120, "exceeded"))
+        n = len(self.up.requests)
+        st, out, h = self.chat(tab="code")
+        j = json.loads(out)
+        self.assertEqual((st, j["error"], j["tab"]), (402, "tab_quota_exceeded", "code"))
+        self.assertIn("tab Code", j["message"])
+        self.assertEqual(h["x-quota-state"], "ok")                            # hạn mức chung vẫn còn
+        self.assertEqual(len(self.up.requests), n)
+        self.assertEqual(self.chat(tab="work")[0], 200)                       # tab khác vẫn dùng được
+        self.assertEqual(json.loads(self.chat(tab=None)[1])["error"], "tab_required")   # có hạn mức theo tab: phải khai tab
+        self.assertEqual(self.row("select blocked from usage")[0], 0)         # không tính là "hết hạn mức ngày"
+        self.op("create", "lop-a")
+        self.op("add", "lop-a", idents=[SV])
+        self.op("set", "lop-a", field="tab_limits", value={"code": 1_000})    # nhóm ghi đè hạn mức theo tab của bậc
+        self.assertEqual(self.chat(tab="code")[0], 200)
+        self.now[0] = Q.next_reset(T0) + 5
+        self.assertEqual(self.q()["tab_quota"]["code"]["used"], 0)           # sang ngày mới
+
+    def test_denials_are_counted_by_code_only(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "tabs": {"student": ["work"]}, "models": {"student": ["m"]}})
+        self.chat(tab="code")
+        self.chat(tab="code")
+        self.chat(tab=None)
+        self.chat(model="khac")
+        self.store.add(Q.vn_day(T0), self.uid(SV), "student", 1_000_000, 2_000_000, 0)
+        self.chat()
+        self.assertEqual(self.denials(), {"tab_not_allowed": 2, "tab_required": 1, "model_not_allowed": 1, "quota_exceeded": 1})
+        with self.store.lock:
+            cols = [r[1] for r in self.store.db.execute("PRAGMA table_info(denials)")]
+        self.assertEqual(cols, ["day", "code", "n"])                          # không mã người dùng, không nhóm
+        self.store.deny(Q.vn_day(T0), "x'; drop table usage;--")              # chỉ mã trong danh sách cố định
+        self.assertNotIn("x'; drop table usage;--", self.denials())
+
+    def test_policy_view_has_settings_but_no_emails(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "models": {"student": ["m"]}, "overrides": {SV: 5}, "capture": {"users": ["test01"]}})
+        self.q()
+        with open(self.policy_path) as f:
+            raw = f.read()
+        p = json.loads(raw)
+        self.assertEqual((p["models"], p["overrides"], p["capture"]), ({"student": ["m"]}, 1, 1))
+        self.assertNotIn(SV, raw)
+        self.assertNotIn("test01", raw)
+        self.assertEqual(os.stat(self.policy_path).st_mode & 0o777, 0o600)
+
+    def test_group_file_written_by_admin_code_is_private(self):
+        self.op("create", "lop-a")
+        self.op("add", "lop-a", idents=[SV])
+        self.assertEqual(os.stat(self.groups_path).st_mode & 0o777, 0o600)  # chứa email: chỉ người dùng dịch vụ đọc
+        with open(self.groups_path) as f:
+            self.assertEqual(Q.parse_groups(json.load(f))["index"], {SV: "lop-a"})
+
+
 class PureTests(unittest.TestCase):
     def test_tiers_and_limits(self):
         cfg = Q.load_config("/không/có")
