@@ -20,7 +20,7 @@ import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
 import { stackOf, type Stack, type UiLib } from "./task-profile";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import type { HttpToolRuntime } from "./http-tools";
-import type { SandboxStatus } from "./container";
+import { CACHE_SCOPES, type CacheInfo, type CacheScope, type ImagePullState, type SandboxHost, type SandboxStatus } from "./container";
 import { feedbackProblem, type FeedbackInput, type FeedbackResult } from "./feedback";
 import { buildShareV2, type SharedChatInfo, type SharePayloadV2, type SharePreview, type ShareResult } from "./share";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
@@ -85,7 +85,7 @@ export interface ControllerOptions {
   projectId?: string;
   /** Tự chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md). Không đặt = không ghi, không gửi gì. Tắt được bằng Settings.diagnostics hoặc policy.diagnostics=false. */
   /** Desktop, tab Code: trạng thái chạy lệnh trong container Docker (dò lại Docker mỗi lần gọi). Không đặt = không có tuỳ chọn này. */
-  sandbox?: { status(): Promise<SandboxStatus> };
+  sandbox?: SandboxHost;
   diagnostics?: { endpoint: string; headers?(): Record<string, string>; enabled?(): boolean; version: string; build?: string; platform: string; fetch?: typeof fetch };
 }
 
@@ -1588,6 +1588,25 @@ export class LocalController implements AgentController {
   async sandboxStatus(): Promise<SandboxStatus | null> {
     if (!this.o.sandbox || (this.o.profile ?? "code") !== "code") return null;
     return this.o.sandbox.status();
+  }
+  /** "Tải ảnh": docker pull đúng ảnh đang cấu hình (không nhận tên ảnh từ giao diện). */
+  async sandboxPullImage(): Promise<ImagePullState | null> {
+    if (!this.o.sandbox?.pullImage || (this.o.profile ?? "code") !== "code") return null;
+    return this.o.sandbox.pullImage();
+  }
+  async sandboxPullStatus(): Promise<ImagePullState | null> {
+    if ((this.o.profile ?? "code") !== "code") return null;
+    return this.o.sandbox?.pullStatus?.() ?? null;
+  }
+  /** Dung lượng volume cache npm/pip của dự án đang mở và của mọi dự án. */
+  async sandboxCache(): Promise<CacheInfo | null> {
+    if (!this.o.sandbox?.cacheInfo || (this.o.profile ?? "code") !== "code") return null;
+    return this.o.sandbox.cacheInfo(this.o.env.root);
+  }
+  async sandboxClearCache(scope: CacheScope): Promise<{ ok: boolean; message: string }> {
+    if (!this.o.sandbox?.clearCache || (this.o.profile ?? "code") !== "code") return { ok: false, message: "Không có container ở đây." };
+    if (!CACHE_SCOPES.includes(scope)) return { ok: false, message: "Yêu cầu không hợp lệ." };
+    return this.o.sandbox.clearCache(this.o.env.root, scope);
   }
 
   async diagnosticsStatus(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }> {

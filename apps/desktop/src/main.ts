@@ -1,17 +1,18 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, protocol, safeStorage, session, shell, type MenuItemConstructorOptions } from "electron";
-import { accessSync, constants as fsConstants, existsSync, readFileSync } from "node:fs";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, powerMonitor, protocol, safeStorage, session, shell, Tray, type MenuItemConstructorOptions } from "electron";
+import { accessSync, constants as fsConstants, existsSync, readFileSync, realpathSync } from "node:fs";
 import os from "node:os";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
-import { brandName, buildWorkSamples, cleanProjectName, containerImage, createMultiProject, decideContainer, ID_RE, LocalController, newId, parsePolicy, sanitizeImage, sanitizePorts, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type ContainerSettings, type DockerProbe, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SandboxStatus, type SessionEvent, type TaskLock } from "@neu/agent-core";
-import { cleanupContainers, cleanupContainersSync, containersStarted, findDocker, JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, probeDocker, readPackDirs, type ContainerChoice, type KeyCodec } from "@neu/agent-env-node";
+import { brandName, buildWorkSamples, cleanProjectName, containerImage, createMultiProject, decideContainer, dueState, ID_RE, LocalController, newId, parsePolicy, sanitizeImage, sanitizePorts, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type ContainerSettings, type DockerProbe, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SandboxStatus, type ScheduledTask, type SessionEvent, type TaskLock, type CacheInfo, type CacheScope, type ImagePullState } from "@neu/agent-core";
+import { cacheTargets, cacheVolumeName, cleanupContainers, cleanupContainersSync, containersStarted, findDocker, knownCacheVolumes, listCacheVolumes, pullImage, removeCacheVolumes, summarizeCache, JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, probeDocker, readPackDirs, type ContainerChoice, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
+import { applyPatch, atLoginSupported, authNotice, closeAction, DEFAULT_PREFS, hasActiveTasks, HIDDEN_ARG, keepEffective, loginItemFor, readPrefs, startHidden, trayMenu, type BackgroundPrefs } from "./background";
 import { dropPristineSamples } from "./samples";
 import { canInstallHere, launchInstaller } from "./installer";
 import { checkPage } from "./page-check";
 import { selfUpdateAllowed, Updater, UPDATE_METHODS } from "./updater";
-import { APP_ORIGIN, AUTH_METHODS, authArgsOk, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
+import { APP_ORIGIN, AUTH_METHODS, authArgsOk, authBlocks, BACKGROUND_METHODS, backgroundArgsOk, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
 
 // Hằng số lúc build (xem build.mjs): bản phát hành KHÔNG chứa mã kiểm thử/giả lập và KHÔNG chứa key.
 declare const __SMOKE__: boolean;
@@ -52,7 +53,8 @@ if (!SMOKE && !app.requestSingleInstanceLock()) app.quit();
 if (SMOKE) app.setPath("userData", path.join(SMOKE, "userData"));
 
 // Đổi tên hiển thị (NEU Agent / Hando / Handio) KHÔNG được đổi nơi lưu cài đặt/lịch sử/phiên đăng nhập: ghim đúng thư mục của bản cũ (@neu/agent-desktop).
-if (!SMOKE) app.setPath("userData", path.join(app.getPath("appData"), "@neu", "agent-desktop"));
+// Chỉ bản dev: NEU_USER_DATA = thư mục dữ liệu riêng để thử tay mà không đụng cài đặt/lịch sử thật.
+if (!SMOKE) app.setPath("userData", __DEV__ && process.env.NEU_USER_DATA ? process.env.NEU_USER_DATA : path.join(app.getPath("appData"), "@neu", "agent-desktop"));
 /** Tên thư mục dự án đã dùng qua các bản (ưu tiên giữ thư mục đang có): tên hiển thị hiện tại, NEU Agent, Hando, Handio. */
 const BRAND_DIRS = [...new Set([brandName(), "NEU Agent", "Hando", "Handio"])];
 const userData = () => app.getPath("userData");
@@ -212,7 +214,53 @@ async function containerChoice(force = false): Promise<ContainerChoice & { probe
 }
 async function sandboxStatus(): Promise<SandboxStatus> {
   const { probe, docker: _bin, ...d } = await containerChoice(true);
-  return { ...d, docker: probe ?? { ok: false }, networkLocked: policy.bashNetwork === false };
+  return { ...d, docker: probe ?? { ok: false }, networkLocked: policy.bashNetwork === false, pull: imagePull };
+}
+// "Tải ảnh": chỉ khi người dùng bấm; ảnh lấy từ cài đặt người dùng/chính sách (không nhận tên ảnh từ giao diện); một lần tải một lúc
+let imagePull: ImagePullState | null = null;
+async function sandboxPullImage(): Promise<ImagePullState> {
+  if (imagePull?.running) return imagePull;
+  const image = containerImage(await containerSettings(), policy);
+  if (!dockerBin) dockerBin = findDocker();
+  if (!dockerBin) return (imagePull = { image, running: false, layersDone: 0, layersTotal: 0, ok: false, error: "không tìm thấy Docker" });
+  imagePull = { image, running: true, layersDone: 0, layersTotal: 0 };
+  void pullImage(dockerBin, image, (st) => (imagePull = st)).finally(() => (dockerCache = null)); // dò lại ngay: ảnh vừa có
+  return imagePull;
+}
+// cache npm/pip (volume handio-cache-*): chỉ volume có nhãn + tên của Handio; "dự án đã xoá" = không còn trong danh sách dự án nào
+async function knownProjectPaths(): Promise<string[]> {
+  const out: string[] = [];
+  for (const p of PROFILES_LIST) {
+    try {
+      const r = JSON.parse(await fs.readFile(path.join(userData(), `projects-${p}.json`), "utf8")) as { projects?: { path?: unknown }[] };
+      for (const x of Array.isArray(r.projects) ? r.projects : []) if (typeof x?.path === "string") out.push(x.path);
+    } catch {
+      /* chưa có danh sách của tab này */
+    }
+  }
+  return out;
+}
+const projectVolume = (root: string): string => {
+  try {
+    return cacheVolumeName(realpathSync(root)); // như NodeEnv: tên theo realpath của thư mục dự án
+  } catch {
+    return cacheVolumeName(root);
+  }
+};
+async function sandboxCache(root: string): Promise<CacheInfo | null> {
+  if (!dockerBin) dockerBin = findDocker();
+  const vols = dockerBin ? await listCacheVolumes(dockerBin) : null;
+  return vols ? summarizeCache(vols, projectVolume(root), knownCacheVolumes(await knownProjectPaths())) : null;
+}
+async function sandboxClearCache(root: string, scope: CacheScope): Promise<{ ok: boolean; message: string }> {
+  if (!dockerBin) dockerBin = findDocker();
+  const vols = dockerBin ? await listCacheVolumes(dockerBin) : null;
+  if (!dockerBin || !vols) return { ok: false, message: "Docker không dùng được." };
+  const targets = cacheTargets(vols, scope, projectVolume(root), knownCacheVolumes(await knownProjectPaths()));
+  if (!targets.length) return { ok: true, message: "Không có gì để xoá." };
+  const r = await removeCacheVolumes(dockerBin, targets);
+  if (r.failed.length) return { ok: false, message: `Đã xoá ${r.removed.length}; ${r.failed.length} cache đang được lệnh dùng, hãy dừng lệnh rồi thử lại.` };
+  return { ok: true, message: `Đã xoá ${r.removed.length} cache.` };
 }
 
 const makeEnv = (profile: Profile, dir: string) => {
@@ -422,8 +470,8 @@ async function buildController(profile: Profile): Promise<LocalController> {
     authHosts: [new URL(__DEFAULT_BASE_URL__).host],
     realFs: true,
     // tác vụ định kỳ: một bộ lập lịch cho cả tab chạy cả dự án chưa mở (khi ứng dụng đang mở và đã đăng nhập); cả ứng dụng chỉ một tác vụ mỗi lúc
-    tasks: { enabled: !SMOKE, background: true, lock: taskLock, canRun: () => !auth || auth.status().signedIn },
-    sandbox: profile === "code" && !SMOKE ? { status: sandboxStatus } : undefined,
+    tasks: { enabled: !SMOKE, background: true, lock: taskLock, canRun: () => !tasksPaused && (!auth || auth.status().signedIn) },
+    sandbox: profile === "code" && !SMOKE ? { status: sandboxStatus, pullImage: sandboxPullImage, pullStatus: () => imagePull, cacheInfo: sandboxCache, clearCache: sandboxClearCache } : undefined,
     packs: loadPacks,
     toolsBase: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/"),
     projects: host,
@@ -464,7 +512,10 @@ async function buildController(profile: Profile): Promise<LocalController> {
   });
   ctl.onEvent((e) => {
     send(profile, e);
-    if (e.type === "task_done" && e.notify) notifyTask(e.name, e.status);
+    if (e.type === "task_done") {
+      if (e.notify) notifyTask(e.name, e.status);
+      void refreshBackground();
+    }
   });
   return ctl;
 }
@@ -476,13 +527,158 @@ function notifyTask(name: string, status: "ok" | "error" | "skipped"): void {
   if (SMOKE || status === "skipped" || !Notification.isSupported()) return;
   const short = name.length > 40 ? name.slice(0, 39) + "…" : name;
   const n = new Notification({ title: "Tác vụ định kỳ", body: `“${short}”: ${status === "ok" ? "đã xong" : "lỗi"}. Xem ở nút ⏰.` });
-  n.on("click", () => {
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.show();
-    win.focus();
-  });
+  n.on("click", () => showWindow());
   n.show();
+}
+
+// ---------------------------------------------------------------- chạy nền ở khay khi đóng cửa sổ (để tác vụ định kỳ chạy; src/background.ts)
+let bg: BackgroundPrefs = { ...DEFAULT_PREFS };
+/** Đang thoát hẳn (menu Thoát, Cmd+Q, cài bản cập nhật, tắt máy): đóng cửa sổ là đóng thật. */
+let quitting = false;
+/** "Tạm dừng tác vụ" ở menu khay: không chạy lượt mới (chỉ trong bộ nhớ, mở lại ứng dụng là hết). */
+let tasksPaused = false;
+let tray: Tray | null = null;
+/** Cửa sổ đang ẩn xuống khay (không phải đóng). */
+let inTray = false;
+/** Có tác vụ đang bật (nhớ tạm, làm mới mỗi 30 giây và sau mỗi thao tác với tác vụ). */
+let hasTasks = false;
+let authNotified = false;
+/** Đã tạo cửa sổ đầu tiên (trước đó "activate"/mở lại ứng dụng không được tạo cửa sổ thứ hai). */
+let started = false;
+const bgFile = () => path.join(userData(), "background.json");
+const canAtLogin = () => atLoginSupported({ platform: process.platform, packaged: app.isPackaged, windowsStore: !!process.windowsStore, smoke: !!SMOKE });
+
+async function loadBackgroundPrefs(): Promise<void> {
+  try {
+    bg = readPrefs(JSON.parse(await fs.readFile(bgFile(), "utf8")));
+  } catch {
+    bg = { ...DEFAULT_PREFS };
+  }
+}
+async function saveBackgroundPrefs(): Promise<void> {
+  await fs.mkdir(userData(), { recursive: true });
+  await fs.writeFile(bgFile(), JSON.stringify(bg), { mode: 0o600 });
+}
+/** Trạng thái cho giao diện: "Mở cùng máy" lấy theo hệ điều hành (người dùng có thể đã gỡ ở Cài đặt hệ thống). */
+function backgroundState(): { keep: boolean; atLogin: boolean; atLoginSupported: boolean } {
+  const sup = canAtLogin();
+  let atLogin = false;
+  if (sup && bg.atLogin) {
+    try {
+      atLogin = app.getLoginItemSettings(process.platform === "win32" ? { args: [HIDDEN_ARG] } : undefined).openAtLogin;
+    } catch {
+      atLogin = false;
+    }
+  }
+  return { keep: bg.keep, atLogin, atLoginSupported: sup };
+}
+
+async function allTasks(): Promise<ScheduledTask[]> {
+  const out: ScheduledTask[] = [];
+  for (const c of controllers.values()) out.push(...(await c.tasksForProfile().catch(() => [])));
+  return out;
+}
+
+function showWindow(): void {
+  inTray = false;
+  if (process.platform === "darwin") void app.dock?.show();
+  if (!win || win.isDestroyed()) {
+    void createWindow();
+    return;
+  }
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+/** Ẩn cửa sổ xuống khay (macOS: ẩn cả khỏi Dock). Báo một lần ở lần đầu. */
+function hideToTray(): void {
+  if (!win || win.isDestroyed()) return;
+  inTray = true;
+  const w = win;
+  if (w.isFullScreen()) {
+    w.once("leave-full-screen", () => w.hide());
+    w.setFullScreen(false);
+  } else w.hide();
+  if (process.platform === "darwin") app.dock?.hide();
+  void refreshBackground();
+  if (!bg.told) {
+    bg.told = true;
+    void saveBackgroundPrefs().catch(() => undefined);
+    if (Notification.isSupported()) {
+      const n = new Notification({ title: `${brandName()} vẫn chạy ở khay`, body: "Để tác vụ định kỳ chạy. Thoát hẳn: bấm biểu tượng ở khay → Thoát hẳn." });
+      n.on("click", () => showWindow());
+      n.show();
+    }
+  }
+}
+
+/** Biểu tượng khay: icon chữ N của ứng dụng (build/icon.png chép vào dist/tray.png lúc build), thu nhỏ có bản @2x. */
+function trayImage(): Electron.NativeImage {
+  const src = nativeImage.createFromPath(path.join(__dirname, "tray.png"));
+  if (src.isEmpty()) return src;
+  const size = process.platform === "darwin" ? 18 : 16;
+  const out = nativeImage.createEmpty();
+  for (const scaleFactor of [1, 2]) out.addRepresentation({ scaleFactor, buffer: src.resize({ width: size * scaleFactor, height: size * scaleFactor, quality: "best" }).toPNG() });
+  return out;
+}
+
+function buildTrayMenu(tasks: ScheduledTask[], now: number): Menu {
+  const items = trayMenu({ brand: brandName(), tasks, now, paused: tasksPaused, signedIn: !auth || auth.status().signedIn });
+  return Menu.buildFromTemplate(items.map((it): MenuItemConstructorOptions => {
+    if (it.id === "sep") return { type: "separator" };
+    if (it.id === "pause") return { label: it.label, type: "checkbox", checked: it.checked, click: (m) => { tasksPaused = m.checked; void refreshBackground(); } };
+    if (it.id === "quit") return { label: it.label, click: () => { quitting = true; app.quit(); } };
+    return { label: it.label, click: () => showWindow() }; // Mở / tác vụ kế tiếp / cần đăng nhập: chỉ mở cửa sổ (không tự mở trang đăng nhập)
+  }));
+}
+
+/** Đồng bộ khay với lựa chọn + danh sách tác vụ. Hết lý do chạy nền khi đang ẩn ở khay (vd lịch một lần đã chạy xong) thì làm đúng việc "đóng" đã bị hoãn. */
+let refreshing = false;
+async function refreshBackground(): Promise<void> {
+  if (SMOKE || refreshing) return;
+  refreshing = true;
+  try {
+    const tasks = await allTasks();
+    const now = Date.now();
+    hasTasks = hasActiveTasks(tasks, now);
+    if (!keepEffective({ keep: bg.keep, hasTasks, smoke: !!SMOKE })) {
+      tray?.destroy();
+      tray = null;
+      if (inTray) {
+        inTray = false;
+        if (process.platform === "darwin") {
+          void app.dock?.show();
+          win?.destroy(); // như đóng cửa sổ thường trên macOS: ứng dụng còn ở Dock
+        } else {
+          quitting = true;
+          app.quit();
+        }
+      }
+      return;
+    }
+    if (!tray) {
+      tray = new Tray(trayImage());
+      tray.setToolTip(brandName());
+      if (process.platform !== "darwin") tray.on("click", () => showWindow()); // Windows/Linux: bấm trái là mở; menu ở chuột phải
+    }
+    tray.setContextMenu(buildTrayMenu(tasks, now));
+    // phiên đăng nhập hết hạn khi đang ẩn: tác vụ đến hạn không chạy; báo một lần, KHÔNG tự mở trình duyệt đăng nhập
+    if (auth && !tasksPaused) {
+      const due = tasks.filter((t) => dueState(t, now) === "run").length;
+      const r = authNotice({ signedIn: auth.status().signedIn, dueCount: inTray ? due : 0, notified: authNotified });
+      authNotified = r.notified;
+      if (r.notify && Notification.isSupported()) {
+        const n = new Notification({ title: "Tác vụ định kỳ chưa chạy", body: "Phiên đăng nhập đã hết hạn. Mở ứng dụng để đăng nhập lại." });
+        n.on("click", () => showWindow());
+        n.show();
+      }
+    }
+  } catch {
+    /* không đọc được cài đặt: để lượt sau */
+  } finally {
+    refreshing = false;
+  }
 }
 
 /** Menu “Mở thư mục…”: thêm một thư mục có sẵn làm dự án và chuyển sang nó. */
@@ -664,6 +860,27 @@ function registerIpc(): void {
     }
     return updater.status();
   });
+  // kênh chạy nền: đọc / đặt "Giữ chạy nền khi đóng cửa sổ" + "Mở cùng máy" (cấp ứng dụng)
+  ipcMain.handle("neu:background", async (e, method: unknown, arg: unknown) => {
+    if (!trusted(e)) throw new Error("Nguồn không hợp lệ");
+    if (authBlocks(!!auth, !!auth?.status().signedIn)) throw new Error("Cần đăng nhập");
+    if (!limiter.allow()) throw new Error("Quá nhiều yêu cầu, hãy thử lại sau giây lát.");
+    if (typeof method !== "string" || !BACKGROUND_METHODS.has(method) || !backgroundArgsOk(method, arg)) throw new Error("Yêu cầu không hợp lệ");
+    if (method === "set") {
+      const next = applyPatch(bg, arg as { keep?: boolean; atLogin?: boolean }, canAtLogin());
+      if (canAtLogin() && (next.atLogin !== bg.atLogin || (arg as { atLogin?: boolean }).atLogin !== undefined)) {
+        try {
+          app.setLoginItemSettings(loginItemFor(next.atLogin, process.platform));
+        } catch {
+          throw new Error("Không đặt được “Mở cùng máy”.");
+        }
+      }
+      bg = next;
+      await saveBackgroundPrefs();
+      await refreshBackground();
+    }
+    return backgroundState();
+  });
   ipcMain.handle("neu:call", async (e, profile: unknown, method: unknown, args: unknown) => {
     if (!trusted(e)) throw new Error("Nguồn không hợp lệ");
     if (authBlocks(!!auth, !!auth?.status().signedIn)) throw new Error("Cần đăng nhập");
@@ -676,7 +893,9 @@ function registerIpc(): void {
         void ctl.send(String(args[0])); // chạy nền; tiến độ qua sự kiện
         return undefined;
       }
-      return await (ctl as unknown as Record<string, (...a: unknown[]) => unknown>)[method](...args);
+      const out = await (ctl as unknown as Record<string, (...a: unknown[]) => unknown>)[method](...args);
+      if (method === "taskAdd" || method === "taskSet" || method === "taskRemove" || method === "projectRemove") void refreshBackground(); // khay theo đúng danh sách tác vụ
+      return out;
     } catch (err) {
       throw new Error(err instanceof Error ? err.message.slice(0, 500) : "Lỗi không xác định");
     }
@@ -711,9 +930,9 @@ function hardenSession(): void {
   });
 }
 
-async function createWindow(): Promise<void> {
+async function createWindow(hidden = false): Promise<void> {
   win = new BrowserWindow({
-    width: 1280, height: 860, minWidth: 900, minHeight: 600, show: !SMOKE, backgroundColor: "#f6f6f3", title: brandName(),
+    width: 1280, height: 860, minWidth: 900, minHeight: 600, show: !SMOKE && !hidden, backgroundColor: "#f6f6f3", title: brandName(),
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -727,6 +946,17 @@ async function createWindow(): Promise<void> {
     win.webContents.on("did-start-navigation", (d) => console.error("[nav]", d.url, "main=" + d.isMainFrame, "same=" + d.isSameDocument));
     win.webContents.on("did-fail-load", (_e, code, desc, url) => console.error("[fail-load]", code, desc, url));
   }
+  // đóng cửa sổ khi đang giữ chạy nền (và có tác vụ): ẩn xuống khay thay vì đóng; đang thoát hẳn thì đóng thật
+  const w = win;
+  w.on("close", (e) => {
+    if (closeAction({ quitting, keep: bg.keep, hasTasks, smoke: !!SMOKE }) !== "hide") return;
+    e.preventDefault();
+    hideToTray();
+  });
+  w.on("session-end", () => void (quitting = true)); // Windows: đăng xuất/tắt máy, không chặn
+  w.on("closed", () => {
+    if (win === w) win = null;
+  });
   win.webContents.on("preload-error", (_e, file, err) => console.error("[preload-error]", file, err?.message));
   win.webContents.on("console-message", (_e, level, msg, line, src) => { if (__DEV__ && level >= 2) console.error("[renderer]", msg, src + ":" + line); });
   await win.loadURL(APP_ORIGIN + "/index.html");
@@ -829,7 +1059,22 @@ app.whenReady().then(async () => {
   registerIpc();
   for (const p of PROFILES_LIST) controllers.set(p, await buildController(p));
   buildMenu();
-  await createWindow();
+  await loadBackgroundPrefs();
+  await refreshBackground();
+  // mở cùng máy: chạy nền có hiệu lực thì chỉ hiện ở khay; không thì mở cửa sổ như thường
+  const openedAtLogin = canAtLogin() && (process.platform === "win32" ? process.argv.includes(HIDDEN_ARG) : app.getLoginItemSettings().wasOpenedAtLogin === true);
+  const hidden = startHidden({ keep: bg.keep, hasTasks, smoke: !!SMOKE, openedAtLogin });
+  if (hidden) {
+    inTray = true;
+    if (process.platform === "darwin") app.dock?.hide();
+  }
+  await createWindow(hidden);
+  started = true;
+  if (!SMOKE) {
+    const t = setInterval(() => void refreshBackground(), 30_000);
+    t.unref();
+    powerMonitor.on("shutdown", () => void (quitting = true));
+  }
   startUpdater();
   // lần trước ứng dụng bị tắt ngang khi đang có container: dọn (chỉ khi đang dùng container, để không gọi docker vô cớ)
   if (!SMOKE) void containerChoice().then((c) => { if (c.mode === "docker" && c.docker) return cleanupContainers(c.docker); }).catch(() => undefined);
@@ -856,13 +1101,11 @@ app.whenReady().then(async () => {
 });
 
 app.on("second-instance", () => {
-  if (win) {
-    if (win.isMinimized()) win.restore();
-    win.focus();
-  }
+  if (started) showWindow(); // mở lại ứng dụng khi đang chạy nền ở khay: hiện cửa sổ
 });
 // tự cập nhật: bản đã tải nền và kiểm mã băm sẽ được cài khi người dùng đóng ứng dụng (không mở lại)
 app.on("before-quit", (e) => {
+  quitting = true; // Cmd+Q, menu Thoát, trình cài bản mới: cửa sổ đóng thật, không ẩn xuống khay
   // sắp cài bản mới khi đóng: dừng gọn việc đang chạy (và ghi chỗ làm tiếp) rồi mới thoát
   if (!suspended && updater?.willInstallOnQuit()) {
     e.preventDefault();
@@ -883,5 +1126,6 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin" || SMOKE) app.quit();
 });
 app.on("activate", () => {
-  if (!BrowserWindow.getAllWindows().length) void createWindow();
+  if (!started) return;
+  if (!win || win.isDestroyed() || inTray) showWindow();
 });

@@ -143,6 +143,12 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   sendFeedback: (a) => a.length === 1 && isObj(a[0]) && typeof a[0].kind === "string" && ["bug", "idea", "praise", "other"].includes(a[0].kind) && str(a[0].text, 3000) && typeof a[0].tech === "boolean" && Object.keys(a[0]).length === 3,
   diagnosticsStatus: (a) => a.length === 0,
   sandboxStatus: (a) => a.length === 0,
+  // "Tải ảnh" không nhận tham số: ảnh luôn lấy từ cài đặt người dùng/chính sách ở tiến trình chính
+  sandboxPullImage: (a) => a.length === 0,
+  sandboxPullStatus: (a) => a.length === 0,
+  sandboxCache: (a) => a.length === 0,
+  // xoá cache: chỉ chọn PHẠM VI (dự án này / tất cả / dự án đã xoá), không bao giờ nhận tên volume từ giao diện
+  sandboxClearCache: (a) => a.length === 1 && typeof a[0] === "string" && ["project", "all", "orphans"].includes(a[0]),
   diagnosticsPreview: (a) => a.length === 1 && str(a[0], 500),
   diagnosticsSend: (a) => a.length === 0,
   resetPermissions: (a) => a.length === 0,
@@ -213,6 +219,17 @@ export function authArgsOk(method: string, arg: unknown): boolean {
   if (!isObj(arg) || Object.keys(arg).some((k) => k !== "username" && k !== "password")) return false;
   // eslint-disable-next-line no-control-regex
   return typeof arg.username === "string" && /^[A-Za-z0-9._@+-]{1,64}$/.test(arg.username) && typeof arg.password === "string" && arg.password.length >= 1 && arg.password.length <= 200 && !/[\u0000-\u001f]/.test(arg.password);
+}
+
+/** Kênh chạy nền (neu:background): đọc / đặt "Giữ chạy nền khi đóng cửa sổ" và "Mở cùng máy". */
+export const BACKGROUND_METHODS = new Set(["get", "set"]);
+
+/** get không có tham số; set nhận {keep?, atLogin?} (ít nhất một khoá, chỉ boolean, không khoá lạ). */
+export function backgroundArgsOk(method: string, arg: unknown): boolean {
+  if (method === "get") return arg === undefined;
+  if (method !== "set" || !isObj(arg)) return false;
+  const keys = Object.keys(arg);
+  return keys.length >= 1 && keys.every((k) => (k === "keep" || k === "atLogin") && typeof arg[k] === "boolean");
 }
 
 /** Khi SSO bật mà chưa đăng nhập, MỌI lệnh nghiệp vụ bị từ chối (giao diện chỉ được gọi kênh đăng nhập). */

@@ -105,3 +105,63 @@ jobs:
           docker pull ubuntu:24.04
       - name: Chạy bài thử
         run: node deploy/test/${{ matrix.script }}
+
+  # Container Docker của tab Code (packages/env-node/src/docker.ts) trên Linux THẬT: docker-real.test.ts không được tự bỏ qua ở đây.
+  # Chỉ chạy cho PR (deploy.yml gọi lại ci.yml khi vào main: job này bỏ qua, không làm chậm/chặn triển khai máy chủ).
+  container-linux:
+    name: "Container Docker thật (Linux)"
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"   # không cần Electron cho bài này
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Kéo ảnh mặc định (lấy đúng tên trong mã)
+        run: |
+          set -euo pipefail
+          img=$(grep -oP 'DEFAULT_CONTAINER_IMAGE = "\K[^"]+' packages/core/src/container.ts)
+          echo "Ảnh: $img"
+          docker pull "$img"
+          docker image ls "$img"
+      - name: Người dùng runner, Docker, quyền thư mục tạm
+        run: |
+          id
+          docker version --format 'Docker {{.Server.Version}} {{.Server.Os}}/{{.Server.Arch}}'
+          docker info --format 'Rootless/bảo mật: {{.SecurityOptions}}'
+          d=$(mktemp -d); ls -ld "$d"; rmdir "$d"
+      - name: Chạy docker-real.test.ts với Docker thật (thiếu Docker/ảnh thì đỏ; có cả bài cần mạng)
+        env:
+          HANDIO_REQUIRE_DOCKER: "1"
+          HANDIO_DOCKER_NET: "1"
+        run: npx vitest run packages/env-node/test/docker-real.test.ts --reporter=verbose --reporter=json --outputFile=docker-real.json
+      - name: Kiểm số bài đã chạy (không bài nào bị bỏ qua)
+        run: |
+          node -e '
+            const r = require("./docker-real.json");
+            console.log(`Đạt ${r.numPassedTests}/${r.numTotalTests} · lỗi ${r.numFailedTests} · bỏ qua ${r.numPendingTests + r.numTodoTests}`);
+            if (r.numFailedTests || r.numPendingTests || r.numTodoTests || r.numPassedTests < 14) process.exit(1);
+          '
+      - name: Không để lại container/volume
+        if: always()
+        run: |
+          docker ps -a --filter label=handio.sandbox=1 --format '{{.Names}}'
+          docker volume ls --filter label=handio.cache=1 --format '{{.Name}}'
+
+  # Windows: thường không có Docker chạy container Linux trên runner, nên chỉ chạy bài docker giả + đường dẫn ổ đĩa (C:\…).
+  container-windows:
+    name: "Container: docker giả + đường dẫn Windows"
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx vitest run packages/env-node/test/docker.test.ts --reporter=verbose
