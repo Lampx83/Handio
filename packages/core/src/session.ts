@@ -1177,6 +1177,29 @@ export class Agent {
     return t.length > maxChars ? t.slice(0, 3000) + "\n… (omitted) …\n" + t.slice(-(maxChars - 3000)) : t;
   }
 
+  /**
+   * Sự thật KHÔNG qua mô hình, gắn sau bản tóm tắt: mô hình nhỏ tóm tắt hay sót (Codex từng gặp: tóm tắt xong quên mình đã sửa tệp nào, quên đang làm dở).
+   * Gồm: lời người dùng gần nhất (nguyên văn, như Codex giữ tin người dùng), tệp đã tạo/sửa trong phiên, danh sách việc, tiến trình nền đang chạy.
+   */
+  compactFacts(): string {
+    const ctx = this.s.ctx;
+    const out: string[] = [];
+    const asks = this.messages
+      .filter((m) => m.role === "user" && typeof m.content === "string" && m.content.trim() && !isInternalUser(m.content) && !m.content.startsWith("[Tóm tắt phần hội thoại"))
+      .map((m) => String(m.content).split("\n\n[Nội dung các tệp được đính kèm")[0].replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(-3)
+      .map((t) => "- " + (t.length > 600 ? t.slice(0, 598) + "…" : t));
+    if (asks.length) out.push("Lời người dùng gần nhất (nguyên văn):\n" + asks.join("\n"));
+    const files = [...new Set(ctx.undoStack.map((e) => relPath(ctx, e.path)))].slice(-30);
+    if (files.length) out.push("Tệp đã tạo/sửa trong phiên này (đừng làm lại từ đầu; đọc lại trước khi sửa tiếp): " + files.join(", "));
+    const todos = ctx.todos ?? [];
+    if (todos.length) out.push("Việc cần làm: " + todos.slice(0, 12).map((t) => `${t.status === "completed" ? "✓" : t.status === "in_progress" ? "▶" : "○"} ${t.content}`).join(" | "));
+    const procs = (ctx.procs?.list() ?? []).filter((p) => p.alive);
+    if (procs.length) out.push("Tiến trình nền đang chạy (đừng bật lại): " + procs.map((p) => `${p.id} \`${p.command.slice(0, 80)}\`${p.url ? " " + p.url : ""}`).join("; "));
+    return out.length ? "\n\n[Sự thật ghi lại tự động]\n" + out.join("\n") : "";
+  }
+
   async compact(focus = "", midturn = false): Promise<boolean> {
     if (this.messages.length < 3) return false;
     this.s.emit({ type: "notice", level: "info", text: "Đang tóm tắt hội thoại để giải phóng ngữ cảnh…" });
@@ -1189,9 +1212,10 @@ export class Agent {
       return false;
     }
     this.s.track(r.usage, user.length);
+    const facts = this.compactFacts();
     this.archived = [...this.archived, ...this.messages].slice(-ARCHIVE_MAX);
     this.messages = [
-      { role: "user", content: "[Tóm tắt phần hội thoại trước đó, để tiết kiệm ngữ cảnh]\n" + (r.content.trim() || "(không có tóm tắt)") },
+      { role: "user", content: "[Tóm tắt phần hội thoại trước đó, để tiết kiệm ngữ cảnh]\n" + (r.content.trim() || "(không có tóm tắt)") + facts },
       { role: "assistant", content: "Đã nắm bối cảnh, tôi sẽ tiếp tục từ đây." },
     ];
     if (midturn) this.messages.push({ role: "user", content: "Hãy tiếp tục công việc đang làm dở theo bản tóm tắt ở trên." });
