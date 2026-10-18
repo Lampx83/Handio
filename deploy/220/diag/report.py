@@ -197,6 +197,16 @@ def summarize(recs, rows):
         return {v: {"installs": len(inst[v]), "turns": tn.get(v, 0)} for v in inst}
 
     S["versions"], S["platforms"], S["profiles"], S["models"] = split("version"), split("platform"), split("profile"), split("model")
+    # máy Desktop theo phiên bản (bản web luôn mới nhất nên không tính vào "máy chạy bản cũ")
+    dv = collections.defaultdict(lambda: {"installs": set(), "turns": 0})
+    for r in recs:
+        a_ = r.get("a") or {}
+        if str(a_.get("platform", "?")) == "web":
+            continue
+        x = dv[str(a_.get("version", "?"))]
+        x["installs"].add(a_.get("install"))
+        x["turns"] += r["e"].get("t") == "turn"
+    S["versions_desktop"] = {v: {"installs": len(x["installs"]), "turns": x["turns"]} for v, x in dv.items()}
 
     # nginx
     N = {"requests": len(rows), "by_route": dict(collections.Counter(r.get("route", "other") for r in rows))}
@@ -356,7 +366,7 @@ def rule_retry(S, T, B=None):
 
 
 def rule_old_versions(S, T, B=None):
-    vs = S["versions"]
+    vs = S.get("versions_desktop", S["versions"])
     if len(vs) < 2:
         return None
 

@@ -293,8 +293,10 @@ class StatsTest(unittest.TestCase):
         dl = os.path.join(self.tmp.name, "dl")
         os.makedirs(dl)
         jdump({"version": "0.2.0", "released": "2026-10-20", "minVersion": "0.1.5", "notes": "• Mới"}, os.path.join(dl, "latest.json"))
-        recs = [rec(day_ts(0), turn_ev(), uid="a" * 16, app=dict(APP, version="0.2.0")), rec(day_ts(0), turn_ev(), uid="b" * 16, app=dict(APP, version="0.1.0")),
-                rec(day_ts(0), turn_ev(), uid="c" * 16, app=dict(APP, version="0.1.9")), rec(day_ts(0), turn_ev(), uid="d" * 16, app=dict(APP, version="0.2.1"))]
+        win = dict(APP, platform="win")   # bản web luôn mới nhất nên không tính vào tỷ lệ cập nhật: dùng Desktop
+        recs = [rec(day_ts(0), turn_ev(), uid="a" * 16, app=dict(win, version="0.2.0")), rec(day_ts(0), turn_ev(), uid="b" * 16, app=dict(win, version="0.1.0")),
+                rec(day_ts(0), turn_ev(), uid="c" * 16, app=dict(win, version="0.1.9")), rec(day_ts(0), turn_ev(), uid="d" * 16, app=dict(win, version="0.2.1")),
+                rec(day_ts(0), turn_ev(), uid="e" * 16, app=dict(APP, version="0.1.0"))]   # người dùng web cũ: bị bỏ qua
         write_diag(self.diag, recs)
         j = S.run(self.diag, None, self.out, os.path.join(self.tmp.name, "h.json"), NOW, dl)
         r = j["release"]

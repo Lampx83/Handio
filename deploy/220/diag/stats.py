@@ -458,6 +458,8 @@ def compute_all(recs, daily, now, findings=None, release=None, quota_fn=None, ho
         dists = {k: [{"value": v, "users": len(x["users"]), "installs": len(x["installs"]), "turns": x["turns"]} for v, x in sorted(d.items(), key=lambda kv: (-len(kv[1]["users"]), -kv[1]["turns"]))] for k, d in ac["dist"].items()}
         fb = ac["fb"]
         latest_ver = collections.Counter(U[uid]["ver"] for uid in ac["users"] if uid in U)     # mỗi người một phiên bản: bản đang dùng gần nhất
+        # bản web luôn là bản mới nhất (tải lại trang là có): chỉ máy Desktop mới có "chưa cập nhật", nên tỷ lệ cập nhật và số người dưới mức tối thiểu chỉ tính Desktop
+        latest_desktop = collections.Counter(U[uid]["ver"] for uid in ac["users"] if uid in U and (U[uid]["plat"].most_common(1) or [("?", 0)])[0][0] != "web")
         # công cụ: bản ứng dụng cũ không gắn mã lý do lỗi nên không phân biệt được "chương trình lỗi"; loại các bản đó khỏi tỷ lệ lỗi
         byv = collections.defaultdict(lambda: [0, 0, 0, 0])
         for (v, _nm), x in ac["tool_v"].items():
@@ -508,7 +510,7 @@ def compute_all(recs, daily, now, findings=None, release=None, quota_fn=None, ho
             "llm_errors": dict(ac["llm_err"].most_common()), "llm_status": [{"kind": k2, "status": s2, "n": v} for (k2, s2), v in ac["llm_status"].most_common(10)],
             "concentration": conc,
             "version_latest": [{"value": v, "users": c} for v, c in latest_ver.most_common()],
-            "release": release_info(release, [{"value": v, "users": c} for v, c in latest_ver.items()], len(ac["users"])), "quota": quota_fn(RANGES[key][0] if not hourly_ else 7) if quota_fn else None,
+            "release": release_info(release, [{"value": v, "users": c} for v, c in latest_desktop.items()], sum(latest_desktop.values())), "quota": quota_fn(RANGES[key][0] if not hourly_ else 7) if quota_fn else None,
             "ui": dict(ac["ui"].most_common()), "feedback": {"up": fb.get("up", 0), "down": fb.get("down", 0), "reasons": {k: v for k, v in ((k[4:], v) for k, v in fb.items() if k.startswith("why:"))}}}
     return out
 
