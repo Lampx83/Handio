@@ -20,6 +20,7 @@ import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
 import { stackOf, type Stack, type UiLib } from "./task-profile";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import type { HttpToolRuntime } from "./http-tools";
+import type { SandboxStatus } from "./container";
 import { feedbackProblem, type FeedbackInput, type FeedbackResult } from "./feedback";
 import { buildShareV2, type SharedChatInfo, type SharePayloadV2, type SharePreview, type ShareResult } from "./share";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
@@ -74,6 +75,8 @@ export interface ControllerOptions {
   /** Tự chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md). Không đặt = không ghi, không gửi gì. Tắt được bằng Settings.diagnostics hoặc policy.diagnostics=false. */
   /** Tác vụ định kỳ (schedule.ts): `enabled` bật bộ hẹn giờ (Desktop/web); `now` để kiểm thử dùng đồng hồ giả. Không đặt `enabled` = chỉ quản lý được, không tự chạy. */
   tasks?: { enabled?: boolean; now?: () => number; tickMs?: number };
+  /** Desktop, tab Code: trạng thái chạy lệnh trong container Docker (dò lại Docker mỗi lần gọi). Không đặt = không có tuỳ chọn này. */
+  sandbox?: { status(): Promise<SandboxStatus> };
   diagnostics?: { endpoint: string; headers?(): Record<string, string>; enabled?(): boolean; version: string; build?: string; platform: string; fetch?: typeof fetch };
 }
 
@@ -285,7 +288,7 @@ export class LocalController implements AgentController {
       commands: this.session.slashCommands(),
       todos: this.todos,
       busy: this.busy,
-      capabilities: { exec: !!env.exec, runJs: !!env.runJs, fetch: !!env.fetchUrl, openFolder: !!this.o.openFolder, realFs: this.o.realFs, openExternal: !!this.o.openExternally, revealWorkspace: !!this.o.revealWorkspace, pdf: !!env.convertToPdf, reset: !!this.o.resetWorkspace, sandbox: !!env.sandbox, projects: !!this.o.projects, pickFolder: !!this.o.projects?.pick, chats: !!this.o.chats, renderDesign: !!this.o.renderDesign },
+      capabilities: { exec: !!env.exec, runJs: !!env.runJs, fetch: !!env.fetchUrl, openFolder: !!this.o.openFolder, realFs: this.o.realFs, openExternal: !!this.o.openExternally, revealWorkspace: !!this.o.revealWorkspace, pdf: !!env.convertToPdf, reset: !!this.o.resetWorkspace, sandbox: !!env.sandbox && env.sandbox.kind !== "none" && env.sandbox.kind !== "refuse", projects: !!this.o.projects, pickFolder: !!this.o.projects?.pick, chats: !!this.o.chats, renderDesign: !!this.o.renderDesign },
       policy: { baseUrl: !!this.o.policy?.baseUrl, insecureHttp: this.o.policy?.allowInsecureHttp !== undefined, notice: this.o.policy?.notice },
       untrustedProject: !this.trusted && (this.project.allow.length > 0 || !!this.project.mode || Object.keys(this.project.hooks ?? {}).length > 0 || Object.keys(this.project.mcpServers ?? {}).length > 0),
       memoryFiles: this.session.memory.map((m) => m.name),
@@ -1058,6 +1061,9 @@ export class LocalController implements AgentController {
     const p = this.o.policy;
     if (p?.baseUrl) delete (rest as Partial<Settings>).baseUrl; // bị chính sách khoá
     if (p?.allowInsecureHttp !== undefined) delete (rest as Partial<Settings>).allowInsecureHttp;
+    // ảnh Docker không đổi được từ giao diện (chỉ tệp cài đặt/chính sách); chính sách bắt buộc container thì không tắt được
+    delete (rest as Partial<Settings>).containerImage;
+    if (p?.requireContainer) delete (rest as Partial<Settings>).container;
     const next = normalizeSettings({ ...this.settings, ...rest }, this.o.defaults);
     next.key = key === undefined ? this.settings.key : key || undefined;
     this.settings = next;
@@ -1374,6 +1380,12 @@ export class LocalController implements AgentController {
     const r = await this.shareCall("share/revoke", { method: "POST", body: { id } });
     if (r?.status === 200 && r.json?.ok) return { ok: true, message: "Đã thu hồi: liên kết không còn dùng được." };
     return { ok: false, message: r?.json?.message || "Chưa thu hồi được. Hãy thử lại sau." };
+  }
+
+  /** Tab Code (Desktop): đang chạy lệnh trong container hay không, Docker có chạy không. null = nơi chạy này không có tuỳ chọn container. */
+  async sandboxStatus(): Promise<SandboxStatus | null> {
+    if (!this.o.sandbox || (this.o.profile ?? "code") !== "code") return null;
+    return this.o.sandbox.status();
   }
 
   async diagnosticsStatus(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }> {

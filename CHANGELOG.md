@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Tab Code: chạy lệnh trong container Docker** (Desktop, tuỳ chọn): bật ở Cài đặt → Quyền → "Chạy lệnh trong container Docker". Lệnh của agent chỉ thấy thư mục dự án, không thấy phần còn lại của máy, không chạy bằng quyền quản trị, mặc định không ra mạng. Bật "Cho ra mạng" để cài gói (npm/pip, có cache riêng cho từng dự án) và đặt "Cổng xem trước" (ví dụ 5173) để mở web đang chạy trong container. Cần Docker Desktop; Docker không chạy thì lệnh chạy như cũ và ứng dụng báo rõ. Quản trị viên có thể bắt buộc dùng container (`requireContainer` trong `policy.json`).
 - **Mục "Tải về" trên trang giới thiệu**: chọn bản macOS (chip Apple/Intel), Windows hoặc bản web, kèm cách mở khi hệ điều hành cảnh báo lần đầu và cách kiểm tra mã SHA-256. Hỏi đáp có link tới chính sách quyền riêng tư.
 - **DESIGN.md cho từng dự án Design**: ghi màu, phông, khoảng cách và giọng điệu vào `DESIGN.md` ở thư mục dự án, agent đọc và làm theo ở mọi thiết kế. Sửa tệp lúc nào cũng được, có hiệu lực từ tin nhắn kế tiếp. Chưa có thì gõ `/designmd` để agent tạo bản mẫu (hoặc rút từ thiết kế đang có).
 - **Phân quyền tab theo nhóm người dùng**: quản trị viên có thể chỉ cho một nhóm (theo miền email, ví dụ sinh viên `@st.neu.edu.vn` hoặc giảng viên/cán bộ `@neu.edu.vn`) dùng một số tab Work/Code/Design. Tab không được dùng sẽ ẩn, và máy chủ từ chối yêu cầu của tab đó kèm thông báo rõ. Mặc định chưa cấu hình thì mọi người vẫn dùng cả ba tab như trước.
