@@ -31,8 +31,8 @@ npm run dev:web                # web ở localhost, có "Demo giả lập" khôn
 npm run desktop                # chạy Electron từ mã nguồn
 npm run smoke                  # kiểm thử đầu-cuối bản Desktop (58 kiểm tra, mở cửa sổ Electron)
 npm run version:check          # mọi gói cùng phiên bản + CHANGELOG có mục đó
-cd deploy/220/diag && python3 -m unittest discover -s . -p 'test_*.py'     # máy chủ (Python)
-node deploy/test/e2e-sso.mjs && node deploy/test/e2e-install.mjs && node deploy/test/e2e-deploy.mjs   # cần Docker
+cd deploy/220/diag && python3 -m unittest discover -s . -p 'test_*.py'     # máy chủ (Python); tương tự cho deploy/220/backup
+node deploy/test/e2e-sso.mjs && node deploy/test/e2e-install.mjs && node deploy/test/e2e-deploy.mjs && node deploy/test/e2e-backup.mjs   # cần Docker
 ```
 
 **Trước khi báo "xong" hoặc commit: `npm run typecheck && npx vitest run` phải xanh** (và bộ liên quan nếu đụng `deploy/`/Desktop). CI chạy đúng những lệnh này; main đỏ thì **không được triển khai**.

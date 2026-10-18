@@ -588,7 +588,7 @@ export class DiagnosticsRecorder {
       this.signal("step_limit", undefined, t?.steps);
     } else if (/^Lời gọi công cụ bị cắt/.test(text)) this.signal("args_truncated");
     else if (/^Agent bắt đầu lặp lại một đoạn văn/.test(text)) this.signal("text_repeat");
-    else if (/lặp lại cùng một thao tác/.test(text)) {
+    else if (/lặp lại cùng một thao tác|lỗi \d+ lần liên tiếp nên đã dừng/.test(text)) {
       if (t) t.loopStop = true;
       if (!t || ![...t.signals].some((k) => k.startsWith("loop"))) this.signal("loop", undefined, t?.repN);
     } else if (/^Ngữ cảnh đầy, đang rút gọn/.test(text)) this.signal("context_overflow", undefined, t?.ctx); // n = % ngữ cảnh ứng dụng tự ước lượng lúc bị từ chối: thấp ⇒ giới hạn thật của máy chủ nhỏ hơn cấu hình
