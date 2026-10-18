@@ -5,6 +5,7 @@ import { PROFILES, PROFILE_ORDER } from "@neu/agent-core/profiles";
 import { mountApp, type AppHandle } from "./app";
 import { h, store } from "./dom";
 import { openDownload } from "./download";
+import { icon } from "./icons";
 import { applyAppearance, type AccountInfo } from "./settings-ui";
 
 export interface ShellOptions {
@@ -40,15 +41,15 @@ export function mountShell(root: HTMLElement, controllers: Partial<Record<Profil
   const slots = new Map<Profile, HTMLElement[]>();
   const bar = h("div", { class: "topbar" + (opts.macInset ? " mac-inset" : "") },
     leftHost,
-    h("span", { class: "brand" }, brandMark(22), opts.productName ?? brandName()),
+    h("span", { class: "brand" }, brandMark(24), h("span", { class: "brand-t" }, opts.productName ?? brandName())),
     h("div", { class: "tabs", role: "tablist", "aria-label": "Chế độ làm việc" }, ...ids.map((id) => {
       const b = h("button", { class: "tab", type: "button", role: "tab", id: "tab-" + id, "aria-controls": "panel-" + id, onclick: () => (id !== active && controllers[id]?.track?.("tab_switch"), select(id)) },
-        h("span", { class: "tl" }, PROFILES[id].label), h("span", { class: "dot", "aria-hidden": "true" }));
+        icon(id === "code" ? "code" : id === "design" ? "palette" : "briefcase", 16), h("span", { class: "tl" }, PROFILES[id].label), h("span", { class: "dot", "aria-hidden": "true" }));
       tabs.set(id, b);
       return b;
     })),
     rightHost,
-    opts.downloadsBase ? h("button", { class: "iconbtn dl-btn", type: "button", title: "Tải ứng dụng Desktop cho macOS/Windows", onclick: () => (controllers[active]?.track?.("download_open"), void openDownload(opts.downloadsBase!, opts.install)) }, "⬇ Tải ứng dụng") : null,
+    opts.downloadsBase ? h("button", { class: "iconbtn dl-btn", type: "button", title: "Tải ứng dụng Desktop cho macOS/Windows", onclick: () => (controllers[active]?.track?.("download_open"), void openDownload(opts.downloadsBase!, opts.install)) }, icon("download", 16), h("span", { class: "dl-t" }, "Tải ứng dụng")) : null,
   );
   const body = h("div", { class: "panels" });
   root.append(h("div", { class: "shell" }, bar, body));

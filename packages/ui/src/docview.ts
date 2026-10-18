@@ -1,6 +1,6 @@
 import type { AgentController, DocView, ViewBlock, ViewSection } from "@neu/agent-core";
 import { clear, h } from "./dom";
-import { treeIcon } from "./icons";
+import { icon, treeIcon } from "./icons";
 
 const base = (p: string): string => p.split("/").pop() ?? p;
 
@@ -23,9 +23,9 @@ export class DocPane {
     this.el = h("aside", { class: "dv", "aria-label": "Xem tài liệu", hidden: true },
       h("div", { class: "dv-head" }, this.icon, this.title,
         h("span", { class: "grow" }),
-        h("button", { class: "iconbtn", type: "button", title: "Tải xuống", "aria-label": "Tải xuống", onclick: () => this.path && this.actions.download(this.path) }, "⬇"),
-        actions.external ? h("button", { class: "iconbtn", type: "button", title: "Mở bằng ứng dụng", "aria-label": "Mở bằng ứng dụng", onclick: () => this.path && this.actions.external!(this.path) }, "↗") : null,
-        h("button", { class: "iconbtn", type: "button", title: "Đóng", "aria-label": "Đóng", onclick: () => this.close() }, "✕")),
+        h("button", { class: "iconbtn", type: "button", title: "Tải xuống", "aria-label": "Tải xuống", onclick: () => this.path && this.actions.download(this.path) }, icon("download")),
+        actions.external ? h("button", { class: "iconbtn", type: "button", title: "Mở bằng ứng dụng", "aria-label": "Mở bằng ứng dụng", onclick: () => this.path && this.actions.external!(this.path) }, icon("external")) : null,
+        h("button", { class: "iconbtn", type: "button", title: "Đóng", "aria-label": "Đóng", onclick: () => this.close() }, icon("x"))),
       this.body);
   }
 
