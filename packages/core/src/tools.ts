@@ -1,4 +1,5 @@
 import { installPitfall, pythonMissingHint, timeoutMissingHint, toolNameAsCommand } from "./pitfalls";
+import { isLongRunning } from "./processes";
 import { diffLines, type DiffLine } from "./diff";
 import type { DirEntry, Env } from "./env";
 import { matchGlob } from "./glob";
@@ -44,6 +45,8 @@ export interface UndoEntry {
   turn?: number;
   /** Các thay đổi do cùng một lệnh bash: /undo hoàn tác cả nhóm. */
   group?: string;
+  /** Thời điểm thay đổi (để biết máy chủ đang chạy có cũ hơn mã nguồn không). */
+  at?: number;
 }
 
 export interface ToolContext {
@@ -214,7 +217,7 @@ export async function checkFresh(ctx: ToolContext, p: string, rel: string): Prom
 
 /** Ghi lại nội dung cũ trước khi sửa (cho /undo, "Thay đổi", /rewind). */
 export function pushUndo(ctx: ToolContext, path: string, old: string | Uint8Array | null, group?: string): void {
-  ctx.undoStack.push({ path, old, turn: ctx.turn ?? 0, ...(group ? { group } : {}) });
+  ctx.undoStack.push({ path, old, turn: ctx.turn ?? 0, at: Date.now(), ...(group ? { group } : {}) });
 }
 
 export async function remember(ctx: ToolContext, p: string): Promise<void> {
@@ -356,11 +359,16 @@ async function applyEdit(ctx: ToolContext, args: { path: string; old_string: str
     for (const t of tries) {
       for (const sb of [false, true]) if (!fz && (fz = fuzzyReplace(text, t.o, t.nw, sb))) [used, skipBlank] = [t, sb];
     }
+    // tệp ĐÃ có sẵn new_string (thường là mô hình sửa rồi mà quên, sau khi tóm tắt ngữ cảnh): không phải lỗi, đừng để nó thử lại mãi (Aider làm tương tự)
+    if (!fz && nw.trim().length >= 12) {
+      const flat = (x: string) => x.normalize("NFC").replace(/\s+/g, " ").trim();
+      if (flat(text).includes(flat(nw))) return { p, text, next: text, note: `Không cần sửa: ${relPath(ctx, p)} đã có sẵn đoạn new_string (có lẽ đã sửa ở bước trước). Đọc lại tệp nếu muốn kiểm tra.`, unchanged: true };
+    }
     if (!fz) throw new ToolError(`Không tìm thấy old_string trong ${args.path}.${closestHint(text, numbered?.o ?? o) || " Hãy đọc lại file (read_file) và sao chép đúng từng ký tự (kể cả thụt dòng)."}`, "no_match");
     next = fz.text;
     note = `Đã sửa ${relPath(ctx, p)} (khớp gần đúng, bỏ qua khác biệt thụt dòng/khoảng trắng${skipBlank ? "/dòng trống" : ""}; bắt đầu ở dòng ${fz.line}).${tip(used)}`;
   }
-  return { p, text, next, note };
+  return { p, text, next, note, unchanged: false };
 }
 
 export function builtinTools(env: Env): Tool[] {
@@ -478,6 +486,7 @@ export function builtinTools(env: Env): Tool[] {
       },
       async run(ctx, a) {
         const r = await applyEdit(ctx, a, false);
+        if (r.unchanged) return r.note;
         await ctx.env.writeText(r.p, r.next);
         await remember(ctx, r.p);
         pushUndo(ctx, r.p, r.text);
@@ -547,8 +556,18 @@ export function builtinTools(env: Env): Tool[] {
         if (typeof a.command !== "string" || !a.command.trim()) throw new ToolError("Thiếu lệnh.", "bad_args");
         const pitfall = installPitfall(a.command) ?? toolNameAsCommand(a.command);
         if (pitfall) throw new ToolError(pitfall, "bad_args");
-        if (a.background) {
+        // máy chủ dev/web chạy mãi: gọi không có background thì lệnh treo tới hết giờ rồi bị giết, mô hình lại chạy lại (vòng lặp hay gặp nhất).
+        // Tự chuyển sang chạy nền như Claude Code/Codex.
+        const autoBg = !a.background && !!ctx.procs && isLongRunning(a.command);
+        if (a.background || autoBg) {
           if (!ctx.procs) throw new ToolError("Nơi chạy này không hỗ trợ chạy nền.", "unsupported");
+          const note = autoBg ? "Lệnh này chạy mãi (máy chủ) nên đã tự chuyển sang chạy nền. " : "";
+          // máy chủ cùng loại đang chạy và mã nguồn chưa đổi từ lúc nó bật: KHÔNG khởi động lại (khởi động lại mãi là vòng lặp vô ích)
+          const running = ctx.procs.findRunning(a.command, ctx.root);
+          if (running && !ctx.undoStack.some((e) => (e.at ?? 0) > running.info.startedAt)) {
+            const tail = running.log.split("\n").slice(-12).join("\n").trim();
+            return `${note}Máy chủ đã đang chạy (id=${running.info.id}${running.info.url ? ", " + running.info.url : ""}) và chưa có tệp nào đổi từ lúc nó bật, nên KHÔNG khởi động lại. Dùng bash_output ${running.info.id} để xem nhật ký, check_page để thử trang; cần khởi động lại thật (đổi cấu hình, cài gói) thì kill_process ${running.info.id} trước.${tail ? "\nNhật ký gần nhất:\n" + clip(tail) : ""}`;
+          }
           let info;
           try {
             info = ctx.procs.start(a.command, ctx.root);
@@ -557,7 +576,7 @@ export function builtinTools(env: Env): Tool[] {
           }
           await ctx.procs.settle(info.id, 6000);
           const p = ctx.procs.get(info.id)!;
-          return `Đã chạy nền (id=${info.id}).${info.replaced ? ` Đã dừng ${info.replaced} (cùng loại) để không chiếm hai cổng.` : ""} ${p.info.alive ? "Đang chạy." : `Đã thoát với mã ${p.info.code}.`}${p.info.url ? ` Địa chỉ: ${p.info.url} (người dùng có thể bấm “Mở” để xem).` : ""}\n--- đầu ra ---\n${clip(p.log.trim() || "(chưa có đầu ra)")}${!p.info.alive && p.info.code ? (pythonMissingHint(p.log) ? "\n" + pythonMissingHint(p.log) : "") : ""}`;
+          return `${note}Đã chạy nền (id=${info.id}).${info.replaced ? ` Đã dừng ${info.replaced} (cùng loại) để không chiếm hai cổng.` : ""} ${p.info.alive ? "Đang chạy." : `Đã thoát với mã ${p.info.code}.`}${p.info.url ? ` Địa chỉ: ${p.info.url} (người dùng có thể bấm “Mở” để xem).` : ""}\n--- đầu ra ---\n${clip(p.log.trim() || "(chưa có đầu ra)")}${!p.info.alive && p.info.code ? (pythonMissingHint(p.log) ? "\n" + pythonMissingHint(p.log) : "") : ""}`;
         }
         const timeout = Math.max(1, Math.min(Math.floor(Number(a.timeout) || 60), 300));
         const r = await ctx.env.exec!(a.command, { cwd: ctx.root, timeoutMs: timeout * 1000, signal: ctx.signal });

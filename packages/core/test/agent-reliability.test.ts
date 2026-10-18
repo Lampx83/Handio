@@ -426,7 +426,7 @@ describe("vòng lặp đọc cùng một bộ tệp (chu kỳ dài)", () => {
     await c.send("Sửa lỗi tải tệp lên");
     expect(llm.calls.length).toBeLessThan(25); // không chạy hết 40 bước
     const seen = llm.calls.flatMap((x) => x.messages).map((m) => String(m.content ?? "")).join("\n"); // cái mô hình nhìn thấy
-    expect(seen).toMatch(/lặp lại cùng một chuỗi 5 thao tác/);
+    expect(seen).toMatch(/lặp lại cùng một chuỗi 5 thao tác|nhận đúng kết quả này/); // bộ phát hiện (thao tác, kết quả) bắt được còn sớm hơn
     expect(events.some((e) => e.type === "turn_end")).toBe(true);
   });
 });
