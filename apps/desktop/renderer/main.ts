@@ -1,5 +1,5 @@
 import "@neu/agent-ui/style.css";
-import { brandName, type AgentController, type ChatMeta, type DirEntry, type HistoryItem, type PermissionResponse, type Profile, type ProjectsState, type SessionEvent, type Settings, type UiState } from "@neu/agent-core";
+import { brandName, type AgentController, type BackgroundState, type ChatMeta, type DirEntry, type HistoryItem, type PermissionResponse, type Profile, type ProjectsState, type SessionEvent, type Settings, type UiState } from "@neu/agent-core";
 import { mountShell } from "@neu/agent-ui";
 import { mountUpdateBanner, type UpdateBridge } from "./update-banner";
 
@@ -17,6 +17,7 @@ interface Bridge {
   platform: string;
   auth: { status(): Promise<AuthState>; login(): Promise<AuthState>; loginPassword(u: string, p: string): Promise<AuthState>; setRemember(value: boolean): Promise<AuthState>; logout(): Promise<AuthState>; onChange(cb: (s: AuthState) => void): () => void };
   update: UpdateBridge;
+  background: { get(): Promise<BackgroundState>; set(patch: { keep?: boolean; atLogin?: boolean }): Promise<BackgroundState> };
   call(profile: string, method: string, args: unknown[]): Promise<any>;
   onEvent(cb: (profile: string, e: unknown) => void): () => void;
 }
@@ -112,6 +113,7 @@ class IpcController implements AgentController {
   taskStop = () => this.call<void>("taskStop");
   taskUndo = (id: string) => this.call<any>("taskUndo", id);
   taskNotify = (on?: boolean) => this.call<boolean>("taskNotify", ...(on === undefined ? [] : [on]));
+  taskBackground = (patch?: { keep?: boolean; atLogin?: boolean }) => (patch ? bridge.background.set(patch) : bridge.background.get());
   exportDesign = (p: string, f: "pdf" | "png", w: number, h?: number) => this.call<any>("exportDesign", ...(h === undefined ? [p, f, w] : [p, f, w, h]));
 }
 

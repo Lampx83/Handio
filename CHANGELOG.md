@@ -12,11 +12,13 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Container có cả Node và Python**: ảnh mặc định `node:22-bookworm` (Node 22, Python 3, gcc, git). Agent tự tạo `.venv` và cài pip khi bạn bật "Cho ra mạng". Ảnh chưa có trên máy thì bấm **Tải ảnh** (~400 MB) trong Cài đặt → Quyền, có tiến độ; ứng dụng không tự tải ngầm.
 - **Xoá cache container** (Cài đặt → Quyền): xem dung lượng cache npm/pip của dự án đang mở và của mọi dự án, xoá cache dự án này, xoá tất cả, hoặc dọn cache của dự án đã bỏ khỏi danh sách. Chỉ xoá cache do ứng dụng tạo.
 - **Tác vụ định kỳ làm được nhiều hơn** (nút ⏰): thêm lịch **một lần** vào ngày giờ định sẵn; bản Desktop chạy được cả dự án chưa mở; mỗi lần chạy được lưu thành cuộc trò chuyện "⏰ tên" để xem lại hoặc nhắn tiếp; thông báo của hệ thống khi xong/lỗi (tắt được); xem lần tới/lần trước, dừng giữa chừng và hoàn tác một lần chạy.
+- **Tác vụ định kỳ chạy cả khi đóng cửa sổ** (Desktop, tuỳ chọn): tích "Giữ chạy nền khi đóng cửa sổ" trong hộp ⏰. Đóng cửa sổ thì ứng dụng thu xuống khay (macOS: thanh menu, ẩn khỏi Dock), chỉ khi có tác vụ đang bật. Menu ở biểu tượng: mở lại, tác vụ kế tiếp, tạm dừng tác vụ, **Thoát hẳn**. Có thêm "Mở cùng máy" (ẩn ở khay). Mặc định tắt cả hai. Phiên đăng nhập hết hạn thì tác vụ không chạy và ứng dụng báo để bạn đăng nhập lại.
 - **Nhóm người dùng tuỳ tạo** (quản trị viên): gán email hoặc tài khoản vào nhóm như một lớp học hay nhóm giảng viên, rồi đặt riêng cho nhóm hạn mức token/ngày, tab được dùng, mô hình được dùng và hạn mức token riêng cho từng tab. Sửa ngay trên trang quản trị *Hạn mức* (dán cả danh sách email) hoặc bằng `quota.sh group`, có hiệu lực từ yêu cầu kế tiếp. Trang này cũng hiện cấu hình theo bậc, và trang quản trị đếm số yêu cầu bị từ chối theo lý do. Chưa tạo nhóm nào thì mọi thứ như cũ.
 
 ### Thay đổi
 - **Chỉ vào để sửa riêng tư hơn**: phần trích từ thiết kế gửi cho agent nay tự che giá trị ô nhập (kể cả mật khẩu), chữ trong ô nhập nhiều dòng, dữ liệu nhúng dài, chú thích ẩn và token/mật khẩu trong đường dẫn.
 - **Thông báo rõ khi nhóm của bạn không được dùng mô hình đang chọn** hoặc đã hết hạn mức riêng của một tab (các tab khác vẫn dùng được), thay vì báo lỗi key chung chung.
+- **Chỉ hiện mô hình bạn được dùng**: danh sách mô hình ở Cài đặt và nút chọn mô hình chỉ còn mô hình nhóm của bạn được phép. Không còn mô hình nào thì nút **Kiểm tra** báo rõ để liên hệ quản trị viên. Chưa giới hạn mô hình thì như cũ.
 
 ## [0.8.21] - 2026-10-18
 

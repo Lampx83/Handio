@@ -223,3 +223,31 @@ describe("phân quyền theo nhóm: tab được dùng", () => {
     expect(events.at(-1)).toMatchObject({ type: "turn_end" });
   });
 });
+
+describe("phân quyền mô hình: danh sách /models do cổng lọc", () => {
+  const list = (ids: unknown[], h: Record<string, string> = {}) => (async () => new Response(JSON.stringify({ object: "list", data: ids.map((id) => ({ id })) }), { headers: { "content-type": "application/json", ...h } })) as unknown as typeof fetch;
+
+  it("danh sách đã lọc còn mô hình: trả đúng các mô hình đó (bỏ phần tử lạ)", async () => {
+    expect(await new LlmClient(cfg, list(["m", 5, null], { "x-neu-models": "filtered" })).models()).toEqual(["m"]);
+  });
+
+  it("lọc xong không còn mô hình nào: lỗi rõ bằng tiếng Việt, có mã model_not_allowed", async () => {
+    const err = await new LlmClient(cfg, list([], { "x-neu-models": "filtered" })).models().catch((e) => e);
+    expect(err).toBeInstanceOf(LlmError);
+    expect(err).toMatchObject({ status: 403, code: "model_not_allowed", message: "Tài khoản của bạn chưa được dùng mô hình nào, liên hệ quản trị viên." });
+  });
+
+  it("máy chủ khác trả danh sách rỗng (không có tiêu đề lọc): như cũ, không báo lỗi", async () => {
+    expect(await new LlmClient(cfg, list([])).models()).toEqual([]);
+  });
+
+  it("Kiểm tra kết nối hiện đúng thông báo; listModels không ném lỗi", async () => {
+    let saved = {};
+    const c = await LocalController.create({
+      env: new MemoryEnv("/w", {}), realFs: false, fetchImpl: list([], { "x-neu-models": "filtered" }), defaults: { baseUrl: BASE },
+      store: { load: async () => saved, save: async (s: any) => void (saved = s) }, trust: { isTrusted: async () => false, setTrusted: async () => undefined },
+    } as any);
+    expect(await c.testConnection()).toEqual({ ok: false, message: "Tài khoản của bạn chưa được dùng mô hình nào, liên hệ quản trị viên." });
+    expect(await c.listModels()).toEqual([]);
+  });
+});
