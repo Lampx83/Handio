@@ -41,7 +41,7 @@ class Manifest(unittest.TestCase):
         m = re.search(r"(grep -E '\^\(FAIL\|ERROR\)[^\n]*?cut -c1-200)", s)
         self.assertTrue(m, "install-diag.sh không in tên bài thử đỏ")
         log = 'Traceback (most recent call last):\n  File "/opt/x/test_a.py", line 3, in test_b\n    self.assertEqual(1, 2)\nAssertionError: 1 != 2\n\n' \
-              "FAIL: test_b (test_a.A.test_b)\nERROR: test_c (test_a.A.test_c)\nPermissionError: [Errno 13] Permission denied\nRan 3 tests\n"
+              "FAIL: test_b (test_a.A.test_b)\nERROR: test_c (test_a.A.test_c)\nPermissionError: [Errno 13] Permission denied\nsqlite3.OperationalError: no such column: model\nRan 3 tests\n"
         import subprocess, tempfile
         with tempfile.TemporaryDirectory() as d:
             open(os.path.join(d, ".unittest.log"), "w", encoding="utf-8").write(log)
@@ -50,6 +50,7 @@ class Manifest(unittest.TestCase):
         self.assertIn("ERROR: test_c", out)
         self.assertIn("AssertionError: 1 != 2", out)
         self.assertIn("PermissionError", out)
+        self.assertIn("sqlite3.OperationalError: no such column: model", out)   # tên lỗi có chữ số (lần đầu bị bỏ sót)
         self.assertNotIn("File ", out)
         self.assertNotIn("Ran 3", out)
 

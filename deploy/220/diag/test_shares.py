@@ -276,9 +276,24 @@ class Reader(unittest.TestCase):
         self.path = os.path.join(self.tmp, "s.db")
         db = SH.ShareDB(self.path, now=lambda: 2_000_000)
         self.sid = db.create("lan.nguyen@neu.edu.vn", SH.clean_payload(payload_v2())[0])["id"]
+        # máy 220 chạy kiểm thử qua sudo (SUDO_USER có giá trị) mà khi đó share_read bỏ qua --db và đọc CSDL THẬT: các bài này kiểm đường
+        # chạy thường nên bỏ SUDO_USER; hành vi dưới sudo có bài riêng (test_under_sudo_ignores_db_flag)
+        self._env = {k: os.environ.pop(k) for k in ("SUDO_USER", "NEU_SHARES_DB") if k in os.environ}
 
     def tearDown(self):
+        os.environ.update(self._env)
         shutil.rmtree(self.tmp, True)
+
+    def test_under_sudo_ignores_db_flag(self):
+        # qua sudo chỉ được đọc đúng CSDL chia sẻ: --db trỏ nơi khác bị bỏ qua (ở đây CSDL mặc định không mở được nên trả 2, không đọc self.path)
+        os.environ["SUDO_USER"] = "neu-deploy"
+        os.environ["NEU_SHARES_DB"] = os.path.join(self.tmp, "khong-co.db")
+        try:
+            code, text = self.run_reader(self.sid)
+        finally:
+            del os.environ["SUDO_USER"], os.environ["NEU_SHARES_DB"]
+        self.assertEqual(code, 2)
+        self.assertNotIn("Làm app trắc nghiệm", text)
 
     def run_reader(self, *args):
         import io

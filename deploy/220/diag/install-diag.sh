@@ -80,7 +80,7 @@ done
 if [ -z "${NEU_DIAG_SKIP_TESTS:-}" ] && ls "$HERE"/test_*.py >/dev/null 2>&1; then
   echo "Chạy kiểm thử…"
   # thất bại: in TÊN bài đỏ + dòng lỗi (không in traceback/dữ liệu) để nhật ký triển khai của CI cho biết nguyên nhân mà không cần vào máy chủ
-  (cd "$HERE" && python3 -m unittest discover -s . -p 'test_*.py' >/dev/null 2>"$HERE/.unittest.log") || { echo "Kiểm thử THẤT BẠI (xem $HERE/.unittest.log). Dừng."; grep -E '^(FAIL|ERROR): |^[A-Za-z.]*(Error|Exception): ' "$HERE/.unittest.log" | head -n 20 | cut -c1-200; exit 1; }
+  (cd "$HERE" && python3 -m unittest discover -s . -p 'test_*.py' >/dev/null 2>"$HERE/.unittest.log") || { echo "Kiểm thử THẤT BẠI (xem $HERE/.unittest.log). Dừng."; grep -E '^(FAIL|ERROR): |^[A-Za-z0-9_.]*(Error|Exception): ' "$HERE/.unittest.log" | head -n 20 | cut -c1-200; exit 1; }
   rm -f "$HERE/.unittest.log"
 fi
 
