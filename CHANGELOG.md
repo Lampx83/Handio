@@ -5,6 +5,13 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Nút DESIGN.md trên khung xem trước Design**: có tệp thì mở để xem, sửa; chưa có thì nhờ agent tạo (như gõ `/designmd`).
+- **Chỉ vào để sửa nhiều chỗ một lần**: chọn một phần, gõ yêu cầu, bấm **+ Ghi chú**, chọn tiếp phần khác… rồi **Gửi** một lần. Mỗi ghi chú có số thứ tự trên bản xem trước, bỏ từng cái được; tối đa 8 ghi chú mỗi lần.
+
+### Thay đổi
+- **Chỉ vào để sửa riêng tư hơn**: phần trích từ thiết kế gửi cho agent nay tự che giá trị ô nhập (kể cả mật khẩu), chữ trong ô nhập nhiều dòng, dữ liệu nhúng dài, chú thích ẩn và token/mật khẩu trong đường dẫn.
+
 ## [0.8.21] - 2026-10-18
 
 ### Thêm
