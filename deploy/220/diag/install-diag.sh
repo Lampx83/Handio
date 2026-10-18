@@ -45,13 +45,16 @@ TLS_FILE=$ETC/tls-hosts
 FRONT_IP=@@SITE_222_INTERNAL_IP@@                # máy 222 (giữ tên miền, HTTPS)
 VAR=/var/lib/neu-agent
 USER_NAME=neu-diag
+# Lệnh CHỈ ĐỌC một bản chia sẻ cho nhóm phát triển (kể cả trợ lý AI): nhóm neu-diag chạy được dưới tài khoản neu-diag, không gì khác
+SHARE_READ=/usr/local/sbin/neu-share-read
+SHARE_SUDO=/etc/sudoers.d/neu-share-read
 SNIP=/etc/nginx/snippets/neu-agent-locations.conf
 TS=$(date +%Y%m%d%H%M%S)
 BAK=/var/backups/neu-agent-diag/$TS
 SERVICES="neu-agent-diag.service neu-agent-accounts.service"
 TIMERS="neu-agent-diag-report.timer neu-agent-healthz.timer neu-agent-diag-stats.timer neu-agent-diag-alert.timer"
 UNITS="neu-agent-diag.service neu-agent-accounts.service neu-agent-diag-report.service neu-agent-diag-report.timer neu-agent-healthz.service neu-agent-healthz.timer neu-agent-diag-stats.service neu-agent-diag-stats.timer neu-agent-diag-alert.service neu-agent-diag-alert.timer"
-CODE="collector.py report.py stats.py charts.py pages.py healthz.py schema.json accounts.py accounts.html accounts.js quota_admin.py quota.html quota.js feedback.py feedback.html feedback.js shares.py shares.html shares.js admin.js alerts.py"
+CODE="collector.py report.py stats.py charts.py pages.py healthz.py schema.json accounts.py accounts.html accounts.js quota_admin.py quota.html quota.js feedback.py feedback.html feedback.js shares.py shares.html shares.js share_read.py admin.js alerts.py"
 
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
 command -v python3 >/dev/null && command -v systemctl >/dev/null || { echo "Thiếu python3 hoặc systemctl."; exit 1; }
@@ -60,7 +63,7 @@ if [ "${1:-}" = "--uninstall" ]; then
   for t in $TIMERS; do systemctl disable --now "$t" 2>/dev/null || true; done
   for s in $SERVICES; do systemctl disable --now "$s" 2>/dev/null || true; done
   for u in $UNITS; do rm -f "$UNITDIR/$u"; done
-  rm -rf "$DROPIN_DIR" "$ALERT_DROPIN" "$HEALTH_DROPIN" "$LIB" "$LROT"; systemctl daemon-reload
+  rm -rf "$DROPIN_DIR" "$ALERT_DROPIN" "$HEALTH_DROPIN" "$LIB" "$LROT" "$SHARE_READ" "$SHARE_SUDO"; systemctl daemon-reload
   echo "Đã gỡ dịch vụ chẩn đoán. Còn lại (xoá tay nếu muốn): $VAR, $ETC/diag-secret, $ETC/admins.txt, người dùng $USER_NAME."
   exit 0
 fi
@@ -87,7 +90,8 @@ done
 # ---- kiểm thử trước khi cài (nhanh, không chạm vào hệ thống)
 if [ -z "${NEU_DIAG_SKIP_TESTS:-}" ] && ls "$HERE"/test_*.py >/dev/null 2>&1; then
   echo "Chạy kiểm thử…"
-  (cd "$HERE" && python3 -m unittest discover -s . -p 'test_*.py' >/dev/null 2>"$HERE/.unittest.log") || { echo "Kiểm thử THẤT BẠI (xem $HERE/.unittest.log). Dừng."; exit 1; }
+  # thất bại: in TÊN bài đỏ + dòng lỗi (không in traceback/dữ liệu) để nhật ký triển khai của CI cho biết nguyên nhân mà không cần vào máy chủ
+  (cd "$HERE" && python3 -m unittest discover -s . -p 'test_*.py' >/dev/null 2>"$HERE/.unittest.log") || { echo "Kiểm thử THẤT BẠI (xem $HERE/.unittest.log). Dừng."; grep -E '^(FAIL|ERROR): |^[A-Za-z0-9_.]*(Error|Exception): ' "$HERE/.unittest.log" | head -n 20 | cut -c1-200; exit 1; }
   rm -f "$HERE/.unittest.log"
 fi
 
@@ -95,7 +99,7 @@ fi
 MANAGED=()
 for c in $CODE; do MANAGED+=("$LIB/$c"); done
 for u in $UNITS; do MANAGED+=("$UNITDIR/$u"); done
-MANAGED+=("$LROT" "$DROPIN_DIR/llm.conf" "$ALERT_DROPIN/net.conf" "$HEALTH_DROPIN/probe.conf" "$LIB/users.sh")
+MANAGED+=("$LROT" "$DROPIN_DIR/llm.conf" "$ALERT_DROPIN/net.conf" "$HEALTH_DROPIN/probe.conf" "$LIB/users.sh" "$SHARE_READ" "$SHARE_SUDO")
 mkdir -p "$BAK"
 declare -A EXISTED
 for f in "${MANAGED[@]}"; do
@@ -148,6 +152,13 @@ for c in $CODE; do install -m 0644 -o root -g root "$HERE/$c" "$LIB/$c"; done
 install -m 0755 -o root -g root "$HERE/../users.sh" "$LIB/users.sh"   # dịch vụ phụ (root) gọi đúng bản này để ghi tệp mật khẩu
 for u in $UNITS; do install -m 0644 -o root -g root "$HERE/$u" "$UNITDIR/$u"; done
 install -m 0644 -o root -g root "$HERE/neu-agent-diag.logrotate" "$LROT"
+install -m 0755 -o root -g root "$HERE/share_read.py" "$SHARE_READ"
+# sudoers: chỉ đúng lệnh đọc này, chạy dưới neu-diag (chủ CSDL), không phải root; kiểm cú pháp trước khi đặt vào /etc/sudoers.d
+SUDO_TMP=$(mktemp)
+printf '%s\n' "# Tạo bởi install-diag.sh: nhóm neu-diag đọc một bản chia sẻ (chỉ đọc, không lộ người chia sẻ)" \
+  "%neu-diag ALL=(neu-diag) NOPASSWD: $SHARE_READ, $SHARE_READ *" > "$SUDO_TMP"
+visudo -cf "$SUDO_TMP" >/dev/null || { rm -f "$SUDO_TMP"; echo "sudoers cho neu-share-read không hợp lệ"; exit 1; }
+install -m 0440 -o root -g root "$SUDO_TMP" "$SHARE_SUDO"; rm -f "$SUDO_TMP"
 if [ -s "$LLMKEY" ]; then
   chmod 600 "$LLMKEY"
   mkdir -p "$DROPIN_DIR"

@@ -63,6 +63,11 @@ export interface UpdaterDeps {
   now?(): number;
 }
 
+/** Ứng dụng có tự tải/cài bản mới không: bản cài từ Microsoft Store (MSIX, `process.windowsStore`) thì không, Store lo cập nhật. */
+export function selfUpdateAllowed(p: { windowsStore?: boolean }): boolean {
+  return p.windowsStore !== true;
+}
+
 /** Chọn tệp cài đặt hợp nền tảng/kiến trúc (macOS: đúng chip; Windows: trình cài .exe ưu tiên hơn .zip). */
 export function pickFile(files: LatestFile[], platform: string, arch: string): LatestFile | undefined {
   if (platform === "mac") return files.find((f) => /mac-/i.test(f.name) && f.name.toLowerCase().includes(arch === "arm64" ? "arm64" : "x64") && /\.dmg$/i.test(f.name));

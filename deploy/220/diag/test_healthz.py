@@ -296,7 +296,7 @@ class TlsCert(Base):
         H = self.load()
         self.assertEqual(H.parse_targets("ai.example.vn@192.0.2.22:443, b.example.vn@192.0.2.23, c.example.vn"),
                          [("ai.example.vn", "192.0.2.22", 443), ("b.example.vn", "192.0.2.23", 443), ("c.example.vn", "c.example.vn", 443)])
-        for bad in ("ai example", "ai.example.vn@x y", "a.vn@1.2.3.4:99999", "-a.vn"):
+        for bad in ("ai example", "ai.example.vn@x y", "a.vn@192.0.2.4:99999", "-a.vn"):
             self.assertEqual(H.parse_targets(bad), [], repr(bad))
 
     def test_days_and_levels(self):

@@ -186,12 +186,26 @@ Khi cả hai cùng tăng: kiểm tra `maxOutputTokens`, mô tả công cụ và 
 |---|---|
 | Đường đi | ứng dụng → `POST /agent/share` (SSO, ≤ 512 KB) → `shares.py` → SQLite `/var/lib/neu-agent/feedback/shares.db` (0700, `neu-diag`) |
 | Người dùng được báo | người có liên kết (đã đăng nhập) VÀ nhóm phát triển đều đọc được; che tự động; thu hồi bất cứ lúc nào |
-| Gồm | tiêu đề, các lượt hỏi/đáp, tên công cụ + tóm tắt ngắn thao tác (≤ 400 ký tự); tab, phiên bản, nền tảng |
-| Không gồm | nội dung tệp, kết quả công cụ dài, đường dẫn đầy đủ của máy, khoá/mật khẩu (che ở máy người dùng và che lần nữa ở máy chủ) |
+| Gồm (bản v2, từ 0.8.21) | tiêu đề; **toàn bộ** cuộc trò chuyện, kể cả phần trước các lần tóm tắt ngữ cảnh; lời người dùng gõ; trả lời của agent; mỗi lần gọi công cụ kèm **đối số** (≤ 1.500 ký tự) và **phần đầu kết quả** (≤ 1.500; đọc tệp ≤ 600), đánh dấu lỗi; **lời nhắc của Handio** (`[Hệ thống] …`) và **bản tóm tắt ngữ cảnh**; tab, phiên bản, nền tảng, **mô hình**, **chế độ quyền** |
+| Không gồm | tệp người dùng đính kèm bằng @, phần sau của kết quả dài, khoá/mật khẩu và dữ liệu cá nhân (che ở máy người dùng rồi che lần nữa ở máy chủ). Hộp chia sẻ báo rằng bản chia sẻ có thể chứa một đoạn ngắn nội dung tệp qua kết quả công cụ |
 | Liên kết | mã ngẫu nhiên 22 ký tự; trang đọc là HTML tĩnh, không script, CSP chặt, `noindex`; chưa đăng nhập thì chuyển tới đăng nhập |
 | Giới hạn | 20 liên kết/ngày và tối đa 200 liên kết đang hoạt động mỗi người; ≤ 400 mục, ≤ 300 KB |
 | Ai quản lý | chỉ quản trị viên ở `/agent/admin/shares`: xem, tìm, xoá; **tải JSONL** (tên người chia sẻ thay bằng mã giả danh) để phân tích |
 | Thu hồi | người chia sẻ thu hồi ở hộp 🔗 (xoá hẳn bản chụp); quản trị xoá bất kỳ |
 
 Khi dùng JSONL để cải tiến: đừng đưa nội dung ra ngoài hệ thống; ưu tiên mẫu lỗi (công cụ thất bại, hiểu sai yêu cầu) và chuyển thành ca kiểm thử đã ẩn danh.
+
+### Đọc một bản chia sẻ để cải tiến (cho nhóm phát triển và trợ lý AI)
+
+Người dùng gửi liên kết `https://ai.neu.edu.vn/agent/share/<mã>`. Người trong nhóm `neu-diag` trên máy 220 đọc được bản đó bằng lệnh **chỉ đọc**, không cần đăng nhập trang quản trị:
+
+```bash
+ssh 220 sudo -n -u neu-diag /usr/local/sbin/neu-share-read <mã hoặc liên kết>          # Markdown: người dùng, agent, công cụ + kết quả, nhắc hệ thống
+ssh 220 sudo -n -u neu-diag /usr/local/sbin/neu-share-read <mã> --json                 # JSON
+ssh 220 sudo -n -u neu-diag /usr/local/sbin/neu-share-read --list 20                   # 20 bản gần nhất (mã, ngày, tab, phiên bản, mô hình, tiêu đề)
+```
+
+- Mở CSDL ở chế độ chỉ đọc, không tăng lượt xem, **không in người chia sẻ**. Bản đã thu hồi thì không đọc được.
+- sudoers (`/etc/sudoers.d/neu-share-read`, do `install-diag.sh` tạo, kiểm bằng `visudo -cf`) chỉ cho nhóm `neu-diag` chạy **đúng lệnh này** dưới tài khoản `neu-diag`, không phải root. Thêm người vào nhóm: `sudo ~/neu-agent-220/quota/quota.sh capture grant <user>`.
+- Trợ lý AI (Claude Code) chỉ cần quy tắc cho phép hẹp, ví dụ `Bash(ssh 220 sudo -n -u neu-diag /usr/local/sbin/neu-share-read:*)`, rồi dán liên kết chia sẻ cho nó. Kết quả phân tích nên thành ca kiểm thử đã ẩn danh (`FakeLlm`), không chép nội dung vào kho mã.
 

@@ -6,7 +6,24 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Tải bản cài macOS và Windows ngay trên trang giới thiệu**: đầu trang có nút tải bản mới nhất cho macOS (chip Apple hoặc Intel) và Windows, kèm mã SHA-256, không cần đăng nhập trước. Mở ứng dụng vẫn cần đăng nhập tài khoản trường.
+- **Trang chính sách quyền riêng tư** (`/agent/guide/privacy.html`, tiếng Việt và tiếng Anh): ứng dụng dùng dữ liệu nào, gửi đi đâu, giữ bao lâu, cách tắt hoặc yêu cầu xoá. Có link ở chân trang giới thiệu và trang hướng dẫn.
+- **Chuẩn bị bản Windows trên Microsoft Store**: cài từ Store sẽ không còn cảnh báo "nhà phát hành không xác định", và Store tự cập nhật ứng dụng (bản cài từ Store ẩn mục "Kiểm tra bản cập nhật" trong menu Tệp).
 - **Kiểm tra sức khoẻ máy chủ thử chat thật** (quản trị viên): mỗi 15 phút gửi một câu rất ngắn tới mô hình và đo thời gian ra chữ đầu, nên mô hình treo không còn bị báo "tốt". Trang quản trị và tin cảnh báo nhắc trước 30 ngày khi chứng chỉ HTTPS hoặc mã bí mật đăng nhập Microsoft sắp hết hạn (khai ngày ở `/etc/neu-agent/entra-secret-expires`, rồi chạy lại `install-diag.sh`).
+
+### Thay đổi
+- **Chia sẻ cuộc trò chuyện đầy đủ hơn để nhóm phát triển hiểu và sửa lỗi**: bản chia sẻ nay gồm cả các thao tác của agent (lệnh, tệp đã ghi/sửa) kèm phần đầu kết quả, chỗ nào bị lỗi, lời nhắc của hệ thống, cùng phiên bản, mô hình và chế độ đang dùng. Khoá/mật khẩu và dữ liệu cá nhân vẫn được tự che; tệp bạn đính kèm bằng @ không được gửi.
+
+### Sửa
+- **Chia sẻ báo "Cuộc trò chuyện chưa có nội dung để chia sẻ" dù đã trò chuyện nhiều lượt**: xảy ra sau khi agent tự tóm tắt hội thoại để giải phóng ngữ cảnh. Nay phần trước khi tóm tắt được giữ lại, nên vẫn chia sẻ được toàn bộ và lịch sử đã lưu không mất phần đầu.
+- **Chọn "Toàn quyền" rồi mà agent vẫn hỏi từng lệnh**: khi mở lại cuộc trò chuyện (kể cả sau khi ứng dụng tự cập nhật), tạo cuộc trò chuyện mới hay lưu hướng dẫn dự án, chế độ bị trả về mặc định nhưng nhãn dưới ô nhập vẫn ghi "Toàn quyền". Nay chế độ bạn chọn được giữ trong cùng dự án, và nhãn luôn đúng với chế độ thật.
+- **Vá lỗ hổng bảo mật (mức thấp) của thư viện hiển thị công thức toán** (KaTeX), cập nhật lên bản 0.18.2. Công thức hiển thị như cũ.
+
+## [0.8.20] - 2026-10-15
+
+### Sửa
+- **Agent không còn xoá mất nội dung tệp khi làm việc lâu** (tab Code): trước đây trong cuộc trò chuyện dài, agent đôi khi ghi một dòng kiểu `[16547 ký tự đã ghi vào tệp…]` đè lên tệp thật (ví dụ toàn bộ CSS biến mất) hoặc sửa mã mãi không khớp. Nay việc ghi như vậy bị chặn và agent được nhắc đọc lại tệp trước khi sửa.
+- **Agent sửa tệp ít bị trượt "Không tìm thấy old_string" hơn**: khi đoạn agent chép lại lệch tệp thật chỉ vì thụt dòng, dấu cách thừa, dòng trống thiếu/thừa, lỡ kèm số dòng, kiểu xuống dòng Windows (CRLF) hay dạng gõ dấu tiếng Việt khác nhau, agent vẫn sửa được, nhưng chỉ khi đoạn đó là duy nhất trong tệp (và báo rõ là đã khớp gần đúng). Tệp CRLF giữ nguyên kiểu xuống dòng sau khi sửa. Khi vẫn không khớp, agent được chỉ ra đúng dòng nào khác với tệp, nên lần sửa sau trúng ngay.
 
 ## [0.8.19] - 2026-10-12
 

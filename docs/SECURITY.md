@@ -14,7 +14,7 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 
 ## 2. Các lớp bảo vệ đã có
 
-**Truy cập mạng:** mọi đường dẫn dưới `/agent/` bắt buộc đăng nhập (SSO/tài khoản). Ngoại lệ chủ ý và duy nhất: đường dẫn đúng `/agent/` khi **chưa** đăng nhập trả về trang giới thiệu tĩnh (cùng tệp với `/agent/guide/`, không script, CSP chặt, không nhận POST, không lộ giao diện hay dữ liệu); `e2e-sso.mjs` kiểm tra điều này và kiểm tra `/agent/index.html` vẫn chuyển tới đăng nhập.
+**Truy cập mạng:** mọi đường dẫn dưới `/agent/` bắt buộc đăng nhập (SSO/tài khoản). Ngoại lệ chủ ý thứ nhất: đường dẫn đúng `/agent/` khi **chưa** đăng nhập trả về trang giới thiệu tĩnh (cùng tệp với `/agent/guide/`, không script, CSP chặt, không nhận POST, không lộ giao diện hay dữ liệu); `e2e-sso.mjs` kiểm tra điều này và kiểm tra `/agent/index.html` vẫn chuyển tới đăng nhập. Ngoại lệ thứ hai (chủ ý): `/agent/download/latest/` chỉ chứa bản cài mới nhất + `SHA256SUMS.txt` để tải từ trang giới thiệu (chỉ GET/HEAD, không liệt kê thư mục, `limit_conn` 4). Bản cài không chứa khoá hay bí mật, ứng dụng vẫn bắt đăng nhập khi mở; `latest.json` và phần còn lại của `/agent/download/` vẫn sau đăng nhập (`e2e-sso.mjs`, `e2e-deploy.mjs` kiểm tra).
 
 **Quyền và kiểm soát của người dùng**
 - Mọi thao tác ghi tệp/chạy lệnh/tải web đều **xin phép**, kèm phần thay đổi (diff) hoặc bản mô tả. Chế độ mặc định **Tự động** chỉ tự chạy việc thường ngày trong dự án (sửa tệp, build/test/cài gói, git cục bộ) và vẫn hỏi khi xoá, đụng mạng, tệp bí mật, lệnh lạ hoặc sau khi đọc nội dung web; chế độ “Toàn quyền” là tuỳ chọn có chủ đích, có ở cả ba tab (quản trị viên có thể tắt bằng policy.json).
@@ -34,6 +34,7 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 
 **Ứng dụng Desktop (Electron)**
 - Phiên bản Electron **mới nhất** tại thời điểm đóng gói (44.x); `npm audit` cho phần mã chạy thực tế: 0 lỗ hổng đã biết.
+- Công cụ dev/đóng gói (vitest, vite, esbuild, electron-builder) **không vào gói cài** (gói chỉ có `dist/` đã gộp). Cảnh báo còn mở có chủ đích: `sprintf-js` (electron-builder → @electron/get → global-agent → roarr), chưa có bản vá, chỉ chạy lúc đóng gói trên máy CI/nhà phát triển, không nhận dữ liệu từ người dùng.
 - Giao diện chạy trong cửa sổ cách ly: `sandbox`, `contextIsolation`, không Node, CSP `default-src 'none'; connect-src 'none'`; giao diện phục vụ qua giao thức riêng `app://` (không `file://`) với kiểm tra đường dẫn chống thoát thư mục; **mọi yêu cầu mạng của giao diện bị huỷ**; điều hướng/cửa sổ mới/webview bị chặn; DevTools tắt trong bản phát hành; mọi quyền (camera, mic, vị trí…) bị từ chối.
 - **IPC** giữa giao diện và tiến trình chính: danh sách lệnh cố định, kiểm tra người gửi, kiểm tra kiểu/kích thước từng tham số, giới hạn tần suất, không lộ chi tiết lỗi nội bộ; giao diện **không thể** đặt quy tắc quyền hay chế độ qua IPC.
 - **Electron Fuses** tắt `RunAsNode`, `NODE_OPTIONS`, `--inspect`; chỉ nạp ứng dụng từ **asar có kiểm tra toàn vẹn**; mã hoá cookie.
@@ -102,6 +103,8 @@ Gửi mô tả và cách tái hiện **riêng** cho người quản trị dự �
 **Trang báo cáo của quản trị viên** (`/agent/admin/*.html`): CSP `default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'` — chỉ chạy được `admin.js` cùng nguồn (sắp xếp/lọc bảng, tự tải lại; không chèn HTML, không `eval`, không gọi mạng — có kiểm thử chặn các từ khoá đó), không script nhúng, không ra mạng, không đặt vào khung. Mọi chữ do người dùng gõ trong trang đều được thoát HTML khi sinh trang.
 
 **Cảnh báo chủ động** (`neu-agent-diag-alert`, tuỳ chọn): dịch vụ riêng, mặc định `PrivateNetwork=yes`, chỉ đọc `stats.json`/`health.json` và ghi `/var/lib/neu-agent/alerts`. Chỉ khi quản trị viên đặt URL webhook https ở `/etc/neu-agent/alert-webhook` (0600, root) thì drop-in nạp nó qua `LoadCredential` và mở mạng cho riêng dịch vụ này; dịch vụ thống kê (đọc dữ liệu chẩn đoán) vẫn không có mạng. Tin gửi đi chỉ có số liệu tổng hợp. URL webhook là bí mật: không vào kho, nhật ký hay câu trả lời; chỉ nhận `https://`, không khoảng trắng.
+
+**Đọc bản chia sẻ bằng dòng lệnh** (`neu-share-read`, từ 0.8.21): bản chia sẻ v2 có thêm đối số và phần đầu kết quả công cụ (có thể chứa đoạn ngắn nội dung tệp; hộp chia sẻ nói rõ trước khi người dùng đồng ý), lời nhắc hệ thống và bản tóm tắt ngữ cảnh; vẫn che khoá/dữ liệu cá nhân ở cả hai đầu. Lệnh đọc chạy dưới tài khoản `neu-diag` (không phải root) qua một dòng sudoers chỉ cho nhóm `neu-diag` gọi đúng tệp `/usr/local/sbin/neu-share-read` (root sở hữu, 0755); mở CSDL `mode=ro`, chỉ nhận mã 22 ký tự hoặc `--list N`, khi chạy qua sudo bỏ qua `--db`, không in người chia sẻ, bản đã thu hồi không đọc được. Kiểm thử: `test_shares.py` (Reader).
 
 **Liên kết tài khoản ↔ mã giả danh**: trang Tài khoản (chỉ quản trị viên, vốn đã hiện email thật) thêm cột dẫn tới trang hoạt động `u-<mã>.html`; mã tính phía máy chủ từ `diag-secret`, không gửi bí mật ra ngoài. Không thêm dữ liệu mới nào vào các tệp chẩn đoán.
 

@@ -159,6 +159,9 @@ PY
   done
   (cd "$DLROOT" && sha256sum NEU-Agent-* > .SHA256SUMS.new && chmod 644 .SHA256SUMS.new && mv -f .SHA256SUMS.new SHA256SUMS.txt)
   cp -f "$d/latest.json" "$DLROOT/.latest.new"; chmod 644 "$DLROOT/.latest.new"; mv -f "$DLROOT/.latest.new" "$DLROOT/latest.json"
+  # 5) tên cố định cho nút tải công khai trên trang giới thiệu (latest/): dùng script của bản web đang chạy (bản sao của root); lỗi không chặn phát hành
+  local cur; cur=$(current)
+  if [ -n "$cur" ] && [ -f "$cur/dl-links.sh" ]; then bash "$cur/dl-links.sh" "$DLROOT" || echo "Cảnh báo: không cập nhật được $DLROOT/latest/."; fi
   PUBLISHED_VERSION="$ver"
 }
 
