@@ -1,7 +1,7 @@
 # Dựng gói MSIX cho Microsoft Store trên máy Windows của GitHub (không cần máy Windows riêng). Xem docs/RELEASE-SIGNING.md, mục Microsoft Store.
 #   - Chạy tay (Actions → Store (MSIX) → Run workflow): cần biến repo STORE_IDENTITY_NAME, STORE_PUBLISHER, STORE_PUBLISHER_DISPLAY_NAME
 #     (Partner Center → sản phẩm → Product identity; không phải bí mật). Tải tệp .appx ở mục Artifacts rồi nộp ở Partner Center.
-#   - Pull request đụng tới phần đóng gói Store: dựng THỬ (thiếu STORE_* thì dùng danh tính giả) để biết còn đóng gói được.
+#   - Pull request đụng tới phần đóng gói Store: dựng để biết còn đóng gói được (có STORE_* thì dùng danh tính thật, thiếu thì dùng danh tính giả).
 name: Store (MSIX)
 on:
   workflow_dispatch:
@@ -55,6 +55,6 @@ jobs:
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: msix${{ github.event_name == 'pull_request' && '-thu' || '' }}
+          name: msix   # gói thật hay thử: xem dòng "Gói Store:" trong nhật ký bước dựng
           path: apps/desktop/release/*.appx
           if-no-files-found: error
