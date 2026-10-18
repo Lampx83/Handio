@@ -51,6 +51,7 @@ export function normalizeSettings(raw: Partial<Settings> | null | undefined, def
   s.hooks = sanitizeHooks(r.hooks);
   s.mcpServers = sanitizeMcpServers(r.mcpServers);
   if (r.tasks !== undefined) s.tasks = sanitizeTasks(r.tasks);
+  if (r.taskNotify !== undefined) s.taskNotify = r.taskNotify !== false;
   // container (tab Code): chỉ giữ giá trị đúng kiểu; ảnh/cổng sai bị bỏ
   for (const k of ["container", "containerNetwork"] as const) if (s[k] !== undefined && typeof s[k] !== "boolean") delete s[k];
   if (s.containerPorts !== undefined) s.containerPorts = sanitizePorts(s.containerPorts);

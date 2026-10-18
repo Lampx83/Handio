@@ -186,14 +186,18 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   // Tác vụ định kỳ: lõi kiểm tra lại toàn bộ (sanitizeEvery/newTask); ở đây chỉ chặn kiểu và độ dài
   taskList: (a) => a.length === 0,
   taskAdd: (a) => a.length === 1 && isObj(a[0]) && Object.keys(a[0]).every((k) => k === "name" || k === "prompt" || k === "every") && str(a[0].name, 60) && str(a[0].prompt, 2000) && isObj(a[0].every)
-    && Object.keys(a[0].every).every((k) => k === "kind" || k === "n" || k === "day" || k === "at")
-    && (a[0].every.kind === "minutes" || a[0].every.kind === "daily" || a[0].every.kind === "weekly")
+    && Object.keys(a[0].every).every((k) => k === "kind" || k === "n" || k === "day" || k === "at" || k === "date")
+    && (a[0].every.kind === "minutes" || a[0].every.kind === "daily" || a[0].every.kind === "weekly" || a[0].every.kind === "once")
+    && (a[0].every.date === undefined || (typeof a[0].every.date === "string" && /^\d{4}-\d\d-\d\d$/.test(a[0].every.date)))
     && (a[0].every.n === undefined || (Number.isInteger(a[0].every.n) && (a[0].every.n as number) > 0 && (a[0].every.n as number) <= 10_080))
     && (a[0].every.day === undefined || (Number.isInteger(a[0].every.day) && (a[0].every.day as number) >= 0 && (a[0].every.day as number) <= 6))
     && (a[0].every.at === undefined || (typeof a[0].every.at === "string" && /^\d\d:\d\d$/.test(a[0].every.at))),
   taskSet: (a) => a.length === 2 && idStr(a[0]) && typeof a[1] === "boolean",
   taskRemove: (a) => a.length === 1 && idStr(a[0]),
   taskRunNow: (a) => a.length === 1 && idStr(a[0]),
+  taskStop: (a) => a.length === 0,
+  taskUndo: (a) => a.length === 1 && idStr(a[0]),
+  taskNotify: (a) => a.length === 0 || (a.length === 1 && typeof a[0] === "boolean"),
   exportDesign: (a) => a.length >= 3 && a.length <= 4 && str(a[0], 1000) && (a[1] === "pdf" || a[1] === "png") && Number.isInteger(a[2]) && (a[2] as number) >= 200 && (a[2] as number) <= 4000 && (a[3] === undefined || (Number.isInteger(a[3]) && (a[3] as number) >= 100 && (a[3] as number) <= 20000)),
 };
 

@@ -1,10 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, safeStorage, session, shell, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, protocol, safeStorage, session, shell, type MenuItemConstructorOptions } from "electron";
 import { accessSync, constants as fsConstants, existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
-import { brandName, buildWorkSamples, cleanProjectName, containerImage, createMultiProject, decideContainer, ID_RE, LocalController, newId, parsePolicy, sanitizeImage, sanitizePorts, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type ContainerSettings, type DockerProbe, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SandboxStatus, type SessionEvent } from "@neu/agent-core";
+import { brandName, buildWorkSamples, cleanProjectName, containerImage, createMultiProject, decideContainer, ID_RE, LocalController, newId, parsePolicy, sanitizeImage, sanitizePorts, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type ContainerSettings, type DockerProbe, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SandboxStatus, type SessionEvent, type TaskLock } from "@neu/agent-core";
 import { cleanupContainers, cleanupContainersSync, containersStarted, findDocker, JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, probeDocker, readPackDirs, type ContainerChoice, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
@@ -285,6 +285,16 @@ function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<st
       }
     }
   };
+  const found = async (r: Registry, id: string): Promise<ProjectInfo> => {
+    const p = r.projects.find((x) => x.id === id);
+    if (!p?.path) throw new Error("Không có dự án này.");
+    try {
+      if (!(await fs.stat(p.path)).isDirectory()) throw new Error();
+    } catch {
+      throw new Error(`Thư mục của dự án này không còn: ${p.path}. Hãy bỏ dự án khỏi danh sách hoặc chép thư mục về đúng chỗ cũ.`);
+    }
+    return p;
+  };
   return {
     async list(): Promise<ProjectsState> {
       const r = await read();
@@ -292,17 +302,15 @@ function desktopHost(profile: Profile): ProjectHost & { activePath(): Promise<st
     },
     async open(id) {
       const r = await read();
-      const p = r.projects.find((x) => x.id === id);
-      if (!p?.path) throw new Error("Không có dự án này.");
-      try {
-        if (!(await fs.stat(p.path)).isDirectory()) throw new Error();
-      } catch {
-        throw new Error(`Thư mục của dự án này không còn: ${p.path}. Hãy bỏ dự án khỏi danh sách hoặc chép thư mục về đúng chỗ cũ.`);
-      }
+      const p = await found(r, id);
       p.lastUsed = Date.now();
       r.active = id;
       await write(r);
-      return makeEnv(profile, p.path);
+      return makeEnv(profile, p.path!);
+    },
+    // tác vụ định kỳ của dự án chưa mở: lấy thư mục mà không đổi "dự án đang mở"
+    async peek(id) {
+      return makeEnv(profile, (await found(await read(), id)).path!);
     },
     async create({ name }) {
       const r = await read();
@@ -413,7 +421,8 @@ async function buildController(profile: Profile): Promise<LocalController> {
     diagnostics: { endpoint: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/diag"), headers: (): Record<string, string> => auth?.peekHeaders() ?? {}, enabled: () => !!auth && !SMOKE, version: app.getVersion(), platform: process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : "linux" },
     authHosts: [new URL(__DEFAULT_BASE_URL__).host],
     realFs: true,
-    tasks: { enabled: !SMOKE }, // tác vụ định kỳ: chạy khi ứng dụng đang mở
+    // tác vụ định kỳ: một bộ lập lịch cho cả tab chạy cả dự án chưa mở (khi ứng dụng đang mở và đã đăng nhập); cả ứng dụng chỉ một tác vụ mỗi lúc
+    tasks: { enabled: !SMOKE, background: true, lock: taskLock, canRun: () => !auth || auth.status().signedIn },
     sandbox: profile === "code" && !SMOKE ? { status: sandboxStatus } : undefined,
     packs: loadPacks,
     toolsBase: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/"),
@@ -453,8 +462,27 @@ async function buildController(profile: Profile): Promise<LocalController> {
       if (dir) await shell.openPath(dir);
     },
   });
-  ctl.onEvent((e) => send(profile, e));
+  ctl.onEvent((e) => {
+    send(profile, e);
+    if (e.type === "task_done" && e.notify) notifyTask(e.name, e.status);
+  });
   return ctl;
+}
+
+const taskLock: TaskLock = { held: false };
+
+/** Thông báo hệ thống khi tác vụ định kỳ xong/lỗi: chỉ tên tác vụ (người dùng tự đặt) và trạng thái, không có kết quả hay tên tệp. Tắt được ở nút ⏰. */
+function notifyTask(name: string, status: "ok" | "error" | "skipped"): void {
+  if (SMOKE || status === "skipped" || !Notification.isSupported()) return;
+  const short = name.length > 40 ? name.slice(0, 39) + "…" : name;
+  const n = new Notification({ title: "Tác vụ định kỳ", body: `“${short}”: ${status === "ok" ? "đã xong" : "lỗi"}. Xem ở nút ⏰.` });
+  n.on("click", () => {
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  });
+  n.show();
 }
 
 /** Menu “Mở thư mục…”: thêm một thư mục có sẵn làm dự án và chuyển sang nó. */
