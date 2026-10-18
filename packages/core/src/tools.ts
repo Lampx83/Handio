@@ -222,52 +222,104 @@ export async function remember(ctx: ToolContext, p: string): Promise<void> {
   if (st) ctx.readFiles.set(p, st.mtimeMs);
 }
 
-function fuzzyReplace(text: string, oldS: string, newS: string): { text: string; line: number } | null {
-  const o = oldS.replace(/^\n+|\n+$/g, "").split("\n").map((l) => l.trim());
-  if (!o.length || !o.some(Boolean)) return null;
+// So khớp lỏng theo dòng: bỏ khác biệt khoảng trắng (thụt dòng, cuối dòng, \r, nhiều dấu cách) và dạng Unicode (chữ Việt dựng sẵn/tổ hợp).
+const looseKey = (l: string): string => l.normalize("NFC").replace(/\s+/g, " ").trim();
+const trimNl = (s: string): string => s.replace(/\r/g, "").replace(/^\n+|\n+$/g, "");
+const ind = (l: string): string => l.slice(0, l.length - l.trimStart().length);
+
+/** Thay khối dòng khớp lỏng với old_string; chỉ khi khớp DUY NHẤT. skipBlank: bỏ qua cả dòng trống thiếu/thừa. */
+function fuzzyReplace(text: string, oldS: string, newS: string, skipBlank: boolean): { text: string; line: number } | null {
+  const oldLines = trimNl(oldS).split("\n");
+  // [chỉ số dòng trong old_string, khoá so khớp]
+  const want = oldLines.map((l, k) => [k, looseKey(l)] as const).filter(([, key]) => !skipBlank || key);
+  if (!want.some(([, key]) => key)) return null;
   const lines = text.split("\n");
-  const stripped = lines.map((l) => l.trim());
+  const keys = lines.map(looseKey);
+  const cand = skipBlank ? keys.flatMap((k, i) => (k ? [i] : [])) : keys.map((_, i) => i);
   const hits: number[] = [];
-  for (let i = 0; i + o.length <= lines.length; i++) if (o.every((l, k) => stripped[i + k] === l)) hits.push(i);
+  for (let s = 0; s + want.length <= cand.length && hits.length < 2; s++) if (want.every(([, key], m) => keys[cand[s + m]] === key)) hits.push(s);
   if (hits.length !== 1) return null;
-  const i = hits[0];
-  const oldLines = oldS.replace(/^\n+|\n+$/g, "").split("\n");
-  const ind = (l: string) => l.slice(0, l.length - l.trimStart().length);
-  // chênh lệch thụt dòng giữa từng dòng của old_string và dòng thật trong file; dòng mới dùng chênh lệch của dòng tương ứng (hoặc dòng cuối)
-  const deltas = oldLines.map((l, k) => ind(lines[i + k]).length - ind(l).length);
-  const fillChar = ind(lines[i])[0] ?? " ";
-  const repl = newS.replace(/^\n+|\n+$/g, "").split("\n").map((l, j) => {
-    if (!l.trim()) return l;
+  const at = new Map(want.map(([k], m) => [k, cand[hits[0] + m]]));
+  const start = cand[hits[0]];
+  const end = cand[hits[0] + want.length - 1];
+  // chênh lệch thụt dòng giữa từng dòng có chữ của old_string và dòng thật trong file; dòng mới dùng chênh lệch của dòng tương ứng (hoặc dòng cuối)
+  const deltas = oldLines.map((l, k) => (l.trim() && at.has(k) ? ind(lines[at.get(k)!]).length - ind(l).length : NaN));
+  const firstD = deltas.find((d) => !Number.isNaN(d)) ?? 0;
+  for (let k = 0; k < deltas.length; k++) if (Number.isNaN(deltas[k])) deltas[k] = k ? deltas[k - 1] : firstD;
+  const fillChar = lines.slice(start, end + 1).map(ind).find(Boolean)?.[0] ?? " ";
+  // giữ kiểu xuống dòng của tệp (CRLF trên Windows)
+  const cr = text.includes("\r\n") ? "\r" : "";
+  const repl = trimNl(newS).split("\n").map((l, j, all) => {
     const d = deltas[Math.min(j, deltas.length - 1)];
-    return d >= 0 ? fillChar.repeat(d) + l : l.slice(Math.min(-d, ind(l).length));
+    const body = !l.trim() ? l : d >= 0 ? fillChar.repeat(d) + l : l.slice(Math.min(-d, ind(l).length));
+    return body + (j < all.length - 1 ? cr : lines[end].endsWith("\r") ? "\r" : "");
   });
-  return { text: [...lines.slice(0, i), ...repl, ...lines.slice(i + o.length)].join("\n"), line: i + 1 };
+  return { text: [...lines.slice(0, start), ...repl, ...lines.slice(end + 1)].join("\n"), line: start + 1 };
+}
+
+// Số dòng mô hình hay chép nhầm vào old_string: từ read_file ("    12\t…") hoặc trích đoạn lỗi ("12| …").
+const LINE_NO = [/^ *\d+\t/, /^ *\d+\| ?/];
+function stripLineNumbers(oldS: string, newS: string): { o: string; nw: string } | null {
+  const body = oldS.split("\n").filter((l) => l.trim());
+  const re = LINE_NO.find((r) => body.length && body.every((l) => r.test(l)));
+  if (!re) return null;
+  // new_string: chỉ bỏ ở dòng có số (dòng mô hình thêm mới thường không có)
+  const strip = (s: string) => s.split("\n").map((l) => l.replace(re, "")).join("\n");
+  return { o: strip(oldS), nw: strip(newS) };
 }
 
 function closestHint(text: string, oldS: string): string {
-  const want = oldS.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 6);
-  if (!want.length) return "";
   const lines = text.split("\n");
-  let best = -1;
-  let bestScore = 0;
-  for (const first of want) {
-    const words = new Set(first.split(/\W+/).filter(Boolean));
-    if (!words.size) continue;
-    lines.forEach((l, i) => {
-      const w = l.split(/\W+/).filter(Boolean);
-      const score = w.filter((x) => words.has(x)).length / Math.max(words.size, w.length || 1);
-      if (score > bestScore) {
-        bestScore = score;
-        best = i;
-      }
-    });
+  const old = trimNl(oldS).split("\n");
+  const oldKeys = old.map(looseKey);
+  // căn old_string vào tệp theo độ lệch được nhiều dòng (đủ dài) trùng nhất, rồi chỉ ra dòng nào khác
+  const pos = new Map<string, number[]>();
+  lines.forEach((l, i) => {
+    const k = looseKey(l);
+    if (k.length >= 4) pos.set(k, [...(pos.get(k) ?? []), i]);
+  });
+  const votes = new Map<number, number>();
+  oldKeys.forEach((k, j) => {
+    for (const i of pos.get(k) ?? []) votes.set(i - j, (votes.get(i - j) ?? 0) + 1);
+  });
+  let off = 0;
+  let hitsAt = 0;
+  for (const [o, v] of votes) if (v > hitsAt) [off, hitsAt] = [o, v];
+  const cut = (l: string | undefined) => JSON.stringify((l ?? "").trim().slice(0, 100));
+  let head: string;
+  let from: number;
+  let to: number;
+  if (hitsAt) {
+    const diffs = oldKeys.flatMap((k, j) => (k && looseKey(lines[off + j] ?? "") !== k ? [j] : []));
+    const said = diffs.slice(0, 3).map((j) => `dòng ${j + 1} của old_string ${cut(old[j])} ≠ ${off + j < lines.length && off + j >= 0 ? `tệp dòng ${off + j + 1}: ${cut(lines[off + j])}` : "(ngoài tệp)"}`);
+    head = ` Khớp ${oldKeys.filter(Boolean).length - diffs.length}/${oldKeys.filter(Boolean).length} dòng quanh dòng ${Math.max(0, off) + 1}; khác: ${said.join("; ")}${diffs.length > 3 ? "; …" : ""}.`;
+    from = Math.max(0, off - 2);
+    to = Math.min(lines.length, off + old.length + 2);
+  } else {
+    const want = old.map((l) => l.trim()).filter(Boolean).slice(0, 6);
+    let best = -1;
+    let bestScore = 0;
+    for (const first of want) {
+      const words = new Set(first.split(/\W+/).filter(Boolean));
+      if (!words.size) continue;
+      lines.forEach((l, i) => {
+        const w = l.split(/\W+/).filter(Boolean);
+        const score = w.filter((x) => words.has(x)).length / Math.max(words.size, w.length || 1);
+        if (score > bestScore) {
+          bestScore = score;
+          best = i;
+        }
+      });
+    }
+    if (best < 0 || bestScore < 0.5) return "";
+    head = ` Dòng giống nhất ở dòng ${best + 1}: ${cut(lines[best]).slice(0, 122)}.`;
+    from = Math.max(0, best - 2);
+    to = Math.min(lines.length, best + Math.max(want.length, 3) + 2);
   }
-  if (best < 0 || bestScore < 0.5) return "";
+  if (to - from > 40) to = from + 40;
   // trích luôn vài dòng quanh vị trí đó (có số dòng) để lần sau chép đúng ngay, đỡ một lượt đọc lại
-  const from = Math.max(0, best - 2);
-  const to = Math.min(lines.length, best + Math.max(want.length, 3) + 2);
-  const excerpt = lines.slice(from, to).map((l, k) => `${from + k + 1}| ${l.length > 160 ? l.slice(0, 160) + "…" : l}`).join("\n");
-  return ` Dòng giống nhất ở dòng ${best + 1}: ${JSON.stringify(lines[best].trim().slice(0, 120))}. Nội dung thật quanh đó:\n${excerpt}\n`;
+  const excerpt = lines.slice(from, to).map((l, k) => `${from + k + 1}| ${l.length > 160 ? l.slice(0, 160) + "…" : l.replace(/\r$/, "")}`).join("\n");
+  return `${head} Nội dung thật quanh đó:\n${excerpt}\nChép đúng từ trích đoạn trên (không kèm số dòng "N| " ở đầu), old_string chỉ cần vài dòng quanh chỗ sửa.`;
 }
 
 async function applyEdit(ctx: ToolContext, args: { path: string; old_string: string; new_string: string; replace_all?: boolean }, dryRun: boolean) {
@@ -280,19 +332,33 @@ async function applyEdit(ctx: ToolContext, args: { path: string; old_string: str
   if (o === nw) throw new ToolError("old_string và new_string giống nhau.", "bad_args");
   if (!o) throw new ToolError("old_string rỗng.", "bad_args");
   const text = await readText(ctx, p);
-  const n = text.split(o).length - 1;
+  // các cách hiểu old_string, thử lần lượt: nguyên văn → bỏ số dòng chép nhầm; mỗi cách thử khớp chính xác trước, lỏng sau
+  const numbered = stripLineNumbers(o, nw);
+  const tries = [{ o, nw, numbered: false }, ...(numbered ? [{ ...numbered, numbered: true }] : [])];
+  // tệp toàn CRLF mà old/new_string chỉ có \n
+  const crlf = text.includes("\r\n") && !/(^|[^\r])\n/.test(text);
+  const toFile = (s: string) => (crlf && !s.includes("\r") ? s.replace(/\n/g, "\r\n") : s);
+  const exact = tries.flatMap((t) => [t, ...(["NFC", "NFD"] as const).map((f) => ({ ...t, o: t.o.normalize(f), nw: t.nw.normalize(f) }))]).map((t) => ({ ...t, o: toFile(t.o), nw: toFile(t.nw) }));
+  const tip = (t: { numbered: boolean }) => (t.numbered ? " Lưu ý: đã bỏ số dòng ở đầu các dòng của old_string; lần sau đừng chép số dòng." : "");
   let next: string;
   let note: string;
-  if (n === 0) {
-    const fz = fuzzyReplace(text, o, nw);
-    if (!fz) throw new ToolError(`Không tìm thấy old_string trong ${args.path}.${closestHint(text, o)} Hãy đọc lại file và sao chép đúng từng ký tự (kể cả thụt dòng).`, "no_match");
-    next = fz.text;
-    note = `Đã sửa ${relPath(ctx, p)} (khớp gần đúng, bỏ qua khác biệt thụt dòng/khoảng trắng; bắt đầu ở dòng ${fz.line}).`;
-  } else {
+  const hit = exact.find((t) => t.o && text.includes(t.o));
+  if (hit) {
+    const n = text.split(hit.o).length - 1;
     if (n > 1 && !args.replace_all) throw new ToolError(`old_string xuất hiện ${n} lần trong ${args.path}. Thêm vài dòng xung quanh để duy nhất, hoặc đặt replace_all=true.`, "ambiguous");
-    next = args.replace_all ? text.split(o).join(nw) : text.replace(o, () => nw);
-    const line = text.slice(0, text.indexOf(o)).split("\n").length;
-    note = `Đã sửa ${relPath(ctx, p)} (${args.replace_all ? n : 1} chỗ thay, bắt đầu ở dòng ${line}).`;
+    next = args.replace_all ? text.split(hit.o).join(hit.nw) : text.replace(hit.o, () => hit.nw);
+    const line = text.slice(0, text.indexOf(hit.o)).split("\n").length;
+    note = `Đã sửa ${relPath(ctx, p)} (${args.replace_all ? n : 1} chỗ thay, bắt đầu ở dòng ${line}).${tip(hit)}`;
+  } else {
+    let fz: { text: string; line: number } | null = null;
+    let used = tries[0];
+    let skipBlank = false;
+    for (const t of tries) {
+      for (const sb of [false, true]) if (!fz && (fz = fuzzyReplace(text, t.o, t.nw, sb))) [used, skipBlank] = [t, sb];
+    }
+    if (!fz) throw new ToolError(`Không tìm thấy old_string trong ${args.path}.${closestHint(text, numbered?.o ?? o) || " Hãy đọc lại file (read_file) và sao chép đúng từng ký tự (kể cả thụt dòng)."}`, "no_match");
+    next = fz.text;
+    note = `Đã sửa ${relPath(ctx, p)} (khớp gần đúng, bỏ qua khác biệt thụt dòng/khoảng trắng${skipBlank ? "/dòng trống" : ""}; bắt đầu ở dòng ${fz.line}).${tip(used)}`;
   }
   return { p, text, next, note };
 }
@@ -399,7 +465,7 @@ export function builtinTools(env: Env): Tool[] {
     },
     {
       name: "edit_file", kind: "edit", readonly: false, pathArg: "path",
-      description: "Edit a file by replacing exact text (old_string -> new_string). Read the file first. old_string must match exactly (including indentation) and be unique unless replace_all=true.",
+      description: "Edit a file by replacing exact text (old_string -> new_string). Read the file first. old_string must match the CURRENT file exactly (including indentation; never include the line-number prefix shown by read_file) and be unique unless replace_all=true. Keep old_string short: only the lines to change plus 1-2 lines of context. After earlier edits, copy from the latest read_file or error excerpt, not from memory.",
       parameters: { type: "object", properties: { path: S, old_string: S, new_string: S, replace_all: { type: "boolean" } }, required: ["path", "old_string", "new_string"] },
       summarize: (a) => String(a.path ?? ""),
       async preview(ctx, a) {
