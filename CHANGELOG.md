@@ -16,6 +16,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ### Sửa
 - **Chia sẻ báo "Cuộc trò chuyện chưa có nội dung để chia sẻ" dù đã trò chuyện nhiều lượt**: xảy ra sau khi agent tự tóm tắt hội thoại để giải phóng ngữ cảnh. Nay phần trước khi tóm tắt được giữ lại, nên vẫn chia sẻ được toàn bộ và lịch sử đã lưu không mất phần đầu.
 - **Chọn "Toàn quyền" rồi mà agent vẫn hỏi từng lệnh**: khi mở lại cuộc trò chuyện (kể cả sau khi ứng dụng tự cập nhật), tạo cuộc trò chuyện mới hay lưu hướng dẫn dự án, chế độ bị trả về mặc định nhưng nhãn dưới ô nhập vẫn ghi "Toàn quyền". Nay chế độ bạn chọn được giữ trong cùng dự án, và nhãn luôn đúng với chế độ thật.
+- **Vá lỗ hổng bảo mật (mức thấp) của thư viện hiển thị công thức toán** (KaTeX), cập nhật lên bản 0.18.2. Công thức hiển thị như cũ.
 
 ## [0.8.20] - 2026-10-15
 

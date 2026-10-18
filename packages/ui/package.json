@@ -12,6 +12,6 @@
   },
   "dependencies": {
     "@neu/agent-core": "*",
-    "katex": "^0.16.47"
+    "katex": "^0.18.2"
   }
 }
