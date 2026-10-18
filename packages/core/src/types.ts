@@ -9,6 +9,7 @@ import type { ChangeDiff, ChangeFile, RevertResult } from "./changes";
 import type { RunSuggestion } from "./run-detect";
 import type { DocView } from "./office/locate";
 import type { Procedure } from "./work-ctl";
+import type { Every, ScheduledTask } from "./schedule";
 
 /** Một điểm có thể "quay lại" (/rewind): trước một yêu cầu của người dùng. */
 export interface RewindPoint {
@@ -119,6 +120,8 @@ export interface Settings {
   diagnostics?: boolean;
   /** Mã ngẫu nhiên của máy cài (không phải danh tính), do bộ chẩn đoán tự tạo. */
   diagId?: string;
+  /** Tác vụ định kỳ (schedule.ts). Chỉ sửa qua taskAdd/taskSet/taskRemove, không qua saveSettings của giao diện. */
+  tasks?: ScheduledTask[];
 }
 
 /** Bản gửi cho giao diện: không chứa key. */
@@ -257,6 +260,13 @@ export interface AgentController {
   procedureList?(): Promise<Procedure[]>;
   procedureSave?(name: string, description?: string): Promise<{ ok: true; name: string } | { error: string }>;
   procedureRemove?(name: string): Promise<void>;
+  /** Tác vụ định kỳ của dự án đang mở (chạy khi ứng dụng mở, quyền chặt: chỉ sửa tệp trong dự án). */
+  taskList?(): Promise<ScheduledTask[]>;
+  taskAdd?(spec: { name: string; prompt: string; every: Every }): Promise<{ ok: true; id: string } | { error: string }>;
+  taskSet?(id: string, enabled: boolean): Promise<void>;
+  taskRemove?(id: string): Promise<void>;
+  /** Chạy một tác vụ ngay (vẫn tính vào giới hạn mỗi ngày). Trả về kết quả lần chạy. */
+  taskRunNow?(id: string): Promise<{ status: "ok" | "error" | "skipped"; summary: string } | { error: string }>;
   /** Chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md): trạng thái; xem trước gói “Báo lỗi” (JSON đúng như sẽ gửi, null nếu bị cấm); gửi chính gói đó. */
   /** Ghi một việc người dùng làm trong giao diện (mã trong DIAG_UI_ACTS), cho chẩn đoán không chứa nội dung. Không có = bỏ qua. */
   track?(act: string): void;

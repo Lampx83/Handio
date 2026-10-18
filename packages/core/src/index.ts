@@ -28,6 +28,7 @@ export * from "./http-tools";
 export * from "./vision";
 export * from "./feedback";
 export * from "./share";
+export * from "./schedule";
 export * from "./repeat";
 export * from "./brand";
 export * from "./learning";

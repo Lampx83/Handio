@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Tác vụ định kỳ** (nút ⏰): hẹn giờ để agent tự làm lại một việc, mỗi N phút (từ 30 phút), hằng ngày hoặc hằng tuần; xem danh sách, bật/tắt, xoá, "Chạy ngay" và xem kết quả lần chạy gần nhất. Chỉ chạy khi ứng dụng (hoặc tab web) đang mở; lỡ giờ hẹn quá 6 giờ thì bỏ qua. Vì không có người ngồi trước, tác vụ chỉ được sửa tệp trong dự án: lệnh, mạng, tệp nhạy cảm bị từ chối. Tối đa 12 lần/ngày mỗi tác vụ và dừng khi hết hạn mức token.
 - **Tải bản cài macOS và Windows ngay trên trang giới thiệu**: đầu trang có nút tải bản mới nhất cho macOS (chip Apple hoặc Intel) và Windows, kèm mã SHA-256, không cần đăng nhập trước. Mở ứng dụng vẫn cần đăng nhập tài khoản trường.
 - **Trang chính sách quyền riêng tư** (`/agent/guide/privacy.html`, tiếng Việt và tiếng Anh): ứng dụng dùng dữ liệu nào, gửi đi đâu, giữ bao lâu, cách tắt hoặc yêu cầu xoá. Có link ở chân trang giới thiệu và trang hướng dẫn.
 - **Chuẩn bị bản Windows trên Microsoft Store**: cài từ Store sẽ không còn cảnh báo "nhà phát hành không xác định", và Store tự cập nhật ứng dụng (bản cài từ Store ẩn mục "Kiểm tra bản cập nhật" trong menu Tệp).

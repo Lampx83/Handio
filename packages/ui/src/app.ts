@@ -19,6 +19,7 @@ import { openLearn } from "./learn";
 import { CodeTools } from "./code-tools";
 import { DocPane } from "./docview";
 import { WorkTools } from "./work-tools";
+import { openTasks } from "./tasks-ui";
 import { buildQuestionCard } from "./question-card";
 import { ActivityBlock, activityLabel, changedFiles, chipSplit, DEFAULT_LABEL, detailSteps, groupHistory, isDocViewable, isQuiet, keepsPrecedingText } from "./activity";
 import { buildContextPanel, contextTitle, contextView, type UsageInfo } from "./context-info";
@@ -240,6 +241,7 @@ class App {
       this.learnBtn,
       this.newBtn,
       this.filesBtn,
+      ...(this.ctl.taskList ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Tác vụ định kỳ", title: "Tác vụ định kỳ: hẹn giờ để agent tự làm lại một việc", onclick: () => openTasks(this.ctl, { desktop: this.state.capabilities.realFs }) }, "⏰")] : []),
       ...(this.ctl.shareChat ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Chia sẻ cuộc trò chuyện", title: "Chia sẻ cuộc trò chuyện này bằng một liên kết", onclick: () => openShare(this.ctl, { track: (a) => this.t(a) }) }, "🔗")] : []),
       ...(this.ctl.sendFeedback ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Góp ý", title: "Góp ý / báo lỗi cho nhóm phát triển", onclick: () => openFeedback(this.ctl, { track: (a) => this.t(a) }) }, "💬")] : []),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Hướng dẫn", title: "Hướng dẫn: mẹo, thủ thuật, tình huống mẫu", onclick: () => this.openGuideDlg() }, "💡"),
