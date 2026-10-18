@@ -34,7 +34,7 @@ const jar = (...lists) => lists.flat().join("; ");
 
 const idp = await startMockIdp({ host: "0.0.0.0", issuerHost: "host.docker.internal", clientId: CLIENT });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "neu-e2e-"));
-const cleanup = () => { for (const c of ["e2e-front", "e2e-220", "e2e-gw", "e2e-oauth"]) dk("rm", "-f", c); dk("network", "rm", NET); };
+const cleanup = () => { for (const c of ["e2e-front", "e2e-220", "e2e-gw", "e2e-quota", "e2e-oauth"]) dk("rm", "-f", c); dk("network", "rm", NET); };
 cleanup();
 
 try {
@@ -47,8 +47,8 @@ try {
   fs.mkdirSync(path.join(t, "dl"), { recursive: true });
   fs.mkdirSync(path.join(t, "guide"), { recursive: true });
   const rd = (f) => fs.readFileSync(path.join(d220, f), "utf8");
-  fs.writeFileSync(path.join(t, "conf.d/neu-agent.conf"), rd("neu-agent.http.conf").replace("__NEU_AGENT_KEY__", "testkey").replace("default        0;", "default        0;\n    172.16.0.0/12  1;"));
-  const fix = (s) => s.replaceAll("http://127.0.0.1:4192", "http://e2e-gw").replaceAll("/etc/nginx/snippets/", "/t/snippets/").replaceAll("/var/www/neu-agent-dl/", "/t/dl/").replaceAll("/var/www/neu-agent-guide/", "/t/guide/").replaceAll("/var/www/neu-agent/", "/t/web/").replaceAll("127.0.0.1:4180", "e2e-oauth:4180").replaceAll(`http://${SITE.SITE_GATEWAY_HOSTPORT}`, "http://e2e-gw:80");
+  fs.writeFileSync(path.join(t, "conf.d/neu-agent.conf"), rd("neu-agent.http.conf").replace("__NEU_AGENT_KEY__", "testkey").replace("default        0;", "default        0;\n    172.16.0.0/12  1;").replaceAll("127.0.0.1:4191", "e2e-quota:80").replaceAll(SITE.SITE_GATEWAY_HOSTPORT, "e2e-gw:80"));
+  const fix = (s) => s.replaceAll("http://127.0.0.1:4192", "http://e2e-gw").replaceAll("http://127.0.0.1:4191", "http://e2e-quota").replaceAll("/etc/nginx/snippets/", "/t/snippets/").replaceAll("/var/www/neu-agent-dl/", "/t/dl/").replaceAll("/var/www/neu-agent-guide/", "/t/guide/").replaceAll("/var/www/neu-agent/", "/t/web/").replaceAll("127.0.0.1:4180", "e2e-oauth:4180").replaceAll(`http://${SITE.SITE_GATEWAY_HOSTPORT}`, "http://e2e-gw:80");
   fs.writeFileSync(path.join(t, "snippets/neu-agent-locations.conf"), fix(rd("neu-agent.locations.conf")));
   fs.writeFileSync(path.join(t, "snippets/neu-agent-auth.conf"), fix(rd("neu-agent-auth.conf")));
   fs.writeFileSync(path.join(t, "server.conf"), fix(rd("neu-agent.server.conf")));
@@ -65,6 +65,15 @@ try {
   const gw = path.join(tmp, "gw");
   fs.mkdirSync(gw);
   fs.writeFileSync(path.join(gw, "nginx.conf"), `pid /tmp/g.pid;\nevents {}\nhttp { server { listen 80; location / { default_type application/json; return 200 '{"key":"$http_x_ollama_seckey","auth":"$http_authorization","user":"$http_x_user_email","uri":"$request_uri"}'; } } }\n`);
+  // cổng hạn mức giả (thật nghe 127.0.0.1:4191; logic lọc thử ở deploy/220/quota/test_quota.py): trả lại tiêu đề nó nhận được.
+  // Tiêu đề X-E2e-Gate giả lập cổng bản cũ (404), lỗi 502 do cổng tự trả, và lỗi 401 của Kong đi qua cổng.
+  const qg = path.join(tmp, "qg");
+  fs.mkdirSync(qg);
+  fs.writeFileSync(path.join(qg, "nginx.conf"), `pid /tmp/q.pid;\nevents {}\nhttp { server { listen 80; location / { default_type application/json;
+    if ($http_x_e2e_gate = "old") { return 404 '{"ok":false}'; }
+    if ($http_x_e2e_gate = "502") { return 502 '{"error":"upstream"}'; }
+    if ($http_x_e2e_gate = "401") { return 401 '{"error":"kong-401"}'; }
+    return 200 '{"via":"quota","key":"$http_x_ollama_seckey","auth":"$http_authorization","cookie":"$http_cookie","own":"$http_x_neu_own_key","user":"$http_x_user_email","uri":"$request_uri"}'; } } }\n`);
   // "222": chuyển tiếp /agent/ tới 220
   const f222 = path.join(tmp, "f");
   fs.mkdirSync(f222);
@@ -78,6 +87,7 @@ try {
   dk("network", "create", NET);
   const run = (name, args) => { const r = dk("run", "-d", "--name", name, "--network", NET, ...args); if (r.status !== 0) throw new Error(name + ": " + r.stderr); };
   run("e2e-gw", ["-v", `${gw}:/g:ro`, "nginx:1.24", "nginx", "-c", "/g/nginx.conf", "-g", "daemon off;"]);
+  run("e2e-quota", ["-v", `${qg}:/q:ro`, "nginx:1.24", "nginx", "-c", "/q/nginx.conf", "-g", "daemon off;"]);
   run("e2e-oauth", ["--add-host", "host.docker.internal:host-gateway", "-v", `${path.join(root, "220/auth/templates")}:/tpl:ro`, "-v", `${hp}:/hp:ro`, ...Object.entries({
     PROVIDER: "oidc", OIDC_ISSUER_URL: idp.issuer, CLIENT_ID: CLIENT, CLIENT_SECRET: "bi-mat-thu", REDIRECT_URL: "https://ai.neu.edu.vn/agent/oauth2/callback",
     PROXY_PREFIX: "/agent/oauth2", HTTP_ADDRESS: "0.0.0.0:4180", UPSTREAMS: "static://202", EMAIL_DOMAINS: "neu.edu.vn,st.neu.edu.vn", OIDC_EMAIL_CLAIM: "preferred_username",
@@ -155,6 +165,21 @@ try {
   check("đã đăng nhập: API tới gateway; key do MÁY CHỦ gắn, Authorization bị gỡ, gửi kèm email người dùng", api1.status === 200 && j1.key === "testkey" && j1.auth === "" && j1.user === "lan@neu.edu.vn" && j1.uri === "/vllm/v1/models", JSON.stringify(j1));
   const api2 = await req("/agent/vllm/v1/models", { headers: { Cookie: cookie, "x-ollama-seckey": "key-rieng" } });
   check("người dùng tự dán key riêng thì dùng key của họ", JSON.parse(api2.body).key === "key-rieng");
+  // danh sách mô hình đi qua cổng hạn mức (cổng lọc theo quyền mô hình); danh tính và cờ key riêng do NGINX gắn, tiêu đề giả của máy khách bị ghi đè
+  const fakeH = { Cookie: cookie, "X-User-Email": "admin@neu.edu.vn", "X-Neu-Own-Key": "1" };
+  const mq = JSON.parse((await req("/agent/vllm/v1/models", { headers: fakeH })).body || "{}");
+  check("/models qua cổng hạn mức: email giả và X-Neu-Own-Key giả bị nginx ghi đè; cookie/Authorization không chuyển đi", mq.via === "quota" && mq.user === "lan@neu.edu.vn" && mq.own === "0" && mq.key === "testkey" && mq.cookie === "" && mq.auth === "" && mq.uri === "/vllm/v1/models", JSON.stringify(mq));
+  const j2 = JSON.parse(api2.body || "{}");
+  check("/models qua cổng: tự dán key riêng thì cờ X-Neu-Own-Key=1 (cổng không lọc)", j2.via === "quota" && j2.own === "1", api2.body);
+  const mOld = JSON.parse((await req("/agent/vllm/v1/models", { headers: { Cookie: cookie, "X-E2e-Gate": "old" } })).body || "{}");
+  check("/models: cổng bản cũ (404) → nginx gọi thẳng Kong, vẫn có danh sách, key do máy chủ gắn", mOld.via === undefined && mOld.uri === "/vllm/v1/models" && mOld.key === "testkey" && mOld.user === "lan@neu.edu.vn" && mOld.auth === "", JSON.stringify(mOld));
+  const m401 = await req("/agent/vllm/v1/models", { headers: { Cookie: cookie, "X-E2e-Gate": "401" } });
+  check("/models: lỗi 401 của Kong (key riêng sai) đi nguyên, không bị đổi thành 'cần đăng nhập'", m401.status === 401 && /kong-401/.test(m401.body), `${m401.status} ${m401.body.slice(0, 60)}`);
+  const m502 = await req("/agent/vllm/v1/models", { headers: { Cookie: cookie, "X-E2e-Gate": "502" } });
+  check("/models: cổng tự trả 502 thì đi nguyên (không gọi thẳng Kong, không bỏ qua bộ lọc)", m502.status === 502 && /upstream/.test(m502.body), `${m502.status} ${m502.body.slice(0, 60)}`);
+  const cq = JSON.parse((await req("/agent/vllm/v1/chat/completions", { method: "POST", headers: { ...fakeH, "Content-Type": "application/json" }, body: "{}" })).body || "{}");
+  check("chat qua cổng hạn mức: danh tính/cờ key riêng giả bị ghi đè, cookie không chuyển đi", cq.via === "quota" && cq.user === "lan@neu.edu.vn" && cq.own === "0" && cq.cookie === "" && cq.auth === "", JSON.stringify(cq));
+  await new Promise((r) => setTimeout(r, 1500));   // để hết đợt yêu cầu dồn (giới hạn tốc độ theo IP) trước các bài sau
   // công cụ web (tìm kiếm / tải trang): phải đăng nhập, chỉ GET, danh tính do nginx gắn, tham số đi nguyên vẹn (dịch vụ thật nghe 4192; ở đây giả bằng gateway echo)
   const tl0 = await req("/agent/tools/search?q=neu");
   check("công cụ web: chưa đăng nhập → 401 JSON login_required (không chuyển hướng)", tl0.status === 401 && /login_required/.test(tl0.body), String(tl0.status));
@@ -251,6 +276,15 @@ try {
   check("dò mật khẩu liên tục bị chặn (HTTP 429 sau vài lần)", limited >= 5 && !burst.some((r) => r.status === 302), `${limited}/14 bị chặn`);
   const after = await form("khach01", "mat-khau-thu-nghiem-1");
   check("đang bị giới hạn thì kể cả mật khẩu đúng cũng phải chờ", after.status === 429, String(after.status));
+
+  // cổng hạn mức CHẾT: nginx tự gọi thẳng Kong cho cả danh sách mô hình lẫn chat (người dùng vẫn dùng được, tạm không lọc/không hạn mức)
+  dk("stop", "-t", "0", "e2e-quota");
+  const tokD = "Bearer " + (await idp.sign("lan@neu.edu.vn", undefined, CLIENT));
+  const mDead = await req("/agent/vllm/v1/models", { headers: { Authorization: tokD, "X-User-Email": "admin@neu.edu.vn" } });
+  const md = JSON.parse(mDead.body || "{}");
+  check("cổng chết: /models gọi thẳng Kong, danh tính do nginx gắn, key máy chủ", mDead.status === 200 && md.via === undefined && md.uri === "/vllm/v1/models" && md.user === "lan@neu.edu.vn" && md.key === "testkey" && md.auth === "", `${mDead.status} ${mDead.body.slice(0, 120)}`);
+  const cDead = await req("/agent/vllm/v1/chat/completions", { method: "POST", headers: { Authorization: tokD, "Content-Type": "application/json" }, body: "{}" });
+  check("cổng chết: chat cũng gọi thẳng Kong (hành vi dự phòng sẵn có)", cDead.status === 200 && JSON.parse(cDead.body || "{}").uri === "/vllm/v1/chat/completions", `${cDead.status} ${cDead.body.slice(0, 120)}`);
 } catch (e) {
   console.error("LỖI:", e.stack ?? e);
   results.push(false);

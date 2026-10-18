@@ -15,6 +15,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ### Thay đổi
 - **Chỉ vào để sửa riêng tư hơn**: phần trích từ thiết kế gửi cho agent nay tự che giá trị ô nhập (kể cả mật khẩu), chữ trong ô nhập nhiều dòng, dữ liệu nhúng dài, chú thích ẩn và token/mật khẩu trong đường dẫn.
 - **Thông báo rõ khi nhóm của bạn không được dùng mô hình đang chọn** hoặc đã hết hạn mức riêng của một tab (các tab khác vẫn dùng được), thay vì báo lỗi key chung chung.
+- **Chỉ hiện mô hình bạn được dùng**: danh sách mô hình ở Cài đặt và nút chọn mô hình chỉ còn mô hình nhóm của bạn được phép. Không còn mô hình nào thì nút **Kiểm tra** báo rõ để liên hệ quản trị viên. Chưa giới hạn mô hình thì như cũ.
 
 ## [0.8.21] - 2026-10-18
 

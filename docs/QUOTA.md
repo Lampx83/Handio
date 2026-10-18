@@ -24,7 +24,8 @@ nginx (xác thực SSO, gắn X-User-Email) ─▶ cổng hạn mức 127.0.0.1:
 - Cổng tự bật `stream_options.include_usage` và đọc số token trong phản hồi của mô hình: **số do máy chủ đếm**, không dựa vào ứng dụng tự báo (ứng dụng chỉ dùng để hiển thị).
 - Kiểm tra hạn mức **trước** khi chuyển tiếp; cộng token **sau** khi mô hình trả xong. Vài yêu cầu chạy song song có thể vượt hạn mức một chút (không đáng kể so với hạn mức vài triệu).
 - Lưu theo **mã giả danh** (HMAC của email, cùng cách với chẩn đoán), kèm ngày, bậc, số token, số yêu cầu, số lần bị chặn. **Không lưu email, không lưu nội dung hội thoại.** Giữ 400 ngày.
-- Cổng chết/lỗi: nginx **tự chuyển thẳng tới Kong** (người dùng vẫn dùng được, tạm không có hạn mức); `/agent/healthz` và trang quản trị báo lỗi `quota`.
+- Danh sách mô hình (`/agent/vllm/v1/models`) cũng qua cổng để lọc theo quyền mô hình (xem *Phân quyền mô hình*).
+- Cổng chết/lỗi: nginx **tự chuyển thẳng tới Kong** (người dùng vẫn dùng được, tạm không có hạn mức, danh sách mô hình không lọc); `/agent/healthz` và trang quản trị báo lỗi `quota`.
 - Phản hồi chat có tiêu đề `X-Quota-State/Used/Limit/Remaining/Reset`; `GET /agent/quota` trả hạn mức của chính người gọi. Mã lỗi khi hết: **HTTP 402** `{"error":"quota_exceeded",…}` (bản ứng dụng cũ hiện nguyên thông báo này).
 
 ## Quản trị (chạy trên máy 220)
@@ -89,7 +90,14 @@ Cổng so trường `model` của yêu cầu với danh sách được dùng (th
 ```bash
 sudo ~/neu-agent-220/quota/quota.sh models student qwen3.5-35b-a3b-int4    # all = bỏ giới hạn (mặc định)
 ```
-**Hiện máy chủ chỉ có một mô hình chat** (`qwen3.5-35b-a3b-int4` qua Kong), nên đây là cơ chế chuẩn bị sẵn cho khi có thêm mô hình. Danh sách mô hình `/agent/vllm/v1/models` vẫn đi thẳng tới Kong (chưa lọc theo nhóm); `GET /agent/quota` có `models` (null = mọi mô hình).
+**Hiện máy chủ chỉ có một mô hình chat** (`qwen3.5-35b-a3b-int4` qua Kong), nên đây là cơ chế chuẩn bị sẵn cho khi có thêm mô hình. `GET /agent/quota` có `models` (null = mọi mô hình).
+
+**Danh sách mô hình cũng được lọc:** `GET /agent/vllm/v1/models` đi qua cổng; cổng lấy danh sách từ Kong rồi chỉ giữ mô hình người gọi được dùng (so đúng nguyên chuỗi `id`, kèm tiêu đề `X-Neu-Models: filtered`), nên ứng dụng chỉ hiện mô hình được phép.
+- Không giới hạn mô hình (mặc định), quản trị viên, key riêng, chế độ `observe`: trả **nguyên** danh sách của Kong.
+- Lọc xong không còn mô hình nào: danh sách rỗng; ứng dụng báo *“Tài khoản của bạn chưa được dùng mô hình nào, liên hệ quản trị viên.”* (nút **Kiểm tra** ở Cài đặt).
+- Lỗi của Kong (401 key riêng sai, 429…) đi nguyên. Kong trả danh sách hỏng/quá 1 MB khi cần lọc: cổng trả 500, **không** trả nguyên.
+- Lấy danh sách không tính token, không đếm từ chối.
+- **Cổng chết/treo hoặc còn bản cũ** (chưa có đường `/models`, trả 404): nginx gọi thẳng Kong (`upstream neu_agent_models`, máy chủ dự phòng `backup`), người dùng vẫn thấy danh sách **đầy đủ, chưa lọc** — giống phân quyền tab/mô hình khi cổng chết. Chat vẫn bị cổng chặn mô hình không được phép, nên chỉ là hiện thừa tên mô hình. Cập nhật nginx trước cổng cũng không làm hỏng danh sách.
 
 ## Hạn mức theo tab
 
@@ -133,7 +141,7 @@ ssh -t 220 'cd ~/neu-agent-220 && sudo ./quota/install-quota.sh'          # 1) c
 ssh -t 220 'cd ~/neu-agent-220 && sudo ./diag/install-diag.sh'            # 2) trang quản trị + healthz biết về cổng hạn mức
 ssh -t 220 'cd ~/neu-agent-220 && sudo ./install.sh <key mô hình>'        # 3) nginx chuyển yêu cầu chat qua cổng
 ```
-**Thứ tự quan trọng:** cài (1) trước (3). Gỡ: `sudo ./quota/install-quota.sh --uninstall` rồi chạy lại `install.sh` bản cũ.
+**Thứ tự quan trọng:** cài (1) trước (3). Riêng danh sách mô hình thì sai thứ tự cũng an toàn (cổng cũ trả 404, nginx gọi thẳng Kong), chỉ là chưa lọc cho tới khi cài (1). CD chỉ cập nhật nginx (`install.sh`), **không** cài lại cổng: sau khi gộp thay đổi của `quota/` phải chạy (1) bằng tay. Gỡ: `sudo ./quota/install-quota.sh --uninstall` rồi chạy lại `install.sh` bản cũ.
 
 ## Giới hạn cần biết
 - Kong chỉ thấy một khoá chung `neuagent` (và nó chung hạn mức 600 yêu cầu/phút với các ứng dụng khác thuộc consumer `lampx`); hạn mức theo người chỉ có ở máy 220.
