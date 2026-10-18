@@ -5,8 +5,10 @@ Kiểm tra: oauth2-proxy /ping, cổng mô hình (TCP + HTTP trả lời), CHAT 
 token đầu; 15 phút/lần khi đang tốt), dung lượng đĩa, bộ thu chẩn đoán còn sống; tuỳ cấu hình: hạn chứng chỉ HTTPS của tên miền
 công khai (NEU_HEALTH_TLS_HOSTS) và hạn client secret Entra (tệp quản trị viên khai, YYYY-MM-DD).
 Còn < 30 ngày = CẢNH BÁO (danh sách "warn", không làm healthz đỏ); đã hết hạn = lỗi.
+Kết quả sao lưu dữ liệu (nếu đã cài backup/: lần gần nhất lỗi, quá 36 giờ chưa có bản mới, đẩy sang máy ngoài lỗi): chỉ CẢNH BÁO.
 Ghi /var/lib/neu-agent/health.json (chi tiết, quyền 0640, KHÔNG phục vụ ra ngoài) và thêm một dòng vào health.log mỗi lần có lỗi.
 nginx /agent/healthz chỉ trả {"ok":true|false} (do bộ thu đọc health.json; file cũ >15 phút => false).
+Sao lưu chỉ là cảnh báo ("warn"): không làm "ok" thành false, vì dịch vụ vẫn chạy bình thường; alerts.py báo riêng.
 Thoát mã 1 nếu có lỗi (systemctl --failed sẽ hiện; timer vẫn tiếp tục).
 Key mô hình: tệp credential "model-key" của systemd (install-diag.sh nạp tệp conf.d của nginx, nơi install.sh giữ key) — không ghi ra đâu cả.
 """
@@ -43,6 +45,11 @@ KEY_FILE = E("NEU_HEALTH_KEY_FILE", "")                      # trống = $CREDEN
 ENTRA_FILE = E("NEU_HEALTH_ENTRA_EXPIRES", "/etc/neu-agent/entra-secret-expires")
 TLS_HOSTS = E("NEU_HEALTH_TLS_HOSTS", "")                    # "tên.miền@ip:cổng,…" (ip:cổng tuỳ chọn), do install-diag.sh điền từ cấu hình nơi triển khai
 WARN_DAYS = int(E("NEU_HEALTH_WARN_DAYS", "30"))
+BACKUP_STATUS = E("NEU_HEALTH_BACKUP_STATUS", "/var/lib/neu-agent-backup/status.json")   # backup.py ghi, chỉ có số
+BACKUP_MAX_AGE_H = float(E("NEU_HEALTH_BACKUP_MAX_AGE_H", "36"))
+WARN_ONLY = ("backup",)  # báo trong health.json/nhật ký/cảnh báo nhưng không làm /agent/healthz đỏ
+BACKUP_DETAIL = {"failed": "lần gần nhất lỗi", "stale": "quá hạn, chưa có bản mới", "push_failed": "đẩy sang máy ngoài lỗi",
+                 "unreadable": "không đọc được trạng thái"}
 
 
 def http_check(url, accept_any_status=False, want_ok_json=False):
@@ -239,6 +246,37 @@ def _previous_chat(now):
     return None
 
 
+def _num(v):
+    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+
+def backup_check(path=None, now=None):
+    """Kết quả sao lưu dữ liệu. Chưa cài sao lưu (không có tệp trạng thái) → None: bỏ qua."""
+    now = time.time() if now is None else now
+    try:
+        with open(path or BACKUP_STATUS, encoding="utf-8") as f:
+            st = json.load(f)
+        if not isinstance(st, dict):
+            raise ValueError
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        return {"ok": False, "reason": "unreadable", "age_h": None, "detail": BACKUP_DETAIL["unreadable"]}
+    last_ok = _num(st.get("last_ok"))
+    age_h = round((now - last_ok) / 3600, 1) if last_ok is not None else None
+    if st.get("ok") is not True:
+        reason = "failed"
+    elif age_h is None or age_h > BACKUP_MAX_AGE_H:
+        reason = "stale"
+    elif st.get("pushed") is False:
+        reason = "push_failed"
+    else:
+        reason = "ok"
+    since = "bản tốt gần nhất cách %d giờ" % age_h if age_h is not None else "chưa có bản tốt"
+    detail = since if reason == "ok" else BACKUP_DETAIL[reason] + "; " + since
+    return {"ok": reason == "ok", "reason": reason, "age_h": age_h, "detail": detail}
+
+
 def run():
     now = time.time()
     checks = {
@@ -252,7 +290,12 @@ def run():
     for name, c in (("entra_secret", entra_check(now)), ("tls", tls_check(parse_targets(TLS_HOSTS), now))):
         if c is not None:
             checks[name] = c
-    return {"ts": int(now), "ok": all(c["ok"] for c in checks.values()), "checks": checks, "warn": [k for k, c in checks.items() if c["ok"] and c.get("warn")]}
+    b = backup_check(now=now)
+    if b is not None:
+        checks["backup"] = b
+    # hai kiểu cảnh báo: mục còn tốt nhưng sắp hết hạn (warn=True), và mục chỉ-cảnh-báo đang lỗi (sao lưu): cả hai đều không làm healthz đỏ
+    warn = [k for k, c in checks.items() if c["ok"] and c.get("warn")] + [k for k in WARN_ONLY if k in checks and not checks[k]["ok"]]
+    return {"ts": int(now), "ok": all(c["ok"] for k, c in checks.items() if k not in WARN_ONLY), "checks": checks, "warn": warn}
 
 
 def write_health(h):
@@ -266,7 +309,7 @@ def write_health(h):
 
 def log_failure(h, max_bytes=1_000_000):
     bad = ", ".join("%s(%s)" % (k, v.get("detail", "")) for k, v in h["checks"].items() if not v["ok"])
-    line = "%s FAIL %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(h["ts"])), bad)
+    line = "%s %s %s\n" % (time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(h["ts"])), "FAIL" if not h["ok"] else "WARN", bad)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
     try:
         if os.path.getsize(LOG_FILE) > max_bytes:  # giữ ~200 KB cuối
@@ -285,12 +328,12 @@ def main():
     h = run()
     try:
         write_health(h)
-        if not h["ok"]:
+        if not h["ok"] or h["warn"]:
             log_failure(h)
     except OSError as e:
         print("healthz: không ghi được kết quả: %s" % e.strerror, file=sys.stderr)
         return 2
-    print(json.dumps({"ok": h["ok"], "failed": [k for k, v in h["checks"].items() if not v["ok"]], "warn": h["warn"]}))
+    print(json.dumps({"ok": h["ok"], "failed": [k for k, v in h["checks"].items() if not v["ok"] and k not in WARN_ONLY], "warn": h["warn"]}))
     return 0 if h["ok"] else 1
 
 
