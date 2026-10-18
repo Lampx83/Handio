@@ -5,12 +5,17 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Nhóm người dùng tuỳ tạo** (quản trị viên): gán email hoặc tài khoản vào nhóm như một lớp học hay nhóm giảng viên, rồi đặt riêng cho nhóm hạn mức token/ngày, tab được dùng, mô hình được dùng và hạn mức token riêng cho từng tab. Sửa ngay trên trang quản trị *Hạn mức* (dán cả danh sách email) hoặc bằng `quota.sh group`, có hiệu lực từ yêu cầu kế tiếp. Trang này cũng hiện cấu hình theo bậc, và trang quản trị đếm số yêu cầu bị từ chối theo lý do. Chưa tạo nhóm nào thì mọi thứ như cũ.
+
+### Thay đổi
+- **Thông báo rõ khi nhóm của bạn không được dùng mô hình đang chọn** hoặc đã hết hạn mức riêng của một tab (các tab khác vẫn dùng được), thay vì báo lỗi key chung chung.
+
 ## [0.8.21] - 2026-10-18
 
 ### Thêm
 - **Mục "Tải về" trên trang giới thiệu**: chọn bản macOS (chip Apple/Intel), Windows hoặc bản web, kèm cách mở khi hệ điều hành cảnh báo lần đầu và cách kiểm tra mã SHA-256. Hỏi đáp có link tới chính sách quyền riêng tư.
 - **DESIGN.md cho từng dự án Design**: ghi màu, phông, khoảng cách và giọng điệu vào `DESIGN.md` ở thư mục dự án, agent đọc và làm theo ở mọi thiết kế. Sửa tệp lúc nào cũng được, có hiệu lực từ tin nhắn kế tiếp. Chưa có thì gõ `/designmd` để agent tạo bản mẫu (hoặc rút từ thiết kế đang có).
-- **Nhóm người dùng tuỳ tạo** (quản trị viên): gán email hoặc tài khoản vào nhóm như một lớp học hay nhóm giảng viên, rồi đặt riêng cho nhóm hạn mức token/ngày, tab được dùng, mô hình được dùng và hạn mức token riêng cho từng tab. Sửa ngay trên trang quản trị *Hạn mức* (dán cả danh sách email) hoặc bằng `quota.sh group`, có hiệu lực từ yêu cầu kế tiếp. Trang này cũng hiện cấu hình theo bậc, và trang quản trị đếm số yêu cầu bị từ chối theo lý do. Chưa tạo nhóm nào thì mọi thứ như cũ.
 - **Phân quyền tab theo nhóm người dùng**: quản trị viên có thể chỉ cho một nhóm (theo miền email, ví dụ sinh viên `@st.neu.edu.vn` hoặc giảng viên/cán bộ `@neu.edu.vn`) dùng một số tab Work/Code/Design. Tab không được dùng sẽ ẩn, và máy chủ từ chối yêu cầu của tab đó kèm thông báo rõ. Mặc định chưa cấu hình thì mọi người vẫn dùng cả ba tab như trước.
 - **Tác vụ định kỳ** (nút ⏰): hẹn giờ để agent tự làm lại một việc, mỗi N phút (từ 30 phút), hằng ngày hoặc hằng tuần; xem danh sách, bật/tắt, xoá, "Chạy ngay" và xem kết quả lần chạy gần nhất. Chỉ chạy khi ứng dụng (hoặc tab web) đang mở; lỡ giờ hẹn quá 6 giờ thì bỏ qua. Vì không có người ngồi trước, tác vụ chỉ được sửa tệp trong dự án: lệnh, mạng, tệp nhạy cảm bị từ chối. Tối đa 12 lần/ngày mỗi tác vụ và dừng khi hết hạn mức token.
 - **Tải bản cài macOS và Windows ngay trên trang giới thiệu**: đầu trang có nút tải bản mới nhất cho macOS (chip Apple hoặc Intel) và Windows, kèm mã SHA-256, không cần đăng nhập trước. Mở ứng dụng vẫn cần đăng nhập tài khoản trường.
@@ -21,7 +26,6 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Quản trị viên được cảnh báo khi sao lưu có vấn đề**: lần sao lưu gần nhất lỗi, quá 36 giờ chưa có bản mới, hoặc chưa gửi được sang máy khác đều hiện ở trang quản trị và gửi tin cảnh báo.
 
 ### Thay đổi
-- **Thông báo rõ khi nhóm của bạn không được dùng mô hình đang chọn** hoặc đã hết hạn mức riêng của một tab (các tab khác vẫn dùng được), thay vì báo lỗi key chung chung.
 - **Chia sẻ cuộc trò chuyện đầy đủ hơn để nhóm phát triển hiểu và sửa lỗi**: bản chia sẻ nay gồm cả các thao tác của agent (lệnh, tệp đã ghi/sửa) kèm phần đầu kết quả, chỗ nào bị lỗi, lời nhắc của hệ thống, cùng phiên bản, mô hình và chế độ đang dùng. Khoá/mật khẩu và dữ liệu cá nhân vẫn được tự che; tệp bạn đính kèm bằng @ không được gửi.
 - **Tab Code tự bấm thử ứng dụng web trước khi báo xong** (Desktop): trước đây agent chỉ mở trang xem có lỗi lúc tải, nên có khi báo "xong" mà bạn vừa bấm "Bắt đầu làm bài" là ứng dụng hỏng. Nay agent bấm các nút chính, gõ vào ô nhập và kiểm tra kết quả hiện ra trong một cửa sổ ẩn; lỗi phát sinh ở bước nào thì tự sửa rồi chạy lại đúng luồng đó. Hộp thoại của trang (alert/confirm) không bật lên màn hình của bạn.
 - **Số liệu quản trị đúng hơn**: bản web nay báo số phiên bản thật (trước đây luôn ghi 0.1.0 nên không phân biệt được các bản), tỷ lệ "đã cập nhật" và cảnh báo "máy chạy bản cũ" chỉ tính máy Desktop (web luôn mới nhất), và bảng «Công việc người dùng làm» phân loại thêm tin nối tiếp ("ok", "làm tiếp đi") và câu hỏi để ít bị xếp vào "khác".
