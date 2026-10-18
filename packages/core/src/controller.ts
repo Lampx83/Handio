@@ -11,8 +11,9 @@ import { extOf, formatSections, isOfficeFile, readDocumentSections } from "./off
 import { basename, isInside, join, relative } from "./path";
 import { sniffImage } from "./vision";
 import type { Mode } from "./permissions";
-import { chatTitle, cleanProjectName, countTurns, ID_RE, messagesToHistory, newId, trimForSave, type ChatMeta, type ChatStore, type HistoryItem, type ProjectHost, type ProjectsState } from "./projects";
-import { Session } from "./session";
+import { archiveForSave, chatTitle, cleanProjectName, countTurns, ID_RE, messagesToHistory, newId, trimForSave, type ChatMeta, type ChatStore, type HistoryItem, type ProjectHost, type ProjectsState } from "./projects";
+import { Session, type SessionOptions } from "./session";
+import { dueState, MAX_RUNS_PER_DAY, MAX_TASKS, newTask, RUN_TIMEOUT_MS, runsToday, withRun, type Every, type ScheduledTask } from "./schedule";
 import { badCitations, docViewOf, listProcedures, removeProcedure, saveProcedure, type Procedure } from "./work-ctl";
 import type { DocView } from "./office/locate";
 import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
@@ -20,7 +21,7 @@ import { stackOf, type Stack, type UiLib } from "./task-profile";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import type { HttpToolRuntime } from "./http-tools";
 import { feedbackProblem, type FeedbackInput, type FeedbackResult } from "./feedback";
-import { buildSharePayload, type SharedChatInfo, type SharePayload, type SharePreview, type ShareResult } from "./share";
+import { buildShareV2, type SharedChatInfo, type SharePayloadV2, type SharePreview, type ShareResult } from "./share";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
 import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk } from "./tools";
 import type { AgentController, PermissionRequest, PermissionResponse, QuotaInfo, RewindPoint, SessionEvent, Settings, UiState } from "./types";
@@ -71,6 +72,8 @@ export interface ControllerOptions {
   /** Địa chỉ gốc các dịch vụ của tổ chức cho công cụ HTTP của gói (tools.json), vd https://ai.neu.edu.vn/agent/. Không đặt = công cụ HTTP của gói không bật. */
   toolsBase?: string;
   /** Tự chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md). Không đặt = không ghi, không gửi gì. Tắt được bằng Settings.diagnostics hoặc policy.diagnostics=false. */
+  /** Tác vụ định kỳ (schedule.ts): `enabled` bật bộ hẹn giờ (Desktop/web); `now` để kiểm thử dùng đồng hồ giả. Không đặt `enabled` = chỉ quản lý được, không tự chạy. */
+  tasks?: { enabled?: boolean; now?: () => number; tickMs?: number };
   diagnostics?: { endpoint: string; headers?(): Record<string, string>; enabled?(): boolean; version: string; build?: string; platform: string; fetch?: typeof fetch };
 }
 
@@ -111,6 +114,8 @@ export class LocalController implements AgentController {
   private turnTools: string[] = [];
   private lastGood: { prompt: string; tools: string[]; chatId: string; projectId: string } | null = null;
   private diag?: DiagnosticsRecorder;
+  private tasksTimer?: ReturnType<typeof setInterval>;
+  private taskAbort: AbortController | null = null;
   /** Hạn mức token trong ngày (do máy chủ đếm); null = chưa biết hoặc máy chủ không có hạn mức. */
   private quota: QuotaInfo | null = null;
 
@@ -119,10 +124,10 @@ export class LocalController implements AgentController {
   static async create(o: ControllerOptions): Promise<LocalController> {
     const c = new LocalController(o);
     c.settings = c.applyPolicy(normalizeSettings(await o.store.load(), o.defaults));
-    c.llm = new LlmClient(() => ({ baseUrl: c.settings.baseUrl, model: c.settings.model, key: effectiveKey(c.settings, c.builtin).key, keyHeader: c.settings.keyHeader, temperature: c.settings.temperature, maxOutputTokens: c.settings.maxOutputTokens, thinking: c.settings.thinking, allowInsecure: c.settings.allowInsecureHttp, authHeaders: o.authHeaders ? async () => { try { return o.authHosts?.includes(new URL(c.settings.baseUrl).host) ? await o.authHeaders!() : null; } catch { return null; } } : undefined }), o.fetchImpl);
+    c.llm = new LlmClient(() => ({ baseUrl: c.settings.baseUrl, model: c.settings.model, key: effectiveKey(c.settings, c.builtin).key, keyHeader: c.settings.keyHeader, temperature: c.settings.temperature, maxOutputTokens: c.settings.maxOutputTokens, thinking: c.settings.thinking, allowInsecure: c.settings.allowInsecureHttp, tab: o.profile ?? "code", authHeaders: o.authHeaders ? async () => { try { return o.authHosts?.includes(new URL(c.settings.baseUrl).host) ? await o.authHeaders!() : null; } catch { return null; } } : undefined }), o.fetchImpl);
     // hạn mức token: lấy từ tiêu đề phản hồi mỗi lần gọi mô hình, và hỏi một lần lúc khởi động (không tốn token, không chặn khởi động)
     c.llm.onQuota = (q) => {
-      c.quota = q;
+      c.quota = q.tabs || !c.quota?.tabs ? q : { ...q, tabs: c.quota.tabs }; // tiêu đề phản hồi không có danh sách tab: giữ danh sách đã biết
       c.fire({ type: "quota", quota: q });
     };
     // chỉ hỏi máy chủ mặc định của ứng dụng (không gửi thêm yêu cầu tới địa chỉ do người dùng tự đặt)
@@ -136,6 +141,10 @@ export class LocalController implements AgentController {
       const st = await o.projects.list();
       c.projectId = st.active;
       c.projectName = st.projects.find((p) => p.id === st.active)?.name ?? "";
+    }
+    if (o.tasks?.enabled) {
+      c.tasksTimer = setInterval(() => void c.tasksTick(), o.tasks.tickMs ?? 30_000);
+      (c.tasksTimer as { unref?: () => void }).unref?.();
     }
     return c;
   }
@@ -170,7 +179,7 @@ export class LocalController implements AgentController {
     this.settings = this.applyPolicy(normalizeSettings(await this.o.store.load(), this.o.defaults));
   }
 
-  private async makeSession(): Promise<Session> {
+  private async makeSession(override?: Partial<SessionOptions>): Promise<Session> {
     // Gói mở rộng: của quản trị/người dùng do ứng dụng cung cấp + gói nằm trong dự án (.neuagent/packs, không tin cậy)
     const raws: RawPack[] = [];
     try {
@@ -180,7 +189,7 @@ export class LocalController implements AgentController {
     }
     raws.push(...(await readProjectPacks(this.o.env, this.o.env.root)));
     const { packs, notices } = parsePacks(raws);
-    const sess = await this.makeSessionWith(packs);
+    const sess = await this.makeSessionWith(packs, override);
     sess.startupNotices.push(...notices);
     return sess;
   }
@@ -202,7 +211,7 @@ export class LocalController implements AgentController {
   /** Tiến trình nền (máy chủ dev…) của dự án đang mở: sống qua "cuộc trò chuyện mới", mở lại lịch sử, chuyển sang rồi quay về dự án. */
   private procs?: ProcessManager;
 
-  private makeSessionWith(packs: LoadedPack[]): Promise<Session> {
+  private makeSessionWith(packs: LoadedPack[], override?: Partial<SessionOptions>): Promise<Session> {
     if (this.o.env.spawn && !this.procs) this.procs = new ProcessManager(this.o.env, () => undefined);
     return Session.create({
       procs: this.procs,
@@ -221,6 +230,7 @@ export class LocalController implements AgentController {
       packs,
       httpTools: this.httpToolRuntime(),
       questionTimeoutMs: this.o.questionTimeoutMs,
+      ...override,
     });
   }
 
@@ -289,7 +299,17 @@ export class LocalController implements AgentController {
     return () => this.listeners.delete(cb);
   }
 
+  /** Nhóm của người dùng không được dùng tab này (máy chủ báo qua /quota). Chỉ để báo sớm, tiết kiệm một lượt gọi; máy chủ vẫn tự kiểm tra từng yêu cầu. */
+  private tabDenied(): boolean {
+    const tabs = this.quota?.tabs;
+    return !!tabs && !tabs.includes(this.o.profile ?? "code");
+  }
+
   async send(text: string): Promise<void> {
+    if (this.tabDenied()) {
+      this.fire({ type: "notice", level: "error", text: `Nhóm của bạn không được dùng tab ${PROFILES[this.o.profile ?? "code"].label}.` });
+      return;
+    }
     if (this.busy) {
       // đang làm việc: tin thường được xếp hàng và đưa cho agent ở bước kế tiếp; lệnh (/…, !…) thì phải đợi
       const t = text.trim();
@@ -396,10 +416,12 @@ export class LocalController implements AgentController {
     const store = this.o.chats;
     if (!store || !t.projectId) return;
     const msgs = t.session.main.messages;
-    const turns = countTurns(msgs);
+    const old = t.session.main.archived;
+    const all = old.length ? [...old, ...msgs] : msgs;
+    const turns = countTurns(all);
     if (!turns) return;
     try {
-      await store.save(t.projectId, { id: t.chatId, title: chatTitle(msgs) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, ...(unfinished ? { unfinished: true } : {}), messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined });
+      await store.save(t.projectId, { id: t.chatId, title: chatTitle(all) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, ...(unfinished ? { unfinished: true } : {}), messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined, ...(old.length ? { archived: archiveForSave(old) } : {}) });
     } catch {
       /* không lưu được lịch sử (đầy bộ nhớ…): bỏ qua, không ảnh hưởng công việc */
     }
@@ -570,7 +592,9 @@ export class LocalController implements AgentController {
     const store = this.o.chats;
     if (store && this.projectId) {
       try {
-        if (countTurns(msgs)) await store.save(this.projectId, { id: this.chatId, title: chatTitle(msgs), updated: Date.now(), turns: countTurns(msgs), messages: trimForSave(msgs), inputs: aligned ? [...this.rawInputs] : undefined });
+        const old = this.session.main.archived;
+        const all = old.length ? [...old, ...msgs] : msgs;
+        if (countTurns(all)) await store.save(this.projectId, { id: this.chatId, title: chatTitle(all), updated: Date.now(), turns: countTurns(all), messages: trimForSave(msgs), inputs: aligned ? [...this.rawInputs] : undefined, ...(old.length ? { archived: archiveForSave(old) } : {}) });
         else await store.remove(this.projectId, this.chatId);
       } catch {
         /* không lưu được: bỏ qua */
@@ -616,6 +640,9 @@ export class LocalController implements AgentController {
 
   /** Dừng mọi thứ đang chạy (gọi khi đóng ứng dụng hoặc thay thế bộ điều khiển). */
   dispose(): void {
+    if (this.tasksTimer) clearInterval(this.tasksTimer);
+    this.tasksTimer = undefined;
+    this.taskAbort?.abort();
     this.interrupt();
     this.session.dispose();
     this.procs?.stopAll();
@@ -627,21 +654,39 @@ export class LocalController implements AgentController {
     this.session.dispose();
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.chatId = newId();
     this.rawInputs = [];
     this.fire({ type: "reset" });
   }
 
+  /**
+   * Thay phiên bằng phiên mới (đọc lại cấu hình). `keepMode`: giữ chế độ quyền người dùng vừa chọn (cùng dự án) thay vì quay về mặc định.
+   * Luôn báo chế độ thật cho giao diện: đã gặp nhãn vẫn ghi "Toàn quyền" trong khi phiên mới ở chế độ mặc định và cứ hỏi từng lệnh.
+   */
+  private async replaceSession(keepMode: boolean): Promise<void> {
+    const prev = keepMode ? this.session.mode : undefined;
+    this.session = await this.makeSession();
+    if (prev && prev !== this.session.mode) {
+      try {
+        this.session.setMode(prev);
+      } catch {
+        /* tab/chính sách không cho chế độ đó: giữ mặc định */
+      }
+    }
+    this.fire({ type: "mode", mode: this.session.mode });
+  }
+
   /** Tạo lại phiên (đọc lại AGENTS.md, cấu hình dự án…) nhưng giữ nguyên hội thoại đang có. */
   private async rebuildSession(): Promise<void> {
-    const messages = this.session.main.messages;
+    const { messages, archived } = this.session.main;
     this.session.dispose();
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.session.main.messages = messages;
+    this.session.main.archived = archived;
   }
 
   // ---------------------------------------------------------------- dự án
@@ -662,7 +707,7 @@ export class LocalController implements AgentController {
     this.trusted = await this.o.trust.isTrusted(env.root);
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(false);
     this.pendingNotices.push(...this.session.startupNotices);
     this.chatId = newId();
     this.rawInputs = [];
@@ -806,8 +851,9 @@ export class LocalController implements AgentController {
     this.session.dispose();
     this.todos = [];
     await this.loadProject();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.session.main.messages = saved.messages;
+    this.session.main.archived = saved.archived ?? [];
     this.chatId = saved.id;
     if (saved.title.endsWith(" (nhánh)")) this.branches.add(saved.id);
     this.rawInputs = saved.inputs && saved.inputs.length === countTurns(saved.messages) ? [...saved.inputs] : [];
@@ -1021,6 +1067,132 @@ export class LocalController implements AgentController {
     await this.o.store.save(persisted as Settings);
   }
 
+  // ---------------------------------------------------------------- tác vụ định kỳ
+  private get scope(): { profile: string; projectId: string } {
+    return { profile: this.o.profile ?? "code", projectId: this.projectId };
+  }
+  private taskNow(): number {
+    return (this.o.tasks?.now ?? Date.now)();
+  }
+  private async allTasks(): Promise<ScheduledTask[]> {
+    await this.syncSettings();
+    return this.settings.tasks ?? [];
+  }
+  /** Tác vụ của tab + dự án đang mở. */
+  async taskList(): Promise<ScheduledTask[]> {
+    const { profile, projectId } = this.scope;
+    return (await this.allTasks()).filter((t) => t.profile === profile && t.projectId === projectId);
+  }
+  /** Đọc lại cài đặt rồi sửa danh sách và lưu (nhiều bộ điều khiển dự án dùng chung một tệp cài đặt). */
+  private async changeTasks(fn: (all: ScheduledTask[]) => ScheduledTask[]): Promise<void> {
+    await this.saveSettings({ tasks: fn(await this.allTasks()) });
+  }
+
+  async taskAdd(spec: { name: string; prompt: string; every: Every }): Promise<{ ok: true; id: string } | { error: string }> {
+    const all = await this.allTasks();
+    const mine = all.filter((t) => t.profile === this.scope.profile && t.projectId === this.scope.projectId);
+    if (mine.length >= MAX_TASKS) return { error: `Mỗi dự án có tối đa ${MAX_TASKS} tác vụ định kỳ.` };
+    const t = newTask(spec ?? {}, this.scope, this.taskNow());
+    if (typeof t === "string") return { error: t };
+    await this.saveSettings({ tasks: [...all, t] });
+    return { ok: true, id: t.id };
+  }
+
+  async taskSet(id: string, enabled: boolean): Promise<void> {
+    await this.changeTasks((all) => all.map((t) => (t.id === id && this.isMine(t) ? { ...t, enabled: !!enabled } : t)));
+  }
+
+  async taskRemove(id: string): Promise<void> {
+    await this.changeTasks((all) => all.filter((t) => !(t.id === id && this.isMine(t))));
+  }
+
+  private isMine(t: ScheduledTask): boolean {
+    return t.profile === this.scope.profile && t.projectId === this.scope.projectId;
+  }
+
+  /** Bộ hẹn giờ gọi mỗi ~30 giây: chạy tối đa MỘT tác vụ đến hạn, và chỉ khi agent đang rảnh (không giẫm lên việc người dùng đang làm). */
+  async tasksTick(): Promise<void> {
+    if (this.taskAbort || this.busy) return;
+    const now = this.taskNow();
+    for (const t of await this.taskList()) {
+      const due = dueState(t, now);
+      if (due === "missed") await this.recordTask(t.id, now, { status: "skipped", summary: "Bỏ lỡ giờ hẹn (ứng dụng đang đóng)." }, false);
+      else if (due === "run") {
+        await this.taskRun(t.id, false);
+        return;
+      }
+    }
+  }
+
+  private async recordTask(id: string, now: number, run: { status: "ok" | "error" | "skipped"; summary: string }, counts: boolean): Promise<void> {
+    await this.changeTasks((all) => all.map((t) => (t.id === id ? withRun(t, now, run, counts) : t)));
+  }
+
+  /** Chạy ngay một tác vụ (người dùng bấm hoặc đến hạn). */
+  async taskRunNow(id: string): Promise<{ status: "ok" | "error" | "skipped"; summary: string } | { error: string }> {
+    if (this.busy) return { error: "Agent đang làm việc, hãy chờ hoặc bấm Dừng." };
+    if (this.taskAbort) return { error: "Đang có một tác vụ định kỳ chạy." };
+    return this.taskRun(id, true);
+  }
+
+  /**
+   * Chạy tác vụ trong MỘT PHIÊN RIÊNG, không có người ngồi trước. Quyền chặt hơn phiên thường:
+   *  - chế độ acceptEdits (hoặc default nếu chính sách không cho): chỉ sửa tệp trong dự án; lệnh shell, mạng, tệp nhạy cảm, tệp cấu hình dự án luôn cần hỏi;
+   *  - không ai trả lời nên MỌI yêu cầu hỏi bị từ chối (agent được báo để bỏ qua); không dùng quy tắc "luôn cho phép" đã lưu, không nạp cấu hình/hook/MCP của dự án;
+   *  - bỏ qua nếu hết hạn mức token, quá số lần mỗi ngày; cắt sau RUN_TIMEOUT_MS. Không ghi chẩn đoán, không lưu thành cuộc trò chuyện.
+   */
+  private async taskRun(id: string, manual: boolean): Promise<{ status: "ok" | "error" | "skipped"; summary: string } | { error: string }> {
+    const task = (await this.taskList()).find((t) => t.id === id);
+    if (!task) return { error: "Không còn tác vụ này." };
+    const now = this.taskNow();
+    const skip = async (summary: string) => {
+      await this.recordTask(id, now, { status: "skipped", summary }, false);
+      return { status: "skipped" as const, summary };
+    };
+    if (runsToday(task, now) >= MAX_RUNS_PER_DAY) return skip(`Đã chạy ${MAX_RUNS_PER_DAY} lần hôm nay (giới hạn mỗi ngày).`);
+    if (this.quota && (this.quota.state === "exceeded" || this.quota.state === "grace")) return skip("Hết hạn mức token hôm nay.");
+    const denied: string[] = [];
+    const settings = (): Settings => ({ ...this.settings, mode: "acceptEdits", permissions: { allow: [], deny: this.settings.permissions.deny } });
+    const abort = new AbortController();
+    this.taskAbort = abort;
+    const timer = setTimeout(() => abort.abort(), RUN_TIMEOUT_MS);
+    let run: { status: "ok" | "error"; summary: string };
+    let sess: Session | undefined;
+    try {
+      await this.syncSettings();
+      sess = await this.makeSession({
+        getSettings: settings,
+        emit: () => undefined,
+        trustProject: false,
+        project: { deny: this.project.deny, allow: [] },
+        procs: undefined,
+        askPermission: async (req) => {
+          if (denied.length < 20) denied.push(req.tool);
+          return { allow: false, note: "Tác vụ định kỳ chạy không có người duyệt: thao tác này bị từ chối. Bỏ qua nó và nêu trong báo cáo." };
+        },
+      });
+      try {
+        sess.setMode("acceptEdits");
+      } catch {
+        sess.setMode("default"); // chính sách không cho acceptEdits: càng chặt càng tốt
+      }
+      const guard = "[Tác vụ định kỳ, chạy tự động: không có người trả lời. Đừng hỏi lại. Thao tác bị từ chối thì bỏ qua và nói rõ trong báo cáo. Kết thúc bằng báo cáo ngắn gọn.]\n\n";
+      const final = await sess.main.runTurn(guard + task.prompt, abort.signal);
+      const skipped = denied.length ? ` (${denied.length} thao tác bị từ chối vì không có người duyệt: ${[...new Set(denied)].join(", ")})` : "";
+      run = { status: "ok", summary: (final.trim() || "(không có báo cáo)").slice(0, 600) + skipped };
+    } catch (e) {
+      const m = e instanceof LlmError && e.kind === "abort" ? (abort.signal.aborted && this.taskAbort === abort ? "Chạy quá lâu hoặc bị dừng." : "Bị dừng.") : (e as Error).message;
+      run = { status: "error", summary: m.slice(0, 300) };
+    } finally {
+      clearTimeout(timer);
+      sess?.dispose();
+      this.taskAbort = null;
+    }
+    await this.recordTask(id, this.taskNow(), run, true);
+    if (!manual) this.fire({ type: "notice", level: run.status === "ok" ? "info" : "warn", text: `Tác vụ định kỳ “${task.name}”: ${run.status === "ok" ? "đã chạy xong" : "lỗi"}. Xem ở nút ⏰.` });
+    return run;
+  }
+
   // ---------------------------------------------------------------- chẩn đoán (không chứa nội dung)
   private initDiagnostics(): void {
     const d = this.o.diagnostics;
@@ -1121,21 +1293,30 @@ export class LocalController implements AgentController {
     return e && /\/diag\/?$/.test(e) ? e.replace(/\/diag\/?$/, "/") : null;
   }
 
-  private async sharePayloadFor(chatId?: string, title?: string): Promise<{ payload: SharePayload } | { error: string }> {
-    let messages = this.session.main.messages;
-    let inputs: string[] | undefined = this.rawInputs.length === countTurns(messages) ? this.rawInputs : undefined;
+  private async sharePayloadFor(chatId?: string, title?: string): Promise<{ payload: SharePayloadV2 } | { error: string }> {
+    // cả phần trước các lần tóm tắt ngữ cảnh: trước đây sau khi tóm tắt chỉ còn tin nội bộ → báo "chưa có nội dung"
+    let messages = [...this.session.main.archived, ...this.session.main.messages];
+    let inputs: string[] | undefined = this.rawInputs.length === countTurns(this.session.main.messages) ? this.rawInputs : undefined;
     let t = "";
     if (chatId && chatId !== this.chatId) {
       if (!this.o.chats || !ID_RE.test(chatId)) return { error: "Không tìm thấy cuộc trò chuyện." };
       const saved = await this.o.chats.load(this.projectId, chatId);
       if (!saved) return { error: "Cuộc trò chuyện đã bị xoá." };
-      messages = saved.messages;
+      messages = [...(saved.archived ?? []), ...saved.messages];
       inputs = saved.inputs && saved.inputs.length === countTurns(saved.messages) ? saved.inputs : undefined;
       t = saved.title;
     }
     if (!countTurns(messages)) return { error: "Cuộc trò chuyện chưa có nội dung để chia sẻ." };
     const d = this.o.diagnostics;
-    const payload = buildSharePayload(messagesToHistory(messages, inputs), { title: (title ?? "").trim() || t || chatTitle(messages), profile: this.o.profile ?? "code", version: d?.version ?? "", platform: d?.platform ?? "" });
+    const payload = buildShareV2(messages, {
+      title: (title ?? "").trim() || t || chatTitle(messages),
+      profile: this.o.profile ?? "code",
+      version: d?.version ?? "",
+      platform: d?.platform ?? "",
+      model: this.settings.model,
+      mode: this.session.mode,
+      inputs,
+    });
     return { payload };
   }
 
@@ -1233,11 +1414,12 @@ export class LocalController implements AgentController {
   async trustProject(trust: boolean): Promise<void> {
     await this.o.trust.setTrusted(this.o.env.root, trust);
     this.trusted = trust;
-    const messages = this.session.main.messages;
+    const { messages, archived } = this.session.main;
     this.session.dispose();
-    this.session = await this.makeSession();
+    await this.replaceSession(true);
     this.pendingNotices.push(...this.session.startupNotices);
     this.session.main.messages = messages;
+    this.session.main.archived = archived;
     this.fire({ type: "notice", level: "info", text: trust ? "Đã tin cậy dự án này: quy tắc allow trong .neuagent/settings.json có hiệu lực." : "Không tin cậy dự án: chỉ áp dụng quy tắc cấm." });
   }
 

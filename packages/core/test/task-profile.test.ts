@@ -10,7 +10,10 @@ describe("phân loại yêu cầu (cục bộ, chỉ ra mã)", () => {
     expect(classifyPrompt("chuyển file này sang PDF").kind).toBe("convert");
     expect(classifyPrompt("giải thích hàm reduce là gì").kind).toBe("explain");
     expect(classifyPrompt("so sánh hai phương án").kind).toBe("research");
-    expect(classifyPrompt("ok cảm ơn").kind).toBe("other");
+    expect(classifyPrompt("ok cảm ơn").kind).toBe("followup");
+    expect(classifyPrompt("làm tiếp đi").kind).toBe("followup");
+    expect(classifyPrompt("cái nút này nằm ở đâu?").kind).toBe("explain");
+    expect(classifyPrompt("hmm").kind).toBe("other");
   });
   it("nhận ra người dùng nói chưa đạt", () => {
     expect(classifyPrompt("vẫn lỗi như cũ").redoCue).toBe(true);
@@ -26,6 +29,7 @@ describe("phân loại yêu cầu (cục bộ, chỉ ra mã)", () => {
     expect(stackOf({ pkg: JSON.stringify({ devDependencies: { vite: "5", tailwindcss: "3" } }) })).toEqual({ stack: "vite", ui: "tailwind" });
     expect(stackOf({ reqs: "flask==3\nrequests" })).toEqual({ stack: "flask", ui: "none" });
     expect(stackOf({ hasHtml: true })).toEqual({ stack: "static", ui: "none" });
+    expect(stackOf({})).toEqual({ stack: "none", ui: "none" }); // thư mục trống/chỉ có tài liệu: không phải "khác"
     expect(stackOf({ pkg: "{hỏng" })).toEqual({ stack: "node", ui: "none" });
   });
   it("lệnh kiểm chứng và kết quả", () => {

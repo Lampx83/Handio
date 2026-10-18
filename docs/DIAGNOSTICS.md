@@ -19,7 +19,7 @@ Mục tiêu: hệ thống **tự phát hiện vấn đề** (lỗi mô hình/c�
 |---|---|
 | `turn` (mỗi lượt làm việc) | `end` (ok/interrupted/error/step_limit/loop), `dur_s`, `ttft_ms`, `steps`, `tools`, `tool_fail`, `prompt_tok`, `completion_tok`, `ctx_pct`, `compactions`, `perm_allow`, `perm_deny` |
 | `turn` (bổ sung từ 0.4.0) | `calls` (số lần gọi mô hình), `peak_prompt_tok` (lời nhắc lớn nhất của một lần gọi), `cached_tok` (token lời nhắc dùng lại từ bộ nhớ đệm), `tool_out_tok` (ước lượng token của kết quả công cụ đã gửi lại), `pruned` (số lần lược bớt kết quả cũ), `first_tool_s` (giây tới công cụ đầu tiên): để biết token đi đâu |
-| `turn` (bổ sung từ 0.8.16: **hồ sơ công việc**) | `kind` (build/edit/fix/explain/research/convert/other: loại việc), `redo` (người dùng nhắn lại rằng kết quả chưa đạt; chỉ từ lượt thứ hai), `nth` (lượt thứ mấy của cuộc trò chuyện), `stack` (static/react/vue/svelte/next/vite/node/express/python/flask/fastapi/django/streamlit/other), `ui` (tailwind/chakra/mui/antd/bootstrap/shadcn/none), `art` (loại sản phẩm chính theo đuôi tệp: web/python/word/excel/slides/pdf/text/data/image/other), `files_new`, `files_edit` (số tệp tạo/sửa), `verify` (none/pass/fail: kết quả lần dựng/kiểm thử/check_page cuối của lượt) |
+| `turn` (bổ sung từ 0.8.16: **hồ sơ công việc**) | `kind` (build/edit/fix/explain/research/convert/followup/other: loại việc; `followup` = tin ngắn nối tiếp như "ok", "làm tiếp đi"), `redo` (người dùng nhắn lại rằng kết quả chưa đạt; chỉ từ lượt thứ hai), `nth` (lượt thứ mấy của cuộc trò chuyện), `stack` (none/static/react/vue/svelte/next/vite/node/express/python/flask/fastapi/django/streamlit/other), `ui` (tailwind/chakra/mui/antd/bootstrap/shadcn/none), `art` (loại sản phẩm chính theo đuôi tệp: web/python/word/excel/slides/pdf/text/data/image/other), `files_new`, `files_edit` (số tệp tạo/sửa), `verify` (none/pass/fail: kết quả lần dựng/kiểm thử/check_page cuối của lượt) |
 | `ui` | `act`: việc người dùng làm trong giao diện, **chỉ mã** (`suggestion`, `template`, `attach`, `new_chat`, `tab_switch`, `settings_open`, `mode_change`, `run_click`…): để biết tính năng nào được dùng/bỏ qua |
 | `feedback` | `v` (`up`/`down`) và `reason` chọn sẵn (`wrong`/`incomplete`/`slow`/`confusing`/`other`): người dùng **tự bấm** 👍/👎 sau câu trả lời; không có chữ tự do |
 | `tool` | `name` (danh sách cố định, `mcp`, `other`), `ok`, `dur` (lt1s/lt5s/lt30s/lt2m/ge2m), `err` (khi lỗi; **chỉ mã** như `not_found`, `read_first`, `no_match`, `sandbox`, `program`, `denied`…; từ bản 0.2.0) |
@@ -41,7 +41,7 @@ Phía nginx, nhật ký `/var/log/nginx/neu-agent-access.json.log` chỉ có: gi
 ứng dụng ─POST /agent/diag (SSO)─▶ nginx ─X-User-Email─▶ collector.py (127.0.0.1:4190) ─▶ /var/lib/neu-agent/diag/YYYY-MM-DD.jsonl (0600, xoá sau 90 ngày)
 nginx JSON log ──┐
 diag JSONL ──────┴─▶ report.py (hằng ngày 06:30) ─▶ /var/lib/neu-agent/reports/{YYYY-MM-DD,latest}.{md,html,json}
-healthz.py (5 phút) ─▶ /var/lib/neu-agent/health.json (+ /var/log/neu-agent/health.log khi lỗi) ─▶ /agent/healthz chỉ trả {"ok":true|false}
+healthz.py (5 phút; chat thật 15 phút) ─▶ /var/lib/neu-agent/health.json (+ /var/log/neu-agent/health.log khi lỗi) ─▶ /agent/healthz chỉ trả {"ok":true|false}
 ```
 
 Bộ thu: tối đa 16 KB và 200 sự kiện mỗi gói, giới hạn tốc độ theo người dùng giả danh (burst 20, 12 yêu cầu/phút, 20 000 sự kiện/ngày), mỗi tệp ngày ≤100 MB.
@@ -59,6 +59,10 @@ sudo ./diag/install-diag.sh --admin ban@neu.edu.vn           # người dùng ne
 - Quản trị viên xem báo cáo: danh sách ở `/etc/neu-agent/admins.txt` (mỗi dòng một email, hoặc tên đăng nhập của tài khoản mật khẩu — xem `docs/SECURITY.md`); sửa xong `sudo systemctl restart neu-agent-diag`. Xem tại `https://ai.neu.edu.vn/agent/admin/` (nginx xác thực SSO, bộ thu đối chiếu email, CSP chặt, không tài nguyên ngoài). Không phải quản trị viên → 403.
 - Chạy báo cáo ngay: `sudo systemctl start neu-agent-diag-report.service`; xem `latest.md` trong `/var/lib/neu-agent/reports/`.
 - Sức khoẻ: `cat /var/lib/neu-agent/health.json`, `tail /var/log/neu-agent/health.log`, `curl https://ai.neu.edu.vn/agent/healthz`. Công cụ giám sát ngoài chỉ cần gọi `/agent/healthz` (200 `{"ok":true}`; 503 `{"ok":false}` khi có kiểm tra lỗi hoặc dữ liệu sức khoẻ cũ hơn 15 phút).
+- `healthz.py` kiểm (5 phút/lần): oauth2-proxy, cổng mô hình còn trả lời, **chat thật**, bộ thu, cổng hạn mức, đĩa; thêm **hạn chứng chỉ HTTPS** và **hạn client secret Entra** nếu có cấu hình. Kết quả: `ok` (đỏ khi có lỗi) và `warn` (cảnh báo, **không** làm `/agent/healthz` đỏ).
+  - **Chat thật** (`chat`): một lệnh `/vllm/v1/chat/completions` `max_tokens: 1`, stream, tới thẳng Kong → vLLM, đo thời gian **token đầu**. Lỗi HTTP, không có token hoặc > 20 giây (`NEU_HEALTH_CHAT_MAX_MS`) = đỏ. Đang tốt thì 15 phút mới gọi lại (`NEU_HEALTH_CHAT_EVERY_S`), đang lỗi thì gọi mỗi lần. Key: `install-diag.sh` nạp tệp `/etc/nginx/conf.d/neu-agent.conf` (nơi `install.sh` giữ key) qua `LoadCredential` — không chép key ra tệp khác, không ghi vào `health.json`/nhật ký. Chưa có tệp đó = cảnh báo.
+  - **Secret Entra** (`entra_secret`): quản trị viên khai ngày hết hạn (xem trong Entra → App registrations → Certificates & secrets): `echo 2027-04-30 | sudo tee /etc/neu-agent/entra-secret-expires` rồi chạy lại `install-diag.sh`. Còn < 30 ngày = cảnh báo; đã hết = đỏ (toàn bộ đăng nhập Microsoft hỏng). Đổi secret xong nhớ sửa ngày. Chưa khai thì bỏ qua (script cài nhắc).
+  - **Chứng chỉ HTTPS** (`tls`): tên miền lấy từ `server_name` của site nginx đã cài, kết nối tới máy 222 qua địa chỉ nội bộ (`SITE_222_INTERNAL_IP`, SNI = tên miền). Muốn khác: `/etc/neu-agent/tls-hosts`, mỗi dòng `tên.miền@ip:cổng`. Còn < 30 ngày = cảnh báo; hết hạn = đỏ; không kết nối/không xác minh được = cảnh báo.
 - Gợi ý bằng mô hình (tuỳ chọn): đặt key vào `/etc/neu-agent/llm-key` (600) rồi chạy lại `install-diag.sh`. Chỉ gửi **số liệu tổng hợp** (không sự kiện thô, không chuỗi tự do) tới cổng mô hình (gateway) của nơi triển khai; kết quả là *bản nháp* ghi rõ cần người kiểm tra.
 - Lưu ý: `access_log` của máy chủ ảo này nay chỉ ghi JSON ở tệp trên (không còn ghi vào `access.log` chung).
 
@@ -82,7 +86,7 @@ Chỉ email (hoặc tên đăng nhập) trong `/etc/neu-agent/admins.txt` mới 
 
 ### Cảnh báo chủ động (tuỳ chọn)
 
-Trang chỉ thụ động. Muốn nhận tin khi có sự cố: đặt URL webhook **https** (Microsoft Teams / Slack / Mattermost… nhận `{"text": "…"}`) vào `/etc/neu-agent/alert-webhook` (0600) rồi chạy lại `sudo ./diag/install-diag.sh` (tạo drop-in nạp URL qua `LoadCredential` và mở mạng cho đúng dịch vụ `neu-agent-diag-alert`). Mỗi 10 phút `alerts.py` đọc `stats.json` + `health.json` và báo khi: tỷ lệ lượt lỗi 24 giờ ≥ 20% (≥ 20 lượt), cổng mô hình 5xx ≥ 5% (≥ 50 lệnh), ≥ 5 người bị chặn vì hạn mức, kiểm tra sức khoẻ lỗi hoặc cũ, không có dữ liệu chẩn đoán mới > 6 giờ, trang quản trị không được làm mới > 1 giờ. Mỗi cảnh báo nhắc lại sau 6 giờ nếu còn, và có một tin khi đã hết. **Tin chỉ có số liệu tổng hợp** (không nội dung, không mã người dùng, không email). Không có tệp webhook thì dịch vụ không làm gì và không có mạng. Thử: `python3 /usr/local/lib/neu-agent-diag/alerts.py --dry-run`.
+Trang chỉ thụ động. Muốn nhận tin khi có sự cố: đặt URL webhook **https** (Microsoft Teams / Slack / Mattermost… nhận `{"text": "…"}`) vào `/etc/neu-agent/alert-webhook` (0600) rồi chạy lại `sudo ./diag/install-diag.sh` (tạo drop-in nạp URL qua `LoadCredential` và mở mạng cho đúng dịch vụ `neu-agent-diag-alert`). Mỗi 10 phút `alerts.py` đọc `stats.json` + `health.json` và báo khi: tỷ lệ lượt lỗi 24 giờ ≥ 20% (≥ 20 lượt), cổng mô hình 5xx ≥ 5% (≥ 50 lệnh), ≥ 5 người bị chặn vì hạn mức, kiểm tra sức khoẻ lỗi hoặc cũ, không có dữ liệu chẩn đoán mới > 6 giờ, trang quản trị không được làm mới > 1 giờ, chứng chỉ HTTPS hoặc secret Entra còn < 30 ngày (mức trung bình, nhắc mỗi ngày) hoặc đã hết hạn (mức cao), không kiểm được chat thật/chứng chỉ/hạn secret. Mỗi cảnh báo nhắc lại sau 6 giờ nếu còn, và có một tin khi đã hết. **Tin chỉ có số liệu tổng hợp** (không nội dung, không mã người dùng, không email). Không có tệp webhook thì dịch vụ không làm gì và không có mạng. Thử: `python3 /usr/local/lib/neu-agent-diag/alerts.py --dry-run`.
 
 Giới hạn cần biết: (1) chỉ thấy người **có gửi chẩn đoán** (tắt trong Cài đặt/`policy.json` thì không hiện); (2) người dùng chỉ là mã giả danh — không có email, đúng cam kết ở mục 1; muốn tra mã ứng với ai, tự tính `HMAC-SHA256(diag-secret, email_viết_thường)[:8 hex]` trên máy 220; (3) nhật ký nginx chỉ giữ 14 ngày nên số tải/lệnh gọi mô hình theo ngày được **cộng dồn từ lúc cài trang này** vào `reports/nginx-daily.json`; (4) lượt tải = yêu cầu HTTP 200 tới tệp `.dmg/.exe/...` (route nginx `download_pkg`; cần chạy lại `sudo ./install.sh <key>` để nginx có route này); (5) đổi `diag-secret` thì mã người dùng đổi theo.
 
@@ -182,12 +186,26 @@ Khi cả hai cùng tăng: kiểm tra `maxOutputTokens`, mô tả công cụ và 
 |---|---|
 | Đường đi | ứng dụng → `POST /agent/share` (SSO, ≤ 512 KB) → `shares.py` → SQLite `/var/lib/neu-agent/feedback/shares.db` (0700, `neu-diag`) |
 | Người dùng được báo | người có liên kết (đã đăng nhập) VÀ nhóm phát triển đều đọc được; che tự động; thu hồi bất cứ lúc nào |
-| Gồm | tiêu đề, các lượt hỏi/đáp, tên công cụ + tóm tắt ngắn thao tác (≤ 400 ký tự); tab, phiên bản, nền tảng |
-| Không gồm | nội dung tệp, kết quả công cụ dài, đường dẫn đầy đủ của máy, khoá/mật khẩu (che ở máy người dùng và che lần nữa ở máy chủ) |
+| Gồm (bản v2, từ 0.8.21) | tiêu đề; **toàn bộ** cuộc trò chuyện, kể cả phần trước các lần tóm tắt ngữ cảnh; lời người dùng gõ; trả lời của agent; mỗi lần gọi công cụ kèm **đối số** (≤ 1.500 ký tự) và **phần đầu kết quả** (≤ 1.500; đọc tệp ≤ 600), đánh dấu lỗi; **lời nhắc của Handio** (`[Hệ thống] …`) và **bản tóm tắt ngữ cảnh**; tab, phiên bản, nền tảng, **mô hình**, **chế độ quyền** |
+| Không gồm | tệp người dùng đính kèm bằng @, phần sau của kết quả dài, khoá/mật khẩu và dữ liệu cá nhân (che ở máy người dùng rồi che lần nữa ở máy chủ). Hộp chia sẻ báo rằng bản chia sẻ có thể chứa một đoạn ngắn nội dung tệp qua kết quả công cụ |
 | Liên kết | mã ngẫu nhiên 22 ký tự; trang đọc là HTML tĩnh, không script, CSP chặt, `noindex`; chưa đăng nhập thì chuyển tới đăng nhập |
 | Giới hạn | 20 liên kết/ngày và tối đa 200 liên kết đang hoạt động mỗi người; ≤ 400 mục, ≤ 300 KB |
 | Ai quản lý | chỉ quản trị viên ở `/agent/admin/shares`: xem, tìm, xoá; **tải JSONL** (tên người chia sẻ thay bằng mã giả danh) để phân tích |
 | Thu hồi | người chia sẻ thu hồi ở hộp 🔗 (xoá hẳn bản chụp); quản trị xoá bất kỳ |
 
 Khi dùng JSONL để cải tiến: đừng đưa nội dung ra ngoài hệ thống; ưu tiên mẫu lỗi (công cụ thất bại, hiểu sai yêu cầu) và chuyển thành ca kiểm thử đã ẩn danh.
+
+### Đọc một bản chia sẻ để cải tiến (cho nhóm phát triển và trợ lý AI)
+
+Người dùng gửi liên kết `https://ai.neu.edu.vn/agent/share/<mã>`. Người trong nhóm `neu-diag` trên máy 220 đọc được bản đó bằng lệnh **chỉ đọc**, không cần đăng nhập trang quản trị:
+
+```bash
+ssh 220 sudo -n -u neu-diag /usr/local/sbin/neu-share-read <mã hoặc liên kết>          # Markdown: người dùng, agent, công cụ + kết quả, nhắc hệ thống
+ssh 220 sudo -n -u neu-diag /usr/local/sbin/neu-share-read <mã> --json                 # JSON
+ssh 220 sudo -n -u neu-diag /usr/local/sbin/neu-share-read --list 20                   # 20 bản gần nhất (mã, ngày, tab, phiên bản, mô hình, tiêu đề)
+```
+
+- Mở CSDL ở chế độ chỉ đọc, không tăng lượt xem, **không in người chia sẻ**. Bản đã thu hồi thì không đọc được.
+- sudoers (`/etc/sudoers.d/neu-share-read`, do `install-diag.sh` tạo, kiểm bằng `visudo -cf`) chỉ cho nhóm `neu-diag` chạy **đúng lệnh này** dưới tài khoản `neu-diag`, không phải root. Thêm người vào nhóm: `sudo ~/neu-agent-220/quota/quota.sh capture grant <user>`.
+- Trợ lý AI (Claude Code) chỉ cần quy tắc cho phép hẹp, ví dụ `Bash(ssh 220 sudo -n -u neu-diag /usr/local/sbin/neu-share-read:*)`, rồi dán liên kết chia sẻ cho nó. Kết quả phân tích nên thành ca kiểm thử đã ẩn danh (`FakeLlm`), không chép nội dung vào kho mã.
 

@@ -469,3 +469,52 @@ describe("cuộc trò chuyện mới không phải khám phá lại thư mục",
     expect(work.c.currentSession.systemPrompt(null, 0)).not.toContain("Project files at the start");
   });
 });
+
+describe("dấu vết lược bớt trong lịch sử không bao giờ bị ghi vào tệp", () => {
+  // Đã gặp (13/10, Qwen): đối số write_file cũ bị thay bằng dấu vết ngắn để tiết kiệm ngữ cảnh; mô hình chép lại dấu vết đó làm
+  // `content` → styles.css 16.547 ký tự bị ghi đè còn một dòng; và làm `old_string` → edit_file trượt liên tục.
+  const note = "[16547 ký tự đã ghi vào tệp; lược bớt khỏi lịch sử để tiết kiệm ngữ cảnh, đọc lại bằng read_file nếu cần]";
+  const text = async (env: MemoryEnv, p: string) => new TextDecoder().decode(await env.readBytes("/ws/" + p));
+
+  it("write_file/edit_file nhận dấu vết làm nội dung → từ chối, tệp giữ nguyên, chỉ cách đọc lại", async () => {
+    const { c, env, events } = await makeController([
+      { calls: [{ name: "read_file", args: { path: "styles.css" } }] },
+      { calls: [{ name: "write_file", args: { path: "styles.css", content: note } }] },
+      { calls: [{ name: "write_file", args: { path: "css/new.css", content: note } }] },   // tệp mới cũng không được nhận dấu vết
+      { calls: [{ name: "read_file", args: { path: "app.js" } }] },
+      { calls: [{ name: "edit_file", args: { path: "app.js", old_string: note, new_string: "let a = 2;" } }] },
+      { text: "xong" },
+    ], { seed: { "styles.css": "body { color: red; }\n", "app.js": "let a = 1;\n" } });
+    await c.send("sửa giao diện");
+    expect(await text(env, "styles.css")).toBe("body { color: red; }\n");
+    expect(await text(env, "app.js")).toBe("let a = 1;\n");
+    await expect(env.readBytes("/ws/css/new.css")).rejects.toThrow();
+    const bad = results(events).filter((r) => r.name === "write_file" || r.name === "edit_file");
+    expect(bad).toHaveLength(3);
+    for (const r of bad) {
+      expect(r.ok).toBe(false);
+      expect(r.errKind).toBe("bad_args");
+      expect(r.output).toMatch(/dấu vết/);
+      expect(r.output).toMatch(/read_file/);
+    }
+  });
+
+  it("dấu vết do chính phiên tạo ra (đối số ghi tệp cũ) cũng bị nhận ra", async () => {
+    const long = "x".repeat(900);
+    let seen = "";
+    const { c, env } = await makeController((messages, n) => {
+      if (n === 0) return { calls: [{ name: "write_file", args: { path: "a.css", content: long } }] };
+      if (n === 1) return { text: "đã ghi" };
+      if (n === 2) {
+        for (const m of messages) for (const tc of m.tool_calls ?? []) if (tc.function.name === "write_file") seen = JSON.parse(tc.function.arguments).content;
+        return { calls: [{ name: "write_file", args: { path: "a.css", content: seen } }] };
+      }
+      return { text: "xong" };
+    });
+    await c.send("làm css");
+    (c.currentSession as any).main.pruneToolResults(0);   // như khi ngữ cảnh phình to
+    await c.send("sửa tiếp");
+    expect(seen).toMatch(/^\[900 ký tự/);            // lịch sử đã thay đối số bằng dấu vết
+    expect(await text(env, "a.css")).toBe(long);
+  });
+});

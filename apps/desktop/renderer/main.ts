@@ -99,6 +99,11 @@ class IpcController implements AgentController {
   procedureList = () => this.call<any>("procedureList");
   procedureSave = (n: string, d?: string) => this.call<any>("procedureSave", ...(d === undefined ? [n] : [n, d]));
   procedureRemove = (n: string) => this.call<void>("procedureRemove", n);
+  taskList = () => this.call<any>("taskList");
+  taskAdd = (s: any) => this.call<any>("taskAdd", s);
+  taskSet = (id: string, on: boolean) => this.call<void>("taskSet", id, on);
+  taskRemove = (id: string) => this.call<void>("taskRemove", id);
+  taskRunNow = (id: string) => this.call<any>("taskRunNow", id);
   exportDesign = (p: string, f: "pdf" | "png", w: number, h?: number) => this.call<any>("exportDesign", ...(h === undefined ? [p, f, w] : [p, f, w, h]));
 }
 

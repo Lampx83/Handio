@@ -1,5 +1,5 @@
 [Unit]
-Description=NEU Agent - kiem tra suc khoe (oauth2-proxy, cong mo hinh, dia, bo thu)
+Description=NEU Agent - kiem tra suc khoe (oauth2-proxy, chat that qua cong mo hinh, dia, bo thu, han chung chi/secret)
 After=neu-agent-diag.service
 
 [Service]
@@ -34,7 +34,8 @@ MemoryDenyWriteExecute=yes
 SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
-# chỉ nói chuyện với loopback và cổng mô hình
+# chỉ nói chuyện với loopback và cổng mô hình (drop-in probe.conf của install-diag.sh thêm máy 222 để kiểm chứng chỉ HTTPS,
+# và nạp key mô hình / hạn secret Entra qua LoadCredential)
 IPAddressDeny=any
 IPAddressAllow=localhost @@SITE_GATEWAY_IP@@
 UMask=0027

@@ -263,6 +263,9 @@ export async function runSmoke(c: Ctx): Promise<number> {
         "/": ["text/html", `<!doctype html><title>Ổn</title><div id=root><h1>Xin chào đồng hồ</h1></div><script>console.log("bình thường")</script>`],
         "/loi": ["text/html", `<!doctype html><title>Lỗi</title><div id=root></div><script>function App(){ return Grid; } App();</script>`],
         "/ngoai": ["text/html", `<!doctype html><title>Ngoài</title><h1>Có chữ</h1><script>fetch("https://example.com/x").catch(()=>{}); new Image().src="http://203.0.113.9/p.png";</script>`],
+        // trang tải sạch, chỉ nổ khi bấm nút (lỗi thật của ứng dụng trắc nghiệm: check_page "ổn" nhưng bấm "Bắt đầu làm bài" là ReferenceError)
+        "/quiz": ["text/html", `<!doctype html><title>Quiz</title><h1>Trắc nghiệm</h1><button onclick="startQuiz()">Bắt đầu làm bài</button><script>function startQuiz(){ document.body.append(questions.length); }</script>`],
+        "/quiz-ok": ["text/html", `<!doctype html><title>Quiz</title><h1>Trắc nghiệm</h1><input placeholder="Họ tên"><button onclick="go()">Bắt đầu làm bài</button><div id=q></div><script>function go(){ const n = document.querySelector("input").value; if (confirm("Bắt đầu?")) document.getElementById("q").innerHTML = "<p>Chào " + n + ". Câu 1: 2 + 3 = ?</p><button onclick='done()'>5</button>"; } function done(){ alert("Đúng"); document.getElementById("q").textContent = "Điểm: 10/10"; }</script>`],
       };
       const srv = createServer((req, res) => {
         const hit = pages[(req.url ?? "/").split("?")[0]];
@@ -280,6 +283,14 @@ export async function runSmoke(c: Ctx): Promise<number> {
         check("check_page: trang ổn → có chữ, không lỗi, không trắng", ok.loaded && !ok.blank && ok.errors.length === 0 && /Xin chào/.test(ok.text), JSON.stringify({ t: ok.title, e: ok.errors }));
         check("check_page: bắt đúng lỗi 'Grid is not defined' và báo TRANG TRẮNG", bad.loaded && bad.blank && bad.errors.some((e) => /Grid is not defined/.test(e)), JSON.stringify(bad.errors));
         check("check_page: yêu cầu ra ngoài máy bị chặn và được ghi lại", out.loaded && out.failedRequests.some((f) => /chặn/.test(f)), JSON.stringify(out.failedRequests));
+        const quizBad = await checkPage(`http://127.0.0.1:${port}/quiz`, { waitMs: 200, root: c.codeDir, steps: [{ action: "click", text: "Bắt đầu làm bài" }] });
+        const quizOk = await checkPage(`http://127.0.0.1:${port}/quiz-ok`, { waitMs: 200, root: c.codeDir, steps: [
+          { action: "type", text: "Họ tên", value: "An" }, { action: "click", text: "Bắt đầu làm bài" }, { action: "expect_text", text: "Chào An" }, { action: "click", text: "5" }, { action: "expect_text", text: "Điểm: 10/10" },
+        ] });
+        const quizMiss = await checkPage(`http://127.0.0.1:${port}/quiz-ok`, { waitMs: 200, root: c.codeDir, steps: [{ action: "click", text: "Nộp bài" }, { action: "wait", ms: 100 }] });
+        check("check_page steps: trang tải sạch nhưng bấm nút thì lỗi → lỗi ghi đúng cho bước 1", quizBad.loaded && quizBad.errors.length === 0 && !!quizBad.steps?.[0]?.errors.some((e) => /questions is not defined/.test(e)), JSON.stringify([quizBad.errors, quizBad.steps]));
+        check("check_page steps: gõ, bấm, kiểm chữ đi hết luồng; confirm/alert không bật lên mà được ghi lại", quizOk.steps?.length === 5 && quizOk.steps.every((x) => x.ok && !x.errors.length) && /Điểm: 10\/10/.test(quizOk.text) && !!quizOk.steps[1].dialogs?.some((d) => /Bắt đầu\?/.test(d)) && !!quizOk.steps[3].dialogs?.some((d) => /Đúng/.test(d)), JSON.stringify(quizOk.steps));
+        check("check_page steps: không có nút → dừng ở bước đó, kể các nút đang hiện", quizMiss.steps?.length === 1 && !quizMiss.steps[0].ok && /Bắt đầu làm bài/.test(quizMiss.steps[0].note ?? ""), JSON.stringify(quizMiss.steps));
         check("check_page: 404 được ghi nhận; địa chỉ ngoài máy bị từ chối ngay", none.failedRequests.some((f) => /^404 /.test(f)) && !ext.loaded && /localhost/.test(ext.error ?? ""), JSON.stringify([none.failedRequests, ext.error]));
       } finally {
         srv.close();

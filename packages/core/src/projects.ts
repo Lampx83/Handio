@@ -51,6 +51,8 @@ export interface SavedChat extends ChatMeta {
   messages: ChatMessage[];
   /** Nội dung người dùng gõ (trước khi mở rộng lệnh / và đính kèm @tệp), theo thứ tự các lượt hỏi. */
   inputs?: string[];
+  /** Tin nhắn trước các lần tóm tắt ngữ cảnh (mô hình không còn thấy): để lịch sử và bản chia sẻ không mất phần đầu. */
+  archived?: ChatMessage[];
 }
 
 /** Lưu lịch sử trò chuyện theo dự án (Desktop: thư mục dữ liệu ứng dụng; Web: localStorage). Không ghi vào thư mục dự án của người dùng. */
@@ -91,7 +93,11 @@ export const isInternalUser = (t: string): boolean => /^\[(Tôi vừa tự chạ
 /** Tiêu đề cuộc trò chuyện = câu hỏi đầu tiên của người dùng. */
 export function chatTitle(messages: ChatMessage[]): string {
   const first = messages.find((m) => m.role === "user" && m.content && !isInternalUser(m.content));
-  const t = (first?.content ?? "").replace(/\s+/g, " ").trim();
+  const raw = first?.content ?? "";
+  // ảnh dán: tham chiếu @dan/<tên>.png không phải là tiêu đề (giao diện hiện ảnh); chỉ có ảnh thì đặt tên theo ảnh
+  const noRef = raw.replace(/(^|\s)@(?:dan|\.neuagent\/pasted)\/[^\s]+?\.(?:png|jpe?g|webp|gif)(?=\s|$)/gi, "$1");
+  const t = noRef.replace(/\s+/g, " ").trim();
+  if (!t && noRef !== raw) return "Ảnh đính kèm";
   return t ? (t.length > 60 ? t.slice(0, 58) + "…" : t) : "Cuộc trò chuyện mới";
 }
 
@@ -102,6 +108,9 @@ const MAX_TOOL_OUT = 1500;
 export function trimForSave(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((m) => (m.role === "tool" && m.content && m.content.length > MAX_TOOL_OUT ? { ...m, content: m.content.slice(0, MAX_TOOL_OUT) + "\n… (đã cắt khi lưu)" } : m));
 }
+
+/** Phần trước các lần tóm tắt khi lưu: rút gọn và chỉ giữ ~600 tin cuối (bản web lưu ở localStorage, dung lượng có hạn). */
+export const archiveForSave = (old: ChatMessage[]): ChatMessage[] => trimForSave(old.slice(-600));
 
 function briefArgs(json: string): string {
   try {

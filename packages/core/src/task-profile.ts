@@ -5,9 +5,9 @@
  */
 import { fold } from "./tool-groups";
 
-export const TASK_KINDS = ["build", "edit", "fix", "explain", "research", "convert", "other"] as const;
+export const TASK_KINDS = ["build", "edit", "fix", "explain", "research", "convert", "followup", "other"] as const;
 export const ARTIFACTS = ["web", "python", "word", "excel", "slides", "pdf", "text", "data", "image", "other"] as const;
-export const STACKS = ["static", "react", "vue", "svelte", "next", "vite", "node", "express", "python", "flask", "fastapi", "django", "streamlit", "other"] as const;
+export const STACKS = ["none", "static", "react", "vue", "svelte", "next", "vite", "node", "express", "python", "flask", "fastapi", "django", "streamlit", "other"] as const;
 export const UI_LIBS = ["tailwind", "chakra", "mui", "antd", "bootstrap", "shadcn", "none"] as const;
 export const VERIFY_STATES = ["none", "pass", "fail"] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
@@ -22,19 +22,26 @@ const KIND_RULES: [TaskKind, RegExp][] = [
   ["edit", /\b(sua|chinh|doi|thay|them|bo sung|cap nhat|xoa|bo bot|dieu chinh|rut gon|viet lai|edit|update|change|add|remove|rename|refactor|improve|cai thien|nang cap)\b/],
   ["build", /\b(tao|lam|viet|xay dung|thiet ke|soan|lap|build|create|make|generate|develop|code|phat trien)\b/],
   ["research", /\b(tim|tra cuu|nghien cuu|tong hop|so sanh|thu thap|search|research|find|compare|tim hieu)\b/],
-  ["explain", /\b(giai thich|la gi|tai sao|vi sao|nhu the nao|huong dan|giup toi hieu|explain|why|what is|how (do|does|to))/],
+  ["explain", /\b(giai thich|la gi|tai sao|vi sao|nhu the nao|huong dan|giup toi hieu|co the|lam sao|bao nhieu|o dau|khi nao|explain|why|what is|how (do|does|to))/],
 ];
+/** Tin ngắn nối tiếp ("ok", "tiếp tục", "làm tiếp đi", "được rồi", "đúng rồi", "1", "cái thứ hai"): không phải việc mới. */
+const FOLLOWUP_RE = /^(ok|oke|okay|vang|da|duoc|duoc roi|dung roi|dong y|tiep tuc|lam tiep|tiep di|lam di|lam luon|cu lam|thuc hien di|cam on|thanks|yes|no|khong|co|1|2|3|a|b|c)\b/;
 /** Người dùng nói kết quả trước chưa đạt (chỉ có nghĩa từ lượt thứ hai của cuộc trò chuyện). */
 const REDO_RE = /\b(van (con |bi |lai )?(loi|sai|khong|nhu cu|vay|the)|chua (dung|duoc|xong|hien|chay|on|dep)|khong (dung|duoc|chay|hien|on|phai)|sai roi|lam lai|sua lai|lai loi|lai sai|van chua|khong thay (gi|doi)|khong co gi|y toi la|khong phai (y|nhu))/;
 
 export function classifyPrompt(text: string): { kind: TaskKind; redoCue: boolean } {
   const f = fold(String(text ?? "")).slice(0, 2000);
   let kind: TaskKind = "other";
-  for (const [k, re] of KIND_RULES) {
-    if (re.test(f)) {
-      kind = k;
-      break;
+  const words = f.trim().split(/\s+/).filter(Boolean).length;
+  if (words <= 6 && FOLLOWUP_RE.test(f.trim())) kind = "followup"; // trước các luật khác: "làm tiếp đi" không phải "tạo mới"
+  else {
+    for (const [k, re] of KIND_RULES) {
+      if (re.test(f)) {
+        kind = k;
+        break;
+      }
     }
+    if (kind === "other" && /\?\s*$/.test(f.trim())) kind = "explain";
   }
   return { kind, redoCue: REDO_RE.test(f) };
 }
@@ -66,7 +73,7 @@ export function stackOf(i: { pkg?: string; reqs?: string; hasHtml?: boolean }): 
   const has = (n: string) => Object.prototype.hasOwnProperty.call(deps, n);
   const reqs = (i.reqs ?? "").toLowerCase();
   const py = (n: string) => new RegExp(`^${n}\\b`, "m").test(reqs);
-  let stack: Stack = "other";
+  let stack: Stack = "none";
   if (has("next")) stack = "next";
   else if (has("react")) stack = "react";
   else if (has("vue")) stack = "vue";

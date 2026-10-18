@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { pickFile, Updater, type UpdateState, type UpdaterDeps } from "../src/updater";
+import { pickFile, selfUpdateAllowed, Updater, type UpdateState, type UpdaterDeps } from "../src/updater";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "neu-upd-"));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -37,6 +37,14 @@ function setup(over: { latest?: unknown; body?: Buffer; status?: number; type?: 
   };
   return { u: new Updater(deps), dir, states, calls, revealed, getDismissed: () => dismissed };
 }
+
+describe("selfUpdateAllowed", () => {
+  it("bản cài từ Microsoft Store không tự tải/cài bản mới (Store lo cập nhật; thay tệp trong gói MSIX sẽ hỏng)", () => {
+    expect(selfUpdateAllowed({ windowsStore: true })).toBe(false);
+    expect(selfUpdateAllowed({ windowsStore: false })).toBe(true);
+    expect(selfUpdateAllowed({})).toBe(true);
+  });
+});
 
 describe("pickFile", () => {
   const files = [{ name: "NEU-Agent-0.2.0-mac-arm64.dmg", sha256: "a" }, { name: "NEU-Agent-0.2.0-mac-x64.dmg", sha256: "b" }, { name: "NEU-Agent-0.2.0-win-x64.zip", sha256: "c" }, { name: "NEU-Agent-0.2.0-win-x64.exe", sha256: "d" }];

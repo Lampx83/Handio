@@ -47,6 +47,23 @@ Cần cài lại: `sudo ./quota/install-quota.sh` (cổng đọc tệp cấp th�
 
 Trang quản trị `https://ai.neu.edu.vn/agent/admin/` có mục **Hạn mức token**: token mỗi ngày, số người gần/hết hạn mức, số yêu cầu bị chặn, bảng người dùng đang dùng nhiều hạn mức.
 
+## Phân quyền tab theo nhóm (bậc)
+
+Cùng cổng và cùng "bậc" với hạn mức (bậc xác định theo **miền email**, xem bảng trên): quản trị chọn mỗi bậc được dùng tab nào. **Mặc định không cấu hình = mọi người dùng cả Work, Code, Design** (hành vi cũ).
+
+```bash
+sudo ~/neu-agent-220/quota/quota.sh tabs student work,design   # sinh viên chỉ dùng Work và Design
+sudo ~/neu-agent-220/quota/quota.sh tabs student all           # bỏ giới hạn
+sudo ~/neu-agent-220/quota/quota.sh show                       # dòng "Tab được dùng theo bậc"
+```
+Cấu hình ở `/etc/neu-agent/quota.json`: `"tabs": {"student": ["work", "design"]}`. Bậc không có mặt = đủ ba tab; `[]` = không tab nào; tên tab gõ sai bị bỏ (gõ sai hết thành `[]`, tức chặn chứ không mở rộng quyền).
+
+- **Chặn ở máy chủ:** ứng dụng khai tab đang dùng ở tiêu đề `X-Neu-Tab`; với bậc bị giới hạn, cổng trả **HTTP 403** (`tab_not_allowed`, hoặc `tab_required` nếu thiếu/sai tên tab — ví dụ ứng dụng bản cũ) **trước** khi tính hạn mức hay chuyển tới mô hình, và không ghi gì vào CSDL. Giao diện chỉ ẩn nút tab và báo sớm cho đỡ tốn một lượt gọi (`GET /agent/quota` có thêm `tabs`).
+- **Không áp cho:** quản trị viên (`admins.txt`), người tự dán key riêng, và chế độ `observe` (chỉ đếm, không chặn).
+- Bậc bị giới hạn mà dùng **ứng dụng bản cũ** (chưa gửi `X-Neu-Tab`) sẽ bị từ chối cho đến khi cập nhật: chỉ ảnh hưởng nhóm đã được cấu hình.
+- **Giới hạn thật:** agent chạy ở phía máy khách, nên tab là do ứng dụng khai. Người am hiểu kỹ thuật có thể tự gửi tiêu đề khác để dùng tab ngoài danh sách. Đây là cơ chế **phân nhóm sử dụng** chứ không phải rào chắn chống kẻ tấn công; muốn chặn tuyệt đối cần cấp key mô hình riêng theo nhóm. Khi cổng hạn mức chết, nginx chuyển thẳng tới Kong nên phân quyền tab cũng tạm không áp dụng (giống hạn mức).
+- Chưa làm (để sau): phân quyền theo mô hình, nhóm tuỳ tạo ngoài bậc theo miền, chỉnh trên trang quản trị.
+
 ## Ghi nội dung hội thoại của tài khoản chỉ định (để nghiên cứu)
 
 Mặc định cổng **không ghi nội dung** nào. Quản trị có thể bật ghi cho **đúng một số tài khoản** (thường là tài khoản thử nghiệm như `test01`) để nghiên cứu cách người dùng hỏi và mô hình trả lời:

@@ -443,6 +443,13 @@ dialog.rewind { width: min(560px, 94vw); }
 .cite-src { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 1px 9px 1px 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cite-src b { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: 11px; }
 .cite-src:hover { border-color: var(--accent); color: var(--text); }
+dialog.tasks { width: min(560px, 96vw); }
+dialog.tasks .tk-row { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border); }
+dialog.tasks .tk-main { min-width: 0; overflow-wrap: anywhere; }
+dialog.tasks .tk-last { font-size: 12.5px; color: var(--muted); max-height: 4.5em; overflow: auto; } dialog.tasks .tk-last.bad { color: var(--err); }
+dialog.tasks .tk-acts { display: flex; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+dialog.tasks .tk-new { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+dialog.tasks .tk-when { display: flex; gap: 8px; flex-wrap: wrap; }
 .wt-offer { margin: 4px 0 2px; }
 .wt-pop { left: auto; right: 0; bottom: auto; top: calc(100% + 6px); min-width: 200px; max-height: 320px; }
 .wt-pop .it[aria-disabled="true"] { opacity: .5; }

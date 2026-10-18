@@ -35,6 +35,25 @@ class Manifest(unittest.TestCase):
         for f in re.findall(r'\("([a-z_]+\.(?:html|js))"', src):
             self.assertIn(f, installed, f)
 
+    def test_failed_tests_are_named_in_deploy_log(self):
+        # máy chủ chạy kiểm thử bằng root với dữ liệu thật: khi đỏ, nhật ký CI phải có tên bài đỏ (không cần vào máy chủ), không có traceback
+        s = open(os.path.join(HERE, "install-diag.sh"), encoding="utf-8").read()
+        m = re.search(r"(grep -E '\^\(FAIL\|ERROR\)[^\n]*?cut -c1-200)", s)
+        self.assertTrue(m, "install-diag.sh không in tên bài thử đỏ")
+        log = 'Traceback (most recent call last):\n  File "/opt/x/test_a.py", line 3, in test_b\n    self.assertEqual(1, 2)\nAssertionError: 1 != 2\n\n' \
+              "FAIL: test_b (test_a.A.test_b)\nERROR: test_c (test_a.A.test_c)\nPermissionError: [Errno 13] Permission denied\nsqlite3.OperationalError: no such column: model\nRan 3 tests\n"
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as d:
+            open(os.path.join(d, ".unittest.log"), "w", encoding="utf-8").write(log)
+            out = subprocess.run(["bash", "-c", m.group(1)], env={"HERE": d, "PATH": os.environ.get("PATH", "")}, capture_output=True, text=True).stdout
+        self.assertIn("FAIL: test_b (test_a.A.test_b)", out)
+        self.assertIn("ERROR: test_c", out)
+        self.assertIn("AssertionError: 1 != 2", out)
+        self.assertIn("PermissionError", out)
+        self.assertIn("sqlite3.OperationalError: no such column: model", out)   # tên lỗi có chữ số (lần đầu bị bỏ sót)
+        self.assertNotIn("File ", out)
+        self.assertNotIn("Ran 3", out)
+
 
 if __name__ == "__main__":
     unittest.main()
