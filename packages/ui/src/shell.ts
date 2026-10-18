@@ -75,6 +75,20 @@ export function mountShell(root: HTMLElement, controllers: Partial<Record<Profil
     }));
   }
 
+  // phân quyền theo nhóm: tab nhóm của người dùng không được dùng thì ẩn (máy chủ vẫn tự từ chối từng yêu cầu, ẩn nút chỉ để gọn)
+  const denied = new Set<Profile>();
+  const shown = (): Profile[] => ids.filter((p) => !denied.has(p));
+  function applyTabs(allowed: readonly string[] | undefined): void {
+    denied.clear();
+    if (allowed && allowed.some((t) => ids.includes(t as Profile))) for (const p of ids) if (!allowed.includes(p)) denied.add(p); // không tab nào dùng được: giữ nguyên, lõi sẽ báo lý do
+    for (const p of ids) tabs.get(p)!.hidden = denied.has(p);
+    if (denied.has(active)) select(shown()[0]);
+  }
+  for (const id of ids) {
+    controllers[id]!.onEvent((e) => e.type === "quota" && applyTabs(e.quota.tabs));
+    void controllers[id]!.getState().then((st) => st.quota?.tabs && applyTabs(st.quota.tabs)).catch(() => undefined);
+  }
+
   function select(id: Profile): void {
     if (!ids.includes(id)) return;
     handles.get(active)?.hidden();
@@ -92,16 +106,17 @@ export function mountShell(root: HTMLElement, controllers: Partial<Record<Profil
   }
 
   document.addEventListener("keydown", (e) => {
-    if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key) && ids[+e.key - 1]) {
+    if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key) && shown()[+e.key - 1]) {
       e.preventDefault();
-      select(ids[+e.key - 1]);
+      select(shown()[+e.key - 1]);
     }
   });
   bar.querySelector(".tabs")!.addEventListener("keydown", (e) => {
     const k = (e as KeyboardEvent).key;
     if (k === "ArrowRight" || k === "ArrowLeft") {
-      const i = ids.indexOf(active);
-      select(ids[(i + (k === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]);
+      const v = shown();
+      const i = Math.max(v.indexOf(active), 0);
+      select(v[(i + (k === "ArrowRight" ? 1 : v.length - 1)) % v.length]);
       tabs.get(active)!.focus();
     }
   });

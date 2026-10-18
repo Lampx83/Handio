@@ -101,3 +101,106 @@ describe("hạn mức token trong controller", () => {
     expect((await c.getState()).quota?.state).toBe("exceeded");
   });
 });
+
+describe("phân quyền theo nhóm: tab được dùng", () => {
+  const quotaJson = (tabs?: string[]) => JSON.stringify({ state: "ok", limit: 1_000_000, used: 10, remaining: 999_990, pct: 0, reset_at: 1_800_000_000, tier: "student", ...(tabs ? { tabs } : {}) });
+  const jsonRes = (b: string) => new Response(b, { headers: { "content-type": "application/json" } });
+
+  it("GET /quota đọc danh sách tab (bỏ tên lạ); thiếu = không giới hạn", async () => {
+    const f = (tabs?: unknown) => (async () => jsonRes(JSON.stringify({ state: "ok", limit: 1, used: 0, remaining: 1, pct: 0, reset_at: 1, tabs }))) as unknown as typeof fetch;
+    expect((await new LlmClient(cfg, f(["design", "work", "<x>"])).quota())?.tabs).toEqual(["work", "design"]);
+    expect((await new LlmClient(cfg, f([])).quota())?.tabs).toEqual([]);
+    expect((await new LlmClient(cfg, f(undefined)).quota())?.tabs).toBeUndefined();
+    expect((await new LlmClient(cfg, f("work")).quota())?.tabs).toBeUndefined();
+  });
+
+  it("gửi X-Neu-Tab tới gateway NEU (…/vllm/v1) với tab hợp lệ; KHÔNG gửi tới máy chủ khác hoặc tên tab lạ", async () => {
+    const seen: Record<string, string>[] = [];
+    const fetchImpl = (async (_u: string, init: RequestInit) => (seen.push(init.headers as Record<string, string>), new Response(sse(), { headers: headers({}) }))) as unknown as typeof fetch;
+    await new LlmClient(() => ({ ...cfg(), tab: "design" }), fetchImpl).chat([{ role: "user", content: "x" }]);
+    await new LlmClient(() => ({ baseUrl: "https://api.example.com/v1", model: "m", tab: "design" }), fetchImpl).chat([{ role: "user", content: "x" }]);
+    await new LlmClient(() => ({ ...cfg(), tab: "hack\r\nX: y" }), fetchImpl).chat([{ role: "user", content: "x" }]);
+    await new LlmClient(cfg, fetchImpl).chat([{ role: "user", content: "x" }]);
+    expect(seen.map((h) => h["X-Neu-Tab"])).toEqual(["design", undefined, undefined, undefined]);
+  });
+
+  it("403 tab_not_allowed / tab_required: lỗi có mã, thông báo của máy chủ, KHÔNG thử lại", async () => {
+    for (const code of ["tab_not_allowed", "tab_required"]) {
+      let calls = 0;
+      const fetchImpl = (async () => (calls++, new Response(JSON.stringify({ error: code, message: "Nhóm của bạn không được dùng tab Design (được dùng: Work)." }), { status: 403 }))) as unknown as typeof fetch;
+      const err = await new LlmClient(cfg, fetchImpl).chat([{ role: "user", content: "x" }]).catch((e) => e);
+      expect(err).toBeInstanceOf(LlmError);
+      expect(err).toMatchObject({ status: 403, kind: "auth", code });
+      expect(err.message).toContain("không được dùng tab Design");
+      expect(calls).toBe(1);
+    }
+    // 403 thường (key sai) vẫn là thông báo cũ
+    const plain = (async () => new Response("forbidden", { status: 403 })) as unknown as typeof fetch;
+    const e2 = await new LlmClient(cfg, plain).chat([{ role: "user", content: "x" }]).catch((e) => e);
+    expect(e2.code).toBe("");
+  });
+
+  const make = async (profile: "work" | "code" | "design", tabs: string[] | undefined) => {
+    const chats: string[] = [];
+    const fetchImpl = (async (u: string, init?: RequestInit) => {
+      if (String(u).endsWith("/quota")) return jsonRes(quotaJson(tabs));
+      chats.push(String((init?.headers as Record<string, string>)["X-Neu-Tab"]));
+      return new Response(sse("ok"), { headers: headers({ "x-quota-state": "ok", "x-quota-limit": "1000000", "x-quota-used": "20", "x-quota-reset": "1800000000" }) });
+    }) as unknown as typeof fetch;
+    let saved = {};
+    const c = await LocalController.create({
+      env: new MemoryEnv("/w", {}), realFs: false, fetchImpl, defaults: { baseUrl: BASE }, profile,
+      store: { load: async () => saved, save: async (s: any) => void (saved = s) }, trust: { isTrusted: async () => false, setTrusted: async () => undefined },
+    } as any);
+    const events: SessionEvent[] = [];
+    c.onEvent((e) => events.push(e));
+    await new Promise((r) => setTimeout(r, 20));
+    return { c, events, chats };
+  };
+
+  it("không cấu hình (máy chủ không báo tabs): mọi tab chạy như cũ", async () => {
+    for (const p of ["work", "code", "design"] as const) {
+      const { c, events, chats } = await make(p, undefined);
+      await c.send("xin chào");
+      expect(events.some((e: any) => e.type === "notice" && e.level === "error")).toBe(false);
+      expect(chats.length).toBeGreaterThan(0);
+      expect(new Set(chats)).toEqual(new Set([p])); // mọi lượt gọi mô hình đều khai đúng tab của controller
+    }
+  });
+
+  it("tab được phép chạy; tab bị cấm bị từ chối NGAY ở lõi (không gọi mô hình) kèm lý do", async () => {
+    const ok = await make("work", ["work"]);
+    await ok.c.send("xin chào");
+    expect(ok.chats.length).toBeGreaterThan(0);
+    expect((await ok.c.getState()).quota?.tabs).toEqual(["work"]); // tiêu đề phản hồi không xoá danh sách tab đã biết
+
+    const no = await make("design", ["work"]);
+    await no.c.send("xin chào");
+    expect(no.chats).toEqual([]);
+    const n = no.events.find((e: any) => e.type === "notice" && e.level === "error") as any;
+    expect(n.text).toContain("không được dùng tab");
+    expect(no.events.some((e: any) => e.type === "turn_start")).toBe(false);
+  });
+
+  it("nhóm không có tab nào: mọi tab bị từ chối", async () => {
+    for (const p of ["work", "code", "design"] as const) {
+      const { c, chats } = await make(p, []);
+      await c.send("xin chào");
+      expect(chats).toEqual([]);
+    }
+  });
+
+  it("máy chủ từ chối (phía máy chủ vẫn kiểm tra dù lõi chưa biết): người dùng thấy lý do, phiên không sập", async () => {
+    const fetchImpl = (async (u: string) => (String(u).endsWith("/quota") ? new Response("{}", { status: 404 }) : new Response(JSON.stringify({ error: "tab_not_allowed", message: "Nhóm của bạn không được dùng tab Code (được dùng: Work)." }), { status: 403 }))) as unknown as typeof fetch;
+    let saved = {};
+    const c = await LocalController.create({
+      env: new MemoryEnv("/w", {}), realFs: false, fetchImpl, defaults: { baseUrl: BASE }, profile: "code",
+      store: { load: async () => saved, save: async (s: any) => void (saved = s) }, trust: { isTrusted: async () => false, setTrusted: async () => undefined },
+    } as any);
+    const events: SessionEvent[] = [];
+    c.onEvent((e) => events.push(e));
+    await c.send("xin chào");
+    expect((events.find((e: any) => e.type === "notice" && e.level === "error") as any).text).toContain("không được dùng tab Code");
+    expect(events.at(-1)).toMatchObject({ type: "turn_end" });
+  });
+});

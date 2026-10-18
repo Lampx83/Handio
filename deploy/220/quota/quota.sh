@@ -3,6 +3,7 @@
 #   sudo ./quota.sh show                       cấu hình hiện tại + 15 người dùng nhiều nhất hôm nay (mã giả danh)
 #   sudo ./quota.sh mode observe|enforce       observe = chỉ đếm, không chặn | enforce = chặn khi hết
 #   sudo ./quota.sh tier <student|staff> <số>  đổi hạn mức mặc định của một bậc (token/ngày)
+#   sudo ./quota.sh tabs <student|staff> <work,code,design|all>  tab được dùng theo bậc (= theo miền email); all = bỏ giới hạn (mặc định: mọi tab). Chặn ở cổng, không chỉ ẩn nút
 #   sudo ./quota.sh set <email|tên-đăng-nhập> <số|unlimited>   đặt riêng cho một người (vd lớp học đặc biệt)
 #   sudo ./quota.sh unset <email|tên-đăng-nhập>                bỏ đặt riêng
 #   sudo ./quota.sh usage <email|tên-đăng-nhập>                mức đã dùng hôm nay của một người
@@ -33,6 +34,14 @@ if op == "mode":
     cfg["mode"] = a[0]
 elif op == "tier":
     cfg.setdefault("tiers", {})[a[0]] = num(a[1])
+elif op == "tabs":
+    t = a[0].strip().lower()
+    if not re.fullmatch(r"[a-z0-9_-]{1,32}", t): sys.exit("Tên bậc không hợp lệ")
+    if a[1].strip().lower() == "all": cfg.setdefault("tabs", {}).pop(t, None)
+    else:
+        want = [x for x in a[1].strip().lower().split(",") if x]
+        if not want or any(x not in ("work", "code", "design") for x in want): sys.exit("Danh sách tab phải gồm work, code, design (cách nhau bằng dấu phẩy) hoặc all")
+        cfg.setdefault("tabs", {})[t] = [x for x in ("work", "code", "design") if x in want]
 elif op == "set":
     i = ident(a[0])
     if not re.fullmatch(r"[a-z0-9._%+'-]{1,64}@[a-z0-9.-]{1,190}|[a-z0-9][a-z0-9._-]{2,31}", i): sys.exit("Email/tên đăng nhập không hợp lệ")
@@ -60,6 +69,7 @@ cfg = json.load(open(sys.argv[1], encoding="utf-8"))
 tz = datetime.timezone(datetime.timedelta(hours=7))
 print("Chế độ: %s | bậc: %s | vượt thêm %s%% | nhắc từ %s%% | tối đa %s yêu cầu đồng thời/người" % (cfg.get("mode"), cfg.get("tiers"), cfg.get("grace_pct"), cfg.get("warn_pct"), cfg.get("max_concurrent")))
 print("Tên miền → bậc:", cfg.get("domains"), "| mặc định:", cfg.get("default_tier"))
+print("Tab được dùng theo bậc:", cfg.get("tabs") or "(không giới hạn: mọi bậc dùng cả Work, Code, Design)")
 print("Đặt riêng:", cfg.get("overrides") or "(không có)")
 print("Ghi nội dung hội thoại của:", (cfg.get("capture") or {}).get("users") or "(không ai)")
 try:
@@ -127,13 +137,14 @@ PY
       *) sed -n 2,18p "$0" | sed 's/^# \{0,1\}//'; exit 1;;
     esac
     ;;
-  mode)  [ "${2:-}" ] || { sed -n 2,12p "$0"; exit 1; }; edit mode "$2"; restart;;
-  tier)  [ "${3:-}" ] || { sed -n 2,12p "$0"; exit 1; }; edit tier "$2" "$3"; restart;;
-  set)   [ "${3:-}" ] || { sed -n 2,12p "$0"; exit 1; }; edit set "$2" "$3"; restart;;
-  unset) [ "${2:-}" ] || { sed -n 2,12p "$0"; exit 1; }; edit unset "$2"; restart;;
-  uid)   [ "${2:-}" ] || { sed -n 2,12p "$0"; exit 1; }; uid_of "$2" | cut -c1-8;;
+  mode)  [ "${2:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit mode "$2"; restart;;
+  tier)  [ "${3:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit tier "$2" "$3"; restart;;
+  tabs)  [ "${3:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit tabs "$2" "$3"; restart;;
+  set)   [ "${3:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit set "$2" "$3"; restart;;
+  unset) [ "${2:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit unset "$2"; restart;;
+  uid)   [ "${2:-}" ] || { sed -n 2,13p "$0"; exit 1; }; uid_of "$2" | cut -c1-8;;
   usage)
-    [ "${2:-}" ] || { sed -n 2,12p "$0"; exit 1; }
+    [ "${2:-}" ] || { sed -n 2,13p "$0"; exit 1; }
     U=$(uid_of "$2")
     python3 - "$DB" "$U" <<'PY'
 import sqlite3, sys, datetime
@@ -142,5 +153,5 @@ r = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True).execute("select t
 print("Hôm nay chưa dùng gì." if not r else "Bậc %s | hạn mức %s | đã dùng %s (vào %s, ra %s) | %d yêu cầu | bị chặn %d" % (r[0], "không giới hạn" if r[1] < 0 else format(r[1], ","), format(r[2], ","), format(r[3], ","), format(r[4], ","), r[5], r[6]))
 PY
     ;;
-  *) sed -n 2,12p "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+  *) sed -n 2,13p "$0" | sed 's/^# \{0,1\}//'; exit 1;;
 esac
