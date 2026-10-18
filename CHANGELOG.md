@@ -22,6 +22,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Số liệu quản trị đúng hơn**: bản web nay báo số phiên bản thật (trước đây luôn ghi 0.1.0 nên không phân biệt được các bản), tỷ lệ "đã cập nhật" và cảnh báo "máy chạy bản cũ" chỉ tính máy Desktop (web luôn mới nhất), và bảng «Công việc người dùng làm» phân loại thêm tin nối tiếp ("ok", "làm tiếp đi") và câu hỏi để ít bị xếp vào "khác".
 
 ### Sửa
+- **Agent không còn bật đi bật lại máy chủ web**: lệnh chạy máy chủ (`npm run dev`, `streamlit run`…) tự chạy nền; máy chủ đang chạy mà chưa có tệp nào đổi thì giữ nguyên thay vì tắt rồi bật lại (vòng lặp hay gặp nhất trong số liệu).
+- **Agent nhận ra mình đang giậm chân tại chỗ sớm hơn**: làm lại đúng một thao tác mà ra đúng kết quả cũ (kể cả xen giữa các thao tác khác) thì được nhắc ở lần 3 và dừng ở lần 4; 6 thao tác lỗi liên tiếp thì dừng để hỏi bạn thay vì thử mãi. Sửa tệp giữa các lần chạy thì không tính.
 - **Tiêu đề cuộc trò chuyện bắt đầu bằng ảnh dán** không còn hiện `@dan/anh-dan-….png` mà dùng chính câu bạn gõ (chỉ có ảnh thì ghi "Ảnh đính kèm").
 - **Chia sẻ báo "Cuộc trò chuyện chưa có nội dung để chia sẻ" dù đã trò chuyện nhiều lượt**: xảy ra sau khi agent tự tóm tắt hội thoại để giải phóng ngữ cảnh. Nay phần trước khi tóm tắt được giữ lại, nên vẫn chia sẻ được toàn bộ và lịch sử đã lưu không mất phần đầu.
 - **Chọn "Toàn quyền" rồi mà agent vẫn hỏi từng lệnh**: khi mở lại cuộc trò chuyện (kể cả sau khi ứng dụng tự cập nhật), tạo cuộc trò chuyện mới hay lưu hướng dẫn dự án, chế độ bị trả về mặc định nhưng nhãn dưới ô nhập vẫn ghi "Toàn quyền". Nay chế độ bạn chọn được giữ trong cùng dự án, và nhãn luôn đúng với chế độ thật.

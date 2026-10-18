@@ -135,6 +135,19 @@ const pageNote = (args: unknown, result: string): { url: string; steps: PageStep
   return { url: String(a.url ?? ""), steps, buttons: /^Nút đang hiện: /m.test(result) };
 };
 
+
+/** Công cụ không tính vào phát hiện "(thao tác, kết quả) lặp lại": danh sách việc, hỏi người dùng, bật nhóm công cụ, giao việc cho tác tử con. */
+const OBS_SKIP = new Set(["todo_write", "ask_user", "use_tools", "task", "exit_plan_mode"]);
+/** FNV-1a: chỉ để so "cùng kết quả" trong bộ nhớ. */
+function hash(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16);
+}
+
 export class Session {
   /** Tin nhắn người dùng gửi khi agent đang làm việc: được đưa vào cuộc hội thoại ở bước kế tiếp (không phải chờ hết lượt). */
   queue: string[] = [];
@@ -908,6 +921,13 @@ export class Agent {
   private cycleN = 0;
   private failRun = { tool: "", sig: "", n: 0 };
   private stopWhy = "";
+  /** Câu báo dừng đầy đủ (khi lý do không phải "lặp lại cùng một thao tác"). */
+  private stopMsg = "";
+  /** (thao tác, kết quả) đã gặp kể từ lần đổi tệp gần nhất → số lần; và mốc undoStack để biết có tệp đổi. */
+  private obsSeen = new Map<string, number>();
+  private undoMark = 0;
+  /** Số lần công cụ lỗi liên tiếp (mọi công cụ; trừ chương trình người dùng chạy hỏng và bị từ chối quyền). */
+  private mistakes = 0;
   private nudges = 0;
   private pageChecks = 0;
   private flowNudged = false;
@@ -1221,6 +1241,10 @@ export class Agent {
     this.cycleN = 0;
     this.failRun = { tool: "", sig: "", n: 0 };
     this.stopWhy = "";
+    this.stopMsg = "";
+    this.obsSeen = new Map();
+    this.undoMark = s.ctx.undoStack.length;
+    this.mistakes = 0;
     this.nudges = 0;
     this.pageChecks = 0;
     this.flowNudged = false;
@@ -1325,7 +1349,7 @@ export class Agent {
         }
         if (signal?.aborted) throw new LlmError("Đã dừng.", 0, "abort");
         if (this.repeatN >= 5) {
-          s.emit({ type: "notice", level: "warn", text: this.stopWhy ? `Agent lặp lại cùng một thao tác ${this.stopWhy} nên đã dừng.` : `Agent lặp lại cùng một thao tác ${this.repeatN} lần nên đã dừng.` });
+          s.emit({ type: "notice", level: "warn", text: this.stopMsg || (this.stopWhy ? `Agent lặp lại cùng một thao tác ${this.stopWhy} nên đã dừng.` : `Agent lặp lại cùng một thao tác ${this.repeatN} lần nên đã dừng.`) });
           // thay vì im lặng: nhờ mô hình nói rõ đang kẹt ở đâu và cần người dùng cung cấp/quyết định gì
           const why = await this.wrapUp(signal, "[Hệ thống] Bạn đã bị dừng vì cứ lặp lại thao tác mà không tiến triển. Không gọi công cụ nữa. Hãy nói ngắn gọn: bạn đang cố làm gì, vì sao bị kẹt, và cần người dùng cung cấp thông tin hay quyết định gì để làm tiếp.");
           return why || final || "(đã dừng vì lặp vô ích)";
@@ -1370,6 +1394,33 @@ export class Agent {
       if (this.cycleN >= 3) {
         this.repeatN = Math.max(this.repeatN, 5);
         this.stopWhy = period === 2 ? "qua lại giữa hai thao tác" : "lặp lại cùng một chuỗi thao tác";
+      }
+    }
+    // (thao tác, kết quả) lặp lại dù KHÔNG liền nhau (kiểu StuckDetector của OpenHands): dữ liệu thật thấy agent chạy lại `npm run dev`, check_page
+    // 10–20 lần xen giữa các lệnh khác mà kết quả y hệt. Có tệp đổi thì đếm lại từ đầu (chạy lại sau khi sửa là chính đáng).
+    if (this.s.ctx.undoStack.length !== this.undoMark) {
+      this.undoMark = this.s.ctx.undoStack.length;
+      this.obsSeen.clear();
+    }
+    if (!OBS_SKIP.has(name)) {
+      const obs = result.replace(/\x1b\[[0-9;]*m/g, "").replace(/\d+/g, "#").replace(/\s+/g, " ").slice(0, 4000);
+      const sig = key + "\u0001" + hash(obs);
+      const seen = (this.obsSeen.get(sig) ?? 0) + 1;
+      this.obsSeen.set(sig, seen);
+      if (seen === 3) warn += "\n[Cảnh báo] Lần thứ 3 bạn làm đúng thao tác này và nhận đúng kết quả này kể từ lần sửa tệp gần nhất. Làm lại sẽ không ra gì khác: đọc kỹ kết quả, sửa mã/cấu hình, dùng cách khác, hoặc hỏi người dùng.";
+      if (seen >= 4) {
+        this.repeatN = Math.max(this.repeatN, 5);
+        this.stopWhy = "cho cùng một kết quả";
+      }
+    }
+    // lỗi liên tiếp ở NHIỀU công cụ khác nhau (Cline: 6 lỗi liên tiếp thì dừng; Roo: hỏi người dùng): nhắc ở lần 4, dừng và hỏi ở lần 6
+    if (ok) this.mistakes = 0;
+    else if (kind !== "program" && kind !== "denied") {
+      this.mistakes++;
+      if (this.mistakes === 4) warn += "\n[Cảnh báo] 4 thao tác liên tiếp đều lỗi. Dừng lại nghĩ: đọc kỹ các thông báo lỗi, kiểm tra giả định (đường dẫn, tên tệp, công cụ), làm từng bước nhỏ; vẫn kẹt thì hỏi người dùng.";
+      if (this.mistakes >= 6) {
+        this.repeatN = Math.max(this.repeatN, 5);
+        this.stopMsg = `Agent gặp lỗi ${this.mistakes} lần liên tiếp nên đã dừng để hỏi bạn.`;
       }
     }
     if (ok) this.failRun = { tool: "", sig: "", n: 0 };

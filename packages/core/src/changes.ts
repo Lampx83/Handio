@@ -250,5 +250,5 @@ async function recordDiff(ctx: ToolContext, before: Snap): Promise<void> {
 }
 
 function pushEntry(ctx: ToolContext, abs: string, old: Uint8Array | null, group: string): void {
-  ctx.undoStack.push({ path: abs, old, turn: ctx.turn ?? 0, group });
+  ctx.undoStack.push({ path: abs, old, turn: ctx.turn ?? 0, group, at: Date.now() });
 }
