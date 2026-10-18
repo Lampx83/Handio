@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Tải bản cài macOS và Windows ngay trên trang giới thiệu**: đầu trang có nút tải bản mới nhất cho macOS (chip Apple hoặc Intel) và Windows, kèm mã SHA-256, không cần đăng nhập trước. Mở ứng dụng vẫn cần đăng nhập tài khoản trường.
+
 ### Thay đổi
 - **Chia sẻ cuộc trò chuyện đầy đủ hơn để nhóm phát triển hiểu và sửa lỗi**: bản chia sẻ nay gồm cả các thao tác của agent (lệnh, tệp đã ghi/sửa) kèm phần đầu kết quả, chỗ nào bị lỗi, lời nhắc của hệ thống, cùng phiên bản, mô hình và chế độ đang dùng. Khoá/mật khẩu và dữ liệu cá nhân vẫn được tự che; tệp bạn đính kèm bằng @ không được gửi.
 
