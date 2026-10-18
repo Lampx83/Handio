@@ -14,7 +14,7 @@ Không có phần mềm nào “an toàn tuyệt đối”. Tài liệu này nó
 
 ## 2. Các lớp bảo vệ đã có
 
-**Truy cập mạng:** mọi đường dẫn dưới `/agent/` bắt buộc đăng nhập (SSO/tài khoản). Ngoại lệ chủ ý và duy nhất: đường dẫn đúng `/agent/` khi **chưa** đăng nhập trả về trang giới thiệu tĩnh (cùng tệp với `/agent/guide/`, không script, CSP chặt, không nhận POST, không lộ giao diện hay dữ liệu); `e2e-sso.mjs` kiểm tra điều này và kiểm tra `/agent/index.html` vẫn chuyển tới đăng nhập.
+**Truy cập mạng:** mọi đường dẫn dưới `/agent/` bắt buộc đăng nhập (SSO/tài khoản). Ngoại lệ chủ ý thứ nhất: đường dẫn đúng `/agent/` khi **chưa** đăng nhập trả về trang giới thiệu tĩnh (cùng tệp với `/agent/guide/`, không script, CSP chặt, không nhận POST, không lộ giao diện hay dữ liệu); `e2e-sso.mjs` kiểm tra điều này và kiểm tra `/agent/index.html` vẫn chuyển tới đăng nhập. Ngoại lệ thứ hai (chủ ý): `/agent/download/latest/` chỉ chứa bản cài mới nhất + `SHA256SUMS.txt` để tải từ trang giới thiệu (chỉ GET/HEAD, không liệt kê thư mục, `limit_conn` 4). Bản cài không chứa khoá hay bí mật, ứng dụng vẫn bắt đăng nhập khi mở; `latest.json` và phần còn lại của `/agent/download/` vẫn sau đăng nhập (`e2e-sso.mjs`, `e2e-deploy.mjs` kiểm tra).
 
 **Quyền và kiểm soát của người dùng**
 - Mọi thao tác ghi tệp/chạy lệnh/tải web đều **xin phép**, kèm phần thay đổi (diff) hoặc bản mô tả. Chế độ mặc định **Tự động** chỉ tự chạy việc thường ngày trong dự án (sửa tệp, build/test/cài gói, git cục bộ) và vẫn hỏi khi xoá, đụng mạng, tệp bí mật, lệnh lạ hoặc sau khi đọc nội dung web; chế độ “Toàn quyền” là tuỳ chọn có chủ đích, có ở cả ba tab (quản trị viên có thể tắt bằng policy.json).
