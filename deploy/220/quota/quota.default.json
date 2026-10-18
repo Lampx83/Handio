@@ -7,5 +7,6 @@
   "warn_pct": 80,
   "max_concurrent": 6,
   "overrides": {},
+  "tabs": {},
   "capture": { "users": [], "keep_days": 90 }
 }

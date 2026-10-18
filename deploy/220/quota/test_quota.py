@@ -254,6 +254,95 @@ class RefreshLimitsTests(unittest.TestCase):
         self.assertGreaterEqual(n, 4)
 
 
+class TabAccessTests(GatewayCase):
+    """Phân quyền theo nhóm (bậc theo miền email): tab nào được dùng. Mặc định không cấu hình = mọi người dùng mọi tab."""
+
+    def tab_post(self, ident, tab=None, **kw):
+        return self.post(ident, headers={"X-Neu-Tab": tab} if tab is not None else None, **kw)
+
+    def test_default_has_no_restriction_and_old_clients_without_header_still_work(self):
+        for who in (SV, GV, "khach01"):
+            self.assertEqual(json.loads(self.get("/quota", ident=who)[1])["tabs"], ["work", "code", "design"])
+            self.assertEqual(self.tab_post(who)[0], 200)                  # bản ứng dụng cũ không gửi X-Neu-Tab
+            self.assertEqual(self.tab_post(who, "design")[0], 200)
+        self.assertEqual(Q.load_config("/không/có")["tabs"], {})
+
+    def test_student_limited_staff_untouched(self):
+        self.write_cfg({"tiers": {"student": 1_000_000, "staff": 10_000_000}, "tabs": {"student": ["work"]}})
+        self.assertEqual(json.loads(self.get("/quota", ident=SV)[1])["tabs"], ["work"])
+        self.assertEqual(json.loads(self.get("/quota", ident=GV)[1])["tabs"], ["work", "code", "design"])
+        self.assertEqual(self.tab_post(SV, "work")[0], 200)
+        n_ok = len(self.up.requests)
+        for tab in ("code", "design"):                                     # bị TỪ CHỐI ở máy chủ, không tới mô hình
+            st, out, _ = self.tab_post(SV, tab)
+            self.assertEqual(st, 403)
+            j = json.loads(out)
+            self.assertEqual(j["error"], "tab_not_allowed")
+            self.assertIn("không được dùng tab", j["message"])
+            self.assertEqual(j["tabs"], ["work"])
+        self.assertEqual(len(self.up.requests), n_ok)
+        self.assertEqual(self.tab_post(GV, "code")[0], 200)
+
+    def test_restricted_group_must_declare_a_valid_tab(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "tabs": {"student": ["code"]}})
+        n = len(self.up.requests)
+        for bad in (None, "", "CODE ", "khac", "work,code", "code;design", "../code"):
+            st, out, _ = self.tab_post(SV, bad)
+            if bad == "CODE ":     # chữ hoa/khoảng trắng thừa được chuẩn hoá, vẫn là tab được phép
+                self.assertEqual(st, 200)
+                n += 1
+            else:
+                self.assertEqual((st, json.loads(out)["error"]), (403, "tab_required"), bad)
+        self.assertEqual(len(self.up.requests), n)
+
+    def test_denied_request_leaves_no_trace_and_costs_no_quota(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "tabs": {"student": ["work"]}})
+        self.assertEqual(self.tab_post(SV, "design")[0], 403)
+        self.assertEqual(self.used(SV), 0)
+        self.assertIsNone(self.row("select 1 from usage"))   # không ghi cả dòng chặn: không thêm dữ liệu nào về người dùng
+
+    def test_admin_and_own_key_keep_all_tabs(self):
+        self.write_cfg({"tiers": {"staff": 1_000_000}, "tabs": {"staff": []}})
+        self.assertEqual(self.tab_post("admin@neu.edu.vn", "design")[0], 200)
+        self.assertEqual(self.tab_post(GV, "design")[0], 403)
+        self.assertEqual(self.post(GV, headers={"X-Neu-Tab": "design", "X-Neu-Own-Key": "1"})[0], 200)
+
+    def test_empty_list_means_no_tab_and_typos_fail_closed(self):
+        self.write_cfg({"tabs": {"student": [], "staff": ["wrok", "Code!"]}})
+        cfg = Q.load_config(self.cfg_path)
+        self.assertEqual(cfg["tabs"], {"student": [], "staff": []})   # tên lạ bị bỏ, hết sạch = không tab nào (không mở rộng quyền)
+        st, out, _ = self.tab_post(SV, "work")
+        self.assertEqual(st, 403)
+        self.assertIn("không được dùng tab Work", json.loads(out)["message"])
+
+    def test_garbage_tabs_config_is_ignored(self):
+        self.write_cfg({"tabs": ["work"]})
+        self.assertEqual(Q.load_config(self.cfg_path)["tabs"], {})
+        self.write_cfg({"tabs": {"student": "work", "staff": {"work": 1}, "x": ["design", "design", "work"]}})
+        self.assertEqual(Q.load_config(self.cfg_path)["tabs"], {"x": ["work", "design"]})
+
+    def test_observe_mode_never_blocks_and_reports_all_tabs(self):
+        self.write_cfg({"mode": "observe", "tabs": {"student": ["work"]}})
+        self.assertEqual(json.loads(self.get("/quota")[1])["tabs"], ["work", "code", "design"])
+        self.assertEqual(self.tab_post(SV, "design")[0], 200)
+
+    def test_tabs_follow_email_domain_and_tab_check_runs_before_quota(self):
+        self.write_cfg({"tiers": {"student": 1_000_000}, "tabs": {"student": ["work", "design"]}})
+        self.assertEqual(Q.tier_for(Q.load_config(self.cfg_path), "x@lop.st.neu.edu.vn"), "student")
+        self.assertEqual(self.tab_post("x@lop.st.neu.edu.vn", "code")[0], 403)
+        self.assertEqual(self.tab_post("x@lop.st.neu.edu.vn", "design")[0], 200)
+        self.assertEqual(self.tab_post("khach01", "code")[0], 403)        # tài khoản tên + mật khẩu thuộc bậc mặc định (student)
+        self.store.add(Q.vn_day(T0), self.uid(SV), "student", 1_000_000, 1_200_000, 0)
+        self.assertEqual(self.tab_post(SV, "code")[0], 403)               # vừa hết hạn mức vừa sai tab: báo tab
+        self.assertEqual(self.tab_post(SV, "work")[0], 402)
+
+    def test_tab_header_is_not_forwarded_and_tabs_not_in_database(self):
+        self.write_cfg({"tabs": {"student": ["work"]}})
+        self.assertEqual(self.tab_post(SV, "work")[0], 200)
+        self.assertNotIn("X-Neu-Tab", self.up.requests[-1]["headers"])
+        self.assertNotIn("x-neu-tab", {k.lower() for k in self.up.requests[-1]["headers"]})
+
+
 class PureTests(unittest.TestCase):
     def test_tiers_and_limits(self):
         cfg = Q.load_config("/không/có")

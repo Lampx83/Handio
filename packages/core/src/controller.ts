@@ -119,10 +119,10 @@ export class LocalController implements AgentController {
   static async create(o: ControllerOptions): Promise<LocalController> {
     const c = new LocalController(o);
     c.settings = c.applyPolicy(normalizeSettings(await o.store.load(), o.defaults));
-    c.llm = new LlmClient(() => ({ baseUrl: c.settings.baseUrl, model: c.settings.model, key: effectiveKey(c.settings, c.builtin).key, keyHeader: c.settings.keyHeader, temperature: c.settings.temperature, maxOutputTokens: c.settings.maxOutputTokens, thinking: c.settings.thinking, allowInsecure: c.settings.allowInsecureHttp, authHeaders: o.authHeaders ? async () => { try { return o.authHosts?.includes(new URL(c.settings.baseUrl).host) ? await o.authHeaders!() : null; } catch { return null; } } : undefined }), o.fetchImpl);
+    c.llm = new LlmClient(() => ({ baseUrl: c.settings.baseUrl, model: c.settings.model, key: effectiveKey(c.settings, c.builtin).key, keyHeader: c.settings.keyHeader, temperature: c.settings.temperature, maxOutputTokens: c.settings.maxOutputTokens, thinking: c.settings.thinking, allowInsecure: c.settings.allowInsecureHttp, tab: o.profile ?? "code", authHeaders: o.authHeaders ? async () => { try { return o.authHosts?.includes(new URL(c.settings.baseUrl).host) ? await o.authHeaders!() : null; } catch { return null; } } : undefined }), o.fetchImpl);
     // hạn mức token: lấy từ tiêu đề phản hồi mỗi lần gọi mô hình, và hỏi một lần lúc khởi động (không tốn token, không chặn khởi động)
     c.llm.onQuota = (q) => {
-      c.quota = q;
+      c.quota = q.tabs || !c.quota?.tabs ? q : { ...q, tabs: c.quota.tabs }; // tiêu đề phản hồi không có danh sách tab: giữ danh sách đã biết
       c.fire({ type: "quota", quota: q });
     };
     // chỉ hỏi máy chủ mặc định của ứng dụng (không gửi thêm yêu cầu tới địa chỉ do người dùng tự đặt)
@@ -289,7 +289,17 @@ export class LocalController implements AgentController {
     return () => this.listeners.delete(cb);
   }
 
+  /** Nhóm của người dùng không được dùng tab này (máy chủ báo qua /quota). Chỉ để báo sớm, tiết kiệm một lượt gọi; máy chủ vẫn tự kiểm tra từng yêu cầu. */
+  private tabDenied(): boolean {
+    const tabs = this.quota?.tabs;
+    return !!tabs && !tabs.includes(this.o.profile ?? "code");
+  }
+
   async send(text: string): Promise<void> {
+    if (this.tabDenied()) {
+      this.fire({ type: "notice", level: "error", text: `Nhóm của bạn không được dùng tab ${PROFILES[this.o.profile ?? "code"].label}.` });
+      return;
+    }
     if (this.busy) {
       // đang làm việc: tin thường được xếp hàng và đưa cho agent ở bước kế tiếp; lệnh (/…, !…) thì phải đợi
       const t = text.trim();

@@ -8,7 +8,9 @@ Mỗi người có hạn mức token MỖI NGÀY (giờ Việt Nam; làm mới l
 từ chối yêu cầu mới bằng HTTP 402 {"error":"quota_exceeded",...}. Ở chế độ "observe" chỉ đếm, không chặn.
 
   POST /vllm/v1/chat/completions   kiểm tra hạn mức → chuyển tiếp (giữ nguyên luồng SSE) → cộng token
-  GET  /quota                      hạn mức/đã dùng của chính người gọi (JSON)
+  GET  /quota                      hạn mức/đã dùng của chính người gọi (JSON), kèm `tabs`: các tab được dùng
+  Phân quyền theo nhóm: cấu hình `tabs` {bậc: [work|code|design]} giới hạn tab được dùng theo bậc (= theo miền email). Mặc định rỗng = mọi người dùng mọi tab.
+  Ứng dụng khai tab đang dùng ở tiêu đề `X-Neu-Tab`; bậc bị giới hạn mà thiếu/sai/ngoài danh sách → 403 (xem docs/SECURITY.md, mục "Phân quyền theo nhóm").
   GET  /healthz                    {"ok":true,"mode":...}
 
 Riêng tư: định danh lưu là MÃ GIẢ DANH (HMAC-SHA256(bí mật máy chủ, email viết thường)[:16], cùng cách với bộ thu chẩn đoán); KHÔNG lưu email, nội dung câu hỏi/trả lời.
@@ -39,6 +41,7 @@ def capture_wanted(users, ident):
     if ident in users:
         return True
     return "@" not in ident and any(u.endswith("*") and ident.startswith(u[:-1]) for u in users)
+ALL_TABS = ("work", "code", "design")
 CHAT_PATH = "/vllm/v1/chat/completions"
 MAX_BODY = 4 * 1024 * 1024
 MAX_NONSTREAM = 16 * 1024 * 1024
@@ -53,6 +56,7 @@ DEFAULT_CONFIG = {
     "warn_pct": 80,                         # từ mức này giao diện nhắc người dùng
     "max_concurrent": 6,                    # số yêu cầu đang chạy đồng thời tối đa của một người
     "overrides": {},                        # {"email hoặc tên đăng nhập viết thường": số token | "unlimited"}
+    "tabs": {},                             # {"bậc": ["work","code","design"]}: tab được dùng theo bậc; bậc không có mặt = mọi tab. [] = không tab nào
     # GHI LẠI NỘI DUNG hội thoại (yêu cầu gửi lên + lời mô hình trả) của CHÍNH các tài khoản liệt kê ở đây, để quản trị nghiên cứu.
     # Mặc định TẮT (danh sách rỗng). Chỉ dùng cho tài khoản thử nghiệm của nhóm phát triển; người dùng thật phải được báo trước.
     "capture": {"users": [], "keep_days": 90},
@@ -95,6 +99,9 @@ def load_config(path):
                 cfg["tiers"] = {str(k): int(v) for k, v in raw["tiers"].items() if isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0}
             if isinstance(raw.get("domains"), dict):
                 cfg["domains"] = {str(k).lower(): str(v) for k, v in raw["domains"].items()}
+            if isinstance(raw.get("tabs"), dict):
+                # tên tab lạ bị bỏ; danh sách rỗng (kể cả do gõ sai hết) = KHÔNG tab nào: lỗi cấu hình chỉ làm chặt thêm, không mở rộng quyền
+                cfg["tabs"] = {str(k): [t for t in ALL_TABS if t in v] for k, v in raw["tabs"].items() if isinstance(v, list)}
             if isinstance(raw.get("overrides"), dict):
                 cfg["overrides"] = {str(k).lower(): v for k, v in raw["overrides"].items() if v == "unlimited" or (isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0)}
             cap = raw.get("capture")
@@ -140,6 +147,26 @@ def limit_for(cfg, ident, admins):
         return int(ov), t
     lim = cfg["tiers"].get(t)
     return (int(lim) if lim is not None else None), t
+
+
+def tabs_for(cfg, ident, admins, own_key=False):
+    """Các tab ident được dùng (thứ tự work, code, design). Quản trị viên, người tự dán key riêng (không dùng máy chủ của trường) và chế độ observe (chỉ đếm, không chặn): đủ cả ba."""
+    if own_key or ident in admins or cfg.get("mode") != "enforce":
+        return list(ALL_TABS)
+    allowed = (cfg.get("tabs") or {}).get(tier_for(cfg, ident))
+    return list(ALL_TABS) if allowed is None else list(allowed)
+
+
+def tab_denial(cfg, tabs, declared):
+    """None nếu được phép; ngược lại (mã lỗi, thông báo). Chỉ xét khi bậc này bị giới hạn (không đủ ba tab); thiếu hoặc sai tên tab = từ chối."""
+    if len(tabs) == len(ALL_TABS):
+        return None
+    if declared not in ALL_TABS:
+        return "tab_required", "Phiên bản ứng dụng này chưa khai báo tab. Hãy cập nhật ứng dụng hoặc tải lại trang."
+    if declared in tabs:
+        return None
+    names = {"work": "Work", "code": "Code", "design": "Design"}
+    return "tab_not_allowed", "Nhóm của bạn không được dùng tab %s%s." % (names[declared], (" (được dùng: %s)" % ", ".join(names[t] for t in tabs)) if tabs else "")
 
 
 def assess(cfg, limit, used):
@@ -374,6 +401,7 @@ def quota_info(c, ident, own_key=False):
     return {
         "uid": uid, "tier": tier, "mode": cfg["mode"], "limit": 0 if limit is None else limit, "unlimited": limit is None, "used": used,
         "remaining": None if limit is None else max(limit - used, 0), "pct": None if limit is None else round(100.0 * used / limit, 1) if limit else 100.0,
+        "tabs": tabs_for(cfg, ident, c.admins(), own_key),
         "state": state, "extra": extra, "grace_pct": cfg["grace_pct"], "warn_pct": cfg["warn_pct"], "reset_at": next_reset(now), "own_key": own_key,
     }
 
@@ -538,6 +566,9 @@ class Handler(BaseHTTPRequestHandler):
         own = self.headers.get("X-Neu-Own-Key") == "1"
         q = quota_info(c, ident, own_key=own)
         cfg, now = c.cfg(), int(c.now())
+        deny = tab_denial(cfg, q["tabs"], (self.headers.get("X-Neu-Tab") or "").strip().lower())
+        if deny:   # phân quyền theo nhóm: chặn TRƯỚC khi tính đồng thời/hạn mức hay chuyển tiếp; không ghi gì (không email, không nội dung)
+            return self._json(403, {"error": deny[0], "message": deny[1], "tabs": q["tabs"]})
         day, uid = vn_day(now), q["uid"]
         limit = None if q["unlimited"] else q["limit"]
         # đồng thời: một người không được mở quá nhiều yêu cầu cùng lúc (chống chương trình lỗi/lặp)
