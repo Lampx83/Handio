@@ -213,6 +213,7 @@
           "explain",
           "research",
           "convert",
+          "followup",
           "other"
         ]
       },
@@ -227,6 +228,7 @@
       "stack": {
         "k": "enum",
         "v": [
+          "none",
           "static",
           "react",
           "vue",
