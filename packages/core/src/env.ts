@@ -60,8 +60,34 @@ export interface Env {
   /**
    * Mở một trang (máy chủ dev trên localhost hoặc tệp HTML trong dự án) trong trình duyệt ẩn, cách ly, và báo lại lỗi console, yêu cầu hỏng,
    * trang trắng. Chỉ Desktop có (Chromium sẵn trong Electron). Dùng cho công cụ check_page của tab Code.
+   * `steps`: bấm/gõ/chờ/kiểm chữ tuần tự sau khi trang tải xong (lỗi nhiều khi chỉ nổ lúc bấm nút), kết quả từng bước ở `PageReport.steps`.
    */
-  checkPage?(url: string, opts: { waitMs: number; signal?: AbortSignal }): Promise<PageReport>;
+  checkPage?(url: string, opts: { waitMs: number; steps?: PageStep[]; signal?: AbortSignal }): Promise<PageReport>;
+}
+
+/** Một bước tương tác của check_page, chạy tuần tự sau khi trang tải xong. */
+export interface PageStep {
+  action: "click" | "type" | "wait" | "expect_text";
+  /** Bộ chọn CSS (click/type). */
+  selector?: string;
+  /** click: chữ trên nút; type: placeholder/nhãn của ô nhập; expect_text: chữ phải có trên trang. */
+  text?: string;
+  /** type: giá trị gõ vào. */
+  value?: string;
+  /** wait: số mili giây. */
+  ms?: number;
+}
+
+export interface PageStepResult {
+  label: string;
+  /** Làm được bước này (tìm thấy phần tử / thấy chữ cần thấy). */
+  ok: boolean;
+  /** Lý do không làm được ("không tìm thấy nút…"). */
+  note?: string;
+  /** Lỗi console + ngoại lệ phát sinh SAU bước này (đã rút gọn). */
+  errors: string[];
+  /** Hộp thoại alert/confirm/prompt trang mở ra trong bước này (confirm được tự đồng ý). */
+  dialogs?: string[];
 }
 
 export interface PageReport {
@@ -80,6 +106,10 @@ export interface PageReport {
   blank: boolean;
   /** Nội dung lớp phủ lỗi của Vite/webpack nếu có. */
   overlay?: string;
+  /** Nhãn các nút đang hiện (sau bước cuối nếu có `steps`), để chọn bước bấm tiếp. */
+  buttons?: string[];
+  /** Kết quả từng bước khi gọi với `steps` (dừng ở bước đầu tiên không làm được). `errors` khi đó chỉ gồm lỗi lúc tải. */
+  steps?: PageStepResult[];
 }
 
 export class EnvError extends Error {}

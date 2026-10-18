@@ -1,7 +1,7 @@
 import { TOOL_GROUPS, groupOfTool, groupsFor, matchGroups } from "./tool-groups";
-import { pageTools } from "./page-check";
+import { pageTools, parsePageSteps } from "./page-check";
 import { brandText } from "./brand";
-import type { Env } from "./env";
+import type { Env, PageStep } from "./env";
 import { LlmClient, LlmError, type ChatMessage, type ChatResult, type ToolSchema } from "./llm";
 import { expandCommand, loadAgents, loadCommands, loadDirMemory, loadMemory, loadRules, loadSkills, ruleMatches, type CustomCommand, type CustomSkill, type Rule } from "./memory";
 import { Permissions, type Mode, type TargetInfo } from "./permissions";
@@ -115,6 +115,25 @@ const QUESTION_TIMED_OUT: PermissionResponse = { allow: true };
 let idCounter = 0;
 const nextId = (p: string) => `${p}${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
+/** Việc đã làm trong một lượt (để biết đã kiểm chứng sau lần sửa cuối chưa). */
+const newTurnLog = () => ({
+  seq: 0, lastEdit: 0, checks: [] as { seq: number; ok: boolean; bg?: boolean }[], reads: [] as number[], webEdit: 0, htmlFile: "", pageOk: 0,
+  /** Lần check_page CÓ steps chạy sạch gần nhất; luồng steps agent viết gần nhất; trang sạch gần nhất có nút bấm không. */
+  pageFlow: 0, flow: null as { url: string; steps: PageStep[] } | null, pageButtons: false,
+});
+
+/** Đọc lại lời gọi check_page vừa xong: url, các bước (đã chuẩn hoá) và trang có nút bấm không. */
+const pageNote = (args: unknown, result: string): { url: string; steps: PageStep[]; buttons: boolean } => {
+  const a = (args ?? {}) as { url?: unknown; steps?: unknown };
+  let steps: PageStep[] = [];
+  try {
+    steps = parsePageSteps(a.steps);
+  } catch {
+    /* công cụ đã chạy được nên steps hợp lệ; phòng xa */
+  }
+  return { url: String(a.url ?? ""), steps, buttons: /^Nút đang hiện: /m.test(result) };
+};
+
 export class Session {
   /** Tin nhắn người dùng gửi khi agent đang làm việc: được đưa vào cuộc hội thoại ở bước kế tiếp (không phải chờ hết lượt). */
   queue: string[] = [];
@@ -153,7 +172,7 @@ export class Session {
   turnNo = 0;
   readonly turnMarks = new WeakMap<ChatMessage, number>();
   /** Việc đã làm trong lượt hiện tại: để biết đã chạy kiểm tra sau lần sửa cuối chưa. */
-  turnLog = { seq: 0, lastEdit: 0, checks: [] as { seq: number; ok: boolean; bg?: boolean }[], reads: [] as number[], webEdit: 0, htmlFile: "", pageOk: 0 };
+  turnLog = newTurnLog();
   /** Số lần đã gọi `ask_user` trong lượt hiện tại. */
   private asked = 0;
   readonly main: Agent;
@@ -721,18 +740,24 @@ export class Session {
   beginTurn(userMsg: ChatMessage): void {
     this.ctx.turn = ++this.turnNo;
     this.turnMarks.set(userMsg, this.ctx.turn);
-    this.turnLog = { seq: 0, lastEdit: 0, checks: [], reads: [], webEdit: 0, htmlFile: "", pageOk: 0 };
+    this.turnLog = newTurnLog();
     this.asked = 0;
   }
 
   /** Ghi nhận một công cụ vừa chạy xong (để biết đã kiểm chứng sau lần sửa cuối chưa). */
-  noteTool(name: string, passed: boolean, wrote: boolean, background = false, extra: { file?: string; pageClean?: boolean } = {}): void {
+  noteTool(name: string, passed: boolean, wrote: boolean, background = false, extra: { file?: string; pageClean?: boolean; page?: { url: string; steps: PageStep[]; buttons: boolean } } = {}): void {
     const L = this.turnLog;
     if (wrote && extra.file && /\.(html?|jsx?|tsx?|mjs|vue|svelte|astro|css|scss)$/i.test(extra.file)) {
       L.webEdit = L.seq + 1; // vừa sửa mã/giao diện web: trang có thể đã vỡ
       if (/\.html?$/i.test(extra.file)) L.htmlFile = extra.file;
     }
     if (name === "check_page" && passed && extra.pageClean) L.pageOk = L.seq + 1;
+    if (name === "check_page" && passed && extra.page) {
+      // luồng bấm agent tự viết: giữ lại để lần tự kiểm tra cuối lượt chạy lại đúng luồng đó sau khi agent sửa mã
+      if (extra.page.steps.length) L.flow = { url: extra.page.url, steps: extra.page.steps };
+      if (extra.page.steps.length && extra.pageClean) L.pageFlow = L.seq + 1;
+      if (extra.pageClean) L.pageButtons = extra.page.buttons;
+    }
     // bg: chỉ KHỞI ĐỘNG một máy chủ nền. Máy chủ dev không báo lỗi CSS/import cho đến khi trang được tải, nên không phải là kiểm chứng
     if (name === "bash" || name === "run_javascript") L.checks.push({ seq: ++L.seq, ok: passed, bg: background });
     if (passed && (name === "read_document" || name === "read_file")) L.reads.push(++L.seq); // đọc lại để kiểm tra
@@ -876,6 +901,7 @@ export class Agent {
   private stopWhy = "";
   private nudges = 0;
   private pageChecks = 0;
+  private flowNudged = false;
   private lastReminder = 0;
   private pruneNoted = false;
   private lastPageProblem = "";
@@ -987,7 +1013,8 @@ export class Agent {
     const s = this.s;
     const L = s.turnLog;
     const tool = s.tools.get("check_page");
-    if (s.profile !== "code" || !tool || !L.webEdit || L.pageOk > L.webEdit) return null;
+    // đã sạch sau lần sửa cuối (và luồng bấm agent từng viết cũng đã chạy lại sạch)
+    if (s.profile !== "code" || !tool || !L.webEdit || (L.pageOk > L.webEdit && (!L.flow || L.pageFlow > L.webEdit))) return null;
     if (this.pageChecks >= 3) {
       // hết lượt tự sửa mà trang vẫn lỗi: cho kết thúc nhưng nói THẲNG với người dùng (không để lời "xong" của mô hình che mất)
       if (this.lastPageProblem) {
@@ -1013,20 +1040,36 @@ export class Agent {
         }
       }
     }
-    const url = server?.url ?? (L.htmlFile ? relPath(s.ctx, L.htmlFile) : "");
+    const url = L.flow?.url ?? server?.url ?? (L.htmlFile ? relPath(s.ctx, L.htmlFile) : "");
     if (!url) return null;
     let text: string;
     try {
-      text = await tool.run({ ...s.ctx, signal }, { url, wait_ms: 1500 });
+      // agent đã từng viết luồng bấm trong lượt này: chạy lại đúng luồng đó (trang tải được chưa chắc nút đã hết lỗi)
+      text = await tool.run({ ...s.ctx, signal }, L.flow ? { url, wait_ms: 1500, steps: L.flow.steps } : { url, wait_ms: 1500 });
     } catch {
       return null; // không kiểm tra được (cửa sổ ẩn lỗi…): không chặn việc báo cáo
     }
     if (/KẾT QUẢ: ổn/.test(text)) {
       L.pageOk = ++L.seq;
+      if (L.flow) L.pageFlow = L.pageOk;
+      L.pageButtons = /^Nút đang hiện: /m.test(text);
       return null;
     }
     this.lastPageProblem = text;
-    return "[Hệ thống] Bạn chưa tự kiểm tra trang, nên hệ thống đã mở thử giúp và THẤY LỖI. Đừng báo xong khi trang còn lỗi.\n" + text;
+    return (L.flow ? "[Hệ thống] Hệ thống đã chạy lại luồng bấm bạn viết trước đó sau lần sửa cuối và THẤY LỖI. Đừng báo xong khi còn lỗi.\n" : "[Hệ thống] Bạn chưa tự kiểm tra trang, nên hệ thống đã mở thử giúp và THẤY LỖI. Đừng báo xong khi trang còn lỗi.\n") + text;
+  }
+
+  /**
+   * Trang tải sạch nhưng chưa ai bấm thử nút nào (dữ liệu thật: check_page "ổn", agent báo xong, người dùng bấm "Bắt đầu làm bài" là
+   * ReferenceError ngay). Nhắc MỘT lần mỗi lượt: gọi check_page với steps đi hết luồng chính.
+   */
+  private flowNudge(): string | null {
+    const s = this.s;
+    const L = s.turnLog;
+    if (this.flowNudged || s.profile !== "code" || !s.tools.has("check_page") || !L.webEdit) return null;
+    if (!(L.pageOk > L.webEdit) || !L.pageButtons || L.pageFlow > L.webEdit) return null;
+    this.flowNudged = true;
+    return "[Hệ thống] Trang tải được không lỗi, nhưng CHƯA ai bấm thử: lỗi kiểu \"X is not defined\" trong hàm xử lý sự kiện chỉ nổ khi người dùng bấm nút. Gọi check_page với steps đi hết luồng chính của ứng dụng (ví dụ bấm nút bắt đầu, chọn/nhập, bấm nộp/lưu, rồi expect_text kết quả), sửa mọi lỗi nó báo, rồi mới báo xong.";
   }
 
   private verifyNudge(): string | null {
@@ -1170,6 +1213,7 @@ export class Agent {
     this.stopWhy = "";
     this.nudges = 0;
     this.pageChecks = 0;
+    this.flowNudged = false;
     this.pruneNoted = false;
     this.lastPageProblem = "";
     this.repeats = 0;
@@ -1237,6 +1281,12 @@ export class Agent {
             this.pageChecks++;
             s.emit({ type: "notice", level: "info", text: "Trang web có lỗi, đang sửa tiếp…" });
             this.messages.push({ role: "user", content: auto });
+            continue;
+          }
+          const flow = this.depth === 0 && !signal?.aborted ? this.flowNudge() : null;
+          if (flow) {
+            s.emit({ type: "notice", level: "info", text: "Đang thử bấm các nút chính của trang…" });
+            this.messages.push({ role: "user", content: flow });
             continue;
           }
           const nudge = this.depth === 0 && !signal?.aborted ? this.verifyNudge() : null;
@@ -1556,7 +1606,7 @@ export class Agent {
     result = String(result);
     if (result.length > MAX_TOOL_CHARS) result = result.slice(0, MAX_TOOL_CHARS) + `\n… (đã cắt bớt ${result.length - MAX_TOOL_CHARS} ký tự)`;
     this.done(tc, name, ok, result, ok ? undefined : errKind);
-    s.noteTool(name, ok && !(name === "bash" && /\[(mã thoát [1-9]\d*|Hết thời gian)/.test(result.slice(-80))), s.ctx.undoStack.length > undoBefore, name === "bash" && !!(args as { background?: unknown }).background, { file: target.abs, pageClean: name === "check_page" && /KẾT QUẢ: ổn/.test(result) });
+    s.noteTool(name, ok && !(name === "bash" && /\[(mã thoát [1-9]\d*|Hết thời gian)/.test(result.slice(-80))), s.ctx.undoStack.length > undoBefore, name === "bash" && !!(args as { background?: unknown }).background, { file: target.abs, pageClean: name === "check_page" && /KẾT QUẢ: ổn/.test(result), page: name === "check_page" && ok ? pageNote(args, result) : undefined });
     if (ok && (tool.kind === "net" || tool.kind === "mcp") && !s.perms.tainted) {
       s.perms.tainted = true;
       if (s.perms.mode !== "bypass") s.emit({ type: "notice", level: "warn", text: `Đã nhận nội dung từ ${tool.kind === "mcp" ? "công cụ ngoài (MCP)" : "web/dịch vụ ngoài"} (không tin cậy). Trong lượt này mọi thao tác ghi file/chạy lệnh đều được hỏi lại, kể cả khi bạn đã bật tự động duyệt.` });

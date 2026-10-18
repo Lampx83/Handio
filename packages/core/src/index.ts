@@ -42,3 +42,4 @@ export * from "./updates";
 export * from "./work-ctl";
 export { CITATION_RE, parseCitations, parseLoc, type DocView, type ViewBlock, type ViewSection } from "./office/locate";
 export * from "./multi";
+export { formatPageReport, parsePageSteps, pageStepLabel, MAX_PAGE_STEPS, MAX_STEP_WAIT_MS } from "./page-check";
