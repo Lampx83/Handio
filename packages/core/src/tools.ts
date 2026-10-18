@@ -359,11 +359,16 @@ async function applyEdit(ctx: ToolContext, args: { path: string; old_string: str
     for (const t of tries) {
       for (const sb of [false, true]) if (!fz && (fz = fuzzyReplace(text, t.o, t.nw, sb))) [used, skipBlank] = [t, sb];
     }
+    // tệp ĐÃ có sẵn new_string (thường là mô hình sửa rồi mà quên, sau khi tóm tắt ngữ cảnh): không phải lỗi, đừng để nó thử lại mãi (Aider làm tương tự)
+    if (!fz && nw.trim().length >= 12) {
+      const flat = (x: string) => x.normalize("NFC").replace(/\s+/g, " ").trim();
+      if (flat(text).includes(flat(nw))) return { p, text, next: text, note: `Không cần sửa: ${relPath(ctx, p)} đã có sẵn đoạn new_string (có lẽ đã sửa ở bước trước). Đọc lại tệp nếu muốn kiểm tra.`, unchanged: true };
+    }
     if (!fz) throw new ToolError(`Không tìm thấy old_string trong ${args.path}.${closestHint(text, numbered?.o ?? o) || " Hãy đọc lại file (read_file) và sao chép đúng từng ký tự (kể cả thụt dòng)."}`, "no_match");
     next = fz.text;
     note = `Đã sửa ${relPath(ctx, p)} (khớp gần đúng, bỏ qua khác biệt thụt dòng/khoảng trắng${skipBlank ? "/dòng trống" : ""}; bắt đầu ở dòng ${fz.line}).${tip(used)}`;
   }
-  return { p, text, next, note };
+  return { p, text, next, note, unchanged: false };
 }
 
 export function builtinTools(env: Env): Tool[] {
@@ -481,6 +486,7 @@ export function builtinTools(env: Env): Tool[] {
       },
       async run(ctx, a) {
         const r = await applyEdit(ctx, a, false);
+        if (r.unchanged) return r.note;
         await ctx.env.writeText(r.p, r.next);
         await remember(ctx, r.p);
         pushUndo(ctx, r.p, r.text);

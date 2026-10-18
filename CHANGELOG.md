@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.21] - 2026-10-18
+
 ### Thêm
 - **Tab Code: chạy lệnh trong container Docker** (Desktop, tuỳ chọn): bật ở Cài đặt → Quyền → "Chạy lệnh trong container Docker". Lệnh của agent chỉ thấy thư mục dự án, không thấy phần còn lại của máy, không chạy bằng quyền quản trị, mặc định không ra mạng. Bật "Cho ra mạng" để cài gói (npm/pip, có cache riêng cho từng dự án) và đặt "Cổng xem trước" (ví dụ 5173) để mở web đang chạy trong container. Cần Docker Desktop; Docker không chạy thì lệnh chạy như cũ và ứng dụng báo rõ. Quản trị viên có thể bắt buộc dùng container (`requireContainer` trong `policy.json`).
 - **Mục "Tải về" trên trang giới thiệu**: chọn bản macOS (chip Apple/Intel), Windows hoặc bản web, kèm cách mở khi hệ điều hành cảnh báo lần đầu và cách kiểm tra mã SHA-256. Hỏi đáp có link tới chính sách quyền riêng tư.
@@ -16,6 +18,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Chuẩn bị bản Windows trên Microsoft Store**: cài từ Store sẽ không còn cảnh báo "nhà phát hành không xác định", và Store tự cập nhật ứng dụng (bản cài từ Store ẩn mục "Kiểm tra bản cập nhật" trong menu Tệp).
 - **Kiểm tra sức khoẻ máy chủ thử chat thật** (quản trị viên): mỗi 15 phút gửi một câu rất ngắn tới mô hình và đo thời gian ra chữ đầu, nên mô hình treo không còn bị báo "tốt". Trang quản trị và tin cảnh báo nhắc trước 30 ngày khi chứng chỉ HTTPS hoặc mã bí mật đăng nhập Microsoft sắp hết hạn (khai ngày ở `/etc/neu-agent/entra-secret-expires`, rồi chạy lại `install-diag.sh`).
 - **Máy chủ tự sao lưu dữ liệu mỗi đêm**: góp ý, liên kết chia sẻ, hạn mức, tài khoản được sao lưu mã hoá (chỉ quản trị viên giữ khoá giải mã) và có thể gửi sang máy khác, để không mất khi hỏng ổ đĩa.
+- **Quản trị viên được cảnh báo khi sao lưu có vấn đề**: lần sao lưu gần nhất lỗi, quá 36 giờ chưa có bản mới, hoặc chưa gửi được sang máy khác đều hiện ở trang quản trị và gửi tin cảnh báo.
 
 ### Thay đổi
 - **Chia sẻ cuộc trò chuyện đầy đủ hơn để nhóm phát triển hiểu và sửa lỗi**: bản chia sẻ nay gồm cả các thao tác của agent (lệnh, tệp đã ghi/sửa) kèm phần đầu kết quả, chỗ nào bị lỗi, lời nhắc của hệ thống, cùng phiên bản, mô hình và chế độ đang dùng. Khoá/mật khẩu và dữ liệu cá nhân vẫn được tự che; tệp bạn đính kèm bằng @ không được gửi.
@@ -23,6 +26,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Số liệu quản trị đúng hơn**: bản web nay báo số phiên bản thật (trước đây luôn ghi 0.1.0 nên không phân biệt được các bản), tỷ lệ "đã cập nhật" và cảnh báo "máy chạy bản cũ" chỉ tính máy Desktop (web luôn mới nhất), và bảng «Công việc người dùng làm» phân loại thêm tin nối tiếp ("ok", "làm tiếp đi") và câu hỏi để ít bị xếp vào "khác".
 
 ### Sửa
+- **Agent không còn sửa đi sửa lại một chỗ đã sửa xong**: khi đoạn cần thay không còn nhưng tệp đã có sẵn nội dung mới, agent được báo "không cần sửa" thay vì lỗi rồi thử lại.
 - **Agent không còn "quên" sau khi tóm tắt ngữ cảnh** (cuộc trò chuyện dài): ngoài bản tóm tắt, agent luôn được nhắc lại nguyên văn yêu cầu gần nhất của bạn, các tệp đã tạo/sửa, danh sách việc và máy chủ đang chạy, nên không làm lại từ đầu hay bật lại máy chủ.
 - **Agent không còn bật đi bật lại máy chủ web**: lệnh chạy máy chủ (`npm run dev`, `streamlit run`…) tự chạy nền; máy chủ đang chạy mà chưa có tệp nào đổi thì giữ nguyên thay vì tắt rồi bật lại (vòng lặp hay gặp nhất trong số liệu).
 - **Agent nhận ra mình đang giậm chân tại chỗ sớm hơn**: làm lại đúng một thao tác mà ra đúng kết quả cũ (kể cả xen giữa các thao tác khác) thì được nhắc ở lần 3 và dừng ở lần 4; 6 thao tác lỗi liên tiếp thì dừng để hỏi bạn thay vì thử mãi. Sửa tệp giữa các lần chạy thì không tính.
