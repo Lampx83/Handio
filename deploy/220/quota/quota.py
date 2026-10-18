@@ -14,6 +14,7 @@ từ chối yêu cầu mới bằng HTTP 402 {"error":"quota_exceeded",...}. Ở
   Thêm: `models` {bậc: [mô hình]} (trường `model` của yêu cầu phải nằm trong danh sách, không thì 403 model_not_allowed), `tab_limits` {bậc: {tab: token/ngày}}
   (hết thì 402 tab_quota_exceeded), và NHÓM TUỲ TẠO trong groups.json (quản trị viên gán email/tài khoản vào nhóm; nhóm ghi đè bậc: hạn mức, tab, mô hình, hạn mức theo tab).
   Bộ đếm số lần từ chối theo mã lỗi (bảng `denials`: ngày, mã, số lần; không mã người dùng, không nhóm).
+  GET  /vllm/v1/models             lấy danh sách từ gateway rồi chỉ giữ mô hình người gọi được dùng (tiêu đề X-Neu-Models: filtered); không giới hạn = trả nguyên
   GET  /healthz                    {"ok":true,"mode":...}
 
 Riêng tư: định danh lưu là MÃ GIẢ DANH (HMAC-SHA256(bí mật máy chủ, email viết thường)[:16], cùng cách với bộ thu chẩn đoán); KHÔNG lưu email, nội dung câu hỏi/trả lời.
@@ -54,6 +55,8 @@ MAX_TOKENS = 10 ** 12
 # mã từ chối được đếm (bảng denials): danh sách cố định, không bao giờ ghi chuỗi tuỳ ý
 DENY_CODES = ("tab_not_allowed", "tab_required", "model_not_allowed", "quota_exceeded", "tab_quota_exceeded", "busy")
 CHAT_PATH = "/vllm/v1/chat/completions"
+MODELS_PATH = "/vllm/v1/models"
+MAX_MODELS_BODY = 1024 * 1024          # danh sách mô hình thật chỉ vài KB
 MAX_BODY = 4 * 1024 * 1024
 MAX_NONSTREAM = 16 * 1024 * 1024
 KEEP_DAYS = 400
@@ -332,6 +335,16 @@ def model_denial(models, model):
         return "model_not_allowed", "Nhóm của bạn chưa được dùng mô hình nào. Hãy liên hệ quản trị viên."
     shown = model if isinstance(model, str) and MODEL_ID_RE.match(model) else "(không hợp lệ)"
     return "model_not_allowed", "Nhóm của bạn không được dùng mô hình %s (được dùng: %s). Hãy chọn lại mô hình ở Cài đặt." % (shown, ", ".join(models))
+
+
+def filter_models(listing, allowed):
+    """Danh sách mô hình kiểu OpenAI ({"data": [{"id": ...}, ...]}) chỉ còn mô hình trong `allowed` (so đúng nguyên chuỗi, như model_denial).
+    Sai cấu trúc thì ném ValueError (người gọi trả lỗi, KHÔNG trả nguyên danh sách chưa lọc)."""
+    if not isinstance(listing, dict) or not isinstance(listing.get("data"), list):
+        raise ValueError("models")
+    out = dict(listing)
+    out["data"] = [m for m in listing["data"] if isinstance(m, dict) and isinstance(m.get("id"), str) and m["id"] in allowed]
+    return out
 
 
 def assess(cfg, limit, used):
@@ -783,9 +796,47 @@ class Handler(BaseHTTPRequestHandler):
             q = quota_info(c, ident, own_key=self.headers.get("X-Neu-Own-Key") == "1")
             q.pop("uid", None)
             return self._json(200, q, quota_headers(q))
+        if p == MODELS_PATH:
+            return self._models(c)
         return self._json(404, {"ok": False})
 
     do_HEAD = do_GET
+
+    # -- GET danh sách mô hình (lọc theo quyền mô hình của bậc/nhóm)
+    def _models(self, c):
+        ident = self._ident()
+        if not ident:
+            return self._json(401, {"error": "no_identity"})
+        own = self.headers.get("X-Neu-Own-Key") == "1"
+        allowed = models_for(c.cfg(), ident, c.admins(), own, c.groups())   # None = không lọc (quản trị viên, key riêng, observe, không cấu hình)
+        headers = {k: v for k in FORWARD_REQ if k != "content-type" for v in [self.headers.get(k)] if v}
+        host, port = c.upstream
+        up = http.client.HTTPConnection(host, port, timeout=30)
+        try:
+            up.request("GET", MODELS_PATH, headers=headers)
+            r = up.getresponse()
+            body = r.read(MAX_MODELS_BODY + 1)
+        except (OSError, http.client.HTTPException):
+            return self._json(502, {"error": "upstream", "message": "Không kết nối được máy chủ mô hình."})
+        finally:
+            up.close()
+        # danh sách hỏng/quá lớn: 500, KHÔNG trả nguyên. Đừng đổi sang 404: nginx gọi thẳng Kong khi cổng lỗi kết nối/treo/404 (= bỏ qua bộ lọc)
+        if len(body) > MAX_MODELS_BODY:
+            return self._json(500, {"error": "upstream_format", "message": "Máy chủ mô hình trả danh sách quá lớn."})
+        if allowed is not None and r.status == 200:
+            try:
+                listing = filter_models(json.loads(body.decode("utf-8")), allowed)
+            except (ValueError, UnicodeDecodeError):
+                return self._json(500, {"error": "upstream_format", "message": "Máy chủ mô hình trả danh sách không đọc được."})
+            return self._json(200, listing, {"X-Neu-Models": "filtered"})
+        # không lọc, hoặc gateway báo lỗi (lỗi không chứa danh sách): trả nguyên như cũ
+        self.send_response(r.status)
+        self.send_header("Content-Type", r.getheader("Content-Type") or "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     # -- POST chat
     def do_POST(self):

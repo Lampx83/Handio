@@ -33,11 +33,22 @@ class FakeUpstream:
 
     def __init__(self):
         self.requests, self.delay, self.status, self.stream_body = [], 0.0, 200, sse()
+        self.models_body = json.dumps({"object": "list", "data": [{"id": "m", "object": "model"}, {"id": "qwen-lon", "object": "model"}, {"id": "M", "object": "model"}]}).encode()
+        self.model_gets = []
         outer = self
 
         class H(BaseHTTPRequestHandler):
             def log_message(self, *a):
                 pass
+
+            def do_GET(self):
+                outer.model_gets.append({"path": self.path, "headers": dict(self.headers)})
+                out = outer.models_body if outer.status == 200 else b'{"error":"x"}'
+                self.send_response(outer.status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(out)))
+                self.end_headers()
+                self.wfile.write(out)
 
             def do_POST(self):
                 n = int(self.headers["Content-Length"])
@@ -832,6 +843,92 @@ class FlowTests(GatewayCase):
         h = Q.Handler.__new__(Q.Handler)
         h.client_address = ("10.1.2.3", 5)
         self.assertFalse(Q.Handler._local(h))
+
+
+class ModelListTests(GatewayCase):
+    """GET /vllm/v1/models: cổng lấy danh sách từ gateway rồi chỉ giữ mô hình người gọi được dùng (theo bậc/nhóm)."""
+
+    def setUp(self):
+        super().setUp()
+        self.groups_path = os.path.join(self.tmp.name, "q", "groups.json")
+        self.ctx.group_file = Q.Groups(self.groups_path)
+
+    def ids(self, ident=SV, headers=None):
+        st, out, h = self.get(Q.MODELS_PATH, ident=ident, headers=headers)
+        self.assertEqual(st, 200, out)
+        return [m["id"] for m in json.loads(out)["data"]], h
+
+    def group(self, op, **kw):
+        res = QA.group_op(self.groups_path, T0, "admin@neu.edu.vn", op, "lop-a", **kw)
+        self.assertTrue(res["ok"], res)
+
+    def test_no_model_limit_returns_listing_unchanged(self):
+        st, out, h = self.get(Q.MODELS_PATH)
+        self.assertEqual((st, out), (200, self.up.models_body))                 # nguyên từng byte như gateway trả
+        self.assertNotIn("x-neu-models", h)
+        self.assertEqual(self.up.model_gets[0]["path"], "/vllm/v1/models")
+
+    def test_tier_limit_filters_by_exact_id(self):
+        self.write_cfg({"models": {"student": ["m", "khong-co-tren-gateway"]}})
+        ids, h = self.ids()
+        self.assertEqual(ids, ["m"])                                            # "M" khác "m"; mô hình không có trên gateway không tự thêm
+        self.assertEqual(h["x-neu-models"], "filtered")
+        self.assertEqual(self.ids(GV)[0], ["m", "qwen-lon", "M"])                # bậc khác không cấu hình: nguyên danh sách
+
+    def test_group_overrides_tier_and_empty_list(self):
+        self.write_cfg({"models": {"student": ["m"]}})
+        self.group("create")
+        self.group("add", idents=[SV])
+        self.group("set", field="models", value=["qwen-lon"])
+        self.assertEqual(self.ids()[0], ["qwen-lon"])
+        self.group("set", field="models", value=["da-go-khoi-gateway"])
+        ids, h = self.ids()
+        self.assertEqual((ids, h["x-neu-models"]), ([], "filtered"))           # không còn mô hình nào dùng được: danh sách rỗng (ứng dụng báo rõ)
+        self.group("set", field="models", value=["*"])
+        self.assertEqual(self.ids()[0], ["m", "qwen-lon", "M"])
+
+    def test_admin_own_key_and_observe_are_not_filtered(self):
+        self.write_cfg({"models": {"student": [], "staff": []}})
+        self.assertEqual(self.ids("admin@neu.edu.vn")[0], ["m", "qwen-lon", "M"])
+        self.assertEqual(self.ids(headers={"X-Neu-Own-Key": "1"})[0], ["m", "qwen-lon", "M"])
+        self.assertEqual(self.ids()[0], [])
+        self.write_cfg({"mode": "observe", "models": {"student": []}})
+        self.assertEqual(self.ids()[0], ["m", "qwen-lon", "M"])
+
+    def test_identity_required_and_secrets_not_forwarded(self):
+        self.assertEqual(self.get(Q.MODELS_PATH, ident=None)[0], 401)
+        self.assertEqual(self.get(Q.MODELS_PATH, ident="khong phai email")[0], 401)
+        self.assertEqual(self.up.model_gets, [])
+        self.get(Q.MODELS_PATH, headers={"x-ollama-seckey": "khoa-may-chu", "Cookie": "sess=bi-mat", "Authorization": "Bearer abc", "X-Neu-Own-Key": "0"})
+        h = {k.lower(): v for k, v in self.up.model_gets[0]["headers"].items()}
+        self.assertEqual((h["x-ollama-seckey"], h["x-user-email"]), ("khoa-may-chu", SV))
+        for k in ("cookie", "authorization", "x-neu-own-key"):
+            self.assertNotIn(k, h)
+
+    def test_upstream_error_passthrough_and_bad_listing_is_not_leaked(self):
+        self.write_cfg({"models": {"student": ["m"]}})
+        self.up.status = 401                                                   # key riêng sai: lỗi của gateway đi nguyên (ứng dụng báo "Key sai")
+        self.assertEqual(self.get(Q.MODELS_PATH)[0], 401)
+        self.up.status = 200
+        for bad in (b"{hong", b'{"data": "x"}', b"[]", b'{"data":[{"id":"m"}],"x":"' + b"a" * Q.MAX_MODELS_BODY + b'"}'):
+            self.up.models_body = bad
+            st, out, _ = self.get(Q.MODELS_PATH)
+            self.assertEqual(st, 500, bad[:20])                                # lỗi rõ, không trả nguyên (và không 404: nginx sẽ gọi thẳng Kong = bỏ lọc)
+            self.assertEqual(json.loads(out)["error"], "upstream_format")
+        self.up.models_body = json.dumps({"data": [{"id": "m"}, "rac", {"id": 5}, {"khong": "id"}]}).encode()
+        self.assertEqual(self.ids()[0], ["m"])                                 # phần tử lạ bị bỏ
+
+    def test_upstream_down_gives_502(self):
+        self.up.close()
+        st, out, _ = self.get(Q.MODELS_PATH)
+        self.assertEqual((st, json.loads(out)["error"]), (502, "upstream"))
+
+    def test_models_listing_is_not_counted_or_denied(self):
+        self.write_cfg({"models": {"student": []}})
+        self.ids()
+        self.assertEqual(self.used(SV), 0)
+        with self.store.lock:
+            self.assertEqual(self.store.db.execute("select count(*) from denials").fetchone()[0], 0)
 
 
 if __name__ == "__main__":

@@ -80,6 +80,8 @@ export class LlmError extends Error {
   }
 }
 
+export const NO_MODEL_ALLOWED = "Tài khoản của bạn chưa được dùng mô hình nào, liên hệ quản trị viên.";
+
 const notModelServer = () => new LlmError("Địa chỉ API không trả về dữ liệu của mô hình (nhận được một trang web). Hãy kiểm tra lại địa chỉ ở Cài đặt, hoặc máy chủ chưa được cấu hình.", 0, "");
 
 function friendly(status: number, text: string): LlmError {
@@ -253,8 +255,11 @@ export class LlmClient {
     }
     if (!r.ok) throw friendly(r.status, await r.text());
     if (/html/i.test(r.headers.get("content-type") ?? "")) throw notModelServer();
-    const j = (await r.json()) as { data?: { id: string }[] };
-    return (j.data ?? []).map((m) => m.id);
+    const j = (await r.json()) as { data?: { id?: unknown }[] };
+    const ids = (Array.isArray(j.data) ? j.data : []).map((m) => m?.id).filter((id): id is string => typeof id === "string");
+    // cổng của máy chủ NEU đã lọc theo quyền mô hình của nhóm (X-Neu-Models: filtered) mà không còn mô hình nào: báo rõ thay vì danh sách trống khó hiểu
+    if (!ids.length && r.headers.get("x-neu-models") === "filtered") throw new LlmError(NO_MODEL_ALLOWED, 403, "auth", "model_not_allowed");
+    return ids;
   }
 
   /** Nhờ mô hình đọc một ảnh (data URL) theo chỉ dẫn: chép chữ (OCR), mô tả biểu đồ, trích bảng… Trả về văn bản. Không dùng công cụ, không suy luận. */
