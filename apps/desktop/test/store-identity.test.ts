@@ -8,7 +8,7 @@ beforeAll(async () => {
   S = await import(pathToFileURL(path.resolve(__dirname, "../scripts/store-identity.mjs")).href);
 });
 
-const ok = { STORE_IDENTITY_NAME: "12345PhamLam.NEUAgent", STORE_PUBLISHER: "CN=1A2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D", STORE_PUBLISHER_DISPLAY_NAME: "Phạm Lâm" };
+const ok = { STORE_IDENTITY_NAME: "12345KhachThu.NEUAgent", STORE_PUBLISHER: "CN=00000000-0000-0000-0000-000000000000", STORE_PUBLISHER_DISPLAY_NAME: "Khách Thử" };
 
 describe("store-identity.mjs", () => {
   it("chưa đặt biến nào: undefined (để --test dùng danh tính giả)", () => {
@@ -17,7 +17,7 @@ describe("store-identity.mjs", () => {
   });
 
   it("đủ và đúng dạng: trả danh tính đã cắt khoảng trắng, tên có dấu giữ nguyên", () => {
-    expect(S.storeIdentity({ ...ok, STORE_IDENTITY_NAME: ` ${ok.STORE_IDENTITY_NAME}\n` })).toEqual({ identityName: "12345PhamLam.NEUAgent", publisher: ok.STORE_PUBLISHER, publisherDisplayName: "Phạm Lâm" });
+    expect(S.storeIdentity({ ...ok, STORE_IDENTITY_NAME: ` ${ok.STORE_IDENTITY_NAME}\n` })).toEqual({ identityName: "12345KhachThu.NEUAgent", publisher: ok.STORE_PUBLISHER, publisherDisplayName: "Khách Thử" });
   });
 
   it("thiếu một phần hoặc sai dạng: báo đủ các chỗ sai", () => {

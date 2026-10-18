@@ -1,6 +1,6 @@
 // Danh tính gói MSIX cho Microsoft Store: lấy ở Partner Center → sản phẩm → Product identity (KHÔNG phải bí mật), đặt ở biến repo GitHub.
-//   STORE_IDENTITY_NAME           Package/Identity/Name                 vd 12345PhamLam.NEUAgent
-//   STORE_PUBLISHER               Package/Identity/Publisher            vd CN=1A2B3C4D-5E6F-7A8B-9C0D-1E2F3A4B5C6D
+//   STORE_IDENTITY_NAME           Package/Identity/Name                 vd 12345KhachThu.NEUAgent
+//   STORE_PUBLISHER               Package/Identity/Publisher            vd CN=00000000-0000-0000-0000-000000000000
 //   STORE_PUBLISHER_DISPLAY_NAME  Package/Properties/PublisherDisplayName
 
 /** Danh tính giả để dựng THỬ trên CI (kiểm tra đóng gói được); gói dựng bằng nó không nộp lên Store được. */

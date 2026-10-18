@@ -5,6 +5,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Chuẩn bị bản Windows trên Microsoft Store**: cài từ Store sẽ không còn cảnh báo "nhà phát hành không xác định", và Store tự cập nhật ứng dụng (bản cài từ Store ẩn mục "Kiểm tra bản cập nhật" trong menu Tệp).
+
 ### Thay đổi
 - **Chia sẻ cuộc trò chuyện đầy đủ hơn để nhóm phát triển hiểu và sửa lỗi**: bản chia sẻ nay gồm cả các thao tác của agent (lệnh, tệp đã ghi/sửa) kèm phần đầu kết quả, chỗ nào bị lỗi, lời nhắc của hệ thống, cùng phiên bản, mô hình và chế độ đang dùng. Khoá/mật khẩu và dữ liệu cá nhân vẫn được tự che; tệp bạn đính kèm bằng @ không được gửi.
 
