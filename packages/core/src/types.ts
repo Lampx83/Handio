@@ -302,6 +302,10 @@ export interface AgentController {
   diagnosticsStatus?(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }>;
   /** Tab Code (Desktop): trạng thái container Docker cho lệnh shell (container.ts). */
   sandboxStatus?(): Promise<import("./container").SandboxStatus | null>;
+  sandboxPullImage?(): Promise<import("./container").ImagePullState | null>;
+  sandboxPullStatus?(): Promise<import("./container").ImagePullState | null>;
+  sandboxCache?(): Promise<import("./container").CacheInfo | null>;
+  sandboxClearCache?(scope: import("./container").CacheScope): Promise<{ ok: boolean; message: string }>;
   diagnosticsPreview?(note: string): Promise<string | null>;
   diagnosticsSend?(): Promise<{ ok: boolean }>;
 }

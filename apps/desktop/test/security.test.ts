@@ -109,6 +109,17 @@ describe("kiểm tra yêu cầu IPC", () => {
   it("container Docker: chỉ bật/tắt, mạng, cổng xem trước; KHÔNG đặt được ảnh hay cờ docker qua IPC", () => {
     expect(ok("sandboxStatus")).toBe(true);
     expect(ok("sandboxStatus", "x")).toBe(false);
+    // tải ảnh: không tham số (không đặt được tên ảnh qua IPC)
+    expect(ok("sandboxPullImage")).toBe(true);
+    expect(ok("sandboxPullImage", "evil/miner:latest")).toBe(false);
+    expect(ok("sandboxPullImage", "--all-tags")).toBe(false);
+    expect(ok("sandboxPullStatus")).toBe(true);
+    expect(ok("sandboxPullStatus", 1)).toBe(false);
+    // cache: chỉ phạm vi cố định, không nhận tên volume
+    expect(ok("sandboxCache")).toBe(true);
+    expect(ok("sandboxCache", "handio-cache-0123456789abcdef")).toBe(false);
+    for (const sc of ["project", "all", "orphans"]) expect(ok("sandboxClearCache", sc)).toBe(true);
+    for (const bad of [[], ["handio-cache-0123456789abcdef"], ["my-db-data"], ["all", "x"], [{ scope: "all" }], [["all"]], ["ALL"], ["--force"]]) expect(ok("sandboxClearCache", ...bad), JSON.stringify(bad)).toBe(false);
     expect(ok("saveSettings", { container: true, containerNetwork: false, containerPorts: [5173, 3000] })).toBe(true);
     expect(ok("saveSettings", { container: "yes" })).toBe(false);
     expect(ok("saveSettings", { containerImage: "node:22-bookworm-slim" })).toBe(false);

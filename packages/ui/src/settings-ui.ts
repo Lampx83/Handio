@@ -1,4 +1,4 @@
-import type { AgentController, Mode, UiState } from "@neu/agent-core";
+import { DEFAULT_CONTAINER_IMAGE, DEFAULT_IMAGE_INFO, type AgentController, type CacheScope, type Mode, type SandboxStatus, type UiState } from "@neu/agent-core";
 import { clear, h, store } from "./dom";
 import { detailSteps, setDetailSteps } from "./activity";
 
@@ -123,13 +123,70 @@ export function openSettings(ctl: AgentController, st: UiState, account: Account
         const list = [...new Set(ports.value.split(/[\s,;]+/).filter(Boolean).map(Number))].filter((n) => Number.isInteger(n) && n >= 1024 && n <= 65535).slice(0, 5);
         void save({ containerPorts: list });
       });
-      const dock = d.docker.ok ? `Docker ${d.docker.version ?? ""}${d.docker.imagePresent === false ? ` · ảnh ${d.image} chưa tải (lần chạy đầu sẽ tải về)` : ""}` : `Docker không dùng được (${d.docker.error ?? "chưa kiểm tra"})`;
-      const state = d.mode === "docker" ? `Đang chạy lệnh trong container (${d.image})${d.network ? ", có mạng" : ", không mạng"}` : d.mode === "refuse" ? "Lệnh bị từ chối: " + (d.reason ?? "") : d.wanted ? d.reason ?? "" : "Lệnh chạy trực tiếp trên máy";
+      const tools = d.image === DEFAULT_CONTAINER_IMAGE ? ` (${DEFAULT_IMAGE_INFO.tools})` : "";
+      const dock = d.docker.ok ? `Docker ${d.docker.version ?? ""}` : `Docker không dùng được (${d.docker.error ?? "chưa kiểm tra"})`;
+      const state = d.mode === "docker" ? `Đang chạy lệnh trong container ${d.image}${tools}${d.network ? ", có mạng" : ", không mạng"}` : d.mode === "refuse" ? "Lệnh bị từ chối: " + (d.reason ?? "") : d.wanted ? d.reason ?? "" : "Lệnh chạy trực tiếp trên máy";
       box.append(
         row("Container", h("label", { class: "chk" }, on, "Chạy lệnh trong container Docker"), d.required ? h("span", { class: "res" }, "Quản trị viên bắt buộc") : ""),
         row("", h("label", { class: "chk" }, net, "Cho ra mạng"), h("span", {}, "Cổng xem trước "), ports),
         row("", h("span", { class: "res " + (d.mode === "docker" ? "ok" : d.wanted ? "bad" : ""), role: "status" }, state + " · " + dock)),
       );
+      if (d.docker.ok && ctl.sandboxPullImage && (d.docker.imagePresent === false || d.pull?.running)) box.append(pullRow(d));
+      if (d.docker.ok && ctl.sandboxCache) box.append(cacheRow());
+    };
+    // "Tải ảnh": chỉ khi người dùng bấm (docker pull đúng ảnh đã cấu hình); hiện số lớp đã tải
+    const pullRow = (d: SandboxStatus): HTMLElement => {
+      const size = d.image === DEFAULT_CONTAINER_IMAGE ? ` (~${DEFAULT_IMAGE_INFO.downloadMb} MB)` : "";
+      const msg = h("span", { class: "res", role: "status", "aria-live": "polite" });
+      const btn = h("button", { class: "btn sm", type: "button", title: `docker pull ${d.image}` }, "Tải ảnh" + size);
+      const show = (p: SandboxStatus["pull"]): boolean => {
+        const running = !!p?.running;
+        btn.disabled = running;
+        msg.className = "res" + (p && !running ? (p.ok ? " ok" : " bad") : "");
+        msg.textContent = !p ? `Chưa có ${d.image}` : running ? `Đang tải… ${p.layersTotal ? `${p.layersDone}/${p.layersTotal} lớp` : ""}` : p.ok ? "Đã tải xong" : `Chưa tải được (${p.error ?? "lỗi"})`;
+        return running;
+      };
+      const poll = async () => {
+        const p = await ctl.sandboxPullStatus?.().catch(() => null);
+        if (!box.isConnected) return;
+        if (show(p)) setTimeout(() => void poll(), 1000);
+        else void paintRow();
+      };
+      btn.addEventListener("click", async () => {
+        if (show(await ctl.sandboxPullImage!().catch(() => null))) setTimeout(() => void poll(), 1000);
+      });
+      if (show(d.pull)) setTimeout(() => void poll(), 1000);
+      return row("Ảnh", btn, msg);
+    };
+    // cache npm/pip (volume Docker theo dự án): dung lượng + xoá dự án này / tất cả / của dự án đã bỏ khỏi danh sách
+    const cacheRow = (): HTMLElement => {
+      const info = h("span", {}, "Đang đo…");
+      const msg = h("span", { class: "res", role: "status", "aria-live": "polite" });
+      const btns = h("span", { class: "chips left" });
+      const r = row("Cache", info, btns, msg);
+      const fmt = (b: number | null): string => (b === null ? "?" : b < 1e6 ? `${Math.round(b / 1e3)} kB` : b < 1e9 ? `${Math.round(b / 1e6)} MB` : `${(b / 1e9).toFixed(1).replace(".", ",")} GB`);
+      const load = async () => {
+        const c = await ctl.sandboxCache!().catch(() => null);
+        clear(btns);
+        if (!c) return void (info.textContent = "Không đo được");
+        info.textContent = `Dự án này: ${c.project.exists ? fmt(c.project.bytes) : "chưa có"} · Tất cả: ${fmt(c.total.bytes)} (${c.total.count})`;
+        const act = (label: string, scope: CacheScope, ask: string, disabled: boolean) => h("button", { class: "btn sm", type: "button", disabled, onclick: async () => {
+          if (!confirm(ask)) return;
+          msg.className = "res";
+          msg.textContent = "Đang xoá…";
+          const res = await ctl.sandboxClearCache!(scope).catch(() => ({ ok: false, message: "Không xoá được." }));
+          msg.className = "res " + (res.ok ? "ok" : "bad");
+          msg.textContent = res.message;
+          await load();
+        } }, label);
+        btns.append(
+          act("Xoá cache dự án", "project", "Xoá cache npm/pip của dự án này? Lần cài sau sẽ tải lại.", !c.project.exists),
+          act("Xoá tất cả", "all", `Xoá cache npm/pip của mọi dự án (${c.total.count})?`, !c.total.count),
+          ...(c.orphans.count ? [act(`Dọn dự án đã xoá (${c.orphans.count})`, "orphans", `Xoá ${c.orphans.count} cache của dự án không còn trong danh sách?`, false)] : []),
+        );
+      };
+      void load();
+      return r;
     };
     void paintRow();
     return box;

@@ -64,6 +64,10 @@ class IpcController implements AgentController {
   diagnosticsPreview = (n: string) => this.call<string | null>("diagnosticsPreview", n);
   diagnosticsSend = () => this.call<any>("diagnosticsSend");
   sandboxStatus = () => this.call<any>("sandboxStatus").catch(() => null);
+  sandboxPullImage = () => this.call<any>("sandboxPullImage").catch(() => null);
+  sandboxPullStatus = () => this.call<any>("sandboxPullStatus").catch(() => null);
+  sandboxCache = () => this.call<any>("sandboxCache").catch(() => null);
+  sandboxClearCache = (scope: "project" | "all" | "orphans") => this.call<any>("sandboxClearCache", scope).catch(() => ({ ok: false, message: "Không xoá được." }));
   resetPermissions = () => this.call<void>("resetPermissions");
   trustProject = (t: boolean) => this.call<void>("trustProject", t);
   openFolder = () => this.call<void>("openFolder");

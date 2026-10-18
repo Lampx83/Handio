@@ -1,11 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, protocol, safeStorage, session, shell, type MenuItemConstructorOptions } from "electron";
-import { accessSync, constants as fsConstants, existsSync, readFileSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, readFileSync, realpathSync } from "node:fs";
 import os from "node:os";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
-import { brandName, buildWorkSamples, cleanProjectName, containerImage, createMultiProject, decideContainer, ID_RE, LocalController, newId, parsePolicy, sanitizeImage, sanitizePorts, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type ContainerSettings, type DockerProbe, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SandboxStatus, type SessionEvent, type TaskLock } from "@neu/agent-core";
-import { cleanupContainers, cleanupContainersSync, containersStarted, findDocker, JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, probeDocker, readPackDirs, type ContainerChoice, type KeyCodec } from "@neu/agent-env-node";
+import { brandName, buildWorkSamples, cleanProjectName, containerImage, createMultiProject, decideContainer, ID_RE, LocalController, newId, parsePolicy, sanitizeImage, sanitizePorts, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type ContainerSettings, type DockerProbe, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SandboxStatus, type SessionEvent, type TaskLock, type CacheInfo, type CacheScope, type ImagePullState } from "@neu/agent-core";
+import { cacheTargets, cacheVolumeName, cleanupContainers, cleanupContainersSync, containersStarted, findDocker, knownCacheVolumes, listCacheVolumes, pullImage, removeCacheVolumes, summarizeCache, JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, probeDocker, readPackDirs, type ContainerChoice, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
 import { canInstallHere, launchInstaller } from "./installer";
@@ -212,7 +212,53 @@ async function containerChoice(force = false): Promise<ContainerChoice & { probe
 }
 async function sandboxStatus(): Promise<SandboxStatus> {
   const { probe, docker: _bin, ...d } = await containerChoice(true);
-  return { ...d, docker: probe ?? { ok: false }, networkLocked: policy.bashNetwork === false };
+  return { ...d, docker: probe ?? { ok: false }, networkLocked: policy.bashNetwork === false, pull: imagePull };
+}
+// "Tải ảnh": chỉ khi người dùng bấm; ảnh lấy từ cài đặt người dùng/chính sách (không nhận tên ảnh từ giao diện); một lần tải một lúc
+let imagePull: ImagePullState | null = null;
+async function sandboxPullImage(): Promise<ImagePullState> {
+  if (imagePull?.running) return imagePull;
+  const image = containerImage(await containerSettings(), policy);
+  if (!dockerBin) dockerBin = findDocker();
+  if (!dockerBin) return (imagePull = { image, running: false, layersDone: 0, layersTotal: 0, ok: false, error: "không tìm thấy Docker" });
+  imagePull = { image, running: true, layersDone: 0, layersTotal: 0 };
+  void pullImage(dockerBin, image, (st) => (imagePull = st)).finally(() => (dockerCache = null)); // dò lại ngay: ảnh vừa có
+  return imagePull;
+}
+// cache npm/pip (volume handio-cache-*): chỉ volume có nhãn + tên của Handio; "dự án đã xoá" = không còn trong danh sách dự án nào
+async function knownProjectPaths(): Promise<string[]> {
+  const out: string[] = [];
+  for (const p of PROFILES_LIST) {
+    try {
+      const r = JSON.parse(await fs.readFile(path.join(userData(), `projects-${p}.json`), "utf8")) as { projects?: { path?: unknown }[] };
+      for (const x of Array.isArray(r.projects) ? r.projects : []) if (typeof x?.path === "string") out.push(x.path);
+    } catch {
+      /* chưa có danh sách của tab này */
+    }
+  }
+  return out;
+}
+const projectVolume = (root: string): string => {
+  try {
+    return cacheVolumeName(realpathSync(root)); // như NodeEnv: tên theo realpath của thư mục dự án
+  } catch {
+    return cacheVolumeName(root);
+  }
+};
+async function sandboxCache(root: string): Promise<CacheInfo | null> {
+  if (!dockerBin) dockerBin = findDocker();
+  const vols = dockerBin ? await listCacheVolumes(dockerBin) : null;
+  return vols ? summarizeCache(vols, projectVolume(root), knownCacheVolumes(await knownProjectPaths())) : null;
+}
+async function sandboxClearCache(root: string, scope: CacheScope): Promise<{ ok: boolean; message: string }> {
+  if (!dockerBin) dockerBin = findDocker();
+  const vols = dockerBin ? await listCacheVolumes(dockerBin) : null;
+  if (!dockerBin || !vols) return { ok: false, message: "Docker không dùng được." };
+  const targets = cacheTargets(vols, scope, projectVolume(root), knownCacheVolumes(await knownProjectPaths()));
+  if (!targets.length) return { ok: true, message: "Không có gì để xoá." };
+  const r = await removeCacheVolumes(dockerBin, targets);
+  if (r.failed.length) return { ok: false, message: `Đã xoá ${r.removed.length}; ${r.failed.length} cache đang được lệnh dùng, hãy dừng lệnh rồi thử lại.` };
+  return { ok: true, message: `Đã xoá ${r.removed.length} cache.` };
 }
 
 const makeEnv = (profile: Profile, dir: string) => {
@@ -423,7 +469,7 @@ async function buildController(profile: Profile): Promise<LocalController> {
     realFs: true,
     // tác vụ định kỳ: một bộ lập lịch cho cả tab chạy cả dự án chưa mở (khi ứng dụng đang mở và đã đăng nhập); cả ứng dụng chỉ một tác vụ mỗi lúc
     tasks: { enabled: !SMOKE, background: true, lock: taskLock, canRun: () => !auth || auth.status().signedIn },
-    sandbox: profile === "code" && !SMOKE ? { status: sandboxStatus } : undefined,
+    sandbox: profile === "code" && !SMOKE ? { status: sandboxStatus, pullImage: sandboxPullImage, pullStatus: () => imagePull, cacheInfo: sandboxCache, clearCache: sandboxClearCache } : undefined,
     packs: loadPacks,
     toolsBase: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/"),
     projects: host,
