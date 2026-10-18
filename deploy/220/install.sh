@@ -71,6 +71,8 @@ if [ -d "$HERE/downloads" ] && ls "$HERE/downloads" | grep -q .; then
   mkdir -p "$DLROOT"; cp -f "$HERE/downloads/"* "$DLROOT/"; chmod 755 "$DLROOT"; chmod 644 "$DLROOT"/*
   echo "Đã cập nhật bản cài Desktop: $(ls "$DLROOT" | tr '\n' ' ')"
 fi
+# tên cố định cho nút tải công khai trên trang giới thiệu (/agent/download/latest/); lỗi ở đây không chặn triển khai
+bash "$HERE/dl-links.sh" "$DLROOT" || echo "Cảnh báo: không cập nhật được $DLROOT/latest/ (nút tải trên trang giới thiệu)."
 
 # 1c) trang giới thiệu/hướng dẫn công khai: guide-public/ -> /var/www/neu-agent-guide (thay nguyên thư mục để không sót ảnh cũ)
 if [ -f "$HERE/guide-public/index.html" ]; then

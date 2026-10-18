@@ -55,6 +55,9 @@ try {
   fs.writeFileSync(path.join(t, "nginx.conf"), `pid /tmp/n.pid; error_log /dev/stderr info;\nevents {}\nhttp { access_log off; resolver 127.0.0.11; include /t/conf.d/*.conf; include /t/server.conf; }\n`);
   fs.writeFileSync(path.join(t, "web/index.html"), "<html>NEU-AGENT-APP</html>");
   fs.writeFileSync(path.join(t, "dl/SHA256SUMS.txt"), "0000  x.dmg\n");
+  fs.writeFileSync(path.join(t, "dl/NEU-Agent-1.0.0-win-x64.exe"), "NEU-INSTALLER");
+  fs.mkdirSync(path.join(t, "dl/latest"));
+  fs.symlinkSync("../NEU-Agent-1.0.0-win-x64.exe", path.join(t, "dl/latest/NEU-Agent-win-x64.exe"));
   fs.writeFileSync(path.join(t, "guide/index.html"), "<html>NEU-GUIDE-PUBLIC</html>");
   fs.writeFileSync(path.join(t, "guide/changelog.html"), "<html>NEU-CHANGELOG-PUBLIC</html>");
   fs.writeFileSync(path.join(t, "guide/help.html"), "<html>NEU-HELP-PUBLIC</html>");
@@ -115,6 +118,9 @@ try {
   check("chưa đăng nhập: API trả 401 JSON login_required (không chuyển hướng)", api0.status === 401 && /login_required/.test(api0.body) && /json/.test(api0.headers["content-type"]), api0.body.slice(0, 60));
   const dl0 = await req("/agent/download/SHA256SUMS.txt");
   check("chưa đăng nhập: trang tải về cũng phải đăng nhập", dl0.status === 302);
+  const dlPub = await req("/agent/download/latest/NEU-Agent-win-x64.exe");
+  check("chưa đăng nhập: tải được bản cài mới nhất ở /agent/download/latest/ (nút trên trang giới thiệu)", dlPub.status === 200 && dlPub.body === "NEU-INSTALLER" && dlPub.headers["x-content-type-options"] === "nosniff", String(dlPub.status));
+  check("chưa đăng nhập: bản cài theo phiên bản và latest.json vẫn phải đăng nhập", (await req("/agent/download/NEU-Agent-1.0.0-win-x64.exe")).status === 302 && (await req("/agent/download/latest.json")).status === 302);
   const g0 = await req("/agent/guide/");
   check("chưa đăng nhập: trang hướng dẫn công khai /agent/guide/ xem được (200, không chuyển tới đăng nhập)", g0.status === 200 && /NEU-GUIDE-PUBLIC/.test(g0.body), String(g0.status));
   check("trang hướng dẫn công khai: CSP chặt (không cho script), nosniff", /default-src 'none'/.test(g0.headers["content-security-policy"] ?? "") && !/script-src/.test(g0.headers["content-security-policy"] ?? "") && g0.headers["x-content-type-options"] === "nosniff");

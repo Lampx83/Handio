@@ -191,10 +191,17 @@ try {
 
   const p1 = pubCmd(mkDesktop("9.1.0"));
   check("publish-desktop 9.1.0: PUBLISHED, tệp + latest.json + SHA256SUMS có mặt, quyền 644", p1.ok && /PUBLISHED_DESKTOP 9\.1\.0/.test(p1.out) && dlVersion() === "9.1.0" && dl("ls NEU-Agent-9.1.0-* | wc -l") === "3" && dl("stat -c %a latest.json SHA256SUMS.txt NEU-Agent-9.1.0-win-x64.exe | tr '\\n' ' '") === "644 644 644" && dl("sha256sum -c SHA256SUMS.txt >/dev/null && echo OK") === "OK", p1.out.split("\n").slice(-2).join(" | "));
+  const pubCode = (u, extra = "") => ex(`curl -s --path-as-is -o /dev/null -w '%{http_code}' ${extra} -H 'Host: ai.neu.edu.vn' 'http://127.0.0.1${u}'`).out;
+  check("nút tải công khai: latest/ trỏ tới bản 9.1.0, SHA256SUMS của latest/ khớp", dl("readlink latest/NEU-Agent-mac-arm64.dmg") === "../NEU-Agent-9.1.0-mac-arm64.dmg" && dl("cd latest && sha256sum -c SHA256SUMS.txt >/dev/null && echo OK") === "OK", dl("ls -l latest/"));
   const p2 = pubCmd(mkDesktop("9.2.0"));
   check("publish-desktop 9.2.0: giữ cả 9.1.0 (để quay lui); SHA256SUMS liệt kê cả hai bản", p2.ok && dlVersion() === "9.2.0" && dl("ls NEU-Agent-* | wc -l") === "6" && dl("grep -c 'NEU-Agent-' SHA256SUMS.txt") === "6");
   const p3 = pubCmd(mkDesktop("9.3.0"));
   check("publish-desktop 9.3.0: chỉ giữ 2 bản mới nhất (9.1.0 bị dọn)", p3.ok && dlVersion() === "9.3.0" && dl("ls NEU-Agent-* | wc -l") === "6" && dl("ls NEU-Agent-9.1.0-* 2>/dev/null | wc -l") === "0" && dl("sha256sum -c SHA256SUMS.txt >/dev/null && echo OK") === "OK");
+  check("nút tải công khai: sau 9.3.0 latest/ trỏ tới 9.3.0 (bản 9.1.0 đã dọn không để lại liên kết hỏng)", dl("readlink latest/NEU-Agent-win-x64.exe") === "../NEU-Agent-9.3.0-win-x64.exe" && dl("ls latest/ | tr '\\n' ' '").trim() === "NEU-Agent-mac-arm64.dmg NEU-Agent-mac-x64.dmg NEU-Agent-win-x64.exe SHA256SUMS.txt" && dl("cd latest && sha256sum -c SHA256SUMS.txt >/dev/null && echo OK") === "OK", dl("ls latest/ && readlink latest/*.exe").replace(/\n/g, " "));
+  check("nginx: chưa đăng nhập tải được bản cài mới nhất + SHA256SUMS ở latest/; POST bị chặn",
+    pubCode("/agent/download/latest/NEU-Agent-win-x64.exe") === "200" && pubCode("/agent/download/latest/SHA256SUMS.txt") === "200" && pubCode("/agent/download/latest/NEU-Agent-win-x64.exe", "-X POST") === "403");
+  check("nginx: latest.json, SHA256SUMS chung, bản cài theo phiên bản vẫn phải đăng nhập (kể cả đi vòng qua latest/../)",
+    pubCode("/agent/download/latest.json") === "302" && pubCode("/agent/download/SHA256SUMS.txt") === "302" && pubCode("/agent/download/NEU-Agent-9.3.0-win-x64.exe") === "302" && pubCode("/agent/download/latest/../latest.json") === "302" && pubCode("/agent/download/latest/") === "403");
   const keepSums = dl("sha256sum latest.json SHA256SUMS.txt NEU-Agent-9.3.0-mac-arm64.dmg");
   const rejectDesk = (name, dir, re) => { const r = pubCmd(dir); check(name, !r.ok && re.test(r.out) && dl("sha256sum latest.json SHA256SUMS.txt NEU-Agent-9.3.0-mac-arm64.dmg") === keepSums && dl("ls .tmp.* 2>/dev/null | wc -l") === "0", r.out.split("\n").slice(-2).join(" | ")); };
   rejectDesk("hạ phiên bản (9.0.0 < 9.3.0) bị từ chối, trang tải không đổi", mkDesktop("9.0.0"), /Không hạ phiên bản/);
