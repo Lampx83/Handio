@@ -29,6 +29,11 @@ contextBridge.exposeInMainWorld("neu", {
       return () => ipcRenderer.removeListener("neu:update-changed", h);
     },
   },
+  // chạy nền ở khay khi đóng cửa sổ + mở cùng máy (tiến trình chính kiểm tra tham số: security.ts backgroundArgsOk)
+  background: {
+    get: () => ipcRenderer.invoke("neu:background", "get"),
+    set: (patch: { keep?: boolean; atLogin?: boolean }) => ipcRenderer.invoke("neu:background", "set", patch),
+  },
   onEvent: (cb: (profile: string, e: unknown) => void) => {
     const h = (_e: unknown, profile: string, ev: unknown) => cb(profile, ev);
     ipcRenderer.on("neu:event", h);

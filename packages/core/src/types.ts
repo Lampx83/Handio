@@ -194,6 +194,13 @@ export interface UiState {
 }
 
 /** Giao diện dùng chung giữa UI và nơi chạy agent (cùng trang ở web, qua IPC ở desktop). */
+/** Chạy nền ở khay (Desktop). `atLoginSupported` = có "Mở cùng máy" ở bản này không (bản cài macOS/Windows, không Microsoft Store). */
+export interface BackgroundState {
+  keep: boolean;
+  atLogin: boolean;
+  atLoginSupported: boolean;
+}
+
 export interface AgentController {
   getState(): Promise<UiState>;
   onEvent(cb: (e: SessionEvent) => void): () => void;
@@ -287,6 +294,8 @@ export interface AgentController {
   taskUndo?(id: string): Promise<RevertResult | { error: string }>;
   /** Thông báo hệ thống khi tác vụ xong/lỗi: không tham số = đọc, có = đặt. */
   taskNotify?(on?: boolean): Promise<boolean>;
+  /** Desktop: giữ chạy nền ở khay khi đóng cửa sổ (để tác vụ chạy) và mở cùng máy. Không tham số = đọc. Cấp ứng dụng, không theo dự án. */
+  taskBackground?(patch?: { keep?: boolean; atLogin?: boolean }): Promise<BackgroundState>;
   /** Chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md): trạng thái; xem trước gói “Báo lỗi” (JSON đúng như sẽ gửi, null nếu bị cấm); gửi chính gói đó. */
   /** Ghi một việc người dùng làm trong giao diện (mã trong DIAG_UI_ACTS), cho chẩn đoán không chứa nội dung. Không có = bỏ qua. */
   track?(act: string): void;

@@ -462,6 +462,7 @@ dialog.tasks .tk-acts { display: flex; gap: 6px; flex: none; flex-wrap: wrap; ju
 dialog.tasks .tk-new { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
 dialog.tasks .tk-sched { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 dialog.tasks .tk-sched input[type=number] { width: 90px; }
+dialog.tasks .chk[hidden] { display: none; }
 @media (max-width: 560px) { dialog.tasks .tk-row { flex-direction: column; } dialog.tasks .tk-acts { justify-content: flex-start; max-width: none; } dialog.tasks .tk-sched > * { flex: 1 1 40%; } }
 .wt-offer { margin: 4px 0 2px; }
 .wt-pop { left: auto; right: 0; bottom: auto; top: calc(100% + 6px); min-width: 200px; max-height: 320px; }

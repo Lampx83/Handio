@@ -72,7 +72,7 @@ Khi chưa ký số, macOS/Windows vẫn cảnh báo “nhà phát hành không x
 ### Tự cập nhật (từ 0.8.3)
 
 - **Bật mặc định**, nhớ lựa chọn ở `update.json` trong thư mục dữ liệu. Chỉ chạy được khi ứng dụng cài ở nơi ghi được: Windows (bản `.exe` cho người dùng hiện tại, không cần quản trị) và macOS (`.app` ở `/Applications` hoặc `~/Applications`, không chạy trực tiếp từ ổ đĩa ảnh). Máy không đủ điều kiện thì rơi về cách cũ (tải rồi mở tệp).
-- **Tải nền** vào `<dữ liệu>/updates`, kiểm kích thước và SHA-256 theo `latest.json`; bản cũ bị xoá. **Cài khi đóng ứng dụng** (không mở lại) hoặc khi bấm **Cài đặt và khởi động lại** (mở lại).
+- **Tải nền** vào `<dữ liệu>/updates`, kiểm kích thước và SHA-256 theo `latest.json`; bản cũ bị xoá. **Cài khi đóng ứng dụng** (không mở lại) hoặc khi bấm **Cài đặt và khởi động lại** (mở lại). Đang bật "Giữ chạy nền khi đóng cửa sổ" thì đóng cửa sổ chỉ ẩn xuống khay: bản mới cài khi **Thoát hẳn** (menu khay, Cmd+Q, menu Tệp).
 - **Windows:** chạy `Setup.exe /S --updated [--force-run]` (NSIS im lặng, giống `electron-updater`). **macOS:** một đoạn shell chờ ứng dụng thoát, gắn `.dmg`, thay `.app`, mở lại; lỗi thì mở `.dmg` để kéo-thả (nhật ký ở `$TMPDIR/neu-update.log`).
 - **Làm tiếp việc dở:** nếu agent đang chạy lúc cập nhật, ứng dụng dừng gọn, lưu hội thoại và ghi `resume.json` (hiệu lực 24 giờ, dùng một lần, chỉ khi đã lên phiên bản mới). Mở lại và đã đăng nhập thì tự mở đúng cuộc trò chuyện và nhắn agent làm tiếp.
 - Người dùng bản **trước 0.8.3** vẫn cập nhật theo cách cũ (tải về rồi mở tệp) một lần; từ đó trở đi tự động.
