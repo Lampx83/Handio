@@ -40,6 +40,19 @@ Store ký lại gói nên người dùng không gặp SmartScreen; Store cũng t
 3. **Dựng gói**: GitHub → Actions → **Store (MSIX)** → *Run workflow*. Xong thì tải tệp `NEU-Agent-<phiên bản>-win-x64.appx` ở mục *Artifacts*. Pull request đụng tới phần đóng gói Store tự dựng thử bằng danh tính giả (gói thử không nộp được).
 4. **Nộp**: Partner Center → sản phẩm → *Submission* → tải tệp `.appx` lên, điền mô tả, ảnh chụp, chính sách riêng tư, độ tuổi → gửi kiểm duyệt.
 
+5. **Tự nộp bản cập nhật từ CI** (sau khi bài nộp đầu tiên đã được duyệt): job `store` của workflow **Release** dựng MSIX mỗi lần phát hành và nộp bằng `msstore` CLI, giữ mô tả, ảnh của lần trước. Thiết lập một lần:
+   - Partner Center → ⚙ *Account settings* → *User management* → *Microsoft Entra applications*: liên kết (hoặc tạo) một thư mục Entra, tạo ứng dụng mới với vai trò **Manager**, tạo khoá (*Add new key*). Chép *Tenant ID*, *Client ID*, khoá; *Seller ID* ở *Account settings* → *Legal info* (hoặc *Identifiers*).
+   - Đặt vào GitHub (khoá là bí mật, không gửi qua chat):
+     ```bash
+     gh secret set STORE_TENANT_ID
+     gh secret set STORE_SELLER_ID
+     gh secret set STORE_CLIENT_ID
+     gh secret set STORE_CLIENT_SECRET
+     ```
+     Biến `STORE_PRODUCT_ID` (Store ID, công khai) đã đặt. Thiếu secret thì job chỉ dựng gói (tải ở *Artifacts*), không nộp; lỗi ở job này không chặn bản cài trên máy chủ.
+   - Bài nộp đầu đặt *Don't publish until I select Publish now*; các bài nộp sau chép lại tuỳ chọn này. Muốn tự lên Store ngay khi duyệt xong thì đổi thành *Publish as soon as it passes certification* trước lần phát hành tự động đầu tiên.
+   - Phiên bản gói = phiên bản ứng dụng + `.0` (0.8.20 → 0.8.20.0), nên mỗi lần nộp phải là phiên bản mới (`npm run version:bump`).
+
 Chạy thử trước khi nộp (nên làm, vì MSIX chạy trong môi trường đóng gói): đăng nhập tài khoản trường, mở dự án, tab Code chạy lệnh, xuất tệp. Không có máy Windows thì mượn máy phòng thực hành, hoặc dùng máy ảo Windows 11 ARM trên Mac (UTM, Parallels). Gói thử dựng bằng danh tính giả chưa ký nên phải bật *Developer Mode* và cài bằng `Add-AppxPackage -AllowUnsigned` (PowerShell, Windows 11).
 
 ## Cách chắc chắn nhất cho máy của trường
