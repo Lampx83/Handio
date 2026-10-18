@@ -32,6 +32,7 @@ export * from "./repeat";
 export * from "./brand";
 export * from "./learning";
 export * from "./design-templates";
+export * from "./design-md";
 export * from "./projects";
 export * from "./projects-kv";
 export * from "./sample-design";
