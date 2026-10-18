@@ -215,6 +215,17 @@ export function authArgsOk(method: string, arg: unknown): boolean {
   return typeof arg.username === "string" && /^[A-Za-z0-9._@+-]{1,64}$/.test(arg.username) && typeof arg.password === "string" && arg.password.length >= 1 && arg.password.length <= 200 && !/[\u0000-\u001f]/.test(arg.password);
 }
 
+/** Kênh chạy nền (neu:background): đọc / đặt "Giữ chạy nền khi đóng cửa sổ" và "Mở cùng máy". */
+export const BACKGROUND_METHODS = new Set(["get", "set"]);
+
+/** get không có tham số; set nhận {keep?, atLogin?} (ít nhất một khoá, chỉ boolean, không khoá lạ). */
+export function backgroundArgsOk(method: string, arg: unknown): boolean {
+  if (method === "get") return arg === undefined;
+  if (method !== "set" || !isObj(arg)) return false;
+  const keys = Object.keys(arg);
+  return keys.length >= 1 && keys.every((k) => (k === "keep" || k === "atLogin") && typeof arg[k] === "boolean");
+}
+
 /** Khi SSO bật mà chưa đăng nhập, MỌI lệnh nghiệp vụ bị từ chối (giao diện chỉ được gọi kênh đăng nhập). */
 export const authBlocks = (authEnabled: boolean, signedIn: boolean): boolean => authEnabled && !signedIn;
 

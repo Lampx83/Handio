@@ -242,6 +242,27 @@ export async function runSmoke(c: Ctx): Promise<number> {
     const csp = await js<string>(`document.querySelector('meta[http-equiv="Content-Security-Policy"]').content`);
     check("giao diện có CSP chặt, không cho ra mạng", /connect-src 'none'/.test(csp) && /default-src 'none'/.test(csp));
     check("giao diện không có Node (sandbox)", await js<boolean>(`typeof require === 'undefined' && typeof process === 'undefined' && typeof window.neu.call === 'function'`));
+    // ---------------- chạy nền ở khay: mặc định tắt, kiểm thử không bao giờ chạy nền; hộp ⏰ có công tắc; tham số sai bị từ chối
+    {
+      const r = await js<{ get: { keep: boolean; atLogin: boolean; atLoginSupported: boolean }; bad: string; row: boolean; loginHidden: boolean }>(`(async () => {
+        const r = { get: await window.neu.background.get() };
+        try { await window.neu.background.set({ keep: "yes" }); r.bad = 'ALLOWED'; } catch (e) { r.bad = 'rejected'; }
+        try { await window.neu.background.set({ keep: true, path: "/tmp/x" }); r.bad += '+ALLOWED'; } catch (e) { /* đúng */ }
+        const btns = [...document.querySelectorAll('[aria-label="Tác vụ định kỳ"]')];
+        r.btns = btns.length;
+        (btns.find((b) => b.offsetParent) ?? btns[0])?.click();
+        await new Promise((t) => setTimeout(t, 400));
+        const d = document.querySelector('dialog.tasks');
+        const labels = [...(d?.querySelectorAll('label.chk') ?? [])];
+        r.dlg = !!d;
+        r.row = labels.some((l) => /Giữ chạy nền khi đóng cửa sổ/.test(l.textContent));
+        r.loginHidden = labels.filter((l) => /Mở cùng máy/.test(l.textContent)).every((l) => l.hidden);
+        d?.close();
+        return r;
+      })()`);
+      check("chạy nền: mặc định tắt, không có “Mở cùng máy” ở bản thử; hộp ⏰ có công tắc; tham số sai bị từ chối",
+        r.get.keep === false && r.get.atLogin === false && r.get.atLoginSupported === false && r.bad === "rejected" && r.row && r.loginHidden, JSON.stringify(r));
+    }
     // ---------------- tấn công giả lập từ giao diện (coi như giao diện bị chiếm quyền)
     const atk = await js<Record<string, string>>(`(async () => {
       const r = {};

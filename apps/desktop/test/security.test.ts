@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { AUTH_METHODS, authArgsOk, authBlocks, CSP, IPC_METHODS, IPC_VALIDATORS, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "../src/security";
+import { AUTH_METHODS, authArgsOk, authBlocks, BACKGROUND_METHODS, backgroundArgsOk, CSP, IPC_METHODS, IPC_VALIDATORS, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "../src/security";
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "neu-sec-")));
 const root = path.join(tmp, "renderer");
@@ -314,6 +314,23 @@ describe("cổng đăng nhập SSO", () => {
   it("kênh đăng nhập chỉ có đúng năm lệnh, và không trùng lệnh nghiệp vụ", () => {
     expect([...AUTH_METHODS].sort()).toEqual(["login", "loginPassword", "logout", "remember", "status"]);
     for (const m of AUTH_METHODS) expect(IPC_METHODS.has(m)).toBe(false);
+  });
+});
+
+describe("kênh chạy nền (neu:background)", () => {
+  it("chỉ có get/set, không trùng lệnh nghiệp vụ hay kênh đăng nhập", () => {
+    expect([...BACKGROUND_METHODS].sort()).toEqual(["get", "set"]);
+    for (const m of BACKGROUND_METHODS) expect(IPC_METHODS.has(m) || AUTH_METHODS.has(m), m).toBe(false);
+  });
+  it("get không tham số; set chỉ nhận {keep?, atLogin?} kiểu boolean", () => {
+    expect(backgroundArgsOk("get", undefined)).toBe(true);
+    expect(backgroundArgsOk("get", {})).toBe(false);
+    expect(backgroundArgsOk("set", { keep: true })).toBe(true);
+    expect(backgroundArgsOk("set", { atLogin: false })).toBe(true);
+    expect(backgroundArgsOk("set", { keep: true, atLogin: true })).toBe(true);
+    for (const bad of [undefined, null, {}, [], "keep", { keep: "true" }, { keep: 1 }, { atLogin: null }, { keep: true, path: "/tmp/x" }, { keep: true, args: ["--x"] }, { openAtLogin: true }])
+      expect(backgroundArgsOk("set", bad), JSON.stringify(bad)).toBe(false);
+    expect(backgroundArgsOk("quit", undefined)).toBe(false);
   });
 });
 
