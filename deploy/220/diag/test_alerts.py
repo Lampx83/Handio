@@ -110,5 +110,52 @@ class Webhook(unittest.TestCase):
         self.assertFalse(os.path.exists(state))
 
 
+class HealthChecks(unittest.TestCase):
+    """Cảnh báo từ health.json do healthz.py ghi (checks + warn)."""
+    def ev(self, checks, ok=None):
+        h = {"ok": all(c["ok"] for c in checks.values()) if ok is None else ok, "checks": checks, "warn": [k for k, c in checks.items() if c["ok"] and c.get("warn")]}
+        return {a["key"]: a for a in A.evaluate(stats(), h, NOW)}
+
+    def test_failed_components_are_named(self):
+        # health.json có "checks", không có "failed": trước đây tin luôn ghi "không rõ thành phần"
+        a = self.ev({"chat": {"ok": False, "detail": "HTTP 502"}, "disk": {"ok": False, "detail": "free min 3% LOW:/var/log"}, "oauth2": {"ok": True}})
+        self.assertEqual(set(a), {"health"})
+        t = a["health"]["text"]
+        self.assertIn("chat (HTTP 502)", t)
+        self.assertIn("disk", t)
+        self.assertNotIn("/var/log", t, "không đưa đường dẫn vào tin")
+
+    def test_expiry_warnings_are_medium_and_remind_daily(self):
+        a = self.ev({"tls": {"ok": True, "warn": True, "days": 12, "detail": "chứng chỉ HTTPS còn 12 ngày"},
+                     "entra_secret": {"ok": True, "warn": True, "days": 20, "detail": "secret Entra còn 20 ngày"}, "chat": {"ok": True}})
+        self.assertEqual(set(a), {"tls_expiring", "entra_secret_expiring"})
+        self.assertEqual({x["sev"] for x in a.values()}, {"trung bình"})
+        self.assertIn("12 ngày", a["tls_expiring"]["text"])
+        self.assertIn("20 ngày", a["entra_secret_expiring"]["text"])
+        al = list(a.values())
+        fire, _, st = A.decide(al, {}, NOW)
+        self.assertEqual(len(fire), 2)
+        self.assertEqual(A.decide(al, st, NOW + 7 * 3600)[0], [], "cảnh báo hạn: nhắc mỗi ngày một lần, không phải 6 giờ")
+        self.assertEqual(len(A.decide(al, st, NOW + 25 * 3600)[0]), 2)
+
+    def test_expired_is_high(self):
+        a = self.ev({"tls": {"ok": False, "warn": False, "days": -1, "detail": "x"}, "entra_secret": {"ok": False, "warn": False, "days": -3, "detail": "x"}})
+        self.assertEqual(set(a), {"tls_expired", "entra_secret_expired"}, "không lặp thêm cảnh báo 'health' chung")
+        self.assertEqual({x["sev"] for x in a.values()}, {"cao"})
+
+    def test_cannot_check_is_reported(self):
+        a = self.ev({"tls": {"ok": True, "warn": True, "detail": "không kết nối được (ConnectionRefusedError)"},
+                     "entra_secret": {"ok": True, "warn": True, "detail": "tệp hạn secret sai định dạng (cần YYYY-MM-DD)"},
+                     "chat": {"ok": True, "warn": True, "detail": "chưa có key mô hình (chạy lại install-diag.sh)"}})
+        self.assertEqual(set(a), {"tls_unchecked", "entra_secret_unchecked", "chat_unchecked"})
+        self.assertIn("YYYY-MM-DD", a["entra_secret_unchecked"]["text"])
+
+    def test_texts_have_no_host_or_ip(self):
+        a = self.ev({"tls": {"ok": True, "warn": True, "days": 5, "detail": "ai.example.vn@192.0.2.22"}, "chat": {"ok": False, "detail": "x@192.0.2.22"}})
+        txt = A.message(list(a.values()), [])
+        for bad in ("example", "192.0.2", "@"):
+            self.assertNotIn(bad, txt)
+
+
 if __name__ == "__main__":
     unittest.main()

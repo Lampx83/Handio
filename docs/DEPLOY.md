@@ -28,7 +28,7 @@ Application (client) ID và tenant ID của ứng dụng nằm ở cấu hình r
 - Thêm nền tảng **Mobile and desktop applications**: `http://localhost` và bật **Allow public client flows = Yes** (dùng cho bản Desktop).
 - Quyền (delegated): `openid`, `profile`, `email`, `offline_access`.
 - Tài khoản `@st.neu.edu.vn` phải đăng nhập được vào đúng tenant này. Nếu gặp lỗi `AADSTS50020`, sinh viên thuộc tenant khác: cần đổi ứng dụng sang đa tenant (liên hệ người phát triển).
-- **Mã bí mật (client secret) chỉ nhập trên máy 220 khi cài, không đưa vào mã nguồn/gói cài/chat.** Đổi mã định kỳ (tạo mã mới trong Entra rồi chạy lại `install-auth.sh`).
+- **Mã bí mật (client secret) chỉ nhập trên máy 220 khi cài, không đưa vào mã nguồn/gói cài/chat.** Đổi mã định kỳ (tạo mã mới trong Entra rồi chạy lại `install-auth.sh`). Khai ngày hết hạn của mã vào `/etc/neu-agent/entra-secret-expires` (YYYY-MM-DD) rồi chạy lại `diag/install-diag.sh` để được nhắc trước 30 ngày (xem docs/DIAGNOSTICS.md).
 
 ### Cài đặt (theo thứ tự)
 ```bash
