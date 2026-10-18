@@ -4,281 +4,444 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>NEU Agent — Cánh tay AI, làm mọi việc thay bạn</title>
-<meta name="description" content="NEU Agent: cánh tay AI của Trường Đại học Kinh tế Quốc dân. Từ thao tác máy tính, lập trình, tạo bài trình bày, thiết kế đến hàng trăm công việc khác. Xem demo trước khi đăng nhập.">
-<meta name="theme-color" content="#081020">
+<meta name="description" content="NEU Agent: trợ lý AI của Trường Đại học Kinh tế Quốc dân cho cán bộ, giảng viên, sinh viên. Làm văn phòng, lập trình, thiết kế; bản web, macOS và Windows.">
+<meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:site_name" content="NEU Agent">
+<meta property="og:title" content="NEU Agent — Cánh tay AI, làm mọi việc thay bạn">
+<meta property="og:description" content="Trợ lý AI của Trường Đại học Kinh tế Quốc dân: Work, Code, Design. Đăng nhập bằng tài khoản @neu.edu.vn.">
+<meta property="og:url" content="https://ai.neu.edu.vn/agent/guide/">
+<meta property="og:image" content="https://ai.neu.edu.vn/agent/guide/img/work.webp">
+<meta property="og:image:alt" content="Màn hình NEU Agent ở chế độ Work">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/agent/guide/img/handio-mark.svg" type="image/svg+xml">
-<style>
-:root{--ink:#081020;--ink2:#0d1b3a;--blue:#2d7bff;--cyan:#06e5ff;--ice:#d6f5ff;--cloud:#e8ecf5;--text:#e7eefc;--muted:#9fb2d6;--line:rgba(120,160,255,.22)}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth}
-body{margin:0;background:var(--ink);color:var(--text);font:16px/1.65 -apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
-a{color:var(--cyan)}
+<style id="site-css">
+/* Kiểu chung cho các trang công khai /agent/guide/ (giới thiệu, hướng dẫn, nhật ký thay đổi, quyền riêng tư).
+   CSP chỉ cho style nội tuyến nên tệp này được CHÉP vào thẻ <style id="site-css"> của từng trang:
+   sửa ở đây rồi chạy `node scripts/guide-css.mjs` (changelog.html lấy tự động khi dựng). Kiểm thử báo lỗi nếu lệch. */
+:root{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f1f3f6;--text:#111827;--muted:#5b6472;--border:#e3e6eb;--accent:#0b4a9e;--accent-hover:#093d83;--accent-soft:#eaf1fb;--on-accent:#fff;--head-bg:rgba(247,248,250,.86);--code:#eef0f3;
+  --r1:6px;--r2:10px;--r3:14px;--sh1:0 1px 2px rgb(16 24 40/.06);--sh2:0 4px 12px rgb(16 24 40/.08);--sh3:0 12px 32px rgb(16 24 40/.14);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--head-h:64px}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1115;--panel:#161a20;--panel2:#1d222a;--text:#e6e9ef;--muted:#9aa3b2;--border:#2a3039;--accent:#5b9bff;--accent-hover:#7cb0ff;--accent-soft:#16253d;--on-accent:#0b1220;--head-bg:rgba(15,17,21,.86);--code:#1d222a;
+  --sh1:0 1px 2px rgb(0 0 0/.3);--sh2:0 4px 12px rgb(0 0 0/.35);--sh3:0 12px 32px rgb(0 0 0/.45)}}
+*,*:before,*:after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:calc(var(--head-h) + 16px)}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 var(--font);-webkit-font-smoothing:antialiased;overflow-wrap:break-word}
 img,svg{max-width:100%}
-.wrap{max-width:1200px;margin:0 auto;padding:0 20px}
-/* ---- chữ handio ---- */
-.wm{font-weight:800;letter-spacing:-.035em;line-height:1;white-space:nowrap}
-.wm b{color:var(--cyan)}
-.lg{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:#fff}
-.lg svg{width:36px;height:36px;flex:none}
-.lg .wm{font-size:28px}
+a{color:var(--accent);text-underline-offset:2px}
+a:hover{color:var(--accent-hover)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h1,h2,h3{line-height:1.25;letter-spacing:-.01em;margin:0}
+p{margin:0 0 12px}
+code,kbd{font:14px/1.4 var(--mono);background:var(--code);border-radius:var(--r1);padding:1px 6px}
+kbd{border:1px solid var(--border);border-bottom-width:2px}
+.wrap{max-width:1200px;margin:0 auto;padding:0 16px}
+@media (min-width:768px){.wrap{padding:0 24px}}
+.skip{position:absolute;left:8px;top:-48px;z-index:20;padding:8px 12px;background:var(--panel);border-radius:var(--r2);box-shadow:var(--sh2)}
+.skip:focus{top:8px}
+.ic{width:20px;height:20px;flex:none}
+
+/* ---- thanh trên (dính) ---- */
+.site-head{position:sticky;top:0;z-index:10;background:var(--head-bg);-webkit-backdrop-filter:saturate(180%) blur(12px);backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--border)}
+.site-head .wrap{display:flex;align-items:center;gap:16px;height:var(--head-h)}
+.brand{display:inline-flex;align-items:center;gap:8px;color:var(--text);text-decoration:none;font-weight:700;font-size:16px;letter-spacing:-.01em;white-space:nowrap}
+.brand:hover{color:var(--text)}
+.brand svg,.brand img{width:28px;height:28px;display:block;border-radius:7px}
+.site-nav{display:flex;align-items:center;gap:4px;margin-left:auto}
+.site-nav a{padding:8px 12px;border-radius:var(--r1);color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
+.site-nav a:hover{color:var(--text);background:var(--panel2)}
+.site-nav a[aria-current]{color:var(--text);background:var(--panel2)}
+.head-cta{display:flex;align-items:center;gap:8px;margin-left:8px}
+.menu{display:none;position:relative}
+.menu summary{list-style:none;cursor:pointer;display:grid;place-items:center;width:40px;height:40px;border-radius:var(--r2);border:1px solid var(--border);background:var(--panel);color:var(--text)}
+.menu summary::-webkit-details-marker{display:none}
+.menu[open] summary{background:var(--panel2)}
+.menu .menu-panel{position:absolute;right:0;top:48px;min-width:220px;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh3);display:grid}
+.menu .menu-panel a{padding:10px 12px;border-radius:var(--r1);color:var(--text);text-decoration:none;font-size:16px}
+.menu .menu-panel a:hover{background:var(--panel2)}
+@media (max-width:899px){.site-nav{display:none}.head-cta{margin-left:auto}.menu{display:block}}
+@media (max-width:379px){.head-cta .btn{padding:8px 12px}}
+
 /* ---- nút ---- */
-.btn{display:inline-block;padding:12px 24px;border-radius:12px;font-weight:700;text-decoration:none;color:#04122b;background:linear-gradient(135deg,var(--cyan),var(--blue));box-shadow:0 8px 28px rgba(6,229,255,.25)}
-.btn:hover{filter:brightness(1.08)}
-.btn.ghost{background:transparent;color:var(--ice);border:1px solid var(--line);box-shadow:none}
-.btn.ghost:hover{border-color:var(--cyan)}
-.btn.sm{padding:9px 18px;font-size:14px}
-/* ---- đầu trang ---- */
-header.top{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:18px 0}
-header.top nav{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
-header.top nav a:not(.btn){color:var(--muted);text-decoration:none;font-size:14.5px}
-header.top nav a:not(.btn):hover{color:#fff}
-@media(max-width:760px){header.top nav a:not(.btn){display:none}}
-/* ---- hero ---- */
-.hero{position:relative;overflow:hidden;background:radial-gradient(900px 520px at 78% 38%,rgba(45,123,255,.28),transparent 70%),radial-gradient(600px 400px at 10% 10%,rgba(6,229,255,.14),transparent 70%),linear-gradient(180deg,#050c1c,var(--ink) 60%,var(--ink2))}
-.hero:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(120,160,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,255,.06) 1px,transparent 1px);background-size:56px 56px;mask-image:linear-gradient(180deg,#000,transparent 85%);-webkit-mask-image:linear-gradient(180deg,#000,transparent 85%)}
-.hero .wrap{position:relative}
-.hero-grid{display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);gap:20px;align-items:center;padding:26px 0 54px}
-@media(max-width:960px){.hero-grid{grid-template-columns:1fr}}
-.hero h1{margin:14px 0 14px;font-size:clamp(34px,5.2vw,58px);line-height:1.12;letter-spacing:-.02em}
-.hero h1 span{background:linear-gradient(90deg,var(--cyan),var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent}
-.hero .sub{margin:0 0 24px;color:var(--muted);font-size:18px;max-width:30em}
-.cta{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
-.hero small{color:var(--muted);display:block}
-.dl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:6px 0 12px;font-size:14px;color:var(--muted)}
-.dl a{color:var(--ice);text-decoration:none;padding:6px 13px;border:1px solid var(--line);border-radius:999px}
-.dl a:hover{border-color:var(--cyan);color:#fff}
-.hero small a{color:inherit;white-space:nowrap}
-.pillars{display:flex;flex-wrap:wrap;margin:30px 0 0;padding:0;list-style:none}
-.pillars li{display:block;padding:6px 12px 6px 0;margin-right:12px;font-size:13px;color:var(--ice);text-align:center;line-height:1.3;min-width:70px}
-.pillars a{display:flex;flex-direction:column;align-items:center;gap:8px;white-space:nowrap;color:inherit;text-decoration:none;border-radius:10px;padding:4px 6px;margin:-4px -6px;transition:background .15s,transform .15s}
-.pillars a:hover{background:rgba(66,215,255,.1);transform:translateY(-1px)}
-.pillars a:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
-.pillars li+li{border-left:1px solid var(--line);padding-left:12px}
-.pillars svg{width:34px;height:34px;color:var(--cyan)}
-/* ---- sân khấu: bàn phím vector + hai lớp tay đã tách nền + thẻ nổi ---- */
-.stage{position:relative;width:100%;aspect-ratio:1536/1000;filter:drop-shadow(0 30px 40px rgba(0,0,0,.45))}
-.stage .rw{-webkit-mask-image:linear-gradient(180deg,#000 86%,transparent);mask-image:linear-gradient(180deg,#000 86%,transparent)}
-.stage{cursor:pointer;-webkit-tap-highlight-color:transparent}
-.stage .kb,.stage .mouse{position:absolute;inset:0;width:100%;height:100%}
-.stage .part{position:absolute;height:auto;display:block;pointer-events:none;user-select:none}
-.stage .rw{position:absolute;inset:0}
-.k{animation:kd 2.8s ease-in-out infinite;animation-delay:calc(var(--n)*.17s)}
-.k rect{animation:kg 2.8s ease-in-out infinite;animation-delay:calc(var(--n)*.17s)}
-.hl{animation:tap 5.6s ease-in-out infinite}
-.hr{animation:drag 4.2s ease-in-out infinite}
-.ring{position:absolute;left:75.1%;top:36.2%;width:5.6%;aspect-ratio:1;margin:-2.8% 0 0 -2.8%;border-radius:50%;border:3px solid #ffb020;opacity:0;animation:ring 4.2s ease-out infinite;box-shadow:0 0 18px rgba(255,176,32,.6)}
-.wh{animation:wh 5.2s ease-in-out infinite}
-@keyframes wh{0%,38%,52%,100%{fill:#5d77a9}44%,48%{fill:#7fe9ff}}
-.pulse{position:absolute;left:75.1%;top:36.2%;width:5.6%;aspect-ratio:1;margin:-2.8% 0 0 -2.8%;border-radius:50%;border:3px solid var(--cyan);opacity:0;pointer-events:none}
-.stage:active .pulse{animation:press .5s ease-out}
-.stage:active .k rect,.stage:active .wh{animation:none;fill:#7fe9ff}
-.stage:hover{filter:drop-shadow(0 30px 44px rgba(6,229,255,.18))}
-@keyframes fl{0%,38%{opacity:0}42%{opacity:1}56%{opacity:0}100%{opacity:0}}
-@keyframes press{0%{opacity:.95;transform:scale(.4)}100%{opacity:0;transform:scale(2.4)}}
-@keyframes kd{0%,22%,100%{transform:translateY(0)}6%,12%{transform:translateY(3px)}}
-@keyframes kg{0%,22%,100%{fill:#5c74a4}6%,12%{fill:#7fe9ff}}
-@keyframes tap{0%,100%{transform:translate(0,0)}4%{transform:translate(0,.6%)}8%{transform:translate(0,0)}13%{transform:translate(0,.5%)}18%{transform:translate(0,0)}28%{transform:translate(1.43%,0)}32%{transform:translate(1.43%,.6%)}37%{transform:translate(1.43%,0)}42%{transform:translate(1.43%,.5%)}47%{transform:translate(1.43%,0)}58%{transform:translate(-1.1%,1.5%)}62%{transform:translate(-1.1%,2.1%)}67%{transform:translate(-1.1%,1.5%)}72%{transform:translate(-1.1%,2%)}78%{transform:translate(-1.1%,1.5%)}90%{transform:translate(0,0)}}
-@keyframes drag{0%,100%{transform:translate(0,0)}28%{transform:translate(.6%,1.2%)}40%{transform:translate(.6%,1.6%)}46%{transform:translate(.6%,1.2%)}78%{transform:translate(.2%,.4%)}}
-@keyframes ring{0%,36%{opacity:0;transform:scale(.2)}40%{opacity:.95;transform:scale(.5)}60%{opacity:0;transform:scale(1.7)}100%{opacity:0}}
-/* ---- phần sáng / tối ---- */
-section{padding:62px 0}
-section h2{margin:0 0 8px;font-size:clamp(26px,3.4vw,38px);line-height:1.2;letter-spacing:-.015em}
-.lead{margin:0 0 28px;color:var(--muted);max-width:44em}
-.light{background:linear-gradient(180deg,#f4f7fd,var(--cloud));color:#0b1630}
-.light .lead{color:#51607f}
-.light a{color:#1559d6}
-.light .btn{color:#04122b}
-/* ---- ô chức năng ---- */
-.caps{display:grid;gap:16px;grid-template-columns:1fr}
-@media(min-width:560px){.caps{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:900px){.caps{grid-template-columns:repeat(3,1fr)}}
-.cap{background:#fff;border:1px solid #d9e2f4;border-radius:18px;padding:20px 18px 18px;box-shadow:0 10px 30px rgba(20,50,110,.08)}
-.cap .ic{width:52px;height:52px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#0b1d45,#12306a);color:var(--cyan);margin-bottom:12px}
-.cap .ic svg{width:28px;height:28px}
-.cap h3{margin:0 0 4px;font-size:17px}
-.cap p{margin:0;color:#51607f;font-size:14.5px;line-height:1.5}
-code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:rgba(120,160,255,.14);border-radius:5px;padding:1px 5px;white-space:nowrap}
-.cap .row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 10px}
-.cap .btn.alt{background:#eef3fc;color:#0b1630;box-shadow:none;border:1px solid #d9e2f4}
-.cap .hint{font-size:13.5px;color:#51607f;margin:8px 0 0;padding-top:8px;border-top:1px dashed #d9e2f4}
-.cap .soon{display:inline-block;font-size:12px;font-weight:700;color:#0b4a9e;background:#e8f0fb;border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:2px}
-/* ---- demo trình chiếu thuần CSS ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 16px;border-radius:var(--r2);border:1px solid transparent;font:600 14px/1.2 var(--font);text-decoration:none;white-space:nowrap;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s}
+.btn-primary{background:var(--accent);color:var(--on-accent);box-shadow:var(--sh1)}
+.btn-primary:hover{background:var(--accent-hover);color:var(--on-accent)}
+.btn-secondary{background:var(--panel);color:var(--text);border-color:var(--border);box-shadow:var(--sh1)}
+.btn-secondary:hover{color:var(--text);border-color:var(--muted)}
+.btn-lg{min-height:48px;padding:12px 20px;font-size:16px}
+.btn .ic{width:18px;height:18px}
+
+/* ---- trang giới thiệu: phần đầu ---- */
+.hero{position:relative;overflow:hidden;padding:48px 0 8px;background:radial-gradient(60% 70% at 85% 10%,var(--accent-soft),transparent 70%),var(--bg)}
+.hero-grid{display:grid;gap:48px;align-items:center;grid-template-columns:1fr}
+@media (min-width:1000px){.hero{padding:80px 0 16px}.hero-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 16px;padding:4px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--muted);font-size:14px;font-weight:500}
+.eyebrow .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.hero h1{font-size:32px;line-height:1.15;letter-spacing:-.025em;margin:0 0 16px}
+@media (min-width:768px){.hero h1{font-size:44px}}
+.hero h1 span{color:var(--accent)}
+.hero .sub{font-size:20px;line-height:1.5;color:var(--muted);margin:0 0 24px;max-width:32em}
+@media (max-width:767px){.hero .sub{font-size:16px}}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 24px}
+.quick-dl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px;font-size:14px;color:var(--muted)}
+.quick-dl a{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--text);text-decoration:none}
+.quick-dl a:hover{border-color:var(--accent);color:var(--accent)}
+.hero-note{margin:0;font-size:14px;color:var(--muted)}
+.hero-note a{color:inherit}
+/* khung ứng dụng (ảnh chụp thật trong khung cửa sổ vẽ bằng CSS) */
+.mock{position:relative;isolation:isolate}
+.mock:before{content:"";position:absolute;inset:-24px -24px -24px 24px;border-radius:24px;background:linear-gradient(135deg,var(--accent-soft),transparent 70%);z-index:-1}
+.mock .window{z-index:0}
+.window{position:relative;border-radius:var(--r3);border:1px solid var(--border);background:var(--panel);box-shadow:var(--sh3);overflow:hidden}
+.window .bar{display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--panel2)}
+.window .bar i{width:10px;height:10px;border-radius:50%;background:var(--border)}
+.window .bar span{margin-left:12px;font-size:12px;color:var(--muted)}
+.window img{display:block;width:100%;height:auto}
+@media (max-width:599px){.mock:before{display:none}}
+/* dải năm việc chính */
+.pillars{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:48px 0 0;padding:0;list-style:none;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh1)}
+.pillars li+li{border-left:1px solid var(--border)}
+.pillars a{display:flex;align-items:center;gap:12px;padding:16px;color:var(--text);text-decoration:none;font-size:14px;font-weight:500;line-height:1.35;height:100%}
+.pillars a:hover{background:var(--panel2)}
+.pillars li:first-child a{border-radius:var(--r3) 0 0 var(--r3)}
+.pillars li:last-child a{border-radius:0 var(--r3) var(--r3) 0}
+.pillars .ib{width:40px;height:40px}
+@media (max-width:899px){.pillars{grid-template-columns:repeat(2,minmax(0,1fr))}.pillars li+li{border-left:0}.pillars li{border-top:1px solid var(--border)}.pillars li:nth-child(-n+2){border-top:0}.pillars li:nth-child(even){border-left:1px solid var(--border)}.pillars li:last-child{grid-column:1/-1;border-left:0}.pillars li a{border-radius:0!important}}
+/* ô biểu tượng */
+.ib{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:var(--r2);background:var(--accent-soft);color:var(--accent)}
+.ib .ic{width:22px;height:22px}
+
+/* ---- các phần ---- */
+.sec{padding:64px 0}
+@media (min-width:768px){.sec{padding:96px 0}}
+.sec-alt{background:var(--panel);border-block:1px solid var(--border)}
+.sec-head{max-width:720px;margin:0 0 40px}
+.kicker{margin:0 0 8px;color:var(--accent);font-size:14px;font-weight:600}
+.sec h2{font-size:24px;letter-spacing:-.02em;margin:0 0 12px}
+@media (min-width:768px){.sec h2{font-size:32px}}
+.lead{margin:0;color:var(--muted);font-size:16px;max-width:60ch}
+@media (min-width:768px){.sec .lead{font-size:20px;line-height:1.5}}
+.grid3{display:grid;gap:24px;grid-template-columns:1fr}
+@media (min-width:640px){.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1000px){.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.grid4{display:grid;gap:24px;grid-template-columns:1fr}
+@media (min-width:640px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1100px){.grid4{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.card{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh1);overflow:hidden}
+.sec-alt .card{background:var(--bg)}
+.card h3{font-size:20px;margin:0 0 8px}
+.card p{color:var(--muted);margin:0 0 12px}
+.card ul{margin:0;padding-left:20px;font-size:14px}
+.card li{margin:0 0 4px}
+.card .body{padding:20px 24px 24px}
+.card .media{display:block;aspect-ratio:16/10;object-fit:cover;object-position:left top;width:100%;height:auto;border-bottom:1px solid var(--border);background:var(--panel2)}
+.card .ttl{display:flex;align-items:center;gap:12px;margin:0 0 8px}
+.card .ttl h3{margin:0}
+.card .ttl .ib{width:36px;height:36px}
+.card .ttl .ic{width:18px;height:18px}
+.feat{padding:24px}
+.feat .ib{margin:0 0 16px}
+.feat h3{font-size:16px;margin:0 0 4px}
+.feat p{margin:0;font-size:16px}
+/* demo thuần CSS (nút chọn ẩn + nhãn) */
 .demo input{position:absolute;opacity:0;pointer-events:none}
-.demo .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
-.demo .tabs label{padding:8px 15px;border:1px solid var(--line);border-radius:999px;cursor:pointer;background:rgba(13,27,58,.7);font-size:14px;font-weight:600;color:var(--ice)}
+.demo .tabs{display:flex;flex-wrap:wrap;gap:4px;padding:4px;margin:0 0 24px;background:var(--panel2);border:1px solid var(--border);border-radius:var(--r2);width:fit-content;max-width:100%}
+.demo .tabs label{padding:8px 16px;border-radius:var(--r1);cursor:pointer;font-size:14px;font-weight:500;color:var(--muted)}
+.demo .tabs label:hover{color:var(--text)}
 .demo .slide{display:none}
-.demo .slide .cap2{margin:14px 2px 0;font-size:17px;color:var(--text)}
-.demo .slide .cap2 b{color:var(--cyan)}
-#s1:checked~.tabs label[for=s1],#s2:checked~.tabs label[for=s2],#s3:checked~.tabs label[for=s3],#s4:checked~.tabs label[for=s4],#s5:checked~.tabs label[for=s5]{background:linear-gradient(135deg,var(--cyan),var(--blue));border-color:transparent;color:#04122b}
+.demo .cap2{margin:16px 0 0;max-width:72ch;color:var(--muted)}
+.demo .cap2 b{color:var(--text)}
+#s1:checked~.tabs label[for=s1],#s2:checked~.tabs label[for=s2],#s3:checked~.tabs label[for=s3],#s4:checked~.tabs label[for=s4],#s5:checked~.tabs label[for=s5]{background:var(--panel);color:var(--text);box-shadow:var(--sh1)}
+#s1:focus-visible~.tabs label[for=s1],#s2:focus-visible~.tabs label[for=s2],#s3:focus-visible~.tabs label[for=s3],#s4:focus-visible~.tabs label[for=s4],#s5:focus-visible~.tabs label[for=s5]{outline:2px solid var(--accent);outline-offset:2px}
 #s1:checked~.slides .p1,#s2:checked~.slides .p2,#s3:checked~.slides .p3,#s4:checked~.slides .p4,#s5:checked~.slides .p5{display:block}
-.demo input:focus-visible~.tabs label{outline:2px solid var(--cyan);outline-offset:2px}
-.shot{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0d1b3a;box-shadow:0 18px 50px rgba(0,0,0,.45)}
-.shot img{display:block;width:100%;height:auto}
-/* ---- thẻ chế độ + điểm nổi bật ---- */
-.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.card{background:rgba(13,27,58,.8);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
-.card img{display:block;width:100%;height:auto}
-.card .body{padding:16px 18px 18px}
-.card h3{margin:0 0 6px;font-size:19px;color:#fff}
-.card p{margin:0 0 8px;color:var(--muted);font-size:15px}
-.card ul{margin:6px 0 0;padding-left:18px;font-size:14.5px;color:var(--text)}
-.feat{background:rgba(13,27,58,.8);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
-.feat h3{margin:0 0 4px;font-size:17px;color:#fff}
-.feat p{margin:0;color:var(--muted);font-size:15px}
-.two{display:grid;gap:26px;grid-template-columns:1fr;align-items:center}
-@media(min-width:860px){.two{grid-template-columns:1fr 1.1fr}}
-/* ---- 3 bước + hỏi đáp (nền sáng) ---- */
-.steps{counter-reset:s;display:grid;gap:12px;padding:0;margin:0;list-style:none}
-.steps li{counter-increment:s;background:#fff;border:1px solid #d9e2f4;border-radius:14px;padding:15px 18px 15px 62px;position:relative;box-shadow:0 8px 24px rgba(20,50,110,.06)}
-.steps li:before{content:counter(s);position:absolute;left:16px;top:13px;width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--cyan),var(--blue));color:#04122b;display:grid;place-items:center;font-weight:800}
-details{background:#fff;border:1px solid #d9e2f4;border-radius:14px;padding:13px 18px;margin-bottom:10px}
-summary{cursor:pointer;font-weight:700}
-details p{margin:8px 0 0;color:#51607f}
-/* ---- kêu gọi cuối + chân trang ---- */
-.final{text-align:center;background:radial-gradient(700px 300px at 50% 0,rgba(45,123,255,.3),transparent 70%),var(--ink)}
-.final h2{font-size:clamp(28px,4vw,44px)}
-footer{padding:26px 0 40px;color:var(--muted);font-size:14px;text-align:center;border-top:1px solid var(--line);background:var(--ink)}
-footer a{color:var(--ice)}
-@media (prefers-reduced-motion:reduce){.k,.k rect,.hl,.hr,.ring,.wh,.stage:active .pulse{animation:none}.ring{display:none}html{scroll-behavior:auto}}
+@media (max-width:599px){.demo .tabs{width:100%}.demo .tabs label{flex:1 1 auto;text-align:center;padding:8px}}
+/* hai cột */
+.split{display:grid;gap:40px;grid-template-columns:1fr;align-items:center}
+@media (min-width:900px){.split{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}.split.top{align-items:start}}
+.split .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+/* danh sách có biểu tượng (bảo mật) */
+.points{display:grid;gap:16px;margin:0;padding:0;list-style:none}
+.points li{display:flex;gap:16px;padding:20px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh1)}
+.points h3{font-size:16px;margin:0 0 4px}
+.points p{margin:0;color:var(--muted)}
+/* tải về */
+.dl-card .body{display:flex;flex-direction:column;height:100%}
+.dl-card .row{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px}
+.dl-card .hint{margin:auto 0 0;padding-top:16px;border-top:1px solid var(--border);font-size:14px;color:var(--muted)}
+.dl-card .hint b{color:var(--text)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600;vertical-align:middle;white-space:nowrap}
+.dl-foot{margin:24px 0 0;font-size:14px;color:var(--muted)}
+/* các bước + hỏi đáp */
+.steps{counter-reset:s;display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.steps li{counter-increment:s;position:relative;padding:16px 16px 16px 64px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3)}
+.steps li:before{content:counter(s);position:absolute;left:16px;top:14px;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:14px}
+details.qa{background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);margin:0 0 8px}
+details.qa summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style-position:outside;margin-left:16px}
+details.qa[open] summary{border-bottom:1px solid var(--border)}
+details.qa>p,details.qa>ul{margin:0;padding:12px 16px 16px;color:var(--muted)}
+details.qa>ul{padding-left:36px}
+.sec-alt details.qa,.sec-alt .steps li{background:var(--bg)}
+.sub-h{font-size:20px!important;margin:0 0 16px!important}
+/* kêu gọi cuối */
+.cta-band{padding:64px 0;background:var(--accent);color:var(--on-accent);text-align:center}
+.cta-band h2{font-size:24px;margin:0 0 8px}
+@media (min-width:768px){.cta-band h2{font-size:32px}}
+.cta-band p{margin:0 auto 24px;max-width:48ch;opacity:.9}
+.cta-band .cta{justify-content:center;margin:0}
+.cta-band .btn-primary{background:var(--on-accent);color:var(--accent)}
+.cta-band .btn-primary:hover{background:var(--accent-soft);color:var(--accent)}
+.cta-band .btn-secondary{background:transparent;color:var(--on-accent);border-color:currentColor;box-shadow:none}
+.cta-band .btn-secondary:hover{color:var(--on-accent);background:rgb(255 255 255/.08)}
+.cta-band :focus-visible{outline-color:var(--on-accent)}
+
+/* ---- chân trang ---- */
+.site-foot{padding:40px 0;border-top:1px solid var(--border);background:var(--panel);color:var(--muted);font-size:14px}
+.site-foot .wrap{display:flex;flex-wrap:wrap;gap:16px 40px;justify-content:space-between;align-items:flex-start}
+.site-foot .brand{font-size:16px}
+.site-foot p{margin:8px 0 0}
+.site-foot nav{display:flex;flex-wrap:wrap;gap:8px 24px}
+.site-foot nav a{color:var(--muted);text-decoration:none}
+.site-foot nav a:hover{color:var(--text);text-decoration:underline}
+
+/* ---- trang tài liệu (hướng dẫn, nhật ký, quyền riêng tư) ---- */
+.doc-hero{padding:48px 0 32px;border-bottom:1px solid var(--border);background:radial-gradient(50% 120% at 90% 0,var(--accent-soft),transparent 70%),var(--bg)}
+.doc-hero h1{font-size:24px;letter-spacing:-.02em;margin:0 0 8px}
+@media (min-width:768px){.doc-hero{padding:64px 0 40px}.doc-hero h1{font-size:32px}}
+.doc-hero .lead{font-size:16px}
+@media (min-width:768px){.doc-hero .lead{font-size:20px;line-height:1.5}}
+.doc{display:grid;gap:32px;grid-template-columns:minmax(0,1fr);padding-top:32px;padding-bottom:64px}
+@media (min-width:1000px){.doc{grid-template-columns:220px minmax(0,72ch);gap:64px;padding-top:48px}.toc{position:sticky;top:calc(var(--head-h) + 24px);max-height:calc(100vh - var(--head-h) - 48px);overflow:auto}}
+.toc{font-size:14px}
+.toc .toc-t{display:block;margin:0 0 8px;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.toc ol{list-style:none;margin:0;padding:0;border-left:1px solid var(--border)}
+.toc a{display:block;margin-left:-1px;padding:4px 0 4px 12px;border-left:2px solid transparent;color:var(--muted);text-decoration:none}
+.toc a:hover{color:var(--text);border-left-color:var(--muted)}
+.toc small{color:var(--muted)}
+@media (max-width:999px){.toc{padding:16px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3)}.toc ol{border:0;display:flex;flex-wrap:wrap;gap:4px 16px}.toc a{padding:4px 0;border:0;margin:0}.toc-wide{display:none}}
+.prose{min-width:0}
+.prose>section{padding:0 0 40px;margin:0 0 40px;border-bottom:1px solid var(--border)}
+.prose>section:last-child{border-bottom:0;margin-bottom:0}
+.prose h2{font-size:24px;margin:0 0 12px;letter-spacing:-.015em}
+.prose h3{font-size:16px;margin:24px 0 8px}
+.prose p,.prose li{line-height:1.7}
+.prose ul,.prose ol:not(.steps){margin:0 0 16px;padding-left:24px}
+.prose li{margin:0 0 6px}
+.prose .lead{margin:0 0 16px}
+.note{margin:16px 0;padding:12px 16px;background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:0 var(--r2) var(--r2) 0}
+.tbl{margin:0 0 16px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--r2);background:var(--panel)}
+.tbl table{border-collapse:collapse;width:100%;font-size:14px}
+.tbl th,.tbl td{text-align:left;vertical-align:top;padding:8px 12px;border-bottom:1px solid var(--border)}
+.tbl th{background:var(--panel2);color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td:first-child{white-space:nowrap}
+.tbl.wrap1 td:first-child{white-space:normal;min-width:180px}
+.grid-docs{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:0 0 16px}
+.grid-docs .card{padding:16px 20px}
+.grid-docs .card h3{font-size:16px;margin:0 0 4px}
+.grid-docs .card p{font-size:14px}
+.eg{margin:12px 0 0;padding:4px 0 4px 12px;border-left:3px solid var(--accent);color:var(--muted);font-size:14px;font-style:italic}
+.prose .steps{margin:0 0 16px}
+.prose details.qa summary{margin-left:16px}
+/* nhật ký thay đổi */
+.rel h2{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px}
+.rel h2 small{font-size:14px;font-weight:500;color:var(--muted)}
+.rel h3{display:inline-block;margin:16px 0 8px;padding:2px 8px;border-radius:var(--r1);background:var(--panel2);color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.rel ul{padding-left:20px}
+
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+@media print{.site-head,.toc,.site-foot,.cta-band{display:none}body{background:#fff;color:#000}}
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-<linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#06e5ff"/><stop offset="1" stop-color="#2d7bff"/></linearGradient>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+<symbol id="mark" viewBox="0 0 64 64"><defs><linearGradient id="nm-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1665d8"/><stop offset="1" stop-color="#0a2f6e"/></linearGradient></defs><rect x="4" y="4" width="56" height="56" rx="13" fill="url(#nm-g)"/><path d="M19.5 44.1V19.9h4.6l13.4 16.1V19.9h4.6v24.3h-4.6L24.1 28v16.1z" fill="#fff"/><rect x="19.5" y="48.4" width="25" height="1.6" rx=".8" fill="#f2b134"/></symbol>
 <symbol id="i-pc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="M12 7.5l4.6 3.2-2 .3-1 1.8z" fill="currentColor"/></symbol>
 <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 7.5 4 12l4.5 4.5M15.5 7.5 20 12l-4.5 4.5M13.5 5.5l-3 13"/></symbol>
 <symbol id="i-slide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 13l3-3 2.5 2 3.5-4M9 20h6M12 16v4"/></symbol>
 <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2 2 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3M4 20l4-1"/></symbol>
-<symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16M15 10v10"/></symbol>
 <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
-<symbol id="mark" viewBox="0 0 64 64"><defs><linearGradient id="nm-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1665d8"/><stop offset="1" stop-color="#0a2f6e"/></linearGradient></defs><rect x="4" y="4" width="56" height="56" rx="13" fill="url(#nm-g)"/><path d="M19.5 44.1V19.9h4.6l13.4 16.1V19.9h4.6v24.3h-4.6L24.1 28v16.1z" fill="#fff"/><rect x="19.5" y="48.4" width="25" height="1.6" rx=".8" fill="#f2b134"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 17h5"/></symbol>
+<symbol id="i-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/></symbol>
+<symbol id="i-laptop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+<symbol id="i-server" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="7" rx="1.5"/><rect x="4" y="13" width="16" height="7" rx="1.5"/><path d="M8 7.5h.01M8 16.5h.01"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+<symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
 </defs></svg>
+<a class="skip" href="#noi-dung">Tới nội dung chính</a>
 
-<section class="hero" id="top" style="padding:0">
+<header class="site-head">
   <div class="wrap">
-    <header class="top">
-      <a class="lg" href="#top" aria-label="NEU Agent"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#mark"/></svg><span class="wm">NEU <b>Agent</b></span></a>
-      <nav><a href="#tai-ve">Tải về</a><a href="#demo">Xem demo</a><a href="#hoi-dap">Hỏi đáp</a><a href="/agent/guide/help.html">Hướng dẫn</a><a href="/agent/guide/changelog.html">Có gì mới</a><a class="btn sm" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></nav>
-    </header>
+    <a class="brand" href="#top" aria-label="NEU Agent, về đầu trang"><svg aria-hidden="true"><use href="#mark"/></svg>NEU Agent</a>
+    <nav class="site-nav" aria-label="Chính"><a href="#demo">Xem demo</a><a href="#tai-ve">Tải về</a><a href="#hoi-dap">Hỏi đáp</a><a href="/agent/guide/help.html">Hướng dẫn</a><a href="/agent/guide/changelog.html">Có gì mới</a></nav>
+    <div class="head-cta"><a class="btn btn-primary" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></div>
+    <details class="menu"><summary aria-label="Mở menu"><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></summary>
+      <nav class="menu-panel" aria-label="Menu"><a href="#demo">Xem demo</a><a href="#tai-ve">Tải về</a><a href="#hoi-dap">Hỏi đáp</a><a href="/agent/guide/help.html">Hướng dẫn</a><a href="/agent/guide/changelog.html">Có gì mới</a><a href="/agent/guide/privacy.html">Quyền riêng tư</a></nav>
+    </details>
+  </div>
+</header>
 
+<main id="noi-dung">
+<section class="hero" id="top">
+  <div class="wrap">
     <div class="hero-grid">
       <div>
+        <p class="eyebrow"><span class="dot"></span>Trợ lý AI của Trường Đại học Kinh tế Quốc dân</p>
         <h1>Cánh tay AI, <span>làm mọi việc thay bạn.</span></h1>
-        <p class="sub">Từ thao tác máy tính, lập trình, thuyết trình đến thiết kế: bạn nói mục tiêu, NEU Agent làm đủ việc và tự kiểm tra trước khi báo xong.</p>
-        <div class="cta"><a class="btn" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập để dùng</a><a class="btn ghost" href="#demo">Xem demo</a></div>
-        <div class="dl"><span>Tải bản cài:</span><a href="/agent/download/latest/NEU-Agent-mac-arm64.dmg">macOS · chip Apple</a><a href="/agent/download/latest/NEU-Agent-mac-x64.dmg">macOS · Intel</a><a href="/agent/download/latest/NEU-Agent-win-x64.exe">Windows 10/11</a><a href="#tai-ve">Cách cài</a></div>
-        <small>Tài khoản @neu.edu.vn hoặc @st.neu.edu.vn · <a href="/agent/download/latest/SHA256SUMS.txt">Mã SHA-256</a></small>
-        <ul class="pillars">
-          <li><a href="#work"><svg aria-hidden="true"><use href="#i-pc"/></svg>Thao tác<br>máy tính</a></li>
-          <li><a href="#code"><svg aria-hidden="true"><use href="#i-code"/></svg>Lập trình</a></li>
-          <li><a href="#work"><svg aria-hidden="true"><use href="#i-slide"/></svg>Tạo bài<br>trình bày</a></li>
-          <li><a href="#design"><svg aria-hidden="true"><use href="#i-pen"/></svg>Thiết kế<br>và sáng tạo</a></li>
-          <li><a href="#noi-bat"><svg aria-hidden="true"><use href="#i-plus"/></svg>Nhiều hơn<br>thế nữa</a></li>
-        </ul>
+        <p class="sub">Thao tác máy tính, lập trình, thuyết trình, thiết kế: bạn nói mục tiêu, NEU Agent làm đủ việc và tự kiểm tra trước khi báo xong.</p>
+        <div class="cta">
+          <a class="btn btn-primary btn-lg" href="#tai-ve"><svg class="ic" aria-hidden="true"><use href="#i-dl"/></svg>Tải bản cài</a>
+          <a class="btn btn-secondary btn-lg" href="/agent/oauth2/sign_in?rd=/agent/">Mở bản web<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </div>
+        <p class="quick-dl"><span>Tải nhanh:</span><a href="/agent/download/latest/NEU-Agent-mac-arm64.dmg">macOS · chip Apple</a><a href="/agent/download/latest/NEU-Agent-mac-x64.dmg">macOS · Intel</a><a href="/agent/download/latest/NEU-Agent-win-x64.exe">Windows 10/11</a><a href="#tai-ve">Cách cài</a></p>
+        <p class="hero-note">Đăng nhập bằng tài khoản @neu.edu.vn hoặc @st.neu.edu.vn · <a href="/agent/download/latest/SHA256SUMS.txt">Mã SHA-256</a></p>
       </div>
-
-      <div class="stage" role="img" aria-label="Hai cánh tay rô-bốt gõ bàn phím và cầm chuột">
-        <svg class="kb" viewBox="0 0 1536 1000" aria-hidden="true"><g transform="rotate(-9.3)"><rect x="46" y="190" width="940" height="406" rx="34" fill="#0F2044"/><rect x="46" y="190" width="936" height="394" rx="34" fill="#324369"/><rect x="78" y="218" width="872" height="338" rx="16" fill="#16284E"/><g class="k" style="--n:0"><rect x="93.0" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="170.7" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:1"><rect x="248.5" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="326.2" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:2"><rect x="403.9" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="481.6" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:3"><rect x="559.4" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="637.1" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="714.8" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="792.5" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="870.3" y="232.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:4"><rect x="93.0" y="296.0" width="104.6" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="209.6" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:5"><rect x="287.3" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="365.0" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:6"><rect x="442.8" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="520.5" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:7"><rect x="598.2" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="676.0" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="753.7" y="296.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="831.4" y="296.0" width="104.6" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:8"><rect x="93.0" y="360.0" width="143.5" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="248.5" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:9"><rect x="326.2" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="403.9" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:10"><rect x="481.6" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="559.4" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><g class="k" style="--n:11"><rect x="637.1" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g><rect x="714.8" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="792.5" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="870.3" y="360.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="93.0" y="424.0" width="85.2" height="52.0" rx="9" fill="#5C74A4"/><rect x="190.2" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="267.9" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="345.6" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="423.3" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="501.1" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="578.8" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="656.5" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="734.3" y="424.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="812.0" y="424.0" width="124.0" height="52.0" rx="9" fill="#5C74A4"/><rect x="93.0" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="170.7" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="248.5" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="326.2" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="403.9" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="481.6" y="488.0" width="221.2" height="52.0" rx="9" fill="#5C74A4"/><rect x="714.8" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="792.5" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/><rect x="870.3" y="488.0" width="65.7" height="52.0" rx="9" fill="#5C74A4"/></g></svg>
-        <div class="rw hl"><img class="part" src="/agent/guide/img/handio-hand-left.png" width="630" height="722" alt="" style="left:.46%;top:27.8%;width:41%"></div>
-        <div class="rw hr"><svg class="mouse" viewBox="0 0 1536 1000" aria-hidden="true"><defs><linearGradient id="mg" gradientUnits="userSpaceOnUse" x1="1200" y1="203" x2="1230" y2="740"><stop offset="0" stop-color="#42568A"/><stop offset=".3" stop-color="#2A3C69"/><stop offset=".65" stop-color="#16264E"/><stop offset="1" stop-color="#0E1C40"/></linearGradient></defs><path d="M1228 203C1150 203 1088 258 1086 335C1085 430 1110 560 1160 650C1190 705 1245 745 1290 735C1330 700 1345 560 1346 420C1347 330 1330 250 1280 218C1262 208 1245 203 1228 203Z" fill="url(#mg)"/><path d="M1197 206L1203 246M1224 346L1246 410" stroke="#031A42" stroke-width="6" stroke-linecap="round" fill="none"/><g transform="rotate(-8 1216 296)"><rect x="1188" y="244" width="56" height="104" rx="28" fill="#0B1A3E"/><rect class="wh" x="1198" y="254" width="36" height="84" rx="18" fill="#5D77A9"/></g></svg><img class="part" src="/agent/guide/img/handio-hand-right.png" width="454" height="722" alt="" style="left:70.44%;top:27.8%;width:29.56%"><span class="ring"></span></div>
-        <span class="pulse"></span>
+      <div class="mock">
+        <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i><span>NEU Agent · Work</span></div><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="NEU Agent ở chế độ Work: tạo giấy mời hội thảo từ tệp danh sách khách mời, kèm danh sách tệp của dự án" fetchpriority="high"></div>
       </div>
     </div>
+    <ul class="pillars" aria-label="Việc NEU Agent làm được">
+      <li><a href="#work"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-pc"/></svg></span>Thao tác máy tính</a></li>
+      <li><a href="#code"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-code"/></svg></span>Lập trình</a></li>
+      <li><a href="#work"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-slide"/></svg></span>Tạo bài trình bày</a></li>
+      <li><a href="#design"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-pen"/></svg></span>Thiết kế và sáng tạo</a></li>
+      <li><a href="#noi-bat"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></span>Nhiều hơn thế nữa</a></li>
+    </ul>
   </div>
 </section>
 
-<section id="demo">
+<section class="sec" id="demo">
   <div class="wrap">
-    <h2>Xem NEU Agent hoạt động</h2>
-    <p class="lead">Ảnh chụp từ ứng dụng thật, xem không cần đăng nhập.</p>
+    <div class="sec-head">
+      <p class="kicker">Demo</p>
+      <h2>Xem NEU Agent hoạt động</h2>
+      <p class="lead">Ảnh chụp từ ứng dụng thật, xem không cần đăng nhập.</p>
+    </div>
     <div class="demo">
-      <input type="radio" name="d" id="s1" checked><input type="radio" name="d" id="s2"><input type="radio" name="d" id="s3"><input type="radio" name="d" id="s4"><input type="radio" name="d" id="s5">
+      <input type="radio" name="d" id="s1" checked aria-label="1. Chọn việc"><input type="radio" name="d" id="s2" aria-label="2. Có sẵn dự án mẫu"><input type="radio" name="d" id="s3" aria-label="3. Thiết kế"><input type="radio" name="d" id="s4" aria-label="4. Chỉ vào để sửa"><input type="radio" name="d" id="s5" aria-label="5. Học dần">
       <div class="tabs">
         <label for="s1">1. Chọn việc</label><label for="s2">2. Có sẵn dự án mẫu</label><label for="s3">3. Thiết kế</label><label for="s4">4. Chỉ vào để sửa</label><label for="s5">5. Học dần</label>
       </div>
       <div class="slides">
-        <div class="slide p1"><div class="shot"><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Màn hình chính chế độ Work"></div><p class="cap2"><b>Chọn Work, Code hoặc Design</b> rồi gõ điều bạn muốn, ngắn cũng được. Ví dụ: “tóm tắt các tệp này thành báo cáo một trang”.</p></div>
-        <div class="slide p2"><div class="shot"><img src="/agent/guide/img/tao-du-an.webp" width="2560" height="1600" alt="Tạo dự án mẫu Web ghi chú" loading="lazy" decoding="async"></div><p class="cap2"><b>Một cú bấm có ngay dự án mẫu</b> (web ghi chú, bảng điểm, trang giới thiệu…) để thử, không cần chuẩn bị gì.</p></div>
-        <div class="slide p3"><div class="shot"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Bản xem trước thiết kế" loading="lazy" decoding="async"></div><p class="cap2"><b>Bản xem trước hiện ngay bên phải.</b> Xuất PDF hoặc PNG vào thư mục bạn chọn, đổi khổ máy tính hoặc điện thoại.</p></div>
-        <div class="slide p4"><div class="shot"><img src="/agent/guide/img/chi-vao-de-sua.webp" width="2560" height="1600" alt="Chỉ vào để sửa" loading="lazy" decoding="async"></div><p class="cap2"><b>Bấm vào đúng chỗ muốn đổi</b>, rồi chọn “To hơn”, “Đổi màu”… hoặc gõ vài chữ.</p></div>
-        <div class="slide p5"><div class="shot"><img src="/agent/guide/img/hoc.webp" width="2560" height="1600" alt="Bài học vibe coding" loading="lazy" decoding="async"></div><p class="cap2"><b>Học vibe coding ngay trong ứng dụng</b>: 12 buổi, 16 bài tập, 7 dự án mẫu.</p></div>
+        <div class="slide p1"><div class="window"><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Màn hình chính chế độ Work" loading="lazy" decoding="async"></div><p class="cap2"><b>Chọn Work, Code hoặc Design</b> rồi gõ điều bạn muốn, ngắn cũng được. Ví dụ: “tóm tắt các tệp này thành báo cáo một trang”.</p></div>
+        <div class="slide p2"><div class="window"><img src="/agent/guide/img/tao-du-an.webp" width="2560" height="1600" alt="Tạo dự án mẫu Web ghi chú" loading="lazy" decoding="async"></div><p class="cap2"><b>Một cú bấm có ngay dự án mẫu</b> (web ghi chú, bảng điểm, trang giới thiệu…) để thử, không cần chuẩn bị gì.</p></div>
+        <div class="slide p3"><div class="window"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Bản xem trước thiết kế" loading="lazy" decoding="async"></div><p class="cap2"><b>Bản xem trước hiện ngay bên phải.</b> Xuất PDF hoặc PNG vào thư mục bạn chọn, đổi khổ máy tính hoặc điện thoại.</p></div>
+        <div class="slide p4"><div class="window"><img src="/agent/guide/img/chi-vao-de-sua.webp" width="2560" height="1600" alt="Chỉ vào để sửa" loading="lazy" decoding="async"></div><p class="cap2"><b>Bấm vào đúng chỗ muốn đổi</b>, rồi chọn “To hơn”, “Đổi màu”… hoặc gõ vài chữ.</p></div>
+        <div class="slide p5"><div class="window"><img src="/agent/guide/img/hoc.webp" width="2560" height="1600" alt="Bài học vibe coding" loading="lazy" decoding="async"></div><p class="cap2"><b>Học vibe coding ngay trong ứng dụng</b>: 12 buổi, 16 bài tập, 7 dự án mẫu.</p></div>
       </div>
     </div>
   </div>
 </section>
 
-<section id="che-do" style="padding-top:0">
+<section class="sec sec-alt" id="che-do">
   <div class="wrap">
-    <h2>Ba chế độ cho ba kiểu việc</h2>
-    <p class="lead">Chuyển qua lại bất kỳ lúc nào; mỗi chế độ có sẵn cách làm việc riêng.</p>
-    <div class="grid">
-      <div class="card" id="code"><img src="/agent/guide/img/code.webp" width="2560" height="1600" alt="Chế độ Code" loading="lazy" decoding="async"><div class="body"><h3>Code</h3><p>Viết, sửa lỗi, chạy thử và kiểm tra mã trong thư mục của bạn.</p><ul><li>Tự mở thử trang web đang làm, thấy lỗi thì tự sửa</li><li>Nhiều dự án chạy cùng lúc, chuyển dự án việc vẫn chạy nền</li><li>Nhớ ngữ cảnh dự án qua lệnh <code>/init</code></li></ul></div></div>
-      <div class="card" id="work"><img src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Chế độ Work" loading="lazy" decoding="async"><div class="body"><h3>Work</h3><p>Đọc, tóm tắt, soạn báo cáo, tổng hợp bảng từ tệp của bạn.</p><ul><li>Yêu cầu ngắn vẫn ra bản hoàn chỉnh</li><li>Hỏi lại tối đa một câu khi thật cần</li><li>Đọc lại kết quả trước khi trả</li></ul></div></div>
-      <div class="card" id="design"><img src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Chế độ Design" loading="lazy" decoding="async"><div class="body"><h3>Design</h3><p>Trang giới thiệu, poster, slide, mẫu biểu có bản xem trước trực tiếp.</p><ul><li>Bố cục, màu sắc, chữ được chọn sẵn cho hài hoà</li><li>Chỉ vào phần muốn sửa là xong</li><li>Xuất PDF, PNG vào thư mục bạn chọn</li></ul></div></div>
+    <div class="sec-head">
+      <p class="kicker">Ba chế độ</p>
+      <h2>Ba chế độ cho ba kiểu việc</h2>
+      <p class="lead">Chuyển qua lại bất kỳ lúc nào; mỗi chế độ có cách làm việc riêng.</p>
+    </div>
+    <div class="grid3">
+      <article class="card" id="work"><img class="media" src="/agent/guide/img/work.webp" width="2560" height="1600" alt="Chế độ Work" loading="lazy" decoding="async"><div class="body"><div class="ttl"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg></span><h3>Work</h3></div><p>Đọc, tóm tắt, soạn báo cáo, tổng hợp bảng từ tệp của bạn.</p><ul><li>Yêu cầu ngắn vẫn ra bản hoàn chỉnh</li><li>Hỏi lại tối đa một câu khi thật cần</li><li>Đọc lại kết quả trước khi trả</li></ul></div></article>
+      <article class="card" id="code"><img class="media" src="/agent/guide/img/code.webp" width="2560" height="1600" alt="Chế độ Code" loading="lazy" decoding="async"><div class="body"><div class="ttl"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-code"/></svg></span><h3>Code</h3></div><p>Viết, sửa lỗi, chạy thử và kiểm tra mã trong thư mục của bạn.</p><ul><li>Tự mở thử trang web đang làm, thấy lỗi thì tự sửa</li><li>Nhiều dự án chạy cùng lúc, chuyển dự án việc vẫn chạy nền</li><li>Nhớ ngữ cảnh dự án qua lệnh <code>/init</code></li></ul></div></article>
+      <article class="card" id="design"><img class="media" src="/agent/guide/img/design.webp" width="2560" height="1600" alt="Chế độ Design" loading="lazy" decoding="async"><div class="body"><div class="ttl"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-pen"/></svg></span><h3>Design</h3></div><p>Trang giới thiệu, poster, slide, mẫu biểu có bản xem trước trực tiếp.</p><ul><li>Bố cục, màu sắc, chữ được chọn sẵn cho hài hoà</li><li>Chỉ vào phần muốn sửa là xong</li><li>Xuất PDF, PNG vào thư mục bạn chọn</li></ul></div></article>
     </div>
   </div>
 </section>
 
-<section id="noi-bat" style="padding-top:0">
+<section class="sec" id="noi-bat">
   <div class="wrap">
-    <h2>Điểm nổi bật</h2>
-    <p class="lead">Những thứ làm NEU Agent khác một khung chat thông thường.</p>
-    <div class="grid">
-      <div class="feat"><h3>Nói ít, hiểu nhiều</h3><p>Một câu ngắn được hiểu thành yêu cầu đầy đủ: có bố cục, xử lý lỗi, trình bày đẹp.</p></div>
-      <div class="feat"><h3>Tự kiểm tra trước khi báo xong</h3><p>Mã thì chạy thử và mở trang web xem lỗi; tài liệu và thiết kế thì đọc lại. Thấy sai thì sửa luôn.</p></div>
-      <div class="feat"><h3>Nhiều dự án cùng lúc</h3><p>Giao việc ở dự án này rồi sang dự án khác; việc cũ vẫn chạy nền, có dấu hiệu đang chạy / đã xong.</p></div>
-      <div class="feat"><h3>Sửa tệp ngay trong ứng dụng</h3><p>Bấm vào tệp chữ trong danh sách để xem và sửa, không cần mở ứng dụng khác.</p></div>
-      <div class="feat"><h3>Riêng tư</h3><p>Tệp nằm trên máy bạn. Số liệu cải tiến chỉ là con số và mã lỗi, không có nội dung, và tắt được trong Cài đặt.</p></div>
-      <div class="feat"><h3>Hạn mức công bằng</h3><p>Mỗi người có hạn mức token mỗi ngày, thêm 10% để hoàn tất lượt đang làm; mức của bạn hiện ngay dưới ô nhập.</p></div>
+    <div class="sec-head">
+      <p class="kicker">Điểm nổi bật</p>
+      <h2>Khác một khung chat thông thường</h2>
+    </div>
+    <div class="grid4">
+      <div class="card feat"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-chat"/></svg></span><h3>Nói ít, hiểu nhiều</h3><p>Một câu ngắn được hiểu thành yêu cầu đầy đủ: có bố cục, xử lý lỗi, trình bày đẹp.</p></div>
+      <div class="card feat"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span><h3>Tự kiểm tra trước khi báo xong</h3><p>Mã thì chạy thử và mở trang web xem lỗi; tài liệu và thiết kế thì đọc lại. Thấy sai thì sửa luôn.</p></div>
+      <div class="card feat"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span><h3>Nhiều dự án cùng lúc</h3><p>Giao việc ở dự án này rồi sang dự án khác; việc cũ vẫn chạy nền, có dấu hiệu đang chạy / đã xong.</p></div>
+      <div class="card feat"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg></span><h3>Sửa tệp ngay trong ứng dụng</h3><p>Bấm vào tệp chữ trong danh sách để xem và sửa, không cần mở ứng dụng khác.</p></div>
     </div>
   </div>
 </section>
 
-<section id="tai-lieu" style="padding-top:0">
+<section class="sec sec-alt" id="bao-mat">
   <div class="wrap">
-    <div class="two">
+    <div class="split top">
       <div>
+        <p class="kicker">Bảo mật và riêng tư</p>
+        <h2>Chỉ dành cho người của Trường</h2>
+        <p class="lead">Mọi người dùng phải đăng nhập, ở bản web lẫn bản cài. Dữ liệu nào được gửi, giữ bao lâu: xem chính sách quyền riêng tư.</p>
+        <div class="actions"><a class="btn btn-secondary" href="/agent/guide/privacy.html">Chính sách quyền riêng tư<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a></div>
+      </div>
+      <ul class="points">
+        <li><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><div><h3>Đăng nhập tài khoản trường</h3><p>Microsoft với @neu.edu.vn (cán bộ, giảng viên) hoặc @st.neu.edu.vn (sinh viên), hoặc tài khoản do quản trị cấp.</p></div></li>
+        <li><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-server"/></svg></span><div><h3>Mô hình AI của Trường</h3><p>Nội dung trao đổi gửi tới máy chủ mô hình do Khoa CNTT vận hành. Không quảng cáo, không bán dữ liệu.</p></div></li>
+        <li><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg></span><div><h3>Riêng tư</h3><p>Tệp nằm trên máy bạn. Số liệu cải tiến chỉ là con số và mã lỗi, không có nội dung, và tắt được trong Cài đặt.</p></div></li>
+        <li><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-gauge"/></svg></span><div><h3>Hạn mức công bằng</h3><p>Mỗi người có hạn mức token mỗi ngày, thêm 10% để hoàn tất lượt đang làm; mức của bạn hiện ngay dưới ô nhập.</p></div></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="tai-lieu">
+  <div class="wrap">
+    <div class="split">
+      <div>
+        <p class="kicker">Hướng dẫn</p>
         <h2>Sau khi đăng nhập: nhiều mẹo hơn</h2>
-        <p class="lead">Nút 💡 ở góc trên có hướng dẫn riêng cho từng chế độ: mẹo, tình huống mẫu bấm là chạy, phím tắt, xử lý sự cố. Có ô tìm kiếm, gõ không dấu cũng được.</p>
-        <a class="btn" href="/agent/guide/help.html">Đọc hướng dẫn sử dụng</a> <a class="btn ghost" href="/agent/guide/changelog.html">Nhật ký thay đổi</a>
+        <p class="lead">Nút 💡 ở góc trên có hướng dẫn riêng cho từng chế độ: mẹo, tình huống mẫu bấm là chạy, phím tắt, xử lý sự cố. Tìm được cả khi gõ không dấu.</p>
+        <div class="actions"><a class="btn btn-primary" href="/agent/guide/help.html">Đọc hướng dẫn sử dụng</a><a class="btn btn-secondary" href="/agent/guide/changelog.html">Nhật ký thay đổi</a></div>
       </div>
-      <div class="shot"><img src="/agent/guide/img/huong-dan.webp" width="2560" height="1600" alt="Hộp hướng dẫn trong ứng dụng" loading="lazy"></div>
+      <div class="window"><div class="bar" aria-hidden="true"><i></i><i></i><i></i></div><img src="/agent/guide/img/huong-dan.webp" width="2560" height="1600" alt="Hộp hướng dẫn trong ứng dụng" loading="lazy" decoding="async"></div>
     </div>
   </div>
 </section>
 
-<section class="light" id="tai-ve">
+<section class="sec sec-alt" id="tai-ve">
   <div class="wrap">
-    <h2>Tải về</h2>
-    <p class="lead">Bản cài làm việc trực tiếp với thư mục trên máy và tự cập nhật. Bản nào cũng cần đăng nhập tài khoản của trường.</p>
-    <div class="caps">
-      <div class="cap">
-        <h3>macOS</h3>
+    <div class="sec-head">
+      <p class="kicker">Tải về</p>
+      <h2>Tải về</h2>
+      <p class="lead">Bản cài làm việc trực tiếp với thư mục trên máy và tự cập nhật. Bản nào cũng cần đăng nhập tài khoản của trường.</p>
+    </div>
+    <div class="grid3">
+      <div class="card dl-card"><div class="body">
+        <div class="ttl"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-laptop"/></svg></span><h3>macOS</h3></div>
         <p>Chọn đúng chip: menu Apple → Giới thiệu về máy Mac.</p>
-        <div class="row"><a class="btn sm" href="/agent/download/latest/NEU-Agent-mac-arm64.dmg">Chip Apple (M1–M4)</a><a class="btn sm alt" href="/agent/download/latest/NEU-Agent-mac-x64.dmg">Chip Intel</a></div>
+        <div class="row"><a class="btn btn-primary" href="/agent/download/latest/NEU-Agent-mac-arm64.dmg"><svg class="ic" aria-hidden="true"><use href="#i-dl"/></svg>Chip Apple (M1–M4)</a><a class="btn btn-secondary" href="/agent/download/latest/NEU-Agent-mac-x64.dmg">Chip Intel</a></div>
         <p class="hint">Lần đầu mở, nếu macOS báo không xác minh được nhà phát triển: vào Cài đặt hệ thống → Quyền riêng tư &amp; Bảo mật → <b>Vẫn mở</b>.</p>
-      </div>
-      <div class="cap">
-        <h3>Windows 10/11 <span class="soon">Sắp có trên Microsoft Store</span></h3>
+      </div></div>
+      <div class="card dl-card"><div class="body">
+        <div class="ttl"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-monitor"/></svg></span><h3>Windows 10/11 <span class="badge">Sắp có trên Microsoft Store</span></h3></div>
         <p>Trình cài đặt, không cần quyền quản trị.</p>
-        <div class="row"><a class="btn sm" href="/agent/download/latest/NEU-Agent-win-x64.exe">Tải tệp .exe</a></div>
+        <div class="row"><a class="btn btn-primary" href="/agent/download/latest/NEU-Agent-win-x64.exe"><svg class="ic" aria-hidden="true"><use href="#i-dl"/></svg>Tải tệp .exe</a></div>
         <p class="hint">Nếu hiện “Windows đã bảo vệ máy tính của bạn”: bấm <b>Thông tin thêm</b> → <b>Vẫn chạy</b>. Bản trên Microsoft Store sẽ cài không cảnh báo.</p>
-      </div>
-      <div class="cap">
-        <h3>Bản web</h3>
+      </div></div>
+      <div class="card dl-card"><div class="body">
+        <div class="ttl"><span class="ib"><svg class="ic" aria-hidden="true"><use href="#i-globe"/></svg></span><h3>Bản web</h3></div>
         <p>Không cần cài: đăng nhập là dùng, chạy được cả trên điện thoại.</p>
-        <div class="row"><a class="btn sm" href="/agent/oauth2/sign_in?rd=/agent/">Mở bản web</a></div>
+        <div class="row"><a class="btn btn-primary" href="/agent/oauth2/sign_in?rd=/agent/">Mở bản web<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a></div>
         <p class="hint">Trên Chrome hoặc Edge: đăng nhập, bấm <b>Tải ứng dụng</b> → <b>Cài từ trình duyệt</b> để dùng như ứng dụng, không có cảnh báo.</p>
-      </div>
+      </div></div>
     </div>
-    <p class="lead" style="margin:18px 0 0;font-size:14.5px">Kiểm tra tệp trước khi mở: so với <a href="/agent/download/latest/SHA256SUMS.txt">mã SHA-256</a> (macOS: <code>shasum -a 256 &lt;tệp&gt;</code>, Windows: <code>Get-FileHash &lt;tệp&gt;</code>).</p>
+    <p class="dl-foot">Kiểm tra tệp trước khi mở: so với <a href="/agent/download/latest/SHA256SUMS.txt">mã SHA-256</a> (macOS: <code>shasum -a 256 &lt;tệp&gt;</code>, Windows: <code>Get-FileHash &lt;tệp&gt;</code>).</p>
   </div>
 </section>
 
-<section class="light" id="hoi-dap">
+<section class="sec" id="hoi-dap">
   <div class="wrap">
-    <div class="two" style="align-items:start">
+    <div class="split top">
       <div>
+        <p class="kicker">Bắt đầu</p>
         <h2>Bắt đầu trong 3 bước</h2>
         <ol class="steps">
           <li><b>Đăng nhập</b> bằng tài khoản Microsoft của trường.</li>
@@ -287,28 +450,33 @@ footer a{color:var(--ice)}
         </ol>
       </div>
       <div>
+        <p class="kicker">Hỏi đáp</p>
         <h2>Hỏi nhanh đáp gọn</h2>
-        <details><summary>Dữ liệu của tôi có bị gửi đi đâu không?</summary><p>Nội dung trao đổi được gửi tới máy chủ mô hình của trường để trả lời; tệp chỉ được đọc khi cần cho yêu cầu của bạn. Chi tiết ở <a href="/agent/guide/privacy.html">chính sách quyền riêng tư</a>.</p></details>
-        <details><summary>Nên dùng bản web hay bản cài?</summary><p>Bản web mở là dùng. Bản cài (macOS, Windows) làm việc trực tiếp với thư mục trên máy và tự cập nhật; tải ở mục <a href="#tai-ve">Tải về</a>, kèm mã băm SHA-256. Mở ứng dụng vẫn cần đăng nhập.</p></details>
-        <details><summary>Gặp cảnh báo “nhà phát hành không xác định” khi cài?</summary><p>Bản cài chưa được Apple, Microsoft xác nhận nên lần đầu mở sẽ có cảnh báo; cách mở ở mục <a href="#tai-ve">Tải về</a>. Nên so mã băm SHA-256 trước khi mở. Bản Windows trên Microsoft Store (sắp có) sẽ không cảnh báo.</p></details>
-        <details><summary>Báo hết hạn mức thì sao?</summary><p>Hạn mức tính lại mỗi ngày; thanh trạng thái cho biết bạn đã dùng bao nhiêu.</p></details>
+        <details class="qa"><summary>Dữ liệu của tôi có bị gửi đi đâu không?</summary><p>Nội dung trao đổi được gửi tới máy chủ mô hình của trường để trả lời; tệp chỉ được đọc khi cần cho yêu cầu của bạn. Chi tiết ở <a href="/agent/guide/privacy.html">chính sách quyền riêng tư</a>.</p></details>
+        <details class="qa"><summary>Nên dùng bản web hay bản cài?</summary><p>Bản web mở là dùng. Bản cài (macOS, Windows) làm việc trực tiếp với thư mục trên máy và tự cập nhật; tải ở mục <a href="#tai-ve">Tải về</a>, kèm mã băm SHA-256. Mở ứng dụng vẫn cần đăng nhập.</p></details>
+        <details class="qa"><summary>Gặp cảnh báo “nhà phát hành không xác định” khi cài?</summary><p>Bản cài chưa được Apple, Microsoft xác nhận nên lần đầu mở sẽ có cảnh báo; cách mở ở mục <a href="#tai-ve">Tải về</a>. Nên so mã băm SHA-256 trước khi mở. Bản Windows trên Microsoft Store (sắp có) sẽ không cảnh báo.</p></details>
+        <details class="qa"><summary>Báo hết hạn mức thì sao?</summary><p>Hạn mức tính lại mỗi ngày; thanh trạng thái cho biết bạn đã dùng bao nhiêu.</p></details>
       </div>
     </div>
   </div>
 </section>
 
-<section class="final">
+<section class="cta-band">
   <div class="wrap">
     <h2>Giao việc cho một cánh tay AI</h2>
-    <p class="lead" style="margin-inline:auto">Đăng nhập bằng tài khoản của trường và thử ngay với dự án mẫu.</p>
-    <a class="btn" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập NEU Agent</a>
+    <p>Đăng nhập bằng tài khoản của trường và thử ngay với dự án mẫu.</p>
+    <div class="cta"><a class="btn btn-primary btn-lg" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập NEU Agent</a><a class="btn btn-secondary btn-lg" href="#tai-ve">Tải bản cài</a></div>
   </div>
 </section>
+</main>
 
-<footer>
+<footer class="site-foot">
   <div class="wrap">
-    <span class="lg" style="vertical-align:middle"><svg viewBox="0 0 64 64" aria-hidden="true" style="width:24px;height:24px"><use href="#mark"/></svg><span class="wm" style="font-size:20px">NEU <b>Agent</b></span></span><br>
-    Khoa Công nghệ thông tin · Trường Đại học Kinh tế Quốc dân · <a href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a> · <a href="/agent/guide/help.html">Hướng dẫn sử dụng</a> · <a href="/agent/guide/changelog.html">Nhật ký thay đổi</a> · <a href="/agent/guide/privacy.html">Quyền riêng tư</a>
+    <div>
+      <a class="brand" href="#top"><svg aria-hidden="true"><use href="#mark"/></svg>NEU Agent</a>
+      <p>Khoa Công nghệ thông tin · Trường Đại học Kinh tế Quốc dân</p>
+    </div>
+    <nav aria-label="Chân trang"><a href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a><a href="/agent/guide/help.html">Hướng dẫn sử dụng</a><a href="/agent/guide/changelog.html">Nhật ký thay đổi</a><a href="/agent/guide/privacy.html">Quyền riêng tư</a></nav>
   </div>
 </footer>
 </body>

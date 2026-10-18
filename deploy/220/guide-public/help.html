@@ -1,93 +1,298 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<link rel="icon" href="img/handio-mark.svg" type="image/svg+xml">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hướng dẫn sử dụng NEU Agent</title>
+<title>Hướng dẫn sử dụng · NEU Agent</title>
 <meta name="description" content="Hướng dẫn sử dụng NEU Agent: đăng nhập, ba chế độ Work, Code, Design, cách viết yêu cầu, lệnh /, phím tắt, hạn mức và xử lý sự cố.">
-<style>
-:root{color-scheme:light dark;--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#5d636b;--border:#dedcd3;--accent:#0b4a9e;--accent-text:#fff;--soft:#e8f0fb;--code:#eef0f3}
-@media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#a0a4ac;--border:#34363b;--accent:#5b9bff;--accent-text:#0b1220;--soft:#1d2736;--code:#2a2c31}}
-*{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:16px}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}
-a{color:var(--accent)}
-code,kbd{background:var(--code);border-radius:5px;padding:1px 6px;font:13.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+<meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:site_name" content="NEU Agent">
+<meta property="og:title" content="Hướng dẫn sử dụng NEU Agent">
+<meta property="og:description" content="Đăng nhập, ba chế độ Work, Code, Design, cách viết yêu cầu, lệnh /, phím tắt, hạn mức và xử lý sự cố.">
+<meta property="og:url" content="https://ai.neu.edu.vn/agent/guide/help.html">
+<meta property="og:image" content="https://ai.neu.edu.vn/agent/guide/img/huong-dan.webp">
+<link rel="icon" href="img/handio-mark.svg" type="image/svg+xml">
+<style id="site-css">
+/* Kiểu chung cho các trang công khai /agent/guide/ (giới thiệu, hướng dẫn, nhật ký thay đổi, quyền riêng tư).
+   CSP chỉ cho style nội tuyến nên tệp này được CHÉP vào thẻ <style id="site-css"> của từng trang:
+   sửa ở đây rồi chạy `node scripts/guide-css.mjs` (changelog.html lấy tự động khi dựng). Kiểm thử báo lỗi nếu lệch. */
+:root{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f1f3f6;--text:#111827;--muted:#5b6472;--border:#e3e6eb;--accent:#0b4a9e;--accent-hover:#093d83;--accent-soft:#eaf1fb;--on-accent:#fff;--head-bg:rgba(247,248,250,.86);--code:#eef0f3;
+  --r1:6px;--r2:10px;--r3:14px;--sh1:0 1px 2px rgb(16 24 40/.06);--sh2:0 4px 12px rgb(16 24 40/.08);--sh3:0 12px 32px rgb(16 24 40/.14);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--head-h:64px}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1115;--panel:#161a20;--panel2:#1d222a;--text:#e6e9ef;--muted:#9aa3b2;--border:#2a3039;--accent:#5b9bff;--accent-hover:#7cb0ff;--accent-soft:#16253d;--on-accent:#0b1220;--head-bg:rgba(15,17,21,.86);--code:#1d222a;
+  --sh1:0 1px 2px rgb(0 0 0/.3);--sh2:0 4px 12px rgb(0 0 0/.35);--sh3:0 12px 32px rgb(0 0 0/.45)}}
+*,*:before,*:after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-padding-top:calc(var(--head-h) + 16px)}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 var(--font);-webkit-font-smoothing:antialiased;overflow-wrap:break-word}
+img,svg{max-width:100%}
+a{color:var(--accent);text-underline-offset:2px}
+a:hover{color:var(--accent-hover)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+h1,h2,h3{line-height:1.25;letter-spacing:-.01em;margin:0}
+p{margin:0 0 12px}
+code,kbd{font:14px/1.4 var(--mono);background:var(--code);border-radius:var(--r1);padding:1px 6px}
 kbd{border:1px solid var(--border);border-bottom-width:2px}
-.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
-header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;flex-wrap:wrap}
-.brand{font-weight:800;font-size:20px;color:var(--accent);text-decoration:none}
-nav.main a{margin-left:16px;color:var(--muted);text-decoration:none;font-size:14px}
-nav.main a:hover,nav.main a[aria-current]{color:var(--accent)}
-.btn{display:inline-block;padding:10px 20px;border-radius:10px;font-weight:700;text-decoration:none;border:1px solid var(--accent);background:var(--accent);color:var(--accent-text)}
-.btn.ghost{background:transparent;color:var(--accent)}
-h1{font-size:clamp(26px,4.5vw,38px);line-height:1.2;margin:18px 0 8px}
-.sub{color:var(--muted);margin:0 0 20px;font-size:17px;max-width:680px}
-.layout{display:grid;gap:24px;grid-template-columns:1fr;align-items:start}
-@media(min-width:900px){.layout{grid-template-columns:210px 1fr}.toc{position:sticky;top:16px}}
-.toc{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
-.toc b{display:block;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
-.toc a{display:block;padding:4px 0;color:var(--text);text-decoration:none;font-size:14.5px}
-.toc a:hover{color:var(--accent)}
-@media(max-width:899px){.toc a{display:inline-block;margin-right:14px}}
-section{padding:6px 0 26px}
-h2{font-size:24px;margin:0 0 6px}
-h3{font-size:17px;margin:18px 0 6px}
-.lead{color:var(--muted);margin:0 0 14px}
-p{margin:0 0 10px}
-.steps{counter-reset:s;display:grid;gap:10px;padding:0;list-style:none;margin:0 0 6px}
-.steps li{counter-increment:s;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px 12px 54px;position:relative}
-.steps li:before{content:counter(s);position:absolute;left:12px;top:10px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--accent-text);display:grid;place-items:center;font-weight:800}
-.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px 16px}
-.card h3{margin:0 0 4px;font-size:18px}
-.card p{color:var(--muted);font-size:15px;margin:0 0 8px}
-.card ul{margin:0;padding-left:18px;font-size:14.5px}
-.tbl{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
-table{border-collapse:collapse;width:100%;font-size:14.5px}
-th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:top}
-th{font-size:13px;color:var(--muted);background:var(--soft)}
-tr:last-child td{border-bottom:0}
-td:first-child{white-space:nowrap}
-.note{background:var(--soft);border-radius:12px;padding:10px 14px;margin:12px 0;font-size:15px}
-details{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:8px}
-summary{cursor:pointer;font-weight:600}
-details p,details ul{margin:8px 0 0;color:var(--muted)}
-ul.plain{margin:0 0 10px;padding-left:20px}
-ul.plain li{margin-bottom:4px}
-.eg{border-left:3px solid var(--accent);padding:2px 0 2px 12px;margin:6px 0;color:var(--muted);font-style:italic}
-footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
-.brand{display:inline-flex;align-items:center;gap:8px}.brand .logo{border-radius:7px;display:block}
+.wrap{max-width:1200px;margin:0 auto;padding:0 16px}
+@media (min-width:768px){.wrap{padding:0 24px}}
+.skip{position:absolute;left:8px;top:-48px;z-index:20;padding:8px 12px;background:var(--panel);border-radius:var(--r2);box-shadow:var(--sh2)}
+.skip:focus{top:8px}
+.ic{width:20px;height:20px;flex:none}
+
+/* ---- thanh trên (dính) ---- */
+.site-head{position:sticky;top:0;z-index:10;background:var(--head-bg);-webkit-backdrop-filter:saturate(180%) blur(12px);backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--border)}
+.site-head .wrap{display:flex;align-items:center;gap:16px;height:var(--head-h)}
+.brand{display:inline-flex;align-items:center;gap:8px;color:var(--text);text-decoration:none;font-weight:700;font-size:16px;letter-spacing:-.01em;white-space:nowrap}
+.brand:hover{color:var(--text)}
+.brand svg,.brand img{width:28px;height:28px;display:block;border-radius:7px}
+.site-nav{display:flex;align-items:center;gap:4px;margin-left:auto}
+.site-nav a{padding:8px 12px;border-radius:var(--r1);color:var(--muted);text-decoration:none;font-size:14px;font-weight:500}
+.site-nav a:hover{color:var(--text);background:var(--panel2)}
+.site-nav a[aria-current]{color:var(--text);background:var(--panel2)}
+.head-cta{display:flex;align-items:center;gap:8px;margin-left:8px}
+.menu{display:none;position:relative}
+.menu summary{list-style:none;cursor:pointer;display:grid;place-items:center;width:40px;height:40px;border-radius:var(--r2);border:1px solid var(--border);background:var(--panel);color:var(--text)}
+.menu summary::-webkit-details-marker{display:none}
+.menu[open] summary{background:var(--panel2)}
+.menu .menu-panel{position:absolute;right:0;top:48px;min-width:220px;padding:8px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh3);display:grid}
+.menu .menu-panel a{padding:10px 12px;border-radius:var(--r1);color:var(--text);text-decoration:none;font-size:16px}
+.menu .menu-panel a:hover{background:var(--panel2)}
+@media (max-width:899px){.site-nav{display:none}.head-cta{margin-left:auto}.menu{display:block}}
+@media (max-width:379px){.head-cta .btn{padding:8px 12px}}
+
+/* ---- nút ---- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 16px;border-radius:var(--r2);border:1px solid transparent;font:600 14px/1.2 var(--font);text-decoration:none;white-space:nowrap;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s}
+.btn-primary{background:var(--accent);color:var(--on-accent);box-shadow:var(--sh1)}
+.btn-primary:hover{background:var(--accent-hover);color:var(--on-accent)}
+.btn-secondary{background:var(--panel);color:var(--text);border-color:var(--border);box-shadow:var(--sh1)}
+.btn-secondary:hover{color:var(--text);border-color:var(--muted)}
+.btn-lg{min-height:48px;padding:12px 20px;font-size:16px}
+.btn .ic{width:18px;height:18px}
+
+/* ---- trang giới thiệu: phần đầu ---- */
+.hero{position:relative;overflow:hidden;padding:48px 0 8px;background:radial-gradient(60% 70% at 85% 10%,var(--accent-soft),transparent 70%),var(--bg)}
+.hero-grid{display:grid;gap:48px;align-items:center;grid-template-columns:1fr}
+@media (min-width:1000px){.hero{padding:80px 0 16px}.hero-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;margin:0 0 16px;padding:4px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--muted);font-size:14px;font-weight:500}
+.eyebrow .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:none}
+.hero h1{font-size:32px;line-height:1.15;letter-spacing:-.025em;margin:0 0 16px}
+@media (min-width:768px){.hero h1{font-size:44px}}
+.hero h1 span{color:var(--accent)}
+.hero .sub{font-size:20px;line-height:1.5;color:var(--muted);margin:0 0 24px;max-width:32em}
+@media (max-width:767px){.hero .sub{font-size:16px}}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 24px}
+.quick-dl{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 12px;font-size:14px;color:var(--muted)}
+.quick-dl a{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid var(--border);border-radius:999px;background:var(--panel);color:var(--text);text-decoration:none}
+.quick-dl a:hover{border-color:var(--accent);color:var(--accent)}
+.hero-note{margin:0;font-size:14px;color:var(--muted)}
+.hero-note a{color:inherit}
+/* khung ứng dụng (ảnh chụp thật trong khung cửa sổ vẽ bằng CSS) */
+.mock{position:relative;isolation:isolate}
+.mock:before{content:"";position:absolute;inset:-24px -24px -24px 24px;border-radius:24px;background:linear-gradient(135deg,var(--accent-soft),transparent 70%);z-index:-1}
+.mock .window{z-index:0}
+.window{position:relative;border-radius:var(--r3);border:1px solid var(--border);background:var(--panel);box-shadow:var(--sh3);overflow:hidden}
+.window .bar{display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-bottom:1px solid var(--border);background:var(--panel2)}
+.window .bar i{width:10px;height:10px;border-radius:50%;background:var(--border)}
+.window .bar span{margin-left:12px;font-size:12px;color:var(--muted)}
+.window img{display:block;width:100%;height:auto}
+@media (max-width:599px){.mock:before{display:none}}
+/* dải năm việc chính */
+.pillars{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin:48px 0 0;padding:0;list-style:none;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh1)}
+.pillars li+li{border-left:1px solid var(--border)}
+.pillars a{display:flex;align-items:center;gap:12px;padding:16px;color:var(--text);text-decoration:none;font-size:14px;font-weight:500;line-height:1.35;height:100%}
+.pillars a:hover{background:var(--panel2)}
+.pillars li:first-child a{border-radius:var(--r3) 0 0 var(--r3)}
+.pillars li:last-child a{border-radius:0 var(--r3) var(--r3) 0}
+.pillars .ib{width:40px;height:40px}
+@media (max-width:899px){.pillars{grid-template-columns:repeat(2,minmax(0,1fr))}.pillars li+li{border-left:0}.pillars li{border-top:1px solid var(--border)}.pillars li:nth-child(-n+2){border-top:0}.pillars li:nth-child(even){border-left:1px solid var(--border)}.pillars li:last-child{grid-column:1/-1;border-left:0}.pillars li a{border-radius:0!important}}
+/* ô biểu tượng */
+.ib{display:grid;place-items:center;flex:none;width:44px;height:44px;border-radius:var(--r2);background:var(--accent-soft);color:var(--accent)}
+.ib .ic{width:22px;height:22px}
+
+/* ---- các phần ---- */
+.sec{padding:64px 0}
+@media (min-width:768px){.sec{padding:96px 0}}
+.sec-alt{background:var(--panel);border-block:1px solid var(--border)}
+.sec-head{max-width:720px;margin:0 0 40px}
+.kicker{margin:0 0 8px;color:var(--accent);font-size:14px;font-weight:600}
+.sec h2{font-size:24px;letter-spacing:-.02em;margin:0 0 12px}
+@media (min-width:768px){.sec h2{font-size:32px}}
+.lead{margin:0;color:var(--muted);font-size:16px;max-width:60ch}
+@media (min-width:768px){.sec .lead{font-size:20px;line-height:1.5}}
+.grid3{display:grid;gap:24px;grid-template-columns:1fr}
+@media (min-width:640px){.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1000px){.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.grid4{display:grid;gap:24px;grid-template-columns:1fr}
+@media (min-width:640px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1100px){.grid4{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.card{display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh1);overflow:hidden}
+.sec-alt .card{background:var(--bg)}
+.card h3{font-size:20px;margin:0 0 8px}
+.card p{color:var(--muted);margin:0 0 12px}
+.card ul{margin:0;padding-left:20px;font-size:14px}
+.card li{margin:0 0 4px}
+.card .body{padding:20px 24px 24px}
+.card .media{display:block;aspect-ratio:16/10;object-fit:cover;object-position:left top;width:100%;height:auto;border-bottom:1px solid var(--border);background:var(--panel2)}
+.card .ttl{display:flex;align-items:center;gap:12px;margin:0 0 8px}
+.card .ttl h3{margin:0}
+.card .ttl .ib{width:36px;height:36px}
+.card .ttl .ic{width:18px;height:18px}
+.feat{padding:24px}
+.feat .ib{margin:0 0 16px}
+.feat h3{font-size:16px;margin:0 0 4px}
+.feat p{margin:0;font-size:16px}
+/* demo thuần CSS (nút chọn ẩn + nhãn) */
+.demo input{position:absolute;opacity:0;pointer-events:none}
+.demo .tabs{display:flex;flex-wrap:wrap;gap:4px;padding:4px;margin:0 0 24px;background:var(--panel2);border:1px solid var(--border);border-radius:var(--r2);width:fit-content;max-width:100%}
+.demo .tabs label{padding:8px 16px;border-radius:var(--r1);cursor:pointer;font-size:14px;font-weight:500;color:var(--muted)}
+.demo .tabs label:hover{color:var(--text)}
+.demo .slide{display:none}
+.demo .cap2{margin:16px 0 0;max-width:72ch;color:var(--muted)}
+.demo .cap2 b{color:var(--text)}
+#s1:checked~.tabs label[for=s1],#s2:checked~.tabs label[for=s2],#s3:checked~.tabs label[for=s3],#s4:checked~.tabs label[for=s4],#s5:checked~.tabs label[for=s5]{background:var(--panel);color:var(--text);box-shadow:var(--sh1)}
+#s1:focus-visible~.tabs label[for=s1],#s2:focus-visible~.tabs label[for=s2],#s3:focus-visible~.tabs label[for=s3],#s4:focus-visible~.tabs label[for=s4],#s5:focus-visible~.tabs label[for=s5]{outline:2px solid var(--accent);outline-offset:2px}
+#s1:checked~.slides .p1,#s2:checked~.slides .p2,#s3:checked~.slides .p3,#s4:checked~.slides .p4,#s5:checked~.slides .p5{display:block}
+@media (max-width:599px){.demo .tabs{width:100%}.demo .tabs label{flex:1 1 auto;text-align:center;padding:8px}}
+/* hai cột */
+.split{display:grid;gap:40px;grid-template-columns:1fr;align-items:center}
+@media (min-width:900px){.split{grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)}.split.top{align-items:start}}
+.split .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+/* danh sách có biểu tượng (bảo mật) */
+.points{display:grid;gap:16px;margin:0;padding:0;list-style:none}
+.points li{display:flex;gap:16px;padding:20px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3);box-shadow:var(--sh1)}
+.points h3{font-size:16px;margin:0 0 4px}
+.points p{margin:0;color:var(--muted)}
+/* tải về */
+.dl-card .body{display:flex;flex-direction:column;height:100%}
+.dl-card .row{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px}
+.dl-card .hint{margin:auto 0 0;padding-top:16px;border-top:1px solid var(--border);font-size:14px;color:var(--muted)}
+.dl-card .hint b{color:var(--text)}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:12px;font-weight:600;vertical-align:middle;white-space:nowrap}
+.dl-foot{margin:24px 0 0;font-size:14px;color:var(--muted)}
+/* các bước + hỏi đáp */
+.steps{counter-reset:s;display:grid;gap:12px;margin:0;padding:0;list-style:none}
+.steps li{counter-increment:s;position:relative;padding:16px 16px 16px 64px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3)}
+.steps li:before{content:counter(s);position:absolute;left:16px;top:14px;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--on-accent);font-weight:700;font-size:14px}
+details.qa{background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);margin:0 0 8px}
+details.qa summary{cursor:pointer;padding:12px 16px;font-weight:600;list-style-position:outside;margin-left:16px}
+details.qa[open] summary{border-bottom:1px solid var(--border)}
+details.qa>p,details.qa>ul{margin:0;padding:12px 16px 16px;color:var(--muted)}
+details.qa>ul{padding-left:36px}
+.sec-alt details.qa,.sec-alt .steps li{background:var(--bg)}
+.sub-h{font-size:20px!important;margin:0 0 16px!important}
+/* kêu gọi cuối */
+.cta-band{padding:64px 0;background:var(--accent);color:var(--on-accent);text-align:center}
+.cta-band h2{font-size:24px;margin:0 0 8px}
+@media (min-width:768px){.cta-band h2{font-size:32px}}
+.cta-band p{margin:0 auto 24px;max-width:48ch;opacity:.9}
+.cta-band .cta{justify-content:center;margin:0}
+.cta-band .btn-primary{background:var(--on-accent);color:var(--accent)}
+.cta-band .btn-primary:hover{background:var(--accent-soft);color:var(--accent)}
+.cta-band .btn-secondary{background:transparent;color:var(--on-accent);border-color:currentColor;box-shadow:none}
+.cta-band .btn-secondary:hover{color:var(--on-accent);background:rgb(255 255 255/.08)}
+.cta-band :focus-visible{outline-color:var(--on-accent)}
+
+/* ---- chân trang ---- */
+.site-foot{padding:40px 0;border-top:1px solid var(--border);background:var(--panel);color:var(--muted);font-size:14px}
+.site-foot .wrap{display:flex;flex-wrap:wrap;gap:16px 40px;justify-content:space-between;align-items:flex-start}
+.site-foot .brand{font-size:16px}
+.site-foot p{margin:8px 0 0}
+.site-foot nav{display:flex;flex-wrap:wrap;gap:8px 24px}
+.site-foot nav a{color:var(--muted);text-decoration:none}
+.site-foot nav a:hover{color:var(--text);text-decoration:underline}
+
+/* ---- trang tài liệu (hướng dẫn, nhật ký, quyền riêng tư) ---- */
+.doc-hero{padding:48px 0 32px;border-bottom:1px solid var(--border);background:radial-gradient(50% 120% at 90% 0,var(--accent-soft),transparent 70%),var(--bg)}
+.doc-hero h1{font-size:24px;letter-spacing:-.02em;margin:0 0 8px}
+@media (min-width:768px){.doc-hero{padding:64px 0 40px}.doc-hero h1{font-size:32px}}
+.doc-hero .lead{font-size:16px}
+@media (min-width:768px){.doc-hero .lead{font-size:20px;line-height:1.5}}
+.doc{display:grid;gap:32px;grid-template-columns:minmax(0,1fr);padding-top:32px;padding-bottom:64px}
+@media (min-width:1000px){.doc{grid-template-columns:220px minmax(0,72ch);gap:64px;padding-top:48px}.toc{position:sticky;top:calc(var(--head-h) + 24px);max-height:calc(100vh - var(--head-h) - 48px);overflow:auto}}
+.toc{font-size:14px}
+.toc .toc-t{display:block;margin:0 0 8px;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.toc ol{list-style:none;margin:0;padding:0;border-left:1px solid var(--border)}
+.toc a{display:block;margin-left:-1px;padding:4px 0 4px 12px;border-left:2px solid transparent;color:var(--muted);text-decoration:none}
+.toc a:hover{color:var(--text);border-left-color:var(--muted)}
+.toc small{color:var(--muted)}
+@media (max-width:999px){.toc{padding:16px;background:var(--panel);border:1px solid var(--border);border-radius:var(--r3)}.toc ol{border:0;display:flex;flex-wrap:wrap;gap:4px 16px}.toc a{padding:4px 0;border:0;margin:0}.toc-wide{display:none}}
+.prose{min-width:0}
+.prose>section{padding:0 0 40px;margin:0 0 40px;border-bottom:1px solid var(--border)}
+.prose>section:last-child{border-bottom:0;margin-bottom:0}
+.prose h2{font-size:24px;margin:0 0 12px;letter-spacing:-.015em}
+.prose h3{font-size:16px;margin:24px 0 8px}
+.prose p,.prose li{line-height:1.7}
+.prose ul,.prose ol:not(.steps){margin:0 0 16px;padding-left:24px}
+.prose li{margin:0 0 6px}
+.prose .lead{margin:0 0 16px}
+.note{margin:16px 0;padding:12px 16px;background:var(--accent-soft);border-left:3px solid var(--accent);border-radius:0 var(--r2) var(--r2) 0}
+.tbl{margin:0 0 16px;overflow-x:auto;border:1px solid var(--border);border-radius:var(--r2);background:var(--panel)}
+.tbl table{border-collapse:collapse;width:100%;font-size:14px}
+.tbl th,.tbl td{text-align:left;vertical-align:top;padding:8px 12px;border-bottom:1px solid var(--border)}
+.tbl th{background:var(--panel2);color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td:first-child{white-space:nowrap}
+.tbl.wrap1 td:first-child{white-space:normal;min-width:180px}
+.grid-docs{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin:0 0 16px}
+.grid-docs .card{padding:16px 20px}
+.grid-docs .card h3{font-size:16px;margin:0 0 4px}
+.grid-docs .card p{font-size:14px}
+.eg{margin:12px 0 0;padding:4px 0 4px 12px;border-left:3px solid var(--accent);color:var(--muted);font-size:14px;font-style:italic}
+.prose .steps{margin:0 0 16px}
+.prose details.qa summary{margin-left:16px}
+/* nhật ký thay đổi */
+.rel h2{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 12px}
+.rel h2 small{font-size:14px;font-weight:500;color:var(--muted)}
+.rel h3{display:inline-block;margin:16px 0 8px;padding:2px 8px;border-radius:var(--r1);background:var(--panel2);color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.rel ul{padding-left:20px}
+
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+@media print{.site-head,.toc,.site-foot,.cta-band{display:none}body{background:#fff;color:#000}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <a class="brand" href="./"><img class="logo" src="img/handio-mark.svg" width="30" height="30" alt="">NEU Agent</a>
-    <nav class="main"><a href="./">Giới thiệu</a><a href="help.html" aria-current="page">Hướng dẫn sử dụng</a><a href="changelog.html">Có gì mới</a></nav>
-    <a class="btn" href="/agent/">Đăng nhập</a>
-  </header>
+<a class="skip" href="#noi-dung">Tới nội dung chính</a>
+<header class="site-head">
+  <div class="wrap">
+    <a class="brand" href="./"><img src="img/handio-mark.svg" width="28" height="28" alt="">NEU Agent</a>
+    <nav class="site-nav" aria-label="Chính"><a href="./">Giới thiệu</a><a href="help.html" aria-current="page">Hướng dẫn</a><a href="changelog.html">Có gì mới</a><a href="privacy.html">Quyền riêng tư</a></nav>
+    <div class="head-cta"><a class="btn btn-primary" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></div>
+    <details class="menu"><summary aria-label="Mở menu"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
+      <nav class="menu-panel" aria-label="Menu"><a href="./">Giới thiệu</a><a href="help.html" aria-current="page">Hướng dẫn</a><a href="changelog.html">Có gì mới</a><a href="privacy.html">Quyền riêng tư</a></nav>
+    </details>
+  </div>
+</header>
 
-  <h1>Hướng dẫn sử dụng</h1>
-  <p class="sub">Từ lần đăng nhập đầu tiên đến khi xử lý được việc khó. Đọc từ trên xuống, hoặc nhảy thẳng tới mục bạn cần.</p>
+<main id="noi-dung">
+  <div class="doc-hero">
+    <div class="wrap">
+      <p class="kicker">Hướng dẫn</p>
+      <h1>Hướng dẫn sử dụng</h1>
+      <p class="lead">Từ lần đăng nhập đầu tiên đến khi xử lý được việc khó. Đọc lần lượt, hoặc nhảy tới mục cần.</p>
+    </div>
+  </div>
 
-  <div class="layout">
+  <div class="wrap doc">
     <nav class="toc" aria-label="Mục lục">
-      <b>Mục lục</b>
-      <a href="#bat-dau">Bắt đầu</a>
-      <a href="#che-do">Work, Code, Design</a>
-      <a href="#viet-yeu-cau">Viết yêu cầu</a>
-      <a href="#giao-dien">Làm quen giao diện</a>
-      <a href="#quyen">Chế độ chạy</a>
-      <a href="#lenh">Lệnh / và phím tắt</a>
-      <a href="#may-tinh">Bản cài máy tính</a>
-      <a href="#han-muc">Hạn mức, riêng tư</a>
-      <a href="#su-co">Gặp sự cố</a>
-      <a href="#hoi-dap">Hỏi đáp</a>
+      <span class="toc-t">Mục lục</span>
+      <ol>
+        <li><a href="#bat-dau">Bắt đầu</a></li>
+        <li><a href="#che-do">Work, Code, Design</a></li>
+        <li><a href="#viet-yeu-cau">Viết yêu cầu</a></li>
+        <li><a href="#giao-dien">Làm quen giao diện</a></li>
+        <li><a href="#quyen">Chế độ chạy</a></li>
+        <li><a href="#lenh">Lệnh / và phím tắt</a></li>
+        <li><a href="#may-tinh">Bản cài máy tính</a></li>
+        <li><a href="#han-muc">Hạn mức, riêng tư</a></li>
+        <li><a href="#su-co">Gặp sự cố</a></li>
+        <li><a href="#hoi-dap">Hỏi đáp</a></li>
+      </ol>
     </nav>
 
-    <main>
+    <div class="prose">
       <section id="bat-dau">
         <h2>Bắt đầu</h2>
         <p class="lead">Ai cũng phải đăng nhập. Dùng ngay trên trình duyệt, không cần cài gì.</p>
@@ -102,16 +307,16 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
       <section id="che-do">
         <h2>Work, Code, Design</h2>
         <p class="lead">Chuyển qua lại bất kỳ lúc nào. Mỗi chế độ có dự án và lịch sử riêng.</p>
-        <div class="grid">
-          <div class="card"><h3>Work</h3><p>Cho công việc văn phòng với Word, Excel, PowerPoint, PDF.</p>
+        <div class="grid-docs">
+          <div class="card"><h3>Work</h3><p>Công việc văn phòng với Word, Excel, PowerPoint, PDF.</p>
             <ul><li>Tóm tắt, soạn thông báo, công văn, biên bản</li><li>Tính điểm, bảng tổng hợp bằng công thức</li><li>Làm slide từ tài liệu</li><li>Hỏi đáp từ tài liệu, có trích dẫn bấm xem được</li></ul>
-            <div class="eg">“Soạn thông báo họp tổng kết học kỳ, thứ Sáu tuần sau”</div></div>
-          <div class="card"><h3>Code</h3><p>Cho học và làm lập trình (vibe coding).</p>
+            <p class="eg">“Soạn thông báo họp tổng kết học kỳ, thứ Sáu tuần sau”</p></div>
+          <div class="card"><h3>Code</h3><p>Học và làm lập trình (vibe coding).</p>
             <ul><li>Viết ứng dụng từ một câu mô tả</li><li>Tự chạy thử, đọc lỗi, sửa tiếp</li><li>Giải thích dự án có sẵn, viết test</li><li>Nút 📚 Học: bài học và bài tập tự chấm</li></ul>
-            <div class="eg">“Làm app danh sách việc cần làm, lưu lại khi tải lại trang”</div></div>
+            <p class="eg">“Làm app danh sách việc cần làm, lưu lại khi tải lại trang”</p></div>
           <div class="card"><h3>Design</h3><p>Poster, landing page, slide, logo, thiệp, infographic.</p>
             <ul><li>Xem trước ngay bên phải, chọn khổ A4, vuông, story, slide</li><li>🎯 Chỉ vào để sửa đúng chỗ</li><li>Xuất PDF, PNG (bản máy tính); bản web tải HTML</li></ul>
-            <div class="eg">“Poster A4 hội thảo AI trong giáo dục, phong cách hiện đại”</div></div>
+            <p class="eg">“Poster A4 hội thảo AI trong giáo dục, phong cách hiện đại”</p></div>
         </div>
         <h3>Đưa tệp cho agent</h3>
         <p>Kéo thả tệp vào cửa sổ hoặc bấm <b>＋</b>. Hỗ trợ Word, Excel, PowerPoint, PDF, ảnh (png, jpg, webp) và mã nguồn. Kết quả lưu thành <b>tệp mới</b>, bản gốc không bị ghi đè (muốn ghi đè thì nói rõ).</p>
@@ -119,7 +324,7 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
 
       <section id="viet-yeu-cau">
         <h2>Viết yêu cầu để ra kết quả tốt</h2>
-        <ul class="plain">
+        <ul>
           <li><b>Việc gì – cho ai – cảm giác mong muốn.</b> Ví dụ: “Trang giới thiệu CLB lập trình, cho tân sinh viên, trẻ trung”.</li>
           <li><b>Mô tả kết quả, không mô tả cách làm.</b> Nói “có giỏ hàng, lưu khi tải lại trang”, không cần nói dùng thư viện gì.</li>
           <li><b>Mỗi lần sửa một ý.</b> “Tiêu đề to hơn”, rồi “nền xanh nhạt”, chính xác hơn sửa dồn.</li>
@@ -137,7 +342,7 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
         <p>Mỗi chế độ có nhiều <b>dự án</b> (một thư mục + hướng dẫn riêng). Bấm tên dự án ở cạnh bên để chuyển, tạo mới, đổi tên hoặc bỏ khỏi danh sách (không xoá tệp). Mỗi dự án lưu các <b>cuộc trò chuyện</b>; bấm để mở lại và hỏi tiếp đúng ngữ cảnh cũ. Đổi chủ đề thì mở cuộc trò chuyện mới (＋) cho đỡ tốn token.</p>
         <h3>Các nút thường dùng</h3>
         <div class="tbl"><table>
-          <tr><th>Nút</th><th>Làm gì</th></tr>
+          <tr><th scope="col">Nút</th><th scope="col">Làm gì</th></tr>
           <tr><td>＋</td><td>Đính kèm tệp</td></tr>
           <tr><td>■ Dừng</td><td>Dừng agent đang làm, rồi nói hướng khác</td></tr>
           <tr><td>▶ (Code)</td><td>Chạy và xem bản đang làm</td></tr>
@@ -156,7 +361,7 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
         <h2>Chế độ chạy: ai quyết định gì</h2>
         <p class="lead">Chọn ở dưới ô nhập, hoặc nhấn <kbd>Shift</kbd>+<kbd>Tab</kbd> để đổi nhanh.</p>
         <div class="tbl"><table>
-          <tr><th>Chế độ</th><th>Hành vi</th></tr>
+          <tr><th scope="col">Chế độ</th><th scope="col">Hành vi</th></tr>
           <tr><td>Hỏi trước</td><td>Đọc tự do. Sửa tệp và chạy lệnh phải được bạn duyệt (có hiện phần thay đổi).</td></tr>
           <tr><td>Tự động</td><td>Tự lo việc thường ngày (sửa tệp, build, test, git). Chỉ hỏi khi quan trọng: xoá, mạng, tệp bí mật. Đủ cho đa số việc.</td></tr>
           <tr><td>Lập kế hoạch</td><td>Chỉ đọc. Agent đề xuất kế hoạch để bạn duyệt trước khi làm.</td></tr>
@@ -170,7 +375,7 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
         <p class="lead">Gõ <code>/</code> trong ô nhập để xem danh sách đầy đủ và lọc tiếp. <code>/help</code> liệt kê lệnh của chế độ hiện tại.</p>
         <h3>Lệnh chung</h3>
         <div class="tbl"><table>
-          <tr><th>Lệnh</th><th>Công dụng</th></tr>
+          <tr><th scope="col">Lệnh</th><th scope="col">Công dụng</th></tr>
           <tr><td>/clear</td><td>Xoá hội thoại, bắt đầu phiên mới</td></tr>
           <tr><td>/compact</td><td>Tóm tắt hội thoại để giải phóng ngữ cảnh</td></tr>
           <tr><td>/undo</td><td>Hoàn tác thay đổi tệp gần nhất của agent</td></tr>
@@ -185,14 +390,14 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
         </table></div>
         <h3>Theo từng chế độ</h3>
         <div class="tbl"><table>
-          <tr><th>Chế độ</th><th>Lệnh</th></tr>
+          <tr><th scope="col">Chế độ</th><th scope="col">Lệnh</th></tr>
           <tr><td>Code</td><td><code>/init</code> tạo AGENTS.md (quy ước dự án) · <code>/review</code> nhận xét thay đổi · <code>/commit</code> tạo commit · <code>/explain</code> giải thích cho người mới · <code>/fix-tests</code> chạy test và sửa đến khi qua · <code>/vibe</code> làm app nhỏ từ ý tưởng · <code>/caithien</code> cải thiện một prompt · <code>/diff</code> · <code>/rewind</code></td></tr>
           <tr><td>Work</td><td><code>/tomtat</code> · <code>/soanthao</code> · <code>/bangtinh</code> · <code>/trinhchieu</code> · <code>/rasoat</code> rà soát chính tả, số liệu, thể thức · <code>/hoidap</code> hỏi đáp có trích dẫn · <code>/tronthu</code> trộn thư hàng loạt · <code>/quetcanhan</code> quét dữ liệu cá nhân · <code>/bangtonghop</code> bảng tổng hợp</td></tr>
           <tr><td>Design</td><td><code>/bienthe</code> tạo phiên bản khác (màu, bố cục) thành tệp mới, không mất bản cũ</td></tr>
         </table></div>
         <h3>Phím tắt</h3>
         <div class="tbl"><table>
-          <tr><th>Phím</th><th>Tác dụng</th></tr>
+          <tr><th scope="col">Phím</th><th scope="col">Tác dụng</th></tr>
           <tr><td><kbd>Enter</kbd> · <kbd>Shift</kbd>+<kbd>Enter</kbd></td><td>Gửi · xuống dòng</td></tr>
           <tr><td><kbd>↑</kbd> trong ô nhập</td><td>Gọi lại các câu đã gửi</td></tr>
           <tr><td><kbd>Shift</kbd>+<kbd>Tab</kbd></td><td>Đổi chế độ chạy</td></tr>
@@ -204,7 +409,7 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
 
       <section id="may-tinh">
         <h2>Bản cài cho máy tính</h2>
-        <p class="lead">Dùng web là đủ cho đa số việc. Bản cài (macOS, Windows) làm việc trực tiếp trong thư mục thật trên máy, chạy lệnh thật ở tab Code, xuất PDF/PNG ở Design và tự báo khi có bản mới.</p>
+        <p class="lead">Web là đủ cho đa số việc. Bản cài (macOS, Windows) làm việc trong thư mục thật trên máy, chạy lệnh thật ở tab Code, xuất PDF/PNG ở Design và tự báo khi có bản mới.</p>
         <ol class="steps">
           <li>Đăng nhập web, vào <a href="/agent/download/">trang tải bản cài</a>. Chọn <code>.dmg</code> (macOS: chip Apple <code>arm64</code>, chip Intel <code>x64</code>) hoặc <code>.exe</code> (Windows 64-bit).</li>
           <li>So mã băm SHA-256 của tệp với <code>SHA256SUMS.txt</code> cùng trang.</li>
@@ -218,25 +423,26 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
       <section id="han-muc">
         <h2>Hạn mức và riêng tư</h2>
         <h3>Hạn mức token mỗi ngày</h3>
-        <ul class="plain">
+        <ul>
           <li>Mỗi người có hạn mức token mỗi ngày (mức của bạn hiện ở thanh dưới ô nhập, từ 80%); được vượt thêm khoảng 10% để hoàn tất lượt đang làm.</li>
           <li>Hạn mức làm mới lúc <b>00:00 giờ Việt Nam</b>. Dưới ô nhập có nhãn nhắc khi bạn đã dùng từ 80%; gõ <code>/usage</code> để xem.</li>
           <li>Hết hạn mức vẫn xem và sửa tệp thủ công được.</li>
           <li>Tiết kiệm: mở cuộc trò chuyện mới khi đổi chủ đề, nhắc đúng tệp bằng <code>@</code>, đừng dán cả tệp lớn khi chỉ cần một đoạn.</li>
         </ul>
         <h3>Dữ liệu của bạn</h3>
-        <ul class="plain">
+        <ul>
           <li>Nội dung trao đổi được gửi tới máy chủ mô hình của Khoa CNTT để trả lời. Tệp chỉ được đọc khi cần cho yêu cầu của bạn.</li>
           <li>Bản web lưu dự án và lịch sử <b>trong trình duyệt của bạn</b>; máy chủ không giữ tệp. Xoá dữ liệu trình duyệt là mất, hãy tải về những gì cần giữ.</li>
           <li>Số liệu cải tiến ứng dụng chỉ gồm con số và mã lỗi, <b>không</b> có nội dung trò chuyện hay tên tệp; tắt được ở Cài đặt.</li>
           <li>Đừng dán mật khẩu hay khoá truy cập cho agent. Cần khoá API thì lưu vào tệp <code>.env</code> và nhờ agent đọc từ biến môi trường.</li>
         </ul>
+        <p>Chi tiết: <a href="privacy.html">chính sách quyền riêng tư</a>.</p>
       </section>
 
       <section id="su-co">
         <h2>Gặp sự cố</h2>
-        <div class="tbl"><table>
-          <tr><th>Hiện tượng</th><th>Cách xử lý</th></tr>
+        <div class="tbl wrap1"><table>
+          <tr><th scope="col">Hiện tượng</th><th scope="col">Cách xử lý</th></tr>
           <tr><td>“Phiên đăng nhập đã hết hạn”</td><td>Bấm <b>Đăng nhập lại</b> ngay trong thông báo. Cuộc trò chuyện và tệp vẫn còn.</td></tr>
           <tr><td>“Đã dùng hết hạn mức hôm nay”</td><td>Đợi đến 00:00. Trong lúc đó vẫn xem và sửa tệp thủ công.</td></tr>
           <tr><td>“Đã hết số bước”</td><td>Gõ “tiếp tục”. Agent làm tiếp từ chỗ dừng và tóm tắt đã làm gì.</td></tr>
@@ -246,23 +452,31 @@ footer{padding:24px 0 40px;color:var(--muted);font-size:14px;text-align:center}
           <tr><td>Chữ trong ảnh đọc sai</td><td>Chữ nhỏ, số tiền, ngày, số hiệu có thể sai: đối chiếu lại. PDF bản scan thì xuất từng trang thành ảnh trước.</td></tr>
           <tr><td>Không vào được web</td><td>Thử tải lại trang, đăng nhập lại. Vẫn không được thì báo cho người quản trị.</td></tr>
         </table></div>
-        <p style="margin-top:12px">Lỗi lặp lại? Mở <b>Cài đặt → Báo lỗi…</b>: bạn xem trước đúng dữ liệu sẽ gửi (chỉ số liệu, không có nội dung) rồi mới gửi cho nhóm phát triển.</p>
+        <p>Lỗi lặp lại? Mở <b>Cài đặt → Báo lỗi…</b>: bạn xem trước đúng dữ liệu sẽ gửi (chỉ số liệu, không có nội dung) rồi mới gửi cho nhóm phát triển.</p>
       </section>
 
       <section id="hoi-dap">
         <h2>Hỏi đáp</h2>
-        <details><summary>Ai dùng được?</summary><p>Cán bộ, giảng viên và sinh viên có tài khoản @neu.edu.vn hoặc @st.neu.edu.vn, cùng các tài khoản nội bộ do quản trị cấp.</p></details>
-        <details><summary>Agent có tự xoá hay sửa tệp của tôi không?</summary><p>Chỉ trong thư mục dự án, và theo chế độ chạy bạn chọn. Ở “Hỏi trước” mọi thay đổi đều chờ bạn duyệt; xoá và đụng tệp bí mật luôn được hỏi. Dùng ± để xem và ↶ để hoàn tác.</p></details>
-        <details><summary>Agent đưa số liệu có đáng tin không?</summary><p>Nó tự đọc lại và tính lại trước khi báo, nhưng vẫn có thể sai. Với số tiền, ngày tháng, số hiệu, điểm số: hãy đối chiếu với nguồn. Nói “kiểm tra lại số liệu so với file gốc” để có bảng đối chiếu.</p></details>
-        <details><summary>Excel của agent có phải số gõ tay?</summary><p>Không. Kết quả là công thức (<code>=SUM…</code>), nên sửa dữ liệu là tự tính lại.</p></details>
-        <details><summary>Tôi sửa văn bản của người khác thì sao?</summary><p>Nói “sửa có theo dõi”: thay đổi hiện dưới dạng Track Changes trong Word để người kia chấp nhận hoặc từ chối.</p></details>
-        <details><summary>Bản web hay bản cài?</summary><p>Bản web luôn là bản mới nhất và mở là dùng. Bản cài hợp khi bạn muốn làm việc trực tiếp trong thư mục trên máy, chạy lệnh thật hoặc xuất PDF/PNG.</p></details>
-        <details><summary>Tôi muốn đề xuất tính năng hoặc báo lỗi?</summary><p>Dùng <b>Cài đặt → Báo lỗi…</b> hoặc liên hệ người quản trị đơn vị. Các thay đổi mới nằm ở <a href="changelog.html">nhật ký thay đổi</a>.</p></details>
+        <details class="qa"><summary>Ai dùng được?</summary><p>Cán bộ, giảng viên và sinh viên có tài khoản @neu.edu.vn hoặc @st.neu.edu.vn, cùng các tài khoản nội bộ do quản trị cấp.</p></details>
+        <details class="qa"><summary>Agent có tự xoá hay sửa tệp của tôi không?</summary><p>Chỉ trong thư mục dự án, và theo chế độ chạy bạn chọn. Ở “Hỏi trước” mọi thay đổi đều chờ bạn duyệt; xoá và đụng tệp bí mật luôn được hỏi. Dùng ± để xem và ↶ để hoàn tác.</p></details>
+        <details class="qa"><summary>Agent đưa số liệu có đáng tin không?</summary><p>Nó tự đọc lại và tính lại trước khi báo, nhưng vẫn có thể sai. Với số tiền, ngày tháng, số hiệu, điểm số: hãy đối chiếu với nguồn. Nói “kiểm tra lại số liệu so với file gốc” để có bảng đối chiếu.</p></details>
+        <details class="qa"><summary>Excel của agent có phải số gõ tay?</summary><p>Không. Kết quả là công thức (<code>=SUM…</code>), nên sửa dữ liệu là tự tính lại.</p></details>
+        <details class="qa"><summary>Tôi sửa văn bản của người khác thì sao?</summary><p>Nói “sửa có theo dõi”: thay đổi hiện dưới dạng Track Changes trong Word để người kia chấp nhận hoặc từ chối.</p></details>
+        <details class="qa"><summary>Bản web hay bản cài?</summary><p>Bản web luôn là bản mới nhất và mở là dùng. Bản cài hợp khi bạn muốn làm việc trực tiếp trong thư mục trên máy, chạy lệnh thật hoặc xuất PDF/PNG.</p></details>
+        <details class="qa"><summary>Tôi muốn đề xuất tính năng hoặc báo lỗi?</summary><p>Dùng <b>Cài đặt → Báo lỗi…</b> hoặc liên hệ người quản trị đơn vị. Các thay đổi mới nằm ở <a href="changelog.html">nhật ký thay đổi</a>.</p></details>
       </section>
-    </main>
+    </div>
   </div>
+</main>
 
-  <footer>NEU Agent · Trường Đại học Kinh tế Quốc dân · <a href="./">Giới thiệu</a> · <a href="changelog.html">Nhật ký thay đổi</a> · <a href="privacy.html">Quyền riêng tư</a> · <a href="/agent/">Đăng nhập</a></footer>
-</div>
+<footer class="site-foot">
+  <div class="wrap">
+    <div>
+      <a class="brand" href="./"><img src="img/handio-mark.svg" width="28" height="28" alt="">NEU Agent</a>
+      <p>Khoa Công nghệ thông tin · Trường Đại học Kinh tế Quốc dân</p>
+    </div>
+    <nav aria-label="Chân trang"><a href="./">Giới thiệu</a><a href="changelog.html">Nhật ký thay đổi</a><a href="privacy.html">Quyền riêng tư</a><a href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></nav>
+  </div>
+</footer>
 </body>
 </html>
