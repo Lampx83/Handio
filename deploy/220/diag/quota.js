@@ -15,6 +15,7 @@
   }
   function gmsg(text, kind) { msg(text, kind, "gstatus"); }   // thông báo của mục Nhóm hiện ngay tại mục đó (trang dài)
   function msg(text, kind, where) {
+    if (!kind && /^Đã /.test(text || "")) kind = "ok";   // thông báo thành công ("Đã lưu…", "Đã xoá…") hiện màu xanh
     var s = $(where || "status");
     s.textContent = "";
     if (text) s.appendChild(el("div", text, "msg" + (kind ? " " + kind : "")));
@@ -301,7 +302,7 @@
       gpost({ op: "group_add", name: g.name, idents: ta.value }, "Đã thêm vào nhóm " + g.name + ".").then(function (ok) { if (ok) ta.value = ""; });
     });
     row.appendChild(add);
-    var del = el("button", "Xoá nhóm", "sm");
+    var del = el("button", "Xoá nhóm", "sm danger");
     del.type = "button";
     del.addEventListener("click", function () {
       if (window.confirm("Xoá nhóm " + g.name + " (" + g.members.length + " người)? Họ sẽ quay về cấu hình theo bậc.")) gpost({ op: "group_delete", name: g.name }, "Đã xoá nhóm " + g.name + ".");
@@ -327,6 +328,7 @@
     var ab = $("gaudit");
     ab.textContent = "";
     var OPS = { create: "tạo", "delete": "xoá", add: "thêm", remove: "bỏ", set: "đổi" };
+    $("nogaudit").hidden = (d.groups_audit || []).length > 0;
     (d.groups_audit || []).forEach(function (a) {
       var tr = el("tr");
       tr.appendChild(el("td", when(a.ts)));

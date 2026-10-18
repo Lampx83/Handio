@@ -6,104 +6,137 @@
 <meta name="robots" content="noindex">
 <title>Tài khoản · NEU Agent</title>
 <style>
-:root{--bg:#f6f6f3;--panel:#fff;--text:#1f2328;--muted:#6b7078;--line:#dedcd3;--accent:#0b4a9e;--accent-fg:#fff;--soft:#e4edfa;--err:#c0302b;--ok:#1a7f4b;--warn-bg:#fff7e0}
-@media (prefers-color-scheme:dark){:root{--bg:#17181a;--panel:#1f2023;--text:#e8e6e1;--muted:#9a9ea6;--line:#34363b;--accent:#5b9bff;--accent-fg:#0b1220;--soft:#1b2a45;--err:#ff7b72;--ok:#4cc38a;--warn-bg:#33290f}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
-a{color:var(--accent)}
-h1{font-size:22px;margin:6px 0 4px}
-h2{font-size:15px;margin:0 0 10px;letter-spacing:.2px}
-.muted{color:var(--muted)}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin:14px 0}
+/* theme:start (bản chép report.THEME_CSS, test_theme.py kiểm tra) */
+:root{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f1f3f6;--text:#111827;--muted:#5b6472;--border:#e3e6eb;--grid:#eef0f3;
+--accent:#0b4a9e;--accent-hover:#093d83;--accent-soft:#eaf1fb;--accent-fg:#fff;--ok:#157f4a;--warn:#9a6700;--err:#c0302b;--ok-soft:#e7f4ec;--warn-soft:#fbf3dd;--err-soft:#fbeceb;
+--r1:6px;--r2:10px;--r3:14px;--sh1:0 1px 2px rgb(16 24 40/.06);--sh2:0 4px 12px rgb(16 24 40/.08);--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+--line:var(--border);--fg:var(--text);--mut:var(--muted);--card:var(--panel);--soft:var(--accent-soft);--lo:var(--accent)}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1115;--panel:#161a20;--panel2:#1d222a;--text:#e6e9ef;--muted:#9aa3b2;--border:#2a3039;--grid:#20252d;
+--accent:#5b9bff;--accent-hover:#7db0ff;--accent-soft:#16253d;--accent-fg:#0b1220;--ok:#4cc38a;--warn:#e3b341;--err:#ff7b72;--ok-soft:#11281d;--warn-soft:#2b2410;--err-soft:#341a1a;
+--sh1:0 1px 2px rgb(0 0 0/.3);--sh2:0 4px 12px rgb(0 0 0/.35)}}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:110px}
+body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:1200px;margin:0 auto;padding:22px 24px 64px}
+a{color:var(--accent);text-underline-offset:2px}a:hover{color:var(--accent-hover)}
+h1{font-size:22px;line-height:1.25;margin:0 0 4px;letter-spacing:-.01em}h2{font-size:16px;margin:28px 0 10px}h3{font-size:14px;margin:0 0 6px}h4{font-size:13.5px;margin:16px 0 6px}
+p.sub,.muted,small,.note{color:var(--muted)}p.sub{margin:0 0 14px}small,.note{font-size:12.5px}
+code,.mono{font-family:var(--mono);font-size:.92em}b,strong{font-weight:600}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;height:52px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--border);box-shadow:var(--sh1)}
+.brand{display:flex;align-items:center;gap:8px;color:var(--text);text-decoration:none;white-space:nowrap;flex:none}.brand:hover{color:var(--text)}
+.brand svg{width:26px;height:26px;display:block}.brand b{font-size:15px}.brand span{color:var(--muted);font-size:13px;padding-left:8px;border-left:1px solid var(--border)}
+.appnav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0;height:100%;align-items:stretch}.appnav::-webkit-scrollbar{display:none}
+.appnav a{display:flex;align-items:center;padding:0 11px;color:var(--muted);text-decoration:none;font-size:13.5px;font-weight:500;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
+.appnav a:hover{color:var(--text)}.appnav a[aria-current=page]{color:var(--accent);border-bottom-color:var(--accent)}
+.page-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 20px;margin:4px 0 16px}.page-head>div{min-width:0;flex:1 1 420px}.page-head p.sub{margin:4px 0 0;max-width:860px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--sh1);padding:16px;margin:14px 0;min-width:0}
+.card>h2:first-child,.card-head h2{margin-top:0}
+.card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:0 0 10px}.card-head h2{margin:0}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-label{display:block;font-size:13px;color:var(--muted);margin:0 0 4px}
-input{font:inherit;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);min-width:0}
-input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+input,select,textarea{font:inherit;font-size:14px;padding:7px 10px;border-radius:var(--r1);border:1px solid var(--border);background:var(--panel);color:var(--text);min-width:0;transition:border-color .12s,box-shadow .12s}
+input:hover,select:hover,textarea:hover{border-color:color-mix(in srgb,var(--border) 50%,var(--muted))}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);padding:0}
+button,.btn{font:inherit;font-size:13.5px;font-weight:500;line-height:1.2;padding:8px 14px;border-radius:var(--r1);border:1px solid var(--border);background:var(--panel);color:var(--text);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;box-shadow:var(--sh1);transition:background .12s,border-color .12s}
+button:hover,.btn:hover{background:var(--panel2);color:var(--text)}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}button.primary:hover,.btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+button.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 45%,var(--border))}button.danger:hover{background:var(--err-soft)}
+button.sm,.btn.sm{padding:5px 10px;font-size:13px}
+button[disabled]{opacity:.5;cursor:default}
+.msg{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:var(--r1);margin:10px 0;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--border));background:var(--accent-soft);color:var(--text)}
+.msg::before{content:"i";flex:none;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--accent);color:var(--accent-fg);margin-top:1px}
+.msg.ok{background:var(--ok-soft);border-color:color-mix(in srgb,var(--ok) 35%,var(--border))}.msg.ok::before{content:"✓";background:var(--ok)}
+.msg.warn{background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 35%,var(--border))}.msg.warn::before{content:"!";background:var(--warn)}
+.msg.err{background:var(--err-soft);border-color:color-mix(in srgb,var(--err) 40%,var(--border));color:var(--text)}.msg.err::before{content:"!";background:var(--err)}
+.msg.ok::before,.msg.warn::before,.msg.err::before{color:var(--panel)}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:500;background:var(--panel2);color:var(--text);border:1px solid transparent;white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}.tag.near{background:var(--warn-soft);color:var(--warn)}.tag.bad,.tag.over{background:var(--err-soft);color:var(--err)}
+.wrap,.scroll{overflow:auto;max-height:min(72vh,760px);border:1px solid var(--border);border-radius:var(--r2);background:var(--panel)}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+th{position:sticky;top:0;z-index:1;background:var(--panel2);color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap}
+tbody tr:nth-child(even)>td{background:color-mix(in srgb,var(--panel2) 45%,var(--panel))}
+tbody tr:hover>td{background:var(--accent-soft)}tbody tr:last-child>td{border-bottom:0}
+td.num,th.num,.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}td>a,td>code{white-space:nowrap}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:13.5px}td.empty{background:var(--panel)!important}
+.stats,.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 16px}
+.tile,.kpi>div{background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--sh1);padding:14px 16px;min-width:0}
+.tile span,.kpi span{display:block;color:var(--muted);font-size:12.5px}.tile b,.kpi b{display:block;font-size:26px;line-height:1.15;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin:2px 0}
+.tile .sub{font-size:12.5px;color:var(--text)}
+@media (max-width:640px){main{padding:16px 16px 48px}.appbar{padding:0 12px;gap:10px}.brand span{display:none}.card{padding:14px}h1{font-size:20px}}
+/* theme:end */
+label{display:block;font-size:13px;font-weight:500;color:var(--muted);margin:0 0 4px}
 .field{flex:1 1 220px}
 .field input{width:100%}
-button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text);cursor:pointer}
-button:hover{border-color:var(--accent)}
-button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg);font-weight:600}
-button.danger{color:var(--err);border-color:var(--err)}
-button.sm{padding:4px 10px;font-size:13px}
-button[disabled]{opacity:.55;cursor:default}
-table{width:100%;border-collapse:collapse}
-th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);font-size:14px;vertical-align:middle}
-th{font-weight:600;color:var(--muted);font-size:12.5px}
 td.act{text-align:right;white-space:nowrap}
-code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-.msg{padding:10px 12px;border-radius:8px;margin:10px 0;border:1px solid var(--line);background:var(--soft)}
-.msg.err{border-color:var(--err);color:var(--err);background:transparent}
-.msg.warn{background:var(--warn-bg)}
-.pw{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
-.pw code{font-size:16px;padding:6px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--line);user-select:all}
-.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;background:var(--soft)}
-.tag.bad{color:var(--err);background:transparent;border:1px solid var(--err)}
-.empty{padding:14px 6px;color:var(--muted)}
-nav{font-size:14px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:10px 0 14px}
-.tile{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--bg)}
-.tile b{display:block;font-size:26px;line-height:1.1}
-.tile span{display:block;color:var(--muted);font-size:12.5px}
-.tile .sub{margin-top:4px;font-size:13px;color:var(--text)}
+td.act button+button{margin-left:6px}
+.pw{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.pw code{font-size:15px;padding:5px 10px;border-radius:var(--r1);background:var(--panel);border:1px solid var(--border);user-select:all}
 .plats{display:inline-flex;gap:4px;flex-wrap:wrap}
-.tag.web{background:var(--soft)}
-.tag.desk{background:transparent;border:1px solid var(--line)}
-#filter{width:100%;margin:6px 0 8px}
-.scroll{overflow-x:auto}
+.tag.web{background:var(--accent-soft);color:var(--accent)}
+.tag.desk{background:var(--panel2)}
+#filter{width:min(100%,360px)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px;align-items:start}
+.cols>.card{margin:0}
+.card.danger{border-color:color-mix(in srgb,var(--err) 35%,var(--border))}
+@media (max-width:520px){.cols{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
+<header class="appbar"><a class="brand" href="./"><svg viewBox="64 64 896 896" aria-hidden="true"><defs><linearGradient id="nm-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1665d8"/><stop offset="1" stop-color="#0a2f6e"/></linearGradient></defs><rect x="64" y="64" width="896" height="896" rx="200" fill="url(#nm-g)"/><path d="M312 706V318h74l214 258V318h74v388h-74L386 448v258z" fill="#fff"/><rect x="312" y="770" width="400" height="26" rx="13" fill="#f2b134"/></svg><b>NEU Agent</b><span>Quản trị</span></a><nav class="appnav" aria-label="Trang quản trị"><a href="./">Tổng quan</a><a href="accounts" aria-current="page">Tài khoản</a><a href="quota">Hạn mức</a><a href="feedback">Góp ý</a><a href="shares">Chia sẻ</a><a href="data.html">Dữ liệu &amp; CSV</a><a href="latest.html">Báo cáo chất lượng</a></nav></header>
 <main>
-  <nav><a href="./">← Báo cáo chất lượng</a> · <a href="quota">Hạn mức token</a> · <a href="feedback">Góp ý</a> · <a href="shares">Chia sẻ</a></nav>
-  <h1>Tài khoản và người dùng</h1>
-  <p class="muted">Phần đầu thống kê <b>ai đang dùng NEU Agent</b> (cả Microsoft 365 lẫn tên + mật khẩu; web và Desktop). Bên dưới là nơi <b>tạo và quản lý tài khoản tên + mật khẩu</b> cho người không dùng được Microsoft 365 (khách mời, tài khoản thử). Tài khoản <code>@neu.edu.vn</code> / <code>@st.neu.edu.vn</code> do nhà trường cấp nên chỉ xem được, không quản lý ở đây.</p>
+  <div class="page-head"><div>
+    <h1>Tài khoản và người dùng</h1>
+    <p class="sub">Phần đầu thống kê <b>ai đang dùng NEU Agent</b> (Microsoft 365 lẫn tên + mật khẩu; web và Desktop). Bên dưới là nơi <b>tạo và quản lý tài khoản tên + mật khẩu</b> cho người không dùng được Microsoft 365 (khách mời, tài khoản thử). Tài khoản <code>@neu.edu.vn</code> / <code>@st.neu.edu.vn</code> do nhà trường cấp nên chỉ xem được.</p>
+  </div></div>
 
   <div id="status" role="status" aria-live="polite"></div>
+  <div id="stats" class="stats"></div>
 
   <section class="card" id="seen-card" aria-labelledby="h-seen" hidden>
-    <div class="row" style="justify-content:space-between"><h2 id="h-seen" style="margin:0">Người đã dùng NEU Agent <span class="muted" id="seen-count"></span></h2><button id="csv" class="sm" type="button">Tải CSV</button></div>
-    <p class="muted" style="margin:6px 0 0">Gồm cả tài khoản Microsoft (@neu.edu.vn, @st.neu.edu.vn) và tài khoản tên + mật khẩu, tính theo số liệu ứng dụng gửi về (bản web và bản Desktop). Chỉ hiện người đã làm việc ít nhất một lượt. Không có nội dung hội thoại.</p>
-    <div id="stats" class="stats"></div>
-    <label for="filter" class="muted" style="margin-top:6px">Lọc theo tên hoặc email</label>
-    <input id="filter" type="search" placeholder="vd: sv, @st.neu.edu.vn, khach01" autocomplete="off" spellcheck="false">
-    <div class="scroll"><table><thead><tr><th>Tài khoản</th><th>Loại</th><th>Dùng trên</th><th>Lần đầu</th><th>Gần nhất</th><th>Lượt</th><th>Hoạt động</th></tr></thead><tbody id="seen"></tbody></table></div>
-    <div id="noseen" class="empty" hidden>Chưa có ai (hoặc không khớp bộ lọc).</div>
+    <div class="card-head"><h2 id="h-seen">Người đã dùng NEU Agent <span class="muted" id="seen-count"></span></h2><button id="csv" class="sm" type="button">Tải CSV</button></div>
+    <p class="note" style="margin:0 0 10px">Gồm tài khoản Microsoft và tài khoản tên + mật khẩu, theo số liệu ứng dụng gửi về (web và Desktop). Chỉ hiện người đã làm việc ít nhất một lượt. Không có nội dung hội thoại.</p>
+    <input id="filter" type="search" placeholder="Lọc theo tên hoặc email, vd: khach01, @st.neu.edu.vn" aria-label="Lọc theo tên hoặc email" autocomplete="off" spellcheck="false" style="margin:0 0 10px">
+    <div class="scroll"><table><thead><tr><th>Tài khoản</th><th>Loại</th><th>Dùng trên</th><th>Lần đầu</th><th>Gần nhất</th><th class="num">Lượt</th><th>Hoạt động</th></tr></thead><tbody id="seen"></tbody></table>
+    <div id="noseen" class="empty" hidden>Chưa có ai (hoặc không khớp bộ lọc).</div></div>
   </section>
 
-  <section class="card" aria-labelledby="h-add">
-    <h2 id="h-add">Tạo tài khoản hoặc đổi mật khẩu</h2>
-    <form id="form" autocomplete="off">
-      <div class="row">
-        <div class="field"><label for="name">Tên đăng nhập</label><input id="name" required minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9._-]{2,31}" placeholder="vd: khach01" autocapitalize="none" spellcheck="false"></div>
-        <div class="field"><label for="pw">Mật khẩu (từ 6 ký tự)</label><input id="pw" type="text" required minlength="6" maxlength="200" autocomplete="new-password" spellcheck="false"></div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button type="button" id="gen">Tạo mật khẩu ngẫu nhiên</button>
-        <button type="submit" id="save" class="primary">Lưu tài khoản</button>
-        <span class="muted" id="hint">Tên: chữ thường, số, dấu . _ - (3–32 ký tự). Nếu tên đã có, mật khẩu sẽ được <b>đổi</b>.</span>
-      </div>
-    </form>
-    <div id="shown" hidden></div>
-  </section>
+  <div class="cols">
+    <section class="card" aria-labelledby="h-add">
+      <h2 id="h-add">Tạo tài khoản hoặc đổi mật khẩu</h2>
+      <form id="form" autocomplete="off">
+        <div class="row">
+          <div class="field"><label for="name">Tên đăng nhập</label><input id="name" required minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9._-]{2,31}" placeholder="vd: khach01" autocapitalize="none" spellcheck="false"></div>
+          <div class="field"><label for="pw">Mật khẩu (từ 6 ký tự)</label><input id="pw" type="text" required minlength="6" maxlength="200" autocomplete="new-password" spellcheck="false"></div>
+        </div>
+        <p class="note" id="hint" style="margin:8px 0 12px">Tên: chữ thường, số, dấu . _ - (3–32 ký tự). Nếu tên đã có, mật khẩu sẽ được <b>đổi</b>.</p>
+        <div class="row">
+          <button type="submit" id="save" class="primary">Lưu tài khoản</button>
+          <button type="button" id="gen">Tạo mật khẩu ngẫu nhiên</button>
+        </div>
+      </form>
+      <div id="shown" hidden></div>
+    </section>
 
-  <section class="card" aria-labelledby="h-list">
-    <div class="row" style="justify-content:space-between"><h2 id="h-list" style="margin:0">Tài khoản hiện có <span class="muted" id="count"></span></h2><button id="reload" class="sm">Tải lại</button></div>
-    <table id="tbl" aria-describedby="h-list"><thead><tr><th>Tên</th><th></th></tr></thead><tbody id="users"></tbody></table>
-    <div id="none" class="empty" hidden>Chưa có tài khoản nào.</div>
-  </section>
-
-  <section class="card" aria-labelledby="h-kick">
-    <h2 id="h-kick">Bắt mọi người đăng nhập lại</h2>
-    <p class="muted" style="margin:0 0 10px">Huỷ ngay mọi phiên đang đăng nhập trên trình duyệt (cả Microsoft lẫn tên + mật khẩu). Dùng khi nghi lộ mật khẩu. Mọi người sẽ phải đăng nhập lại, kể cả bạn.</p>
-    <button id="kick" class="danger">Huỷ mọi phiên đăng nhập</button>
-  </section>
+    <section class="card" aria-labelledby="h-list">
+      <div class="card-head"><h2 id="h-list">Tài khoản hiện có <span class="muted" id="count"></span></h2><button id="reload" class="sm">Tải lại</button></div>
+      <div class="scroll"><table id="tbl" aria-describedby="h-list"><thead><tr><th>Tên</th><th></th></tr></thead><tbody id="users"></tbody></table>
+      <div id="none" class="empty" hidden>Chưa có tài khoản nào.</div></div>
+    </section>
+  </div>
 
   <section class="card" aria-labelledby="h-audit">
     <h2 id="h-audit">Nhật ký thao tác gần đây</h2>
-    <table><thead><tr><th>Lúc</th><th>Ai</th><th>Việc</th><th>Tài khoản</th><th>Kết quả</th></tr></thead><tbody id="audit"></tbody></table>
-    <div id="noaudit" class="empty" hidden>Chưa có thao tác nào.</div>
+    <div class="scroll"><table><thead><tr><th>Lúc</th><th>Ai</th><th>Việc</th><th>Tài khoản</th><th>Kết quả</th></tr></thead><tbody id="audit"></tbody></table>
+    <div id="noaudit" class="empty" hidden>Chưa có thao tác nào.</div></div>
+  </section>
+
+  <section class="card danger" aria-labelledby="h-kick">
+    <h2 id="h-kick">Bắt mọi người đăng nhập lại</h2>
+    <p class="note" style="margin:0 0 12px">Huỷ ngay mọi phiên đăng nhập trên trình duyệt (cả Microsoft lẫn tên + mật khẩu). Dùng khi nghi lộ mật khẩu. Mọi người sẽ phải đăng nhập lại, kể cả bạn.</p>
+    <button id="kick" class="danger">Huỷ mọi phiên đăng nhập</button>
   </section>
 </main>
 <script src="accounts.js"></script>

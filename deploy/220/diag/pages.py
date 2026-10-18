@@ -153,9 +153,9 @@ def read_quota_users(db_path, days=30):
 
 
 # ---------------------------------------------------------------- tiện ích hiển thị
-def shell(title, body, back="index.html", back_label="← Tổng quan", extra_nav=""):
-    return ('<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s</title><style>%s</style></head><body><main>'
-            '<nav class="top"><b>NEU Agent</b><a href="%s">%s</a>%s<span style="flex:1"></span><a href="data.html">Dữ liệu &amp; CSV</a></nav>%s</main><script src="admin.js" defer></script></body></html>' % (_e(title), C.CSS, _e(back), _e(back_label), extra_nav, body))
+def shell(title, body, back="index.html", back_label="← Tổng quan", extra_nav="", cur=""):
+    return ('<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>%s · NEU Agent</title><style>%s</style></head><body>%s<main>'
+            '<nav class="crumb actions" style="margin:0 0 10px;font-size:13.5px"><a href="%s">%s</a>%s</nav>%s</main><script src="admin.js" defer></script></body></html>' % (_e(title), C.CSS, R.appbar(cur), _e(back), _e(back_label), extra_nav, body))
 
 
 def tool_rows(tools):
@@ -296,7 +296,7 @@ def data_page(S, U, pids, quota):
                      _p(R.ratio(u["errors_n"], u["turns_n"])) if u["turns_n"] else "—", _num(sum(q.get("by_day", {}).values())) if q else "—"])
     body.append("<h2>Tất cả người dùng (%d)</h2>" % len(U) + table(["Mã", "Bậc", "Lần đầu", "Gần nhất (VN)", "Ngày dùng", "Lượt", "Lỗi", "Token 30 ngày"], rows or [["—"] * 8], "u", raw=(0,)))
     body.append('<h2>Tải CSV</h2><ul><li><a href="users.csv">users.csv</a> — mọi người dùng (mã giả danh)</li><li><a href="daily.csv">daily.csv</a> — số liệu theo ngày</li><li><a href="tools.csv">tools.csv</a> — công cụ</li></ul>')
-    return shell("Dữ liệu đầy đủ", "".join(body))
+    return shell("Dữ liệu đầy đủ", "".join(body), cur="data")
 
 
 # ---------------------------------------------------------------- ghi tất cả

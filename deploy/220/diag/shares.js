@@ -15,6 +15,7 @@
     return e;
   }
   function msg(text, kind) {
+    if (!kind && /^Đã /.test(text || "")) kind = "ok";   // thông báo thành công ("Đã lưu…", "Đã xoá…") hiện màu xanh
     var s = $("status");
     s.textContent = "";
     if (text) s.appendChild(el("div", text, "msg" + (kind ? " " + kind : "")));
@@ -94,7 +95,7 @@
       var u = location.origin + location.pathname.replace(/admin\/shares\/?$/, "") + "share/" + it.id;
       (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(function () { msg("Đã sao chép liên kết."); }, function () { msg(u); });
     });
-    var del = el("button", "Xoá", "sm");
+    var del = el("button", "Xoá", "sm danger");
     del.type = "button";
     del.addEventListener("click", function () {
       if (!window.confirm("Xoá hẳn cuộc trò chuyện chia sẻ này? Liên kết sẽ không còn dùng được.")) return;
