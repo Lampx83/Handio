@@ -1,5 +1,6 @@
 import type { Mode } from "./permissions";
 import { DESIGN_BASE, DESIGN_TEMPLATES } from "./design-templates";
+import { DESIGN_MD_FILE, DESIGN_MD_TEMPLATE } from "./design-md";
 import { WORK_TEMPLATES } from "./work-templates";
 
 export type Profile = "work" | "code" | "design";
@@ -142,6 +143,7 @@ export const PROFILES: Record<Profile, ProfileDef> = {
     welcomeTitle: "Hôm nay bạn muốn thiết kế gì?",
     commands: {
       bienthe: { description: "Tạo phiên bản khác của thiết kế đang mở (màu, bố cục) thành tệp mới", body: "Create a VARIATION of the design the user means: $ARGUMENTS\nIf no file is named, glob for *.html and *.svg and use the most recently modified one (tell the user which). read_file it, then write a NEW file with the same content but a clearly different approach to what the user asked (colors, typography, layout). Never overwrite the original; name it with a suffix such as -v2. Verify by reading it back and report what changed." },
+      designmd: { description: "Tạo (hoặc cập nhật) DESIGN.md: màu, phông, khoảng cách, giọng điệu của dự án", body: `Create or update ${DESIGN_MD_FILE} at the project root: the project's design system, which you will follow in every later design. $ARGUMENTS\nIf ${DESIGN_MD_FILE} does not exist: glob for *.html and *.svg, read the most recent design if there is one and take its real palette and fonts; otherwise use the template. Write ${DESIGN_MD_FILE} with write_file in this structure (sections Màu, Chữ, Khoảng cách và hình khối, Giọng điệu, Không làm), adjusting values to what the user said or to the existing design. Keep it under 40 lines, Vietnamese, with concrete values (hex colors, font stacks, px). Never invent real logos or organization names. If it already exists, read it and change only what the user asked.\nTemplate:\n${DESIGN_MD_TEMPLATE}\nFinish with one sentence telling the user they can edit ${DESIGN_MD_FILE} and that it applies from the next message.` },
       ...DESIGN_TEMPLATE_COMMANDS, // test design-templates.test.ts bảo đảm không trùng tên lệnh có sẵn
     },
     systemBase: DESIGN_BASE,

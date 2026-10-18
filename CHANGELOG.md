@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **DESIGN.md cho từng dự án Design**: ghi màu, phông, khoảng cách và giọng điệu vào `DESIGN.md` ở thư mục dự án, agent đọc và làm theo ở mọi thiết kế. Sửa tệp lúc nào cũng được, có hiệu lực từ tin nhắn kế tiếp. Chưa có thì gõ `/designmd` để agent tạo bản mẫu (hoặc rút từ thiết kế đang có).
 - **Tải bản cài macOS và Windows ngay trên trang giới thiệu**: đầu trang có nút tải bản mới nhất cho macOS (chip Apple hoặc Intel) và Windows, kèm mã SHA-256, không cần đăng nhập trước. Mở ứng dụng vẫn cần đăng nhập tài khoản trường.
 - **Trang chính sách quyền riêng tư** (`/agent/guide/privacy.html`, tiếng Việt và tiếng Anh): ứng dụng dùng dữ liệu nào, gửi đi đâu, giữ bao lâu, cách tắt hoặc yêu cầu xoá. Có link ở chân trang giới thiệu và trang hướng dẫn.
 - **Chuẩn bị bản Windows trên Microsoft Store**: cài từ Store sẽ không còn cảnh báo "nhà phát hành không xác định", và Store tự cập nhật ứng dụng (bản cài từ Store ẩn mục "Kiểm tra bản cập nhật" trong menu Tệp).
