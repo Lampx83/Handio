@@ -10,12 +10,14 @@ const NEU_MARK_SVG =
  * Biểu tượng thương hiệu: bàn tay Handio khi chạy dưới tên "Handio"; chữ N khi triển khai dưới tên khác (mặc định "NEU Agent").
  * SVG nhúng sẵn, hằng số tin cậy. Bàn tay vẫy khi rê chuột (CSS .brand-mark). `size` = chiều cao px.
  */
+let markSeq = 0;
 export function brandMark(size = 22, wave = false): HTMLElement {
   const handio = brandName() === productName();
   const el = document.createElement("span");
   el.className = "brand-mark" + (handio ? "" : " neu-mark") + (wave && handio ? " wave" : "");
   el.setAttribute("aria-hidden", "true");
   el.style.setProperty("--bm", size + "px");
-  el.innerHTML = handio ? brandText(BRAND_MARK_SVG) : NEU_MARK_SVG;
+  // id gradient riêng cho mỗi lần vẽ: nếu bản đầu tiên nằm trong khối bị ẩn (display:none) thì các bản khác vẫn tô đúng màu
+  el.innerHTML = handio ? brandText(BRAND_MARK_SVG) : NEU_MARK_SVG.replace(/nm-g/g, "nm-g" + ++markSeq);
   return el;
 }

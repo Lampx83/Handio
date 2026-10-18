@@ -26,6 +26,7 @@ import { buildHttpTools, type HttpToolRuntime } from "./http-tools";
 import { findRepetition } from "./repeat";
 import { visionTool } from "./vision";
 import { ASK_LIMITS, cleanAnswers, formatAnswers, parseAskQuestions } from "./ask";
+import { DEFAULT_CONTAINER_IMAGE, DEFAULT_IMAGE_INFO, imageToolsHint } from "./container";
 import type { AskQuestion, PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
 
 /** Công cụ Office có cấu trúc: kết quả đã liệt kê nội dung vừa ghi nên cổng "đọc lại" không cần thêm một lần đọc. */
@@ -463,10 +464,10 @@ export class Session {
     if (!sb) return "";
     if (sb.kind !== "seatbelt" && !this.tools.has("bash")) return ""; // seatbelt: giữ đúng lời nhắc cũ
     const note = sb.note ? ` Note: ${sb.note}` : "";
-    if (sb.kind === "refuse") return `\n- Shell: commands are currently REFUSED (${sb.note ?? "sandbox required"}). Do not retry bash; tell the user to start Docker Desktop.`;
+    if (sb.kind === "refuse") return `\n- Shell: commands are currently REFUSED (${sb.note ?? "sandbox required"}). Do not retry bash; tell the user what the note says (start Docker Desktop, or download the image in Settings).`;
     if (sb.kind === "docker") {
       const ports = sb.ports?.length ? ` Web/dev servers started with background=true must listen on 0.0.0.0 and one of the preview ports ${sb.ports.join(", ")} (e.g. \`npx vite --host 0.0.0.0 --port ${sb.ports[0]}\`); the user opens http://localhost:<port>.` : " Dev servers inside the container are NOT reachable from the user's browser (no preview ports configured).";
-      return `\n- Sandbox: shell commands run inside a Linux Docker container (image ${sb.image ?? "?"}) as a non-root user. The project folder is mounted at /workspace (= the working directory, use relative paths; host absolute paths do not exist there). Nothing else from the user's computer is visible, programs installed on the user's computer are NOT available (only what the image provides), the filesystem outside /workspace and /tmp is read-only, and /tmp is wiped after each command${sb.network ? "" : ". There is NO network access (installing packages from the internet fails)"}. Install project dependencies inside the project (npm install, python -m venv .venv).${sb.network ? ports : ""} If a command fails because a tool is missing or a write is denied, explain that this is the container and suggest a safe alternative instead of trying to bypass it.`;
+      return `\n- Sandbox: shell commands run inside a Linux Docker container (image ${sb.image ?? "?"}) as a non-root user. The project folder is mounted at /workspace (= the working directory, use relative paths; host absolute paths do not exist there). Nothing else from the user's computer is visible, programs installed on the user's computer are NOT available (only what the image provides), the filesystem outside /workspace and /tmp is read-only, and /tmp is wiped after each command (it is also noexec)${sb.network ? "" : ". There is NO network access (installing packages from the internet fails)"}. Install project dependencies inside the project (npm install, a .venv for Python).${imageToolsHint(sb.image)}${sb.network ? ports : ""} If a command fails because a tool is missing or a write is denied, explain that this is the container and suggest a safe alternative instead of trying to bypass it.`;
     }
     if (sb.kind === "seatbelt") return `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${sb.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.${note}`;
     return note ? `\n- Shell:${note}` : "";
@@ -886,7 +887,7 @@ export class Session {
     if (!this.o.env.exec) return "";
     if (!sb || sb.kind === "none") return " · không sandbox" + (sb?.note ? ` · ${sb.note}` : "");
     if (sb.kind === "refuse") return ` · bị từ chối: ${sb.note ?? ""}`;
-    const what = sb.kind === "docker" ? `container Docker (${sb.image ?? "?"})` : `sandbox ${sb.kind}`;
+    const what = sb.kind === "docker" ? `container Docker (${sb.image ?? "?"}${sb.image === DEFAULT_CONTAINER_IMAGE ? ": " + DEFAULT_IMAGE_INFO.tools : ""})` : `sandbox ${sb.kind}`;
     return ` · ${what}${sb.network ? "" : ", không mạng"}${sb.ports?.length ? `, cổng xem trước ${sb.ports.join(", ")}` : ""}${sb.note ? ` · ${sb.note}` : ""}`;
   }
 

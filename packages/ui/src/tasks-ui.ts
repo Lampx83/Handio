@@ -1,4 +1,4 @@
-import { describeEvery, MAX_RUNS_PER_DAY, MIN_MINUTES, WEEKDAYS, type AgentController, type Every, type TaskView } from "@neu/agent-core";
+import { describeEvery, MAX_RUNS_PER_DAY, MIN_MINUTES, WEEKDAYS, type AgentController, type BackgroundState, type Every, type TaskView } from "@neu/agent-core";
 import { h } from "./dom";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -129,6 +129,29 @@ export function openTasks(ctl: AgentController, opts: { desktop: boolean; onOpen
     notify.addEventListener("change", () => void ctl.taskNotify!(notify.checked).catch(() => undefined));
   }
 
+  // Desktop: giữ chạy nền ở khay khi đóng cửa sổ (chỉ có hiệu lực khi có tác vụ đang bật) + mở cùng máy (chỉ bật được khi đã giữ chạy nền)
+  const bg = opts.desktop && ctl.taskBackground ? ctl.taskBackground.bind(ctl) : null;
+  const keep = h("input", { type: "checkbox" }) as HTMLInputElement;
+  const atLogin = h("input", { type: "checkbox" }) as HTMLInputElement;
+  const atLoginRow = h("label", { class: "chk", title: "Cần “Ghi nhớ đăng nhập” để tác vụ chạy được sau khi khởi động máy." }, atLogin, "Mở cùng máy (ẩn ở khay)");
+  const keepRow = h("label", { class: "chk", title: "Chỉ khi có tác vụ đang bật. Thoát hẳn ở biểu tượng khay." }, keep, "Giữ chạy nền khi đóng cửa sổ (để tác vụ định kỳ chạy)");
+  const syncBg = (st: BackgroundState) => {
+    keep.checked = st.keep;
+    atLogin.checked = st.atLogin;
+    atLogin.disabled = !st.keep;
+    atLoginRow.hidden = !st.atLoginSupported;
+  };
+  atLoginRow.hidden = true;
+  if (bg) {
+    const set = (patch: { keep?: boolean; atLogin?: boolean }) => void bg(patch).then(syncBg).catch((e: Error) => {
+      err.textContent = e.message;
+      void bg().then(syncBg).catch(() => undefined);
+    });
+    void bg().then(syncBg).catch(() => undefined);
+    keep.addEventListener("change", () => set({ keep: keep.checked }));
+    atLogin.addEventListener("change", () => set({ atLogin: atLogin.checked }));
+  }
+
   const off = ctl.onEvent((e) => {
     if (e.type === "task_done") void paint();
   });
@@ -139,7 +162,9 @@ export function openTasks(ctl: AgentController, opts: { desktop: boolean; onOpen
       list,
       h("div", { class: "tk-new" }, name, prompt, h("div", { class: "tk-sched" }, kind, day, date, time, mins, minsLbl), h("button", { class: "btn primary", type: "button", onclick: () => void add() }, "Thêm tác vụ")),
       err,
-      notify ? h("label", { class: "chk" }, notify, "Thông báo của hệ thống khi xong hoặc lỗi") : ""),
+      notify ? h("label", { class: "chk" }, notify, "Thông báo của hệ thống khi xong hoặc lỗi") : "",
+      bg ? keepRow : "",
+      bg ? atLoginRow : ""),
   );
   dlg.addEventListener("close", () => {
     off();

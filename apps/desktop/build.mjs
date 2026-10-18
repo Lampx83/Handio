@@ -37,4 +37,5 @@ const pkgVersion = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
 const changelog = changelogData(fs.readFileSync("../../CHANGELOG.md", "utf8")); // nhật ký thay đổi nhúng sẵn: xem được cả khi ngoại tuyến
 await build({ ...common, entryPoints: { renderer: "renderer/main.ts" }, outdir: "dist/renderer", platform: "browser", format: "iife", loader: { ".css": "css" }, minify: release, define: { __CHANGELOG__: JSON.stringify(changelog), __APP_VERSION__: JSON.stringify(pkgVersion) } });
 fs.copyFileSync("renderer/index.html", "dist/renderer/index.html");
+fs.copyFileSync("build/icon.png", "dist/tray.png"); // biểu tượng khay (chạy nền khi đóng cửa sổ): icon chữ N của bản NEU, main.ts thu nhỏ lúc chạy
 console.log(`build: ${release ? "RELEASE" : process.env.SMOKE_PACK === "1" ? "SMOKE_PACK" : "DEV"}; endpoint mặc định ${baseUrl}; key nhúng: ${builtinKey ? "CÓ" : "không"}; đăng nhập SSO: ${auth ? "BẬT" : "tắt"}`);

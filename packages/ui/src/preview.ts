@@ -1,6 +1,7 @@
 import { DESIGN_MD_FILE, type AgentController, type UiState } from "@neu/agent-core";
 import { DESIGN_FORMATS } from "@neu/agent-core/design-templates";
 import { clear, h } from "./dom";
+import { icon } from "./icons";
 import { buildBatchEditPrompt, describeElement, MAX_NOTES, QUICK_EDITS, summarize, type ElementDesc, type ElLike, type PickNote } from "./point-edit";
 
 const DESIGN_FILE = /\.(html?|svg)$/i;
@@ -33,7 +34,7 @@ export class DesignPreview {
   private selEl: Element | null = null;
   /** Ghi chú đã thêm (nhiều phần tử), gửi một lần. `el` chỉ để vẽ số thứ tự trên bản xem trước. */
   private notes: (PickNote & { el: Element | null })[] = [];
-  private pickBtn = h("button", { class: "btn sm", type: "button", "aria-pressed": "false", title: "Bấm vào một phần của thiết kế rồi nói ngắn gọn muốn sửa gì", onclick: () => this.togglePick() }, "🎯 Chỉ vào để sửa");
+  private pickBtn = h("button", { class: "btn sm", type: "button", "aria-pressed": "false", title: "Bấm vào một phần của thiết kế rồi nói ngắn gọn muốn sửa gì", onclick: () => this.togglePick() }, icon("target", 15), "Chỉ vào để sửa");
   private pickInput = h("input", { type: "text", maxlength: "400", placeholder: "Muốn sửa gì? (vd: to hơn, đổi sang màu xanh)", "aria-label": "Yêu cầu sửa phần đã chọn" }) as HTMLInputElement;
   private pickBar = h("div", { class: "pv-pick", hidden: true });
   private dmBtn = h("button", { class: "btn sm", type: "button", onclick: () => void this.designMd() }, "DESIGN.md");
@@ -44,9 +45,9 @@ export class DesignPreview {
     this.fmtSel.addEventListener("change", () => this.paint());
     this.el = h("aside", { class: "pv", "aria-label": "Xem trước thiết kế", hidden: true },
       h("div", { class: "pv-head" }, this.fileSel, this.fmtSel,
-        h("button", { class: "btn sm", type: "button", title: "Tải lại", "aria-label": "Tải lại bản xem trước", onclick: () => void this.show(this.path, false) }, "↻")),
+        h("button", { class: "btn sm", type: "button", title: "Tải lại", "aria-label": "Tải lại bản xem trước", onclick: () => void this.show(this.path, false) }, icon("refresh", 15))),
       h("div", { class: "pv-tools" },
-        h("button", { class: "btn sm", type: "button", onclick: () => this.path && this.download(this.path) }, "⬇ Tải tệp"),
+        h("button", { class: "btn sm", type: "button", onclick: () => this.path && this.download(this.path) }, icon("download", 15), "Tải tệp"),
         h("button", { class: "btn sm", type: "button", title: "Xuất PDF: chọn thư mục lưu (không chọn thì lưu cạnh tệp thiết kế). Cần bản Desktop", onclick: () => void this.exp("pdf") }, "PDF"),
         h("button", { class: "btn sm", type: "button", title: "Xuất ảnh PNG cạnh tệp thiết kế (cần bản Desktop)", onclick: () => void this.exp("png") }, "PNG"),
         this.pickBtn, this.dmBtn, this.note),
@@ -176,7 +177,7 @@ export class DesignPreview {
   private paintPickBar(): void {
     clear(this.pickBar);
     const n = this.notes.length;
-    this.pickBtn.textContent = "🎯 Chỉ vào để sửa" + (n ? ` (${n})` : "");
+    this.pickBtn.replaceChildren(icon("target", 15), "Chỉ vào để sửa" + (n ? ` (${n})` : ""));
     if (n) {
       this.pickBar.append(h("ol", { class: "pk-notes", "aria-label": "Ghi chú đã thêm" }, ...this.notes.map((x, i) =>
         h("li", {}, h("b", { class: "pk-n", "aria-hidden": "true" }, String(i + 1)), h("span", { class: "pk-what" }, summarize(x.d)), h("span", { class: "pk-note" }, x.note),

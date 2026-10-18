@@ -8,12 +8,14 @@ import { createHash, randomBytes } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ContainerDecision, DockerProbe } from "@neu/agent-core";
+import { CACHE_VOLUME_RE, parseDockerSize, sanitizeImage, type CacheInfo, type CacheScope, type ContainerDecision, type DockerProbe, type ImagePullState } from "@neu/agent-core";
 
 /** Nơi gắn thư mục dự án trong container. */
 export const WORKSPACE = "/workspace";
 /** Nhãn của mọi container do ứng dụng tạo (để dọn khi thoát / khi khởi động lại sau khi ứng dụng bị tắt ngang). */
 export const SANDBOX_LABEL = "handio.sandbox=1";
+/** Nhãn của volume cache do ứng dụng tạo. Chỉ volume có nhãn NÀY và tên khớp CACHE_VOLUME_RE mới được xoá. */
+export const CACHE_LABEL = "handio.cache=1";
 
 export interface ContainerLimits {
   cpus: number;
@@ -93,7 +95,7 @@ export function containerUser(uid = process.getuid?.(), gid = process.getgid?.()
 export function containerEnv(cache: boolean): Record<string, string> {
   return {
     HOME: "/tmp", TERM: "dumb", LANG: "C.UTF-8", CI: "1", NO_COLOR: "1", PAGER: "cat", GIT_PAGER: "cat", PYTHONUNBUFFERED: "1",
-    NPM_CONFIG_UPDATE_NOTIFIER: "false", GIT_TERMINAL_PROMPT: "0",
+    NPM_CONFIG_UPDATE_NOTIFIER: "false", GIT_TERMINAL_PROMPT: "0", PIP_DISABLE_PIP_VERSION_CHECK: "1",
     ...(cache ? { npm_config_cache: "/cache/npm", PIP_CACHE_DIR: "/cache/pip", YARN_CACHE_FOLDER: "/cache/yarn", XDG_CACHE_HOME: "/cache/xdg" } : {}),
   };
 }
@@ -204,34 +206,169 @@ export async function probeDocker(bin: string | null, image: string, timeoutMs =
 }
 
 const readyImages = new Set<string>();
-/** Có ảnh trên máy chưa; chưa có thì tải đúng ảnh đã cấu hình (một lần). Trả lỗi để báo người dùng. */
+/** Ảnh đã có trên máy chưa. Chưa có thì trả lỗi để báo người dùng: KHÔNG tự tải ngầm (người dùng bấm "Tải ảnh", xem pullImage). */
 export async function ensureImage(bin: string, image: string, signal?: AbortSignal): Promise<string | null> {
   if (readyImages.has(bin + "\0" + image)) return null;
   if ((await runDocker(bin, ["image", "inspect", "--format", "{{.Id}}", image], { timeoutMs: 10_000, signal })).code !== 0) {
-    const p = await runDocker(bin, ["pull", "--quiet", image], { timeoutMs: 600_000, signal });
-    if (p.code !== 0) return `Không tải được ảnh Docker ${image} (${shortDockerError(p.err, p.code)}).`;
+    return `Chưa có ảnh Docker ${image} trên máy. Mở Cài đặt → Quyền → “Tải ảnh” rồi thử lại.`;
   }
   readyImages.add(bin + "\0" + image);
   return null;
 }
 
-const readyVolumes = new Map<string, boolean>();
+/** Tiến độ docker pull (không TTY: mỗi dòng "<lớp>: <trạng thái>"). Thuần để kiểm thử. */
+export function pullProgress(lines: string[]): { layersDone: number; layersTotal: number } {
+  const seen = new Set<string>();
+  const done = new Set<string>();
+  for (const l of lines) {
+    const m = /^([a-f0-9]{12,64}): (.+)$/.exec(l.trim());
+    if (!m) continue;
+    seen.add(m[1]);
+    if (/^(Pull complete|Already exists)/.test(m[2])) done.add(m[1]);
+  }
+  return { layersDone: done.size, layersTotal: seen.size };
+}
+
+/**
+ * "Tải ảnh" do người dùng bấm: `docker pull <ảnh>` (mảng đối số; ảnh kiểm lại theo dạng tên, không thể là cờ). `onState` nhận tiến độ.
+ * Hết giờ 30 phút. Trả trạng thái cuối.
+ */
+export async function pullImage(bin: string, image: string, onState: (s: ImagePullState) => void, signal?: AbortSignal): Promise<ImagePullState> {
+  const st: ImagePullState = { image, running: true, layersDone: 0, layersTotal: 0 };
+  if (sanitizeImage(image) !== image) return { ...st, running: false, ok: false, error: "Tên ảnh không hợp lệ." };
+  onState({ ...st });
+  const lines: string[] = [];
+  const r = await new Promise<{ code: number; err: string }>((resolve) => {
+    const child = nodeSpawn(bin, ["pull", image], { shell: false, stdio: ["ignore", "pipe", "pipe"], env: dockerCliEnv(), windowsHide: true });
+    let buf = "";
+    let err = "";
+    child.stdout.on("data", (b: Buffer) => {
+      buf += b.toString("utf8");
+      const parts = buf.split(/\r?\n/);
+      buf = parts.pop() ?? "";
+      if (lines.length < 5000) lines.push(...parts);
+      Object.assign(st, pullProgress(lines));
+      onState({ ...st });
+    });
+    child.stderr.on("data", (b: Buffer) => { if (err.length < 20_000) err += b.toString("utf8"); });
+    const kill = () => { try { child.kill("SIGKILL"); } catch { /* đã thoát */ } };
+    const timer = setTimeout(kill, 30 * 60_000);
+    signal?.addEventListener("abort", kill, { once: true });
+    let done = false;
+    const finish = (code: number) => { if (done) return; done = true; clearTimeout(timer); signal?.removeEventListener("abort", kill); resolve({ code, err }); };
+    child.on("error", (e) => { err += e.message; finish(127); });
+    child.on("close", (code) => finish(code ?? 1));
+  });
+  st.running = false;
+  st.ok = r.code === 0;
+  if (st.ok) {
+    if (st.layersTotal) st.layersDone = st.layersTotal;
+  } else {
+    st.error = /not found|manifest unknown|repository does not exist|pull access denied/i.test(r.err) ? "không tìm thấy ảnh" : /timeout|network|dial tcp|no such host|TLS/i.test(r.err) ? "lỗi mạng" : shortDockerError(r.err, r.code);
+  }
+  onState({ ...st });
+  return st;
+}
+
+/** Volume đã đổi chủ cho người dùng: khoá → thời điểm tạo của volume lúc đó ("" = khởi tạo lỗi, chạy không cache). */
+const readyVolumes = new Map<string, string>();
 /**
  * Volume cache theo dự án. Volume mới thuộc root nên chạy MỘT container dọn sẵn: chỉ có quyền CHOWN (mọi quyền khác bị bỏ), không mạng,
  * rootfs chỉ đọc, chỉ gắn đúng volume đó, lệnh cố định `chown` (không có gì từ agent hay dự án). Lỗi thì chạy không có cache.
+ * Mỗi lần đều hỏi lại volume còn không (`volume inspect`): volume bị xoá ngoài ứng dụng (Docker Desktop, `docker volume rm`) mà để
+ * `docker run` tự tạo lại thì nó thuộc root, không có nhãn, và người dùng trong container không ghi được.
  */
 export async function ensureCacheVolume(bin: string, volume: string, image: string, user: string, signal?: AbortSignal): Promise<boolean> {
   const key = bin + "\0" + volume + "\0" + user;
-  const known = readyVolumes.get(key);
-  if (known !== undefined) return known;
-  let ok = (await runDocker(bin, ["volume", "create", "--label", SANDBOX_LABEL.replace("sandbox", "cache"), volume], { timeoutMs: 15_000, signal })).code === 0;
+  if (readyVolumes.get(key) === "") return false;
+  const createdAt = async () => {
+    const r = await runDocker(bin, ["volume", "inspect", "--format", "{{.CreatedAt}}", volume], { timeoutMs: 15_000, signal });
+    return r.code === 0 ? r.out.trim() || "?" : "";
+  };
+  let created = await createdAt();
+  if (created && readyVolumes.get(key) === created) return true;
+  let ok = !!created || (await runDocker(bin, ["volume", "create", "--label", CACHE_LABEL, volume], { timeoutMs: 15_000, signal })).code === 0;
   if (ok) {
     const r = await runDocker(bin, ["run", "--rm", "--pull", "never", "--label", SANDBOX_LABEL, "--network", "none", "--read-only", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--security-opt", "no-new-privileges",
       "--user", "0:0", "--mount", `type=volume,source=${volume},target=/cache`, "--entrypoint", "chown", image, user, "/cache"], { timeoutMs: 30_000, signal });
     ok = r.code === 0;
   }
-  readyVolumes.set(key, ok);
+  if (ok && !created) created = (await createdAt()) || "?";
+  readyVolumes.set(key, ok ? created : "");
   return ok;
+}
+
+/** Volume cache của Handio: CHỈ volume vừa có nhãn CACHE_LABEL vừa có tên dạng handio-cache-<16 hex>. null = Docker không trả lời. */
+export async function listCacheVolumes(bin: string): Promise<{ name: string; bytes: number | null }[] | null> {
+  const ls = await runDocker(bin, ["volume", "ls", "-q", "--filter", "label=" + CACHE_LABEL], { timeoutMs: 15_000 });
+  if (ls.code !== 0) return null;
+  const names = [...new Set(ls.out.split(/\s+/).filter((x) => CACHE_VOLUME_RE.test(x)))];
+  const sizes = new Map<string, number | null>();
+  if (names.length) {
+    // dung lượng: docker system df -v (có thể chậm trên máy nhiều ảnh); lỗi thì để null, vẫn xoá được
+    const df = await runDocker(bin, ["system", "df", "-v", "--format", "{{json .Volumes}}"], { timeoutMs: 30_000 });
+    try {
+      const vols = JSON.parse(df.out.trim() || "[]") as { Name?: unknown; Size?: unknown }[];
+      if (Array.isArray(vols)) for (const v of vols) if (typeof v?.Name === "string") sizes.set(v.Name, parseDockerSize(v.Size));
+    } catch {
+      /* bản Docker cũ không có --format cho df -v */
+    }
+  }
+  return names.map((name) => ({ name, bytes: sizes.get(name) ?? null }));
+}
+
+/**
+ * Xoá volume cache: chỉ những tên khớp CACHE_VOLUME_RE VÀ đang có nhãn CACHE_LABEL (liệt kê lại ngay trước khi xoá), từng cái một
+ * (volume đang được lệnh chạy dùng thì docker từ chối: để nguyên). Không bao giờ dùng `volume prune` hay xoá volume khác.
+ */
+export async function removeCacheVolumes(bin: string, names: string[]): Promise<{ removed: string[]; failed: string[] }> {
+  const labeled = new Set((await listCacheVolumes(bin))?.map((v) => v.name) ?? []);
+  const removed: string[] = [];
+  const failed: string[] = [];
+  for (const n of new Set(names)) {
+    if (!CACHE_VOLUME_RE.test(n) || !labeled.has(n)) continue;
+    const r = await runDocker(bin, ["volume", "rm", n], { timeoutMs: 30_000 });
+    (r.code === 0 ? removed : failed).push(n);
+  }
+  forgetCacheVolumes(removed);
+  return { removed, failed };
+}
+
+/** Tên volume cache của các dự án còn trong danh sách (theo đường dẫn đã lưu và realpath hiện tại: dự án đã đổi chỗ vẫn được nhận). */
+export function knownCacheVolumes(paths: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const p of paths) {
+    if (typeof p !== "string" || !path.isAbsolute(p)) continue;
+    out.add(cacheVolumeName(p));
+    try {
+      out.add(cacheVolumeName(realpathSync(p)));
+    } catch {
+      /* thư mục không còn: chỉ theo đường dẫn đã lưu */
+    }
+  }
+  return out;
+}
+
+const sumBytes = (v: { bytes: number | null }[]): number | null => (v.some((x) => x.bytes === null) ? null : v.reduce((a, x) => a + (x.bytes ?? 0), 0));
+
+/** Tóm tắt dung lượng cache (thuần): `project` = volume của dự án đang mở, `known` = volume của mọi dự án còn trong danh sách. */
+export function summarizeCache(vols: { name: string; bytes: number | null }[], project: string, known: Set<string>): CacheInfo {
+  const mine = vols.find((v) => v.name === project);
+  const orphans = vols.filter((v) => !known.has(v.name) && v.name !== project);
+  return { project: { name: project, exists: !!mine, bytes: mine ? mine.bytes : 0 }, total: { count: vols.length, bytes: sumBytes(vols) }, orphans: { count: orphans.length, bytes: sumBytes(orphans) } };
+}
+
+/** Volume sẽ xoá cho mỗi phạm vi (thuần; removeCacheVolumes còn kiểm lại tên + nhãn). */
+export function cacheTargets(vols: { name: string }[], scope: CacheScope, project: string, known: Set<string>): string[] {
+  const names = vols.map((v) => v.name).filter((n) => CACHE_VOLUME_RE.test(n));
+  if (scope === "project") return names.filter((n) => n === project);
+  if (scope === "orphans") return names.filter((n) => !known.has(n) && n !== project);
+  return names;
+}
+
+/** Quên trạng thái "đã khởi tạo" của volume (sau khi xoá: lần chạy sau tạo lại + đổi chủ, nếu không docker tự tạo volume thuộc root). */
+export function forgetCacheVolumes(names: string[]): void {
+  for (const k of [...readyVolumes.keys()]) if (names.some((n) => k.split("\0")[1] === n)) readyVolumes.delete(k);
 }
 
 let started = 0;

@@ -4,7 +4,7 @@ import { clear, h, store } from "./dom";
 import { escapeHtml, renderMarkdown } from "./markdown";
 import { mimeOfName, splitPastedRefs, thumbDataUrl } from "./image-thumb";
 import { copyText, flashCopied } from "./copy";
-import { treeIcon } from "./icons";
+import { icon, treeIcon } from "./icons";
 import { openSettings as openSettingsDialog, type AccountInfo } from "./settings-ui";
 import { accountChip } from "./account-ui";
 import { setUpdateChecker, versionLink } from "./changelog-ui";
@@ -110,7 +110,7 @@ class App {
   private attachRow = h("div", { class: "att-row", hidden: true });
   /** Ảnh nhỏ đã dựng, theo tham chiếu (dùng cho tin nhắn và lịch sử). */
   private thumbs = new Map<string, string>();
-  private sendBtn = h("button", { class: "btn primary send", type: "button", title: "Gửi (Enter)", "aria-label": "Gửi", onclick: () => this.onSendClick() }, "↑");
+  private sendBtn = h("button", { class: "btn primary send", type: "button", title: "Gửi (Enter)", "aria-label": "Gửi", onclick: () => this.onSendClick() }, icon("up"));
   private modePill = h("button", { class: "pill", type: "button", "aria-haspopup": "menu", onclick: () => this.toggleModeMenu() });
   private modeMenu: HTMLElement | null = null;
   private slashMenu: HTMLElement | null = null;
@@ -127,9 +127,9 @@ class App {
   private projBox = h("div", { class: "proj", hidden: true });
   private chatsEl = h("div", { class: "chats", role: "list", "aria-label": "Các cuộc trò chuyện" });
   private chatsHead = h("h4", { class: "chats-h", hidden: true }, "Trò chuyện");
-  private newChatBtn = h("button", { class: "btn newchat", type: "button", onclick: () => (this.t("new_chat"), void this.ctl.newSession()) }, "＋ Cuộc trò chuyện mới");
-  private newBtn = h("button", { class: "iconbtn", type: "button", "aria-label": "Cuộc trò chuyện mới", title: "Cuộc trò chuyện mới (/clear)", onclick: () => (this.t("new_chat"), void this.ctl.newSession()) }, "＋ Mới");
-  private learnBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Học vibe coding", title: "Bài học, bài tập chấm tự động, dự án mẫu", onclick: () => this.openLearning() }, "📚 Học");
+  private newChatBtn = h("button", { class: "btn newchat", type: "button", onclick: () => (this.t("new_chat"), void this.ctl.newSession()) }, icon("plus", 16), "Cuộc trò chuyện mới");
+  private newBtn = h("button", { class: "iconbtn", type: "button", "aria-label": "Cuộc trò chuyện mới", title: "Cuộc trò chuyện mới (/clear)", onclick: () => (this.t("new_chat"), void this.ctl.newSession()) }, icon("plus"), h("span", { class: "lbl" }, "Mới"));
+  private learnBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Học vibe coding", title: "Bài học, bài tập chấm tự động, dự án mẫu", onclick: () => this.openLearning() }, icon("book"), h("span", { class: "lbl" }, "Học"));
   private pv: DesignPreview | null = null;
   private pvHost = h("div", { class: "pv-host", hidden: true });
   /** Bảng Thay đổi, /rewind, thẻ tổng kết, chọn mô hình, nút chạy (chỉ tab Code). */
@@ -230,8 +230,8 @@ class App {
 
   // ------------------------------------------------------------------ khung
   private build(): void {
-    const toggle = h("button", { class: "iconbtn toggle-side", type: "button", "aria-label": "Mở/đóng thanh bên", onclick: () => this.shell.classList.toggle("side-open") }, "☰");
-    this.filesBtn = h("button", { class: "iconbtn", type: "button", "aria-label": "Tệp", title: "Danh sách tệp", "aria-pressed": "false", onclick: () => this.toggleRside() }, "📄");
+    const toggle = h("button", { class: "iconbtn toggle-side", type: "button", "aria-label": "Mở/đóng thanh bên", onclick: () => this.shell.classList.toggle("side-open") }, icon("menu"));
+    this.filesBtn = h("button", { class: "iconbtn", type: "button", "aria-label": "Tệp", title: "Danh sách tệp", "aria-pressed": "false", onclick: () => this.toggleRside() }, icon("file"));
     this.sortBtn = h("button", { class: "rs-sort", type: "button", onclick: () => this.setSort(this.sortBy === "recent" ? "name" : "recent") });
     this.sortBy = this.sortStore.get() === "name" ? "name" : "recent";
     this.paintSort();
@@ -241,11 +241,11 @@ class App {
       this.learnBtn,
       this.newBtn,
       this.filesBtn,
-      ...(this.ctl.taskList ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Tác vụ định kỳ", title: "Tác vụ định kỳ: hẹn giờ để agent tự làm lại một việc", onclick: () => openTasks(this.ctl, { desktop: this.state.capabilities.realFs, onOpenChat: this.ctl.chatOpen && this.state.capabilities.chats ? (id) => void this.openChat(id) : undefined }) }, "⏰")] : []),
-      ...(this.ctl.shareChat ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Chia sẻ cuộc trò chuyện", title: "Chia sẻ cuộc trò chuyện này bằng một liên kết", onclick: () => openShare(this.ctl, { track: (a) => this.t(a) }) }, "🔗")] : []),
-      ...(this.ctl.sendFeedback ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Góp ý", title: "Góp ý / báo lỗi cho nhóm phát triển", onclick: () => openFeedback(this.ctl, { track: (a) => this.t(a) }) }, "💬")] : []),
-      h("button", { class: "iconbtn", type: "button", "aria-label": "Hướng dẫn", title: "Hướng dẫn: mẹo, thủ thuật, tình huống mẫu", onclick: () => this.openGuideDlg() }, "💡"),
-      h("button", { class: "iconbtn", type: "button", "aria-label": "Cài đặt", title: "Cài đặt", onclick: () => this.openSettings() }, "⚙"),
+      ...(this.ctl.taskList ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Tác vụ định kỳ", title: "Tác vụ định kỳ: hẹn giờ để agent tự làm lại một việc", onclick: () => openTasks(this.ctl, { desktop: this.state.capabilities.realFs, onOpenChat: this.ctl.chatOpen && this.state.capabilities.chats ? (id) => void this.openChat(id) : undefined }) }, icon("clock"))] : []),
+      ...(this.ctl.shareChat ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Chia sẻ cuộc trò chuyện", title: "Chia sẻ cuộc trò chuyện này bằng một liên kết", onclick: () => openShare(this.ctl, { track: (a) => this.t(a) }) }, icon("link"))] : []),
+      ...(this.ctl.sendFeedback ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Góp ý", title: "Góp ý / báo lỗi cho nhóm phát triển", onclick: () => openFeedback(this.ctl, { track: (a) => this.t(a) }) }, icon("message"))] : []),
+      h("button", { class: "iconbtn", type: "button", "aria-label": "Hướng dẫn", title: "Hướng dẫn: mẹo, thủ thuật, tình huống mẫu", onclick: () => this.openGuideDlg() }, icon("bulb")),
+      h("button", { class: "iconbtn", type: "button", "aria-label": "Cài đặt", title: "Cài đặt", onclick: () => this.openSettings() }, icon("gear")),
     ];
     let head: HTMLElement | null = null;
     if (this.opts.bar) {
@@ -253,7 +253,7 @@ class App {
       this.opts.bar.right.append(...tools);
     } else head = h("div", { class: "neu-head" }, toggle, this.wsEl, h("span", { class: "grow" }), ...tools);
     this.projBtn.addEventListener("click", () => void toggleProjectMenu(this.projBtn, this.ctl, this.state, { changed: () => void this.refresh(true), newProject: () => openNewProject(this.ctl, this.state, () => void this.refresh(true)), switched: () => void this.afterProjectSwitch() }));
-    this.projBox.append(this.projBtn, h("button", { class: "iconbtn", type: "button", title: "Sửa dự án: tên và hướng dẫn riêng cho agent (AGENTS.md)", "aria-label": "Sửa dự án", onclick: () => void openInstructions(this.ctl, this.state, () => void this.refresh()) }, "📝"));
+    this.projBox.append(this.projBtn, h("button", { class: "iconbtn", type: "button", title: "Sửa dự án: tên và hướng dẫn riêng cho agent (AGENTS.md)", "aria-label": "Sửa dự án", onclick: () => void openInstructions(this.ctl, this.state, () => void this.refresh()) }, icon("pencil")));
     const side = h("aside", { class: "side", "aria-label": "Thanh bên" },
       this.projBox,
       h("div", { class: "newchat-wrap" }, this.newChatBtn),
@@ -269,7 +269,7 @@ class App {
     const composer = h("div", { class: "composer-wrap" }, this.procBar, h("div", { class: "composer" }, this.attachRow, this.input,
       // dưới ô nhập (giống Claude): trái = chế độ chạy; phải = mức ngữ cảnh, mô hình, Gửi
       h("div", { class: "bar" },
-        h("button", { class: "cbtn plus", type: "button", title: "Đính kèm tệp", "aria-label": "Đính kèm tệp", onclick: () => (this.t("attach"), this.fileInput.click()) }, "+"),
+        h("button", { class: "cbtn plus", type: "button", title: "Đính kèm tệp", "aria-label": "Đính kèm tệp", onclick: () => (this.t("attach"), this.fileInput.click()) }, icon("plus", 20)),
         h("div", { class: "mode-wrap", style: { position: "relative" } }, this.modePill),
         this.hintEl, h("span", { class: "grow" }),
         this.quotaEl,
@@ -281,11 +281,11 @@ class App {
     // cột phải: danh sách tệp, hoặc khung xem của tab (Work: tài liệu, Design: xem trước, Code: thay đổi)
     this.filesView.append(
       h("div", { class: "rs-head" }, h("b", {}, "Tệp"), h("span", { class: "grow" }), this.sortBtn,
-        h("button", { class: "iconbtn rs-x", type: "button", "aria-label": "Ẩn danh sách tệp", title: "Ẩn", onclick: () => this.toggleRside(false) }, "✕")),
+        h("button", { class: "iconbtn rs-x", type: "button", "aria-label": "Ẩn danh sách tệp", title: "Ẩn", onclick: () => this.toggleRside(false) }, icon("x"))),
       this.sideActions, this.tree);
     this.viewWrap.append(
-      h("div", { class: "rs-back" }, h("button", { class: "btn sm", type: "button", title: "Quay lại danh sách tệp", onclick: () => this.showFiles() }, "← Tệp"),
-        h("span", { class: "grow" }), h("button", { class: "iconbtn rs-x rs-x-narrow", type: "button", "aria-label": "Đóng", title: "Đóng", onclick: () => this.toggleRside(false) }, "✕")),
+      h("div", { class: "rs-back" }, h("button", { class: "btn sm", type: "button", title: "Quay lại danh sách tệp", onclick: () => this.showFiles() }, icon("back", 16), "Tệp"),
+        h("span", { class: "grow" }), h("button", { class: "iconbtn rs-x rs-x-narrow", type: "button", "aria-label": "Đóng", title: "Đóng", onclick: () => this.toggleRside(false) }, icon("x"))),
       this.codeTools.panel, this.pvHost, this.docPane.el);
     this.rside.append(this.filesView, this.viewWrap);
     if (typeof MutationObserver !== "undefined") {
@@ -419,7 +419,7 @@ class App {
       h("div", { class: "welcome-hand" }, brandMark(64, true)),
       h("h2", {}, st.welcomeTitle),
       h("div", {}, line),
-      h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip", type: "button", onclick: () => (this.t("suggestion"), void this.submit(x)) }, x))),
+      h("div", { class: "chips" }, ...st.suggestions.map((x) => h("button", { class: "chip sug", type: "button", onclick: () => (this.t("suggestion"), void this.submit(x)) }, h("span", {}, x), icon("arrow", 16)))),
       this.tipEl(st.profile as GuideTab)));
   }
 
@@ -427,7 +427,7 @@ class App {
   private tipEl(profile: GuideTab): HTMLElement {
     const tips = TIPS[profile] ?? [];
     const tip = tips.length ? brandText(tips[Math.floor(Date.now() / 60000) % tips.length]) : "";
-    return h("div", { class: "tip-row" }, tip ? h("span", { class: "tip-t" }, "💡 " + tip) : null, h("button", { class: "tip-b", type: "button", onclick: () => this.openGuideDlg() }, "Xem hướng dẫn"));
+    return h("div", { class: "tip-row" }, tip ? h("span", { class: "tip-t" }, icon("bulb", 16), tip) : null, h("button", { class: "tip-b", type: "button", onclick: () => this.openGuideDlg() }, "Xem hướng dẫn"));
   }
 
   // ------------------------------------------------------------------ dự án và lịch sử trò chuyện
@@ -460,7 +460,7 @@ class App {
     const on = !!this.state.capabilities.projects;
     this.projBox.hidden = !on;
     this.projBtn.textContent = "";
-    this.projBtn.append(h("span", { class: "pj-ic" }, this.state.profile === "code" ? "📁" : this.state.profile === "design" ? "🎨" : "🗂"), h("span", { class: "pj-nm" }, this.state.projectName), this.bgBadge(), h("span", { class: "pj-ar" }, "▾"));
+    this.projBtn.append(h("span", { class: "pj-ic" }, icon(this.state.profile === "code" ? "folder" : this.state.profile === "design" ? "palette" : "briefcase")), h("span", { class: "pj-nm" }, this.state.projectName), this.bgBadge(), h("span", { class: "pj-ar" }, icon("chevron", 14)));
     this.projBtn.title = "Dự án đang mở: " + this.state.projectName + " (bấm để chuyển)";
   }
 
@@ -1126,7 +1126,7 @@ class App {
     const waiting = !!this.pending;
     // đang làm việc: ô nhập có chữ → nút “Gửi” (tin được xếp hàng, agent nhận ở bước kế tiếp); trống → “Dừng”
     const stop = this.busy && !this.input.value.trim() && !this.attached.length;
-    this.sendBtn.textContent = stop ? "■" : "↑";
+    this.sendBtn.replaceChildren(icon(stop ? "stop" : "up"));
     this.sendBtn.title = stop ? "Dừng (Esc)" : "Gửi (Enter)";
     this.sendBtn.setAttribute("aria-label", stop ? "Dừng" : "Gửi");
     this.sendBtn.className = "btn send " + (stop ? "danger" : "primary");
@@ -1493,8 +1493,8 @@ class App {
         const open = it.isDir && this.openDirs.has(path);
         const hit = changed.includes(path);
         const acts = it.isDir ? null : h("span", { class: "acts" },
-          this.state.capabilities.openExternal ? h("button", { type: "button", title: "Mở bằng ứng dụng", "aria-label": "Mở " + it.name + " bằng ứng dụng", onclick: (ev: Event) => { ev.stopPropagation(); void this.ctl.openExternally?.(path); } }, "↗") : null,
-          h("button", { type: "button", title: "Tải xuống", "aria-label": "Tải " + it.name + " xuống", onclick: (ev: Event) => { ev.stopPropagation(); void this.download(path); } }, "⬇"));
+          this.state.capabilities.openExternal ? h("button", { type: "button", title: "Mở bằng ứng dụng", "aria-label": "Mở " + it.name + " bằng ứng dụng", onclick: (ev: Event) => { ev.stopPropagation(); void this.ctl.openExternally?.(path); } }, icon("external", 15)) : null,
+          h("button", { type: "button", title: "Tải xuống", "aria-label": "Tải " + it.name + " xuống", onclick: (ev: Event) => { ev.stopPropagation(); void this.download(path); } }, icon("download", 15)));
         const sp = it.isDir ? { head: it.name, tail: "" } : splitName(it.name);
         const row = h("div", { class: "row" + (hit ? " changed" : ""), role: "treeitem", style: { paddingLeft: 6 + depth * 14 + "px" }, tabindex: "0", title: path },
           ...treeIcon(it.name, it.isDir, open), h("span", { class: "nm" }, h("span", { class: "nm-h" }, sp.head), sp.tail ? h("span", { class: "nm-t" }, sp.tail) : null), acts);
@@ -1611,9 +1611,9 @@ class App {
     clear(this.sideActions);
     const c = this.state.capabilities;
     this.sideActions.append(
-      h("button", { class: "btn sm", type: "button", title: "Thêm tệp từ máy của bạn (hoặc kéo thả vào cửa sổ)", onclick: () => (this.t("attach"), this.fileInput.click()) }, "＋ Thêm tệp"),
-      c.revealWorkspace ? h("button", { class: "btn sm", type: "button", title: "Mở thư mục trong Finder/Explorer", onclick: () => void this.ctl.revealWorkspace?.() }, "Mở thư mục") : h("button", { class: "btn sm", type: "button", title: "Tải cả thư mục về dạng .zip", onclick: () => void this.zip() }, "⬇ Zip"),
-      h("button", { class: "btn sm", type: "button", title: "Làm mới", "aria-label": "Làm mới danh sách tệp", onclick: () => void this.loadTree() }, "↻"));
+      h("button", { class: "btn sm", type: "button", title: "Thêm tệp từ máy của bạn (hoặc kéo thả vào cửa sổ)", onclick: () => (this.t("attach"), this.fileInput.click()) }, icon("plus", 15), "Thêm tệp"),
+      c.revealWorkspace ? h("button", { class: "btn sm", type: "button", title: "Mở thư mục trong Finder/Explorer", onclick: () => void this.ctl.revealWorkspace?.() }, "Mở thư mục") : h("button", { class: "btn sm", type: "button", title: "Tải cả thư mục về dạng .zip", onclick: () => void this.zip() }, icon("download", 15), "Zip"),
+      h("button", { class: "btn sm", type: "button", title: "Làm mới", "aria-label": "Làm mới danh sách tệp", onclick: () => void this.loadTree() }, icon("refresh", 15)));
   }
 
   private async uploadList(list: FileList | null): Promise<void> {
@@ -1684,7 +1684,7 @@ class App {
             this.attached = this.attached.filter((x) => x !== a);
             this.renderAttached();
             if (this.busy) this.paintBusy();
-          } }, "✕")));
+          } }, icon("x", 12))));
     }
   }
 

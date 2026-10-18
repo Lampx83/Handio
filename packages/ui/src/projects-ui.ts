@@ -1,5 +1,6 @@
 import type { AgentController, Profile, UiState } from "@neu/agent-core";
 import { clear, h } from "./dom";
+import { icon } from "./icons";
 
 const NOUN: Record<Profile, { one: string; ph: string; ex: string }> = {
   work: { one: "dự án", ph: "VD: Hồ sơ tuyển sinh 2026", ex: "VD: Dự án này là các văn bản của Phòng Đào tạo. Luôn xưng “Nhà trường”, dùng thể thức hành chính, ngày theo dd/mm/yyyy. Không nêu số tiền nếu tôi chưa cung cấp." },
@@ -131,14 +132,14 @@ export async function toggleProjectMenu(anchor: HTMLElement, ctl: AgentControlle
           hooks.changed();
         } }, "×") : null));
     }
-    menu.append(h("div", { class: "pm-sep" }), h("button", { class: "pm-act", type: "button", onclick: () => { close(); hooks.newProject(); } }, "＋ Dự án mới…"));
+    menu.append(h("div", { class: "pm-sep" }), h("button", { class: "pm-act", type: "button", onclick: () => { close(); hooks.newProject(); } }, icon("plus", 16), "Dự án mới…"));
     if (st.capabilities.pickFolder)
       menu.append(h("button", { class: "pm-act", type: "button", onclick: async () => {
         close();
         const r = await ctl.projectPick!();
         if ("error" in r) alert(r.error);
         else if (r.ok) hooks.switched();
-      } }, "📁 Mở thư mục có sẵn…"));
+      } }, icon("folder", 16), "Mở thư mục có sẵn…"));
   };
   paint(ps.projects);
   anchor.after(menu);

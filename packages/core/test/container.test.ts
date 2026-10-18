@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { containerImage, decideContainer, DEFAULT_CONTAINER_IMAGE, MemoryEnv, normalizeSettings, parsePolicy, sanitizeImage, sanitizePorts, sanitizeProjectSettings, type Env, type LlmClient, type SandboxStatus } from "../src";
+import { containerImage, decideContainer, DEFAULT_CONTAINER_IMAGE, imageToolsHint, MemoryEnv, parseDockerSize, PIP_BOOTSTRAP, normalizeSettings, parsePolicy, sanitizeImage, sanitizePorts, sanitizeProjectSettings, type Env, type LlmClient, type SandboxStatus } from "../src";
 import { makeController } from "./helpers";
 
 const OK = { ok: true, version: "29.0.0", imagePresent: true };
@@ -50,6 +50,41 @@ describe("container: quyết định cách chạy lệnh", () => {
   });
 });
 
+describe("container: ảnh chưa có trên máy (không tự tải ngầm)", () => {
+  const NOIMG = { ok: true, version: "29.0.0", imagePresent: false };
+  it("bật + chưa có ảnh: chạy như cũ VÀ báo bấm “Tải ảnh”; bắt buộc thì từ chối", () => {
+    const d = decideContainer({ container: true }, undefined, NOIMG);
+    expect(d.mode).toBe("host");
+    expect(d.reason).toMatch(/Chưa có ảnh Docker node:22-bookworm .*Tải ảnh.*trực tiếp trên máy/);
+    const r = decideContainer({}, { requireContainer: true }, NOIMG);
+    expect(r.mode).toBe("refuse");
+    expect(r.reason).toMatch(/Quản trị viên yêu cầu.*chưa có ảnh.*Tải ảnh/);
+  });
+  it("imagePresent không rõ (chưa dò ảnh) thì vẫn chạy container như trước", () => {
+    expect(decideContainer({ container: true }, undefined, { ok: true }).mode).toBe("docker");
+  });
+});
+
+describe("container: ảnh mặc định có cả Node và Python", () => {
+  it("ảnh mặc định là ảnh chính thức node:22-bookworm (bản đầy đủ, có python3), ghim theo thẻ", () => {
+    expect(DEFAULT_CONTAINER_IMAGE).toBe("node:22-bookworm");
+  });
+  it("gợi ý công cụ chỉ cho ảnh mặc định; có cách tạo venv + pip", () => {
+    expect(imageToolsHint(DEFAULT_CONTAINER_IMAGE)).toContain("Python 3.11");
+    expect(imageToolsHint(DEFAULT_CONTAINER_IMAGE)).toContain(PIP_BOOTSTRAP);
+    expect(imageToolsHint("python:3.12-slim")).toBe("");
+    expect(PIP_BOOTSTRAP).not.toMatch(/\|\s*(ba|z|da)?sh\b/); // không "curl | sh" (bị chặn ở mọi chế độ)
+  });
+  it("parseDockerSize: đơn vị của docker (hệ 1000) và KiB/MiB", () => {
+    expect(parseDockerSize("0B")).toBe(0);
+    expect(parseDockerSize("3.122MB")).toBe(3_122_000);
+    expect(parseDockerSize("1.2GB")).toBe(1_200_000_000);
+    expect(parseDockerSize("512kB")).toBe(512_000);
+    expect(parseDockerSize("2MiB")).toBe(2 * 1024 * 1024);
+    for (const bad of ["N/A", "", "12", "1.2XB", null, 5]) expect(parseDockerSize(bad), String(bad)).toBeNull();
+  });
+});
+
 describe("container: cấu hình chỉ đến từ người dùng/chính sách", () => {
   it("parsePolicy nhận requireContainer/containerImage đúng kiểu, bỏ ảnh sai", () => {
     expect(parsePolicy({ requireContainer: true, containerImage: "python:3.12-slim" })).toEqual({ requireContainer: true, containerImage: "python:3.12-slim" });
@@ -81,6 +116,26 @@ describe("container: cấu hình chỉ đến từ người dùng/chính sách",
     expect(await (await makeController([{ text: "ok" }])).c.sandboxStatus()).toBeNull();
     expect(await (await makeController([{ text: "ok" }], { extra: { sandbox: { status: async () => st } } })).c.sandboxStatus()).toMatchObject({ mode: "docker" });
     expect(await (await makeController([{ text: "ok" }], { profile: "work", extra: { sandbox: { status: async () => st } } })).c.sandboxStatus()).toBeNull();
+  });
+  it("cache/tải ảnh: chuyển đúng thư mục dự án + phạm vi hợp lệ; phạm vi lạ bị từ chối; tab khác không có", async () => {
+    const seen: string[] = [];
+    const sandbox = {
+      status: async () => ({ ...decideContainer({ container: true }, undefined, OK), docker: OK, networkLocked: false }),
+      pullImage: async () => ({ image: DEFAULT_CONTAINER_IMAGE, running: true, layersDone: 0, layersTotal: 0 }),
+      pullStatus: () => null,
+      cacheInfo: async (root: string) => (seen.push("info:" + root), null),
+      clearCache: async (root: string, scope: string) => (seen.push(`clear:${root}:${scope}`), { ok: true, message: "ok" }),
+    };
+    const { c } = await makeController([{ text: "ok" }], { extra: { sandbox } });
+    expect(await c.sandboxPullImage()).toMatchObject({ running: true });
+    await c.sandboxCache();
+    expect(await c.sandboxClearCache("orphans")).toMatchObject({ ok: true });
+    expect(await c.sandboxClearCache("everything" as never)).toMatchObject({ ok: false });
+    expect(seen).toEqual(["info:/ws", "clear:/ws:orphans"]);
+    const w = (await makeController([{ text: "ok" }], { profile: "work", extra: { sandbox } })).c;
+    expect(await w.sandboxCache()).toBeNull();
+    expect(await w.sandboxPullImage()).toBeNull();
+    expect((await w.sandboxClearCache("all")).ok).toBe(false);
   });
 });
 
@@ -117,6 +172,15 @@ describe("container: lời nhắc hệ thống và /status nói đúng nơi lệ
     expect(p).toContain("shell commands run inside an OS sandbox");
     expect(p).toContain('and have NO network access. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.');
     expect(p).not.toContain("Note:");
+  });
+  it("ảnh mặc định: lời nhắc nói có Node + Python và cách tạo venv có pip; /status ghi Node + Python", async () => {
+    const env = withSandbox({ kind: "docker", network: true, image: DEFAULT_CONTAINER_IMAGE, ports: [] });
+    const p = await prompt(env);
+    expect(p).toContain("Python 3.11");
+    expect(p).toContain(PIP_BOOTSTRAP);
+    const { c, events } = await makeController([{ text: "ok" }], { env });
+    await c.send("/status");
+    expect(JSON.stringify(events)).toContain("container Docker (node:22-bookworm: Node 22 + Python 3)");
   });
   it("/status báo container và lý do quay về", async () => {
     const env = withSandbox({ kind: "docker", network: false, image: "node:22-bookworm-slim", ports: [] });
