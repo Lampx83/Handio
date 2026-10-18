@@ -67,6 +67,15 @@ win:
   target:
     - { target: nsis, arch: [x64] }
   artifactName: "NEU-Agent-${version}-win-${arch}.${ext}"
+# Gói MSIX cho Microsoft Store: dựng bằng scripts/store.mjs (workflow store.yml, máy Windows của GitHub). identityName/publisher/publisherDisplayName
+# lấy từ Partner Center qua biến repo STORE_*, không ghi ở đây. Ảnh ô ở build/appx/. Store tự ký lại gói.
+appx:
+  applicationId: NEUAgent
+  displayName: NEU Agent
+  languages: [vi-VN, en-US]
+  backgroundColor: "#0B1630"
+  showNameOnTiles: true
+  artifactName: "NEU-Agent-${version}-win-${arch}.${ext}"
 nsis:
   oneClick: false
   perMachine: false

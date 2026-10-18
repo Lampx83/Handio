@@ -46,6 +46,7 @@ Dọn OJ Judge cũ trên 220: `sudo ./remove-oj-judge.sh` (mặc định chỉ l
 ### Trang chủ công khai `/agent/` và trang giới thiệu `/agent/guide/`
 
 - `/agent/` (đúng đường dẫn này): **chưa đăng nhập** → hiện trang giới thiệu có nút “Đăng nhập” (tới `/agent/oauth2/sign_in?rd=/agent/`); **đã đăng nhập** → vào thẳng ứng dụng (nginx `auth_request`, lỗi 401 chuyển sang `@neu_landing`). Mọi tệp khác của ứng dụng, API, tải về vẫn bắt buộc đăng nhập.
+- Nút tải trên trang giới thiệu trỏ tới `/agent/download/latest/` (**công khai**): chỉ có `NEU-Agent-mac-arm64.dmg`, `NEU-Agent-mac-x64.dmg`, `NEU-Agent-win-x64.exe` (liên kết tới tệp của bản đang phát hành) và `SHA256SUMS.txt`. `deploy/220/dl-links.sh` tạo thư mục này từ `latest.json`, chạy mỗi lần `install.sh` triển khai web và sau `publish-desktop` (cần `neu-agent-deploy` mới: chạy lại `sudo ./ci/setup-ci.sh` một lần; trước đó liên kết được làm mới ở lần triển khai web kế tiếp). `latest.json`, hướng dẫn và bản theo phiên bản vẫn sau đăng nhập.
 - Cả hai nơi phục vụ **cùng một tệp** `deploy/220/guide-public/index.html` (tĩnh, không script, CSP `default-src 'none'; img-src 'self'`, `Cache-Control: no-store` ở `/agent/`), nên đường dẫn ảnh/liên kết trong tệp viết tuyệt đối (`/agent/guide/...`).
 - Tên hiển thị trong trang này viết thẳng “NEU Agent” (chỉ dành cho máy NEU). Bản triển khai khác: sao chép thư mục, đổi tên/ảnh, hoặc đặt `brand.json` cho ứng dụng (xem [EXTENSIONS.md](EXTENSIONS.md), mục “Tên hiển thị”).
 

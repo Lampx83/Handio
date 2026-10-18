@@ -59,6 +59,8 @@ const BULKY_ARGS = new Set(["write_file", "edit_file", "create_docx", "create_xl
 const prunedArgNote = (n: number) => `[${n} ký tự đã ghi vào tệp; lược bớt khỏi lịch sử để tiết kiệm ngữ cảnh, đọc lại bằng read_file nếu cần]`;
 const PRUNED_ARG_RE = /ký tự đã ghi vào tệp; lược bớt khỏi lịch sử/;
 const MAX_TOOL_CHARS = 12000;
+/** Số tin nhắn cũ tối đa giữ lại sau các lần tóm tắt (đủ cho phiên rất dài, không phình mãi). */
+const ARCHIVE_MAX = 3000;
 /** Hạn chờ người dùng trả lời một câu hỏi của `ask_user` (không ai trả lời thì agent tự quyết, không treo phiên). */
 const QUESTION_TIMEOUT_MS = 15 * 60_000;
 /** Số lần `ask_user` tối đa cho một lượt hỏi của người dùng (lời nhắc dặn chỉ hỏi một lần). */
@@ -888,6 +890,8 @@ export class Session {
 
 export class Agent {
   messages: ChatMessage[] = [];
+  /** Tin nhắn đã được thay bằng bản tóm tắt (mô hình không thấy nữa) — giữ để lưu lịch sử và chia sẻ đầy đủ. */
+  archived: ChatMessage[] = [];
   private repeatKey = "";
   private repeatN = 0;
   /** Các lệnh gọi gần nhất (để phát hiện xen kẽ A,B,A,B…) và chuỗi lỗi liên tiếp cùng công cụ cùng lý do. */
@@ -1156,6 +1160,7 @@ export class Agent {
       return false;
     }
     this.s.track(r.usage, user.length);
+    this.archived = [...this.archived, ...this.messages].slice(-ARCHIVE_MAX);
     this.messages = [
       { role: "user", content: "[Tóm tắt phần hội thoại trước đó, để tiết kiệm ngữ cảnh]\n" + (r.content.trim() || "(không có tóm tắt)") },
       { role: "assistant", content: "Đã nắm bối cảnh, tôi sẽ tiếp tục từ đây." },
