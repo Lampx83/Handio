@@ -376,6 +376,7 @@ async function buildController(profile: Profile): Promise<LocalController> {
     diagnostics: { endpoint: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/diag"), headers: (): Record<string, string> => auth?.peekHeaders() ?? {}, enabled: () => !!auth && !SMOKE, version: app.getVersion(), platform: process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : "linux" },
     authHosts: [new URL(__DEFAULT_BASE_URL__).host],
     realFs: true,
+    tasks: { enabled: !SMOKE }, // tác vụ định kỳ: chạy khi ứng dụng đang mở
     packs: loadPacks,
     toolsBase: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/"),
     projects: host,
