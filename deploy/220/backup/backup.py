@@ -358,8 +358,10 @@ def run_locked(conf, kind, out):
                 pass
         err = proc.stderr.read().decode("utf-8", "replace").strip()
         proc.stderr.close()
-        if proc.wait() != 0 or not os.path.exists(part):
-            raise RuntimeError("mã hoá (%s) lỗi: %s" % (kind, (err.splitlines() or [""])[-1][:200]))
+        rc = proc.wait()
+        if rc != 0 or not os.path.exists(part):
+            # mã âm = bị tín hiệu giết (vd. SIGSYS khi bộ lọc lời gọi hệ thống của systemd chặn): ghi rõ để không phải đoán
+            raise RuntimeError("mã hoá (%s) lỗi (mã thoát %s): %s" % (kind, rc, (err.splitlines() or ["không có thông báo"])[-1][:200]))
         if not looks_encrypted(part, kind) or contains_any(part, secrets):
             raise RuntimeError("tệp ra không phải dạng đã mã hoá; huỷ")
         with open(part, "rb") as f:

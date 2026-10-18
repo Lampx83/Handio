@@ -37,6 +37,8 @@ SystemCallArchitectures=native
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 SystemCallFilter=@chown
+# lời gọi bị chặn trả EPERM thay vì giết tiến trình: age (Go) gọi setrlimit lúc khởi động (nhóm @resources); bị giết bằng SIGSYS thì sao lưu hỏng không rõ lý do
+SystemCallErrorNumber=EPERM
 UMask=0077
 Nice=10
 IOSchedulingClass=idle
