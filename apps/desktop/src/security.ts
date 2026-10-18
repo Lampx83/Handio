@@ -143,6 +143,12 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   sendFeedback: (a) => a.length === 1 && isObj(a[0]) && typeof a[0].kind === "string" && ["bug", "idea", "praise", "other"].includes(a[0].kind) && str(a[0].text, 3000) && typeof a[0].tech === "boolean" && Object.keys(a[0]).length === 3,
   diagnosticsStatus: (a) => a.length === 0,
   sandboxStatus: (a) => a.length === 0,
+  // "Tải ảnh" không nhận tham số: ảnh luôn lấy từ cài đặt người dùng/chính sách ở tiến trình chính
+  sandboxPullImage: (a) => a.length === 0,
+  sandboxPullStatus: (a) => a.length === 0,
+  sandboxCache: (a) => a.length === 0,
+  // xoá cache: chỉ chọn PHẠM VI (dự án này / tất cả / dự án đã xoá), không bao giờ nhận tên volume từ giao diện
+  sandboxClearCache: (a) => a.length === 1 && typeof a[0] === "string" && ["project", "all", "orphans"].includes(a[0]),
   diagnosticsPreview: (a) => a.length === 1 && str(a[0], 500),
   diagnosticsSend: (a) => a.length === 0,
   resetPermissions: (a) => a.length === 0,
