@@ -34,6 +34,7 @@ npm run version:bump -- minor         # patch | minor | major | X.Y.Z[-beta.1]; 
 
 4. **Dựng, ký, tạo mã băm**: đẩy tag `vX.Y.Z` để GitHub Actions *Release* chạy (hoặc `npm run dist:signed -w @neu/agent-desktop` trên máy Mac). Kết quả ở `apps/desktop/release/`: `.dmg` (Apple silicon + Intel), `.exe`, `SHA256SUMS.txt`, `SBOM.cdx.json`, `latest.json` (đã có ghi chú lấy từ CHANGELOG).
 5. **Đặt phiên bản tối thiểu (tuỳ chọn)**: trên CI là biến kho `NEU_MIN_VERSION` (Settings → Variables; hiện 0.8.10, bỏ trống = không buộc; có hiệu lực từ lần phát hành kế tiếp vì `latest.json` được tạo lúc phát hành). Nếu bản cũ có lỗi nghiêm trọng/bảo mật cần buộc cập nhật, đặt `NEU_MIN_VERSION=X.Y.Z` khi dựng (hoặc `-m X.Y.Z` ở bước 6). Người dùng đang dùng bản thấp hơn sẽ thấy hộp thoại **bắt buộc** cập nhật, không bấm bỏ qua được. Dùng rất hạn chế.
+   Biến kho `NEU_STORE_WIN_URL` (tuỳ chọn, `https://apps.microsoft.com/detail/<Store ID>`): đặt khi ứng dụng đã có trên Microsoft Store; từ lần phát hành kế tiếp, hộp "Tải ứng dụng" trên máy Windows đưa tới Store thay cho tệp .exe (xem RELEASE-SIGNING.md, mục Microsoft Store).
 6. **Đưa lên máy 220** (theo [DEPLOY.md](DEPLOY.md)):
    ```bash
    deploy/220/prepare.sh                                   # dựng web, gom bản cài + mã băm + latest.json vào deploy/220/downloads

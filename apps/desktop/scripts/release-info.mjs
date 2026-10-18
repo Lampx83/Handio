@@ -33,7 +33,10 @@ try {
   const notes = notesFor(fs.readFileSync(path.resolve(here, "../../../CHANGELOG.md"), "utf8"), version);
   const minVersion = process.env.NEU_MIN_VERSION || "";
   if (minVersion && !/^\d{1,4}\.\d{1,4}\.\d{1,4}(-[0-9A-Za-z.]{1,16})?$/.test(minVersion)) throw new Error("NEU_MIN_VERSION không hợp lệ: " + minVersion);
-  const latest = { version, released: new Date().toISOString().slice(0, 10), notes, ...(minVersion ? { minVersion } : {}), files: fl, signed: { mac: !!signing?.mac?.notarized, win: !!signing?.win?.signed }, signer: { mac: signing?.mac?.authority || "", win: signing?.win?.subject || "" } };
+  // NEU_STORE_WIN_URL (tuỳ chọn) = trang ứng dụng trên Microsoft Store: hộp "Tải ứng dụng" đưa người dùng Windows tới Store (không cảnh báo SmartScreen)
+  const storeWin = process.env.NEU_STORE_WIN_URL || "";
+  if (storeWin && !/^https:\/\/apps\.microsoft\.com\/detail\/[0-9A-Za-z]{12}$/.test(storeWin)) throw new Error("NEU_STORE_WIN_URL phải có dạng https://apps.microsoft.com/detail/<Store ID>: " + storeWin);
+  const latest = { version, released: new Date().toISOString().slice(0, 10), notes, ...(minVersion ? { minVersion } : {}), ...(storeWin ? { store: { win: storeWin } } : {}), files: fl, signed: { mac: !!signing?.mac?.notarized, win: !!signing?.win?.signed }, signer: { mac: signing?.mac?.authority || "", win: signing?.win?.subject || "" } };
   fs.writeFileSync(path.join(out, "latest.json"), JSON.stringify(latest, null, 2));
   console.log("latest.json: ok", JSON.stringify(latest.signed));
 } catch (e) {
