@@ -16,6 +16,10 @@ const MAX_LOG = 200_000;
 /** Lệnh khởi động máy chủ dev/web: một dự án chỉ cần MỘT cái chạy. */
 const DEV_SERVER = /(?:\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|preview)\b|\bvite\b|\bnext\s+(?:dev|start)\b|\bwebpack(?:-dev-server)?\s+serve\b|\bhttp\.server\b|\blive-server\b|\bstreamlit\s+run\b|\bflask\s+run\b|\buvicorn\b|\bnodemon\b)/i;
 const norm = (c: string) => c.trim().replace(/\s+/g, " ");
+/** Lệnh chạy mãi (máy chủ dev/web) — không phải lệnh dựng/kiểm thử chạy một lần. */
+export function isLongRunning(command: string): boolean {
+  return DEV_SERVER.test(command) && !/\b(build|test|lint|install|ci|run\s+build)\b/.test(command) && !/(^|[;&|]\s*)(kill|pkill|killall|lsof)\b/.test(command);
+}
 const LOCAL_URL = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{2,5}[^\s"'<>)]*/;
 
 /** Quản lý các lệnh chạy nền (máy chủ web…) của một phiên; luôn dừng hết khi phiên kết thúc. */
@@ -66,6 +70,15 @@ export class ProcessManager {
     });
     rec.stop = () => h.stop();
     return info;
+  }
+
+  /** Tiến trình còn sống chạy cùng lệnh (hoặc cùng là máy chủ dev) trong cùng thư mục. */
+  findRunning(command: string, cwd: string): { info: ProcInfo; log: string } | undefined {
+    for (const p of this.procs.values()) {
+      if (!p.info.alive || p.cwd !== cwd) continue;
+      if (norm(p.info.command) === norm(command) || (DEV_SERVER.test(p.info.command) && DEV_SERVER.test(command))) return { info: p.info, log: p.log };
+    }
+    return undefined;
   }
 
   get(id: string): { info: ProcInfo; log: string } | undefined {
