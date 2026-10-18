@@ -42,8 +42,11 @@ export interface Env {
   remove(path: string): Promise<void>;
   /** Đường dẫn thật (theo symlink) của đường dẫn ĐÃ TỒN TẠI; ném lỗi nếu chưa có. */
   realpath(path: string): Promise<string>;
-  /** Sandbox hệ điều hành đang bao quanh `exec` (nếu có). */
-  readonly sandbox?: { kind: string; network: boolean };
+  /**
+   * Sandbox đang bao quanh `exec` (nếu có): "seatbelt" (macOS) hoặc "docker" (container, `image`/`ports`).
+   * `note`: lý do quay về cách cũ (vd Docker không chạy) hoặc từ chối, để nói rõ với người dùng và mô hình.
+   */
+  readonly sandbox?: { kind: string; network: boolean; image?: string; ports?: number[]; note?: string };
   exec?(command: string, opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; env?: Record<string, string> }): Promise<ExecResult>;
   /** Chạy lệnh nền (máy chủ web…): trả về điều khiển để dừng; dữ liệu và mã thoát qua callback. */
   spawn?(command: string, opts: { cwd: string; onData: (chunk: string) => void; onExit: (code: number) => void }): { stop(): void; readonly pid?: number };

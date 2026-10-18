@@ -106,6 +106,35 @@ export function openSettings(ctl: AgentController, st: UiState, account: Account
         h("button", { class: "btn primary", type: "button", onclick: async () => { await ctl.saveSettings(patch()); dlg.close(); done(); } }, "Lưu")));
   };
 
+  // ---- Container Docker cho lệnh của tab Code (Desktop): công tắc + trạng thái thật (dò lại Docker mỗi lần mở)
+  const containerRow = (): HTMLElement => {
+    const box = h("div", {});
+    const paintRow = async () => {
+      const d = await ctl.sandboxStatus!().catch(() => null);
+      clear(box);
+      if (!d) return void box.remove();
+      const on = h("input", { type: "checkbox", checked: d.wanted, disabled: d.required, title: d.required ? "Do quản trị viên quy định" : "Lệnh chỉ thấy thư mục dự án, không thấy phần còn lại của máy" });
+      const net = h("input", { type: "checkbox", checked: d.network, disabled: !d.wanted || d.networkLocked, title: d.networkLocked ? "Quản trị viên đã tắt mạng cho lệnh" : "Cần cho npm install/pip install; bật thì lệnh cũng thấy được mạng nội bộ" });
+      const ports = h("input", { type: "text", value: (s.containerPorts ?? []).join(", "), placeholder: "5173, 3000", spellcheck: "false", disabled: !d.network, "aria-label": "Cổng xem trước", style: "width:9em" });
+      const save = async (patch: Partial<typeof s>) => { await ctl.saveSettings(patch); Object.assign(s, patch); await paintRow(); };
+      on.addEventListener("change", () => void save({ container: on.checked }));
+      net.addEventListener("change", () => void save({ containerNetwork: net.checked }));
+      ports.addEventListener("change", () => {
+        const list = [...new Set(ports.value.split(/[\s,;]+/).filter(Boolean).map(Number))].filter((n) => Number.isInteger(n) && n >= 1024 && n <= 65535).slice(0, 5);
+        void save({ containerPorts: list });
+      });
+      const dock = d.docker.ok ? `Docker ${d.docker.version ?? ""}${d.docker.imagePresent === false ? ` · ảnh ${d.image} chưa tải (lần chạy đầu sẽ tải về)` : ""}` : `Docker không dùng được (${d.docker.error ?? "chưa kiểm tra"})`;
+      const state = d.mode === "docker" ? `Đang chạy lệnh trong container (${d.image})${d.network ? ", có mạng" : ", không mạng"}` : d.mode === "refuse" ? "Lệnh bị từ chối: " + (d.reason ?? "") : d.wanted ? d.reason ?? "" : "Lệnh chạy trực tiếp trên máy";
+      box.append(
+        row("Container", h("label", { class: "chk" }, on, "Chạy lệnh trong container Docker"), d.required ? h("span", { class: "res" }, "Quản trị viên bắt buộc") : ""),
+        row("", h("label", { class: "chk" }, net, "Cho ra mạng"), h("span", {}, "Cổng xem trước "), ports),
+        row("", h("span", { class: "res " + (d.mode === "docker" ? "ok" : d.wanted ? "bad" : ""), role: "status" }, state + " · " + dock)),
+      );
+    };
+    void paintRow();
+    return box;
+  };
+
   // ---- Quyền
   const perm = (): HTMLElement => {
     const n = s.permissions?.allow?.length ?? 0;
@@ -114,7 +143,8 @@ export function openSettings(ctl: AgentController, st: UiState, account: Account
     const clearBtn = h("button", { class: "btn sm", type: "button", disabled: !n, title: "Bỏ các lựa chọn “Luôn cho phép” đã lưu", onclick: async () => { await ctl.resetPermissions?.(); cnt.textContent = "Chưa nhớ quy tắc nào"; clearBtn.disabled = true; } }, "Xoá");
     return h("div", {},
       row("Chế độ mặc định", sel, h("button", { class: "btn sm", type: "button", onclick: async () => { await ctl.saveSettings({ mode: sel.value as Mode }); await ctl.setMode(sel.value as Mode); done(); } }, "Áp dụng")),
-      row("Luôn cho phép", cnt, clearBtn));
+      row("Luôn cho phép", cnt, clearBtn),
+      st.profile === "code" && st.capabilities.exec && ctl.sandboxStatus ? containerRow() : null);
   };
 
   // ---- Tài khoản

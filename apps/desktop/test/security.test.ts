@@ -106,6 +106,20 @@ describe("kiểm tra yêu cầu IPC", () => {
     expect(ok("saveSettings", { thinking: "yes" })).toBe(false);
     expect(ok("saveSettings", { baseUrl: "x".repeat(5000) })).toBe(false);
   });
+  it("container Docker: chỉ bật/tắt, mạng, cổng xem trước; KHÔNG đặt được ảnh hay cờ docker qua IPC", () => {
+    expect(ok("sandboxStatus")).toBe(true);
+    expect(ok("sandboxStatus", "x")).toBe(false);
+    expect(ok("saveSettings", { container: true, containerNetwork: false, containerPorts: [5173, 3000] })).toBe(true);
+    expect(ok("saveSettings", { container: "yes" })).toBe(false);
+    expect(ok("saveSettings", { containerImage: "node:22-bookworm-slim" })).toBe(false);
+    expect(ok("saveSettings", { containerImage: "--privileged" })).toBe(false);
+    expect(ok("saveSettings", { containerArgs: ["-v", "/:/host"] })).toBe(false);
+    expect(ok("saveSettings", { containerPorts: [22] })).toBe(false); // cổng hệ thống
+    expect(ok("saveSettings", { containerPorts: [5173, 5173] })).toBe(false);
+    expect(ok("saveSettings", { containerPorts: [1, 2, 3, 4, 5, 6].map((x) => 5000 + x) })).toBe(false);
+    expect(ok("saveSettings", { containerPorts: ["5173:22"] })).toBe(false);
+    expect(ok("saveSettings", { containerPorts: [5173.5] })).toBe(false);
+  });
   it("tải tệp lên: giới hạn số lượng, kích thước, kiểu", () => {
     const f = (name: string, n: number) => ({ name, data: new Uint8Array(n) });
     expect(ok("writeTextFile", "AGENTS.md", "nội dung")).toBe(true);

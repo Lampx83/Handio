@@ -8,6 +8,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ### Thêm
 - **Nút DESIGN.md trên khung xem trước Design**: có tệp thì mở để xem, sửa; chưa có thì nhờ agent tạo (như gõ `/designmd`).
 - **Chỉ vào để sửa nhiều chỗ một lần**: chọn một phần, gõ yêu cầu, bấm **+ Ghi chú**, chọn tiếp phần khác… rồi **Gửi** một lần. Mỗi ghi chú có số thứ tự trên bản xem trước, bỏ từng cái được; tối đa 8 ghi chú mỗi lần.
+- **Tab Code: chạy lệnh trong container Docker** (Desktop, tuỳ chọn): bật ở Cài đặt → Quyền → "Chạy lệnh trong container Docker". Lệnh của agent chỉ thấy thư mục dự án, không thấy phần còn lại của máy, không chạy bằng quyền quản trị, mặc định không ra mạng. Bật "Cho ra mạng" để cài gói (npm/pip, có cache riêng cho từng dự án) và đặt "Cổng xem trước" (ví dụ 5173) để mở web đang chạy trong container. Cần Docker Desktop; Docker không chạy thì lệnh chạy như cũ và ứng dụng báo rõ. Quản trị viên có thể bắt buộc dùng container (`requireContainer` trong `policy.json`).
 
 ### Thay đổi
 - **Chỉ vào để sửa riêng tư hơn**: phần trích từ thiết kế gửi cho agent nay tự che giá trị ô nhập (kể cả mật khẩu), chữ trong ô nhập nhiều dòng, dữ liệu nhúng dài, chú thích ẩn và token/mật khẩu trong đường dẫn.
