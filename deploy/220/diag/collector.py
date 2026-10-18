@@ -14,6 +14,8 @@ kiểm tra chặt theo lược đồ (schema.json, dùng chung với mã TypeScr
   GET  /admin/quota              trang HẠN MỨC TOKEN (quota.html + quota.js): ai đã hết/gần hết hôm nay, cấp thêm nhanh
   GET/POST /admin/api/quota      danh sách (tên lấy từ sổ "ai đã dùng") / {"op":"grant","uid","amount"}: cộng token cho HÔM NAY vào grants.json (cổng hạn mức đọc).
                                  Cùng cơ chế chống CSRF; người cấp (actor) do máy chủ gắn và ghi vào nhật ký trong grants.json. Xem quota_admin.py.
+                                 Nhóm tuỳ tạo: {"op":"group_create|group_delete|group_add|group_remove|group_set", "name", "idents"?, "field"?, "value"?}
+                                 ghi groups.json (cổng hạn mức đọc, áp dụng ngay); GET kèm cấu hình bậc (policy.json do cổng ghi, chỉ xem) và danh sách nhóm.
 
 Định danh: uid = HMAC-SHA256(bí mật máy chủ, email viết thường)[:16 hex]. Trong các tệp chẩn đoán JSONL email KHÔNG được lưu, KHÔNG được ghi nhật ký.
 Ngoại lệ có chủ đích: sổ "ai đã dùng" users-seen.json (Registry) giữ email/tên đăng nhập thật + nền tảng để quản trị viên xem; chỉ qua /admin/api/accounts.
@@ -49,6 +51,7 @@ CTRL_RE = re.compile(r"[\x00-\x1f\x7f]+")
 ADMIN_FILE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.(html|md|json|csv)$")
 DAY_FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.jsonl$")
 MAX_ADMIN_BODY = 1024
+MAX_ADMIN_GROUP_BODY = 32 * 1024    # thêm cả lớp vào nhóm một lần (tối đa 500 email)
 ADMIN_PAGES = {"accounts": ("accounts.html", "text/html; charset=utf-8"), "accounts.js": ("accounts.js", "text/javascript; charset=utf-8"),
                "quota": ("quota.html", "text/html; charset=utf-8"), "quota.js": ("quota.js", "text/javascript; charset=utf-8"),
                "feedback": ("feedback.html", "text/html; charset=utf-8"), "feedback.js": ("feedback.js", "text/javascript; charset=utf-8"),
@@ -357,6 +360,8 @@ class Config:
         self.feedback_hits = kw.get("feedback_hits") or {}
         self.quota_db = kw.get("quota_db", "")                    # CSDL đếm token của cổng hạn mức (rỗng = tắt trang quản lý hạn mức)
         self.grants_file = kw.get("grants_file", "")              # tệp "cấp thêm hôm nay" mà cổng hạn mức đọc
+        self.groups_file = kw.get("groups_file", "")              # nhóm tuỳ tạo (groups.json; cổng hạn mức đọc, nạp lại khi đổi)
+        self.policy_file = kw.get("policy_file", "")              # bản xem cấu hình bậc do cổng hạn mức ghi (policy.json, không có email)
         self.admin_hits = {}                                      # email quản trị -> thời điểm các POST gần đây (giới hạn tốc độ)
         self.admin_lock = threading.Lock()
 
@@ -684,14 +689,40 @@ class Handler(BaseHTTPRequestHandler):
         if res is None:
             return self._quota_unavailable()
         res.update({"ok": True, "me": email, "audit": QA.read_state(c.grants_file)["audit"][::-1], "max_step": QA.MAX_STEP})
+        # cấu hình bậc (chỉ xem; đổi bằng quota.sh) + nhóm tuỳ tạo (xem và sửa ở trang này)
+        gst = QA.read_groups(c.groups_file)
+        idx = {pseudonym(c.secret, m): g for m, g in QA.group_index(gst["groups"]).items()}
+        for u in res["users"]:
+            u["group"] = idx.get(u["uid"])
+        res["policy"] = QA.read_policy(c.policy_file) if c.policy_file else None
+        res["groups"] = [dict(gst["groups"][n], name=n) for n in sorted(gst["groups"])]
+        res["groups_error"] = gst["error"]
+        res["groups_enabled"] = bool(c.groups_file)
+        res["groups_audit"] = gst["audit"][::-1][:30]
         return self._send(200, res)
+
+    GROUP_OPS = {"group_create": "create", "group_delete": "delete", "group_add": "add", "group_remove": "remove", "group_set": "set"}
+
+    def _admin_groups_post(self, email, raw):
+        """Sửa nhóm tuỳ tạo. Chỉ chuyển đúng các trường cần; người thao tác do máy chủ gắn."""
+        c = self.cfg
+        if not c.groups_file:
+            return self._send(503, {"ok": False, "error": "unavailable", "message": "Chưa bật nhóm tuỳ tạo trên máy chủ."})
+        idents = raw.get("idents")
+        if isinstance(idents, str):   # dán cả danh sách: tách theo dấu phẩy, chấm phẩy, khoảng trắng, xuống dòng
+            idents = [x for x in re.split(r"[\s,;]+", idents) if x]
+        res = QA.group_op(c.groups_file, c.now(), email, self.GROUP_OPS[raw["op"]], raw.get("name"), idents=idents, field=raw.get("field"), value=raw.get("value"))
+        code = 200 if res.get("ok") else 404 if res.get("error") == "not_found" else 409 if res.get("error") in ("exists", "in_other_group", "broken") else 500 if res.get("error") == "failed" else 400
+        return self._send(code, res)
 
     def _admin_quota_post(self):
         c = self.cfg
-        got = self._admin_post_json()
+        got = self._admin_post_json(MAX_ADMIN_GROUP_BODY)
         if got is None:
             return
         email, raw = got
+        if isinstance(raw, dict) and raw.get("op") in self.GROUP_OPS:
+            return self._admin_groups_post(email, raw)
         if not isinstance(raw, dict) or raw.get("op") != "grant":
             return self._send(400, {"ok": False, "error": "bad_request", "message": "Yêu cầu không hợp lệ."})
         if not c.quota_db or not c.grants_file:
@@ -925,6 +956,8 @@ def main():
         public_host=os.environ.get("NEU_PUBLIC_HOST", "ai.neu.edu.vn"),
         quota_db=os.environ.get("NEU_QUOTA_DB", "/var/lib/neu-agent/quota/usage.db"),
         grants_file=os.environ.get("NEU_QUOTA_GRANTS", "/var/lib/neu-agent/quota/grants.json"),
+        groups_file=os.environ.get("NEU_QUOTA_GROUPS", "/var/lib/neu-agent/quota/groups.json"),
+        policy_file=os.environ.get("NEU_QUOTA_POLICY", "/var/lib/neu-agent/quota/policy.json"),
     )
     fb_path = os.environ.get("NEU_FEEDBACK_DB", "/var/lib/neu-agent/feedback/feedback.db")
     try:

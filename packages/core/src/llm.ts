@@ -88,16 +88,18 @@ function friendly(status: number, text: string): LlmError {
     return new LlmError("Ngữ cảnh vượt giới hạn của mô hình.", status, "context");
   if (status === 402 && !low.includes("quota_exceeded")) return new LlmError("Hạn mức sử dụng đã hết hoặc tài khoản cần nạp thêm (máy chủ trả 402).", status, "quota");
   if (status === 402) {
+    // tab_quota_exceeded: hết hạn mức riêng của tab đang dùng (các tab khác vẫn dùng được)
+    const code = low.includes("tab_quota_exceeded") ? "tab_quota_exceeded" : "quota_exceeded";
     try {
       const j = JSON.parse(text) as { message?: string };
-      return new LlmError(typeof j.message === "string" && j.message ? j.message.slice(0, 300) : "Bạn đã dùng hết hạn mức token hôm nay. Hạn mức làm mới lúc 00:00 ngày mai.", status, "quota", "quota_exceeded");
+      return new LlmError(typeof j.message === "string" && j.message ? j.message.slice(0, 300) : "Bạn đã dùng hết hạn mức token hôm nay. Hạn mức làm mới lúc 00:00 ngày mai.", status, "quota", code);
     } catch {
-      return new LlmError("Bạn đã dùng hết hạn mức token hôm nay. Hạn mức làm mới lúc 00:00 ngày mai.", status, "quota", "quota_exceeded");
+      return new LlmError("Bạn đã dùng hết hạn mức token hôm nay. Hạn mức làm mới lúc 00:00 ngày mai.", status, "quota", code);
     }
   }
-  if (status === 403 && (low.includes("tab_not_allowed") || low.includes("tab_required"))) {
-    const code = low.includes("tab_not_allowed") ? "tab_not_allowed" : "tab_required";
-    let msg = code === "tab_not_allowed" ? "Nhóm của bạn không được dùng tab này." : "Phiên bản ứng dụng này chưa khai báo tab. Hãy cập nhật ứng dụng hoặc tải lại trang.";
+  if (status === 403 && (low.includes("tab_not_allowed") || low.includes("tab_required") || low.includes("model_not_allowed"))) {
+    const code = low.includes("model_not_allowed") ? "model_not_allowed" : low.includes("tab_not_allowed") ? "tab_not_allowed" : "tab_required";
+    let msg = code === "model_not_allowed" ? "Nhóm của bạn không được dùng mô hình này. Hãy chọn lại mô hình ở Cài đặt." : code === "tab_not_allowed" ? "Nhóm của bạn không được dùng tab này." : "Phiên bản ứng dụng này chưa khai báo tab. Hãy cập nhật ứng dụng hoặc tải lại trang.";
     try {
       const j = JSON.parse(text) as { message?: string };
       if (typeof j.message === "string" && j.message) msg = j.message.slice(0, 300);

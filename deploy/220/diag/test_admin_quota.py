@@ -59,7 +59,9 @@ class AdminQuota(unittest.TestCase):
         for ident in (SV, GV, "sv.ok@st.neu.edu.vn"):
             reg.touch(ident, {"platform": "web"}, [], 1)
         cls.cfg = C.Config(diag_dir=os.path.join(d, "diag"), secret=SECRET, reports_dir=os.path.join(d, "r"), admins_file=cls.admins, web_dir=web,
-                           schema=C.load_schema(), registry=reg, quota_db=cls.db, grants_file=cls.grants)
+                           schema=C.load_schema(), registry=reg, quota_db=cls.db, grants_file=cls.grants,
+                           groups_file=os.path.join(d, "groups.json"), policy_file=os.path.join(d, "policy.json"))
+        cls.groups = cls.cfg.groups_file
         cls.srv = C.make_server(cls.cfg, "127.0.0.1", 0)
         cls.port = cls.srv.server_address[1]
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
@@ -71,8 +73,8 @@ class AdminQuota(unittest.TestCase):
         shutil.rmtree(cls.tmp, True)
 
     def setUp(self):
-        for p in (self.grants, self.grants + ".tmp"):
-            if os.path.exists(p):
+        for p in (self.grants, self.grants + ".tmp", self.groups, self.cfg.policy_file):
+            if os.path.lexists(p):
                 os.remove(p)
         self.cfg.admin_hits.clear()
 
@@ -212,6 +214,100 @@ class AdminQuota(unittest.TestCase):
         with open(self.grants, "w") as f:
             f.write("{hỏng")
         self.assertEqual(self.grant(self.uid_sv, 2)[1]["extra"], 2)               # tệp hỏng coi như chưa có gì
+
+    # ---------------------------------------------------------------- nhóm tuỳ tạo
+    def gop(self, body, **kw):
+        h = dict(JSON_H)
+        h.update(kw.pop("headers", {}))
+        st, data, _ = self.req("POST", "/admin/api/quota", body, headers=h, **kw)
+        return st, json.loads(data)
+
+    def test_groups_need_admin_and_csrf(self):
+        body = {"op": "group_create", "name": "lop-k66-cntt"}
+        self.assertEqual(self.gop(body, email="sv.nguyen@st.neu.edu.vn")[0], 403)
+        self.assertEqual(self.gop(body, email=None)[0], 403)
+        for bad in ({"X-Neu-Admin": "0"}, {"Origin": "https://evil.example"}, {"Sec-Fetch-Site": "cross-site"}, {"Content-Type": "text/plain"}):
+            self.assertEqual(self.gop(body, headers=bad)[0], 403, bad)
+        self.assertFalse(os.path.exists(self.groups))
+
+    def test_group_lifecycle_via_page_and_listing(self):
+        self.assertEqual(self.gop({"op": "group_create", "name": "lop-k66-cntt"})[0], 200)
+        st, j = self.gop({"op": "group_add", "name": "lop-k66-cntt", "idents": "Sv.Nguyen@st.neu.edu.vn, khach01\nsv.ok@st.neu.edu.vn"})
+        self.assertEqual((st, j["members"]), (200, 3))
+        for field, value in (("limit", 2_000_000), ("tabs", ["work", "code"]), ("models", ["qwen3.5-35b-a3b-int4"]), ("tab_limits", {"code": 500_000})):
+            self.assertEqual(self.gop({"op": "group_set", "name": "lop-k66-cntt", "field": field, "value": value})[0], 200, field)
+        with open(self.cfg.policy_file, "w") as f:
+            json.dump({"mode": "enforce", "tiers": {"student": 5_000_000}, "tabs": {}, "models": {}, "overrides": 2, "lạ": "bỏ"}, f)
+        st, j = self.get()
+        g = j["groups"][0]
+        self.assertEqual((g["name"], g["members"], g["limit"], g["tabs"], g["tab_limits"]), ("lop-k66-cntt", ["khach01", "sv.nguyen@st.neu.edu.vn", "sv.ok@st.neu.edu.vn"], 2_000_000, ["work", "code"], {"code": 500_000}))
+        self.assertEqual({u["uid"]: u["group"] for u in j["users"]}[self.uid_sv], "lop-k66-cntt")
+        self.assertIsNone({u["uid"]: u["group"] for u in j["users"]}[self.uid_gv])
+        self.assertEqual(j["policy"], {"mode": "enforce", "tiers": {"student": 5_000_000}, "tabs": {}, "models": {}, "overrides": 2})
+        self.assertEqual(j["groups_audit"][0]["actor"], "admin@neu.edu.vn")       # người sửa do máy chủ gắn
+        self.assertEqual(os.stat(self.groups).st_mode & 0o777, 0o600)
+        self.assertEqual(self.gop({"op": "group_set", "name": "lop-k66-cntt", "field": "limit", "value": None})[0], 200)   # trở về theo bậc
+        self.assertNotIn("limit", self.get()[1]["groups"][0])
+        self.assertEqual(self.gop({"op": "group_remove", "name": "lop-k66-cntt", "idents": ["khach01"]})[1]["members"], 2)
+        self.assertEqual(self.gop({"op": "group_delete", "name": "lop-k66-cntt"})[0], 200)
+        self.assertEqual(self.get()[1]["groups"], [])
+
+    def test_group_validation_rejects_bad_input(self):
+        self.gop({"op": "group_create", "name": "lop-a"})
+        self.gop({"op": "group_create", "name": "lop-b"})
+        self.gop({"op": "group_add", "name": "lop-a", "idents": ["khach01"]})
+        bad = [
+            ({"op": "group_create", "name": "Lớp A"}, 400), ({"op": "group_create", "name": "../x"}, 400), ({"op": "group_create", "name": "lop-a"}, 409),
+            ({"op": "group_add", "name": "lop-b", "idents": ["khach01"]}, 409),                          # mỗi người một nhóm
+            ({"op": "group_add", "name": "lop-b", "idents": ["không phải email"]}, 400), ({"op": "group_add", "name": "lop-b", "idents": []}, 400),
+            ({"op": "group_add", "name": "lop-b", "idents": ["a%d@neu.edu.vn" % i for i in range(501)]}, 400),
+            ({"op": "group_add", "name": "khong-co", "idents": ["a@neu.edu.vn"]}, 404),
+            ({"op": "group_set", "name": "lop-a", "field": "limit", "value": -5}, 400), ({"op": "group_set", "name": "lop-a", "field": "limit", "value": "5"}, 400),
+            ({"op": "group_set", "name": "lop-a", "field": "limit", "value": True}, 400), ({"op": "group_set", "name": "lop-a", "field": "tabs", "value": ["admin"]}, 400),
+            ({"op": "group_set", "name": "lop-a", "field": "models", "value": ["bad model"]}, 400), ({"op": "group_set", "name": "lop-a", "field": "models", "value": []}, 400),
+            ({"op": "group_set", "name": "lop-a", "field": "tab_limits", "value": {"khac": 5}}, 400), ({"op": "group_set", "name": "lop-a", "field": "members", "value": ["x@y.vn"]}, 400),
+        ]
+        for body, code in bad:
+            self.assertEqual(self.gop(body)[0], code, body)
+        st, j = self.get()
+        self.assertEqual([(g["name"], g["members"]) for g in j["groups"]], [("lop-a", ["khach01"]), ("lop-b", [])])
+        self.assertNotIn("limit", j["groups"][0])
+
+    def test_broken_or_symlinked_groups_file_is_never_overwritten(self):
+        with open(self.groups, "w") as f:
+            f.write("{hỏng")
+        st, j = self.gop({"op": "group_create", "name": "lop-a"})
+        self.assertEqual((st, j["error"]), (409, "broken"))
+        self.assertTrue(self.get()[1]["groups_error"])
+        with open(self.groups) as f:
+            self.assertEqual(f.read(), "{hỏng")
+        os.remove(self.groups)
+        target = os.path.join(self.tmp, "victim.json")
+        with open(target, "w") as f:
+            f.write('{"groups": {}}')
+        os.symlink(target, self.groups)
+        self.assertEqual(self.gop({"op": "group_create", "name": "lop-a"})[1]["error"], "broken")
+        with open(target) as f:
+            self.assertEqual(f.read(), '{"groups": {}}')
+
+    def test_cli_used_by_quota_sh(self):
+        out = []
+        p = self.groups
+        self.assertEqual(QA.cli(["create", "giang-vien-fit"], p, out.append), 0)
+        self.assertEqual(QA.cli(["add", "giang-vien-fit", "a@neu.edu.vn", "khach01"], p, out.append), 0)
+        self.assertEqual(QA.cli(["limit", "giang-vien-fit", "20.000.000"], p, out.append), 0)
+        self.assertEqual(QA.cli(["tabs", "giang-vien-fit", "work,code"], p, out.append), 0)
+        self.assertEqual(QA.cli(["models", "giang-vien-fit", "*"], p, out.append), 0)
+        self.assertEqual(QA.cli(["tablimit", "giang-vien-fit", "code", "1,000,000"], p, out.append), 0)
+        g = QA.read_groups(p)["groups"]["giang-vien-fit"]
+        self.assertEqual((g["limit"], g["tabs"], g["models"], g["tab_limits"], g["members"]), (20_000_000, ["work", "code"], ["*"], {"code": 1_000_000}, ["a@neu.edu.vn", "khach01"]))
+        self.assertEqual(QA.cli(["tablimit", "giang-vien-fit", "code", "default"], p, out.append), 0)
+        self.assertNotIn("tab_limits", QA.read_groups(p)["groups"]["giang-vien-fit"])
+        out.clear()
+        self.assertEqual(QA.cli(["of", "KHACH01"], p, out.append), 0)
+        self.assertIn("giang-vien-fit", out[0])
+        for bad in (["limit", "giang-vien-fit", "nhiều"], ["tabs", "giang-vien-fit", "admin"], ["tablimit", "giang-vien-fit", "khac", "5"], ["add", "khong-co", "a@b.vn"], ["xoa-het"]):
+            self.assertEqual(QA.cli(bad, p, out.append), 1, bad)
 
     def test_unavailable_without_quota_db(self):
         old = self.cfg.quota_db

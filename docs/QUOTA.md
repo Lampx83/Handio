@@ -37,7 +37,7 @@ sudo ~/neu-agent-220/quota/quota.sh unset gv.a@neu.edu.vn
 sudo ~/neu-agent-220/quota/quota.sh usage sv.b@st.neu.edu.vn    # mức dùng hôm nay của một người
 sudo ~/neu-agent-220/quota/quota.sh uid sv.b@st.neu.edu.vn      # mã giả danh để đối chiếu trang quản trị
 ```
-Cấu hình ở `/etc/neu-agent/quota.json` (xem `deploy/220/quota/quota.default.json`: bậc, tên miền → bậc, `grace_pct`, `warn_pct`, `max_concurrent`, `overrides`). Mỗi lệnh đổi cấu hình tự kiểm tra rồi khởi động lại dịch vụ.
+Cấu hình ở `/etc/neu-agent/quota.json` (xem `deploy/220/quota/quota.default.json`: bậc, tên miền → bậc, `grace_pct`, `warn_pct`, `max_concurrent`, `overrides`, `tabs`, `models`, `tab_limits`). Nhóm tuỳ tạo nằm ở tệp riêng (xem mục *Nhóm tuỳ tạo*). Mỗi lệnh đổi cấu hình tự kiểm tra rồi khởi động lại dịch vụ.
 
 **Cấp thêm nhanh cho từng người:** trang `https://ai.neu.edu.vn/agent/admin/quota` (quản trị viên; có link ở mục *Hạn mức token* của trang quản trị) liệt kê **ai đã hết hoặc gần hết hạn mức hôm nay** (tên/email lấy từ sổ "ai đã dùng"; người chưa có trong sổ hiện bằng mã giả danh), kèm nút **+1 / +5 / +10 triệu token**. Phần cấp thêm:
 - chỉ có hiệu lực **trong ngày hôm nay** (hết lúc 00:00 giờ VN), cộng dồn nếu bấm nhiều lần (tối đa 100 triệu mỗi lần, 1 tỷ mỗi người mỗi ngày), có nút **Bỏ** để thu hồi;
@@ -58,11 +58,53 @@ sudo ~/neu-agent-220/quota/quota.sh show                       # dòng "Tab đư
 ```
 Cấu hình ở `/etc/neu-agent/quota.json`: `"tabs": {"student": ["work", "design"]}`. Bậc không có mặt = đủ ba tab; `[]` = không tab nào; tên tab gõ sai bị bỏ (gõ sai hết thành `[]`, tức chặn chứ không mở rộng quyền).
 
-- **Chặn ở máy chủ:** ứng dụng khai tab đang dùng ở tiêu đề `X-Neu-Tab`; với bậc bị giới hạn, cổng trả **HTTP 403** (`tab_not_allowed`, hoặc `tab_required` nếu thiếu/sai tên tab — ví dụ ứng dụng bản cũ) **trước** khi tính hạn mức hay chuyển tới mô hình, và không ghi gì vào CSDL. Giao diện chỉ ẩn nút tab và báo sớm cho đỡ tốn một lượt gọi (`GET /agent/quota` có thêm `tabs`).
+- **Chặn ở máy chủ:** ứng dụng khai tab đang dùng ở tiêu đề `X-Neu-Tab`; với bậc bị giới hạn, cổng trả **HTTP 403** (`tab_not_allowed`, hoặc `tab_required` nếu thiếu/sai tên tab — ví dụ ứng dụng bản cũ) **trước** khi tính hạn mức hay chuyển tới mô hình; không ghi gì về người dùng, chỉ tăng bộ đếm theo mã lỗi (xem dưới). Giao diện chỉ ẩn nút tab và báo sớm cho đỡ tốn một lượt gọi (`GET /agent/quota` có thêm `tabs`).
 - **Không áp cho:** quản trị viên (`admins.txt`), người tự dán key riêng, và chế độ `observe` (chỉ đếm, không chặn).
 - Bậc bị giới hạn mà dùng **ứng dụng bản cũ** (chưa gửi `X-Neu-Tab`) sẽ bị từ chối cho đến khi cập nhật: chỉ ảnh hưởng nhóm đã được cấu hình.
 - **Giới hạn thật:** agent chạy ở phía máy khách, nên tab là do ứng dụng khai. Người am hiểu kỹ thuật có thể tự gửi tiêu đề khác để dùng tab ngoài danh sách. Đây là cơ chế **phân nhóm sử dụng** chứ không phải rào chắn chống kẻ tấn công; muốn chặn tuyệt đối cần cấp key mô hình riêng theo nhóm. Khi cổng hạn mức chết, nginx chuyển thẳng tới Kong nên phân quyền tab cũng tạm không áp dụng (giống hạn mức).
-- Chưa làm (để sau): phân quyền theo mô hình, nhóm tuỳ tạo ngoài bậc theo miền, chỉnh trên trang quản trị.
+
+## Nhóm tuỳ tạo (lớp học, nhóm giảng viên…)
+
+Ngoài bậc theo miền email, quản trị viên gán **email hoặc tài khoản tên + mật khẩu** vào nhóm đặt tên tuỳ ý (`lop-k66-cntt`, `giang-vien-fit`). Nhóm **ghi đè bậc** ở mục nào được đặt: hạn mức/ngày, tab, mô hình, hạn mức theo tab; mục không đặt thì theo bậc. **Không có nhóm nào = như cũ.**
+
+```bash
+sudo ~/neu-agent-220/quota/quota.sh group create lop-k66-cntt
+sudo ~/neu-agent-220/quota/quota.sh group add lop-k66-cntt a@st.neu.edu.vn b@st.neu.edu.vn khach01
+sudo ~/neu-agent-220/quota/quota.sh group limit lop-k66-cntt 2000000        # hoặc unlimited | default (= theo bậc)
+sudo ~/neu-agent-220/quota/quota.sh group tabs lop-k66-cntt work,code      # none = không tab nào | default
+sudo ~/neu-agent-220/quota/quota.sh group models lop-k66-cntt '*'          # * = mọi mô hình (nới bậc) | default
+sudo ~/neu-agent-220/quota/quota.sh group tablimit lop-k66-cntt code 1000000   # hạn mức riêng tab Code | default
+sudo ~/neu-agent-220/quota/quota.sh group list | show <nhóm> | of <email> | remove <nhóm> <email…> | delete <nhóm>
+```
+Hoặc trên trang `https://ai.neu.edu.vn/agent/admin/quota`, mục **Nhóm tuỳ tạo**: tạo/xoá nhóm, dán cả danh sách email (tối đa 500 mỗi lần), đặt hạn mức/tab/mô hình/hạn mức theo tab, bỏ từng người; có nhật ký ai sửa gì. Bảng người dùng hôm nay có cột nhóm.
+
+- **Thứ tự ưu tiên hạn mức:** quản trị viên (không giới hạn) > đặt riêng từng người (`quota.sh set`) > nhóm > bậc. Phần cấp thêm trong ngày vẫn cộng thêm như cũ. Quản trị viên và người dùng key riêng không chịu giới hạn tab/mô hình của nhóm.
+- **Mỗi người một nhóm:** thêm người đang ở nhóm khác bị từ chối (bỏ khỏi nhóm cũ trước).
+- **Áp dụng ngay**, không cần khởi động lại: danh sách ở `/var/lib/neu-agent/quota/groups.json` (quyền 0600, người dùng dịch vụ `neu-diag`; có email nên **không chép ra ngoài, không đưa lên kho**). Cổng đọc lại khi tệp đổi. Trang quản trị và `quota.sh group` dùng chung một mã ghi (`diag/quota_admin.py`, có khoá tệp, ghi nguyên tử, không theo liên kết tượng trưng).
+- **Cấu hình sai chỉ làm chặt thêm:** giá trị sai của một mục thành mức chặt nhất (hạn mức sai = 0, tab/mô hình sai = không được dùng). Tệp hỏng: cổng giữ bản đúng gần nhất, `/healthz` có `"groups_error": true`, trang quản trị báo đỏ và **không ghi đè** (để không mất danh sách). Riêng khi cổng **khởi động lại** lúc tệp đang hỏng thì chưa có bản đúng nào: thành viên tạm theo bậc cho tới khi sửa tệp.
+
+## Phân quyền mô hình
+
+Cổng so trường `model` của yêu cầu với danh sách được dùng (theo bậc hoặc nhóm); không khớp **đúng nguyên chuỗi** (kể cả thiếu) thì **HTTP 403** `model_not_allowed` kèm danh sách được dùng, không tới mô hình.
+```bash
+sudo ~/neu-agent-220/quota/quota.sh models student qwen3.5-35b-a3b-int4    # all = bỏ giới hạn (mặc định)
+```
+**Hiện máy chủ chỉ có một mô hình chat** (`qwen3.5-35b-a3b-int4` qua Kong), nên đây là cơ chế chuẩn bị sẵn cho khi có thêm mô hình. Danh sách mô hình `/agent/vllm/v1/models` vẫn đi thẳng tới Kong (chưa lọc theo nhóm); `GET /agent/quota` có `models` (null = mọi mô hình).
+
+## Hạn mức theo tab
+
+Ngoài hạn mức chung/ngày, có thể đặt hạn mức riêng cho từng tab (theo bậc trong `quota.json`, hoặc theo nhóm):
+```bash
+sudo ~/neu-agent-220/quota/quota.sh tablimit student code 2000000          # off = bỏ
+```
+Hết hạn mức của tab (vẫn có vượt thêm `grace_pct`) thì yêu cầu của **tab đó** bị từ chối **HTTP 402** `tab_quota_exceeded`, các tab khác vẫn dùng được. Token theo tab lưu ở bảng `tab_usage` (mã giả danh, ngày, tên tab, số token). Bậc/nhóm có hạn mức theo tab thì ứng dụng **phải** khai tab (bản cũ bị `tab_required`). Cùng giới hạn như phân quyền tab: tab do ứng dụng khai. `GET /agent/quota` có `tab_quota`.
+
+## Đếm số lần bị từ chối
+
+Mỗi lần cổng từ chối, bảng `denials` tăng một bộ đếm theo **(ngày, mã lỗi)**: `quota_exceeded`, `tab_quota_exceeded`, `tab_not_allowed`, `tab_required`, `model_not_allowed`, `busy`. **Không có mã người dùng, không có nhóm.** Trang quản trị (mục *Hạn mức token*) có bảng "Yêu cầu bị cổng từ chối theo lý do".
+
+## Trang quản trị: cấu hình theo bậc
+Trang `/agent/admin/quota` hiện cấu hình theo bậc (chỉ xem: hạn mức, tab, mô hình, hạn mức theo tab, miền email, chế độ). Cổng ghi bản xem này ra `/var/lib/neu-agent/quota/policy.json` mỗi lần nạp cấu hình (không có email; đặt riêng chỉ ghi số người). Đổi cấu hình theo bậc vẫn bằng `quota.sh` (tệp `/etc/neu-agent/quota.json` chỉ root đọc; trang quản trị không có quyền ghi hệ thống).
 
 ## Ghi nội dung hội thoại của tài khoản chỉ định (để nghiên cứu)
 

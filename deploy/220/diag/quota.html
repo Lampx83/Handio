@@ -46,6 +46,15 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .tile span{display:block;color:var(--muted);font-size:12.5px}
 .scroll{overflow-x:auto}
 nav{font-size:14px}
+details.group{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0;background:var(--bg)}
+details.group summary{cursor:pointer;font-weight:600}
+details.group summary span{font-weight:400}
+.grid{display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:center;margin:10px 0}
+@media (max-width:560px){.grid{grid-template-columns:1fr}}
+.members{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px 8px;margin:6px 0}
+.members div{display:flex;justify-content:space-between;gap:8px;padding:2px 0;font-size:13.5px}
+textarea{font:inherit;width:100%;min-height:60px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--text)}
+label.cb{white-space:nowrap;margin-right:10px}
 </style>
 </head>
 <body>
@@ -67,7 +76,7 @@ nav{font-size:14px}
     </div>
     <input id="filter" type="search" placeholder="Lọc theo tên hoặc email" autocomplete="off" spellcheck="false" aria-label="Lọc theo tên hoặc email" style="width:100%;margin:10px 0 6px">
     <div class="scroll"><table>
-      <thead><tr><th>Tài khoản</th><th>Bậc</th><th class="num">Đã dùng / hạn mức</th><th>Trạng thái</th><th class="num">Bị chặn</th><th>Cấp thêm hôm nay</th></tr></thead>
+      <thead><tr><th>Tài khoản</th><th>Bậc / nhóm</th><th class="num">Đã dùng / hạn mức</th><th>Trạng thái</th><th class="num">Bị chặn</th><th>Cấp thêm hôm nay</th></tr></thead>
       <tbody id="users"></tbody>
     </table></div>
     <div id="none" class="empty" hidden>Không có ai trong mục này.</div>
@@ -77,6 +86,27 @@ nav{font-size:14px}
     <h2 id="h-audit">Nhật ký cấp thêm gần đây</h2>
     <div class="scroll"><table><thead><tr><th>Lúc</th><th>Ai cấp</th><th>Cho</th><th class="num">Thêm</th><th class="num">Tổng hôm đó</th></tr></thead><tbody id="audit"></tbody></table></div>
     <div id="noaudit" class="empty" hidden>Chưa cấp thêm lần nào.</div>
+  </section>
+
+  <section class="card" aria-labelledby="h-policy">
+    <h2 id="h-policy">Cấu hình theo bậc <span class="muted">(chỉ xem)</span></h2>
+    <p class="muted" id="policy-note">Bậc xác định theo miền email. Đổi bằng <code>quota.sh tier | tabs | models | tablimit</code> trên máy 220 (xem docs/QUOTA.md).</p>
+    <div class="scroll"><table><thead><tr><th>Bậc</th><th class="num">Hạn mức/ngày</th><th>Tab</th><th>Mô hình</th><th>Hạn mức theo tab</th></tr></thead><tbody id="tiers"></tbody></table></div>
+    <div id="nopolicy" class="empty" hidden>Chưa có bản cấu hình: cập nhật cổng hạn mức (<code>sudo ./quota/install-quota.sh</code>) để trang này đọc được.</div>
+  </section>
+
+  <section class="card" aria-labelledby="h-groups">
+    <h2 id="h-groups">Nhóm tuỳ tạo</h2>
+    <p class="muted">Gán email hoặc tài khoản vào nhóm (ví dụ <code>lop-k66-cntt</code>). Nhóm <b>ghi đè bậc</b> ở mục nào được đặt; mục để trống = theo bậc. Mỗi người một nhóm; đặt riêng từng người (<code>quota.sh set</code>) vẫn ưu tiên hơn nhóm. Áp dụng ngay từ yêu cầu kế tiếp.</p>
+    <div class="row">
+      <input id="g-new" placeholder="tên nhóm mới, ví dụ lop-k66-cntt" autocomplete="off" spellcheck="false" aria-label="Tên nhóm mới" style="flex:1;min-width:200px">
+      <button id="g-create" type="button" class="primary">Tạo nhóm</button>
+    </div>
+    <div id="gstatus" role="status" aria-live="polite"></div>
+    <div id="groups"></div>
+    <div id="nogroups" class="empty" hidden>Chưa có nhóm nào.</div>
+    <h2 style="margin-top:16px">Nhật ký sửa nhóm</h2>
+    <div class="scroll"><table><thead><tr><th>Lúc</th><th>Ai sửa</th><th>Thao tác</th><th>Nhóm</th><th>Chi tiết</th></tr></thead><tbody id="gaudit"></tbody></table></div>
   </section>
 </main>
 <script src="quota.js"></script>

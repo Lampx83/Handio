@@ -4,6 +4,9 @@
 #   sudo ./quota.sh mode observe|enforce       observe = chỉ đếm, không chặn | enforce = chặn khi hết
 #   sudo ./quota.sh tier <student|staff> <số>  đổi hạn mức mặc định của một bậc (token/ngày)
 #   sudo ./quota.sh tabs <student|staff> <work,code,design|all>  tab được dùng theo bậc (= theo miền email); all = bỏ giới hạn (mặc định: mọi tab). Chặn ở cổng, không chỉ ẩn nút
+#   sudo ./quota.sh models <student|staff> <tên1,tên2|all>        mô hình được dùng theo bậc (trường "model" của yêu cầu); all = bỏ giới hạn (mặc định)
+#   sudo ./quota.sh tablimit <student|staff> <work|code|design> <số|off>   hạn mức token/ngày riêng của một tab (ngoài hạn mức chung); off = bỏ
+#   sudo ./quota.sh group <list|show|of|create|delete|add|remove|limit|tabs|models|tablimit> …   NHÓM TUỲ TẠO (ghi đè bậc; áp dụng ngay): sudo ./quota.sh group help
 #   sudo ./quota.sh set <email|tên-đăng-nhập> <số|unlimited>   đặt riêng cho một người (vd lớp học đặc biệt)
 #   sudo ./quota.sh unset <email|tên-đăng-nhập>                bỏ đặt riêng
 #   sudo ./quota.sh usage <email|tên-đăng-nhập>                mức đã dùng hôm nay của một người
@@ -19,6 +22,7 @@ set -euo pipefail
 CONF=/etc/neu-agent/quota.json
 DB=/var/lib/neu-agent/quota/usage.db
 CAPDB=/var/lib/neu-agent/quota/captures.db
+GROUPS=/var/lib/neu-agent/quota/groups.json
 SECRET=/etc/neu-agent/diag-secret
 [ "$(id -u)" -eq 0 ] || { echo "Cần chạy bằng sudo."; exit 1; }
 [ -f "$CONF" ] || { echo "Chưa có $CONF: chạy quota/install-quota.sh trước."; exit 1; }
@@ -42,6 +46,22 @@ elif op == "tabs":
         want = [x for x in a[1].strip().lower().split(",") if x]
         if not want or any(x not in ("work", "code", "design") for x in want): sys.exit("Danh sách tab phải gồm work, code, design (cách nhau bằng dấu phẩy) hoặc all")
         cfg.setdefault("tabs", {})[t] = [x for x in ("work", "code", "design") if x in want]
+elif op == "models":
+    t = a[0].strip().lower()
+    if not re.fullmatch(r"[a-z0-9_-]{1,32}", t): sys.exit("Tên bậc không hợp lệ")
+    if a[1].strip().lower() == "all": cfg.setdefault("models", {}).pop(t, None)
+    else:
+        want = [x.strip() for x in a[1].split(",") if x.strip()]
+        if not want or len(want) > 50 or any(not re.fullmatch(r"[A-Za-z0-9._:/-]{1,100}", x) for x in want): sys.exit("Danh sách mô hình: tên cách nhau bằng dấu phẩy (chữ, số, . _ : / -) hoặc all")
+        cfg.setdefault("models", {})[t] = list(dict.fromkeys(want))
+elif op == "tablimit":
+    t, tab = a[0].strip().lower(), a[1].strip().lower()
+    if not re.fullmatch(r"[a-z0-9_-]{1,32}", t): sys.exit("Tên bậc không hợp lệ")
+    if tab not in ("work", "code", "design"): sys.exit("Tab phải là work, code hoặc design")
+    tl = cfg.setdefault("tab_limits", {}).setdefault(t, {})
+    if a[2].strip().lower() == "off": tl.pop(tab, None)
+    else: tl[tab] = num(a[2])
+    if not tl: cfg["tab_limits"].pop(t, None)
 elif op == "set":
     i = ident(a[0])
     if not re.fullmatch(r"[a-z0-9._%+'-]{1,64}@[a-z0-9.-]{1,190}|[a-z0-9][a-z0-9._-]{2,31}", i): sys.exit("Email/tên đăng nhập không hợp lệ")
@@ -70,6 +90,9 @@ tz = datetime.timezone(datetime.timedelta(hours=7))
 print("Chế độ: %s | bậc: %s | vượt thêm %s%% | nhắc từ %s%% | tối đa %s yêu cầu đồng thời/người" % (cfg.get("mode"), cfg.get("tiers"), cfg.get("grace_pct"), cfg.get("warn_pct"), cfg.get("max_concurrent")))
 print("Tên miền → bậc:", cfg.get("domains"), "| mặc định:", cfg.get("default_tier"))
 print("Tab được dùng theo bậc:", cfg.get("tabs") or "(không giới hạn: mọi bậc dùng cả Work, Code, Design)")
+print("Mô hình được dùng theo bậc:", cfg.get("models") or "(không giới hạn)")
+print("Hạn mức theo tab:", cfg.get("tab_limits") or "(không có)")
+print("Nhóm tuỳ tạo: sudo quota.sh group list")
 print("Đặt riêng:", cfg.get("overrides") or "(không có)")
 print("Ghi nội dung hội thoại của:", (cfg.get("capture") or {}).get("users") or "(không ai)")
 try:
@@ -86,9 +109,9 @@ PY
     ;;
   capture)
     case "${2:-}" in
-      add)    [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }; edit capture_add "$3"; restart
+      add)    [ "${3:-}" ] || { sed -n 2,21p "$0"; exit 1; }; edit capture_add "$3"; restart
               echo "ĐÃ BẬT ghi nội dung hội thoại của '$3' vào $CAPDB (quyền 640 nhóm neu-diag, giữ 90 ngày; cho user Linux đọc: capture grant <user>). Hãy báo cho người dùng tài khoản này." ;;
-      remove) [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }; edit capture_remove "$3"; restart ;;
+      remove) [ "${3:-}" ] || { sed -n 2,21p "$0"; exit 1; }; edit capture_remove "$3"; restart ;;
       list)
         python3 - "$CONF" "$CAPDB" <<'PY'
 import json, sqlite3, sys
@@ -127,24 +150,33 @@ for r in db.execute(q + " order by ts, id", args):
     print(json.dumps(d, ensure_ascii=False))
 PY
         ;;
-      grant)  [ "${3:-}" ] || { sed -n 2,19p "$0"; exit 1; }
+      grant)  [ "${3:-}" ] || { sed -n 2,21p "$0"; exit 1; }
               id -u "$3" >/dev/null 2>&1 || { echo "Không có user Linux '$3'."; exit 1; }
               usermod -aG neu-diag "$3" && echo "Đã thêm '$3' vào nhóm neu-diag: từ phiên SSH MỚI, user này đọc được $CAPDB (chỉ đọc). Hãy báo người dùng tài khoản được ghi." ;;
-      revoke) [ "${3:-}" ] || { sed -n 2,19p "$0"; exit 1; }
+      revoke) [ "${3:-}" ] || { sed -n 2,21p "$0"; exit 1; }
               gpasswd -d "$3" neu-diag && echo "Đã thu quyền đọc của '$3'." ;;
-      purge)  [ "${3:-}" ] || { sed -n 2,18p "$0"; exit 1; }
+      purge)  [ "${3:-}" ] || { sed -n 2,21p "$0"; exit 1; }
               python3 -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); n=db.execute("delete from captures where user=?",(sys.argv[2].strip().lower(),)).rowcount; db.commit(); print("Đã xoá",n,"dòng")' "$CAPDB" "$3" ;;
-      *) sed -n 2,18p "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+      *) sed -n 2,21p "$0" | sed 's/^# \{0,1\}//'; exit 1;;
     esac
     ;;
-  mode)  [ "${2:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit mode "$2"; restart;;
-  tier)  [ "${3:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit tier "$2" "$3"; restart;;
-  tabs)  [ "${3:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit tabs "$2" "$3"; restart;;
-  set)   [ "${3:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit set "$2" "$3"; restart;;
-  unset) [ "${2:-}" ] || { sed -n 2,13p "$0"; exit 1; }; edit unset "$2"; restart;;
-  uid)   [ "${2:-}" ] || { sed -n 2,13p "$0"; exit 1; }; uid_of "$2" | cut -c1-8;;
+  mode)  [ "${2:-}" ] || { sed -n 2,16p "$0"; exit 1; }; edit mode "$2"; restart;;
+  tier)  [ "${3:-}" ] || { sed -n 2,16p "$0"; exit 1; }; edit tier "$2" "$3"; restart;;
+  tabs)  [ "${3:-}" ] || { sed -n 2,16p "$0"; exit 1; }; edit tabs "$2" "$3"; restart;;
+  models) [ "${3:-}" ] || { sed -n 2,16p "$0"; exit 1; }; edit models "$2" "$3"; restart;;
+  tablimit) [ "${4:-}" ] || { sed -n 2,16p "$0"; exit 1; }; edit tablimit "$2" "$3" "$4"; restart;;
+  group)
+    # nhóm tuỳ tạo nằm ở $GROUPS (thư mục của neu-diag), cổng nạp lại khi tệp đổi: KHÔNG cần khởi động lại. Cùng mã ghi với trang quản trị (quota_admin.py).
+    QA=/usr/local/lib/neu-agent-diag/quota_admin.py
+    [ -f "$QA" ] || QA="$(cd "$(dirname "$0")/.." && pwd)/diag/quota_admin.py"
+    [ -f "$QA" ] || { echo "Không thấy quota_admin.py: chạy ./diag/install-diag.sh trước."; exit 1; }
+    [ -d "$(dirname "$GROUPS")" ] || { echo "Chưa có $(dirname "$GROUPS"): chạy quota/install-quota.sh trước."; exit 1; }
+    shift; NEU_QUOTA_GROUPS="$GROUPS" python3 -I "$QA" group "$@";;
+  set)   [ "${3:-}" ] || { sed -n 2,16p "$0"; exit 1; }; edit set "$2" "$3"; restart;;
+  unset) [ "${2:-}" ] || { sed -n 2,16p "$0"; exit 1; }; edit unset "$2"; restart;;
+  uid)   [ "${2:-}" ] || { sed -n 2,16p "$0"; exit 1; }; uid_of "$2" | cut -c1-8;;
   usage)
-    [ "${2:-}" ] || { sed -n 2,13p "$0"; exit 1; }
+    [ "${2:-}" ] || { sed -n 2,16p "$0"; exit 1; }
     U=$(uid_of "$2")
     python3 - "$DB" "$U" <<'PY'
 import sqlite3, sys, datetime
@@ -153,5 +185,5 @@ r = sqlite3.connect("file:%s?mode=ro" % sys.argv[1], uri=True).execute("select t
 print("Hôm nay chưa dùng gì." if not r else "Bậc %s | hạn mức %s | đã dùng %s (vào %s, ra %s) | %d yêu cầu | bị chặn %d" % (r[0], "không giới hạn" if r[1] < 0 else format(r[1], ","), format(r[2], ","), format(r[3], ","), format(r[4], ","), r[5], r[6]))
 PY
     ;;
-  *) sed -n 2,13p "$0" | sed 's/^# \{0,1\}//'; exit 1;;
+  *) sed -n 2,16p "$0" | sed 's/^# \{0,1\}//'; exit 1;;
 esac

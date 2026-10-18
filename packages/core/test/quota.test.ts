@@ -140,6 +140,25 @@ describe("phân quyền theo nhóm: tab được dùng", () => {
     expect(e2.code).toBe("");
   });
 
+  it("403 model_not_allowed và 402 tab_quota_exceeded: mã riêng, thông báo của máy chủ, KHÔNG thử lại", async () => {
+    const cases: [number, string, string, string][] = [
+      [403, "model_not_allowed", "Nhóm của bạn không được dùng mô hình x (được dùng: m). Hãy chọn lại mô hình ở Cài đặt.", "auth"],
+      [402, "tab_quota_exceeded", "Bạn đã dùng hết hạn mức token hôm nay của tab Code (1.000 token).", "quota"],
+    ];
+    for (const [status, code, message, kind] of cases) {
+      let calls = 0;
+      const fetchImpl = (async () => (calls++, new Response(JSON.stringify({ error: code, message }), { status }))) as unknown as typeof fetch;
+      const err = await new LlmClient(cfg, fetchImpl).chat([{ role: "user", content: "x" }]).catch((e) => e);
+      expect(err).toMatchObject({ status, kind, code });
+      expect(err.message).toBe(message);
+      expect(calls).toBe(1);
+    }
+    // thân hỏng vẫn ra thông báo dễ hiểu, không phải "key embedding"
+    const bad = (async () => new Response("model_not_allowed<<", { status: 403 })) as unknown as typeof fetch;
+    const e3 = await new LlmClient(cfg, bad).chat([{ role: "user", content: "x" }]).catch((e) => e);
+    expect(e3.message).toContain("không được dùng mô hình");
+  });
+
   const make = async (profile: "work" | "code" | "design", tabs: string[] | undefined) => {
     const chats: string[] = [];
     const fetchImpl = (async (u: string, init?: RequestInit) => {
