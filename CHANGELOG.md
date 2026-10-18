@@ -5,6 +5,8 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+## [0.8.21] - 2026-10-18
+
 ### Thêm
 - **Mục "Tải về" trên trang giới thiệu**: chọn bản macOS (chip Apple/Intel), Windows hoặc bản web, kèm cách mở khi hệ điều hành cảnh báo lần đầu và cách kiểm tra mã SHA-256. Hỏi đáp có link tới chính sách quyền riêng tư.
 - **DESIGN.md cho từng dự án Design**: ghi màu, phông, khoảng cách và giọng điệu vào `DESIGN.md` ở thư mục dự án, agent đọc và làm theo ở mọi thiết kế. Sửa tệp lúc nào cũng được, có hiệu lực từ tin nhắn kế tiếp. Chưa có thì gõ `/designmd` để agent tạo bản mẫu (hoặc rút từ thiết kế đang có).
