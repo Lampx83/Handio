@@ -3,6 +3,7 @@ import { MODES } from "./permissions";
 import { sanitizeHooks, type HooksConfig } from "./hooks";
 import { sanitizeMcpServers, type McpServerSpec } from "./mcp";
 import { sanitizeTasks } from "./schedule";
+import { sanitizeImage, sanitizePorts } from "./container";
 import type { PublicSettings, Settings } from "./types";
 
 /**
@@ -51,6 +52,10 @@ export function normalizeSettings(raw: Partial<Settings> | null | undefined, def
   s.mcpServers = sanitizeMcpServers(r.mcpServers);
   if (r.tasks !== undefined) s.tasks = sanitizeTasks(r.tasks);
   if (r.taskNotify !== undefined) s.taskNotify = r.taskNotify !== false;
+  // container (tab Code): chỉ giữ giá trị đúng kiểu; ảnh/cổng sai bị bỏ
+  for (const k of ["container", "containerNetwork"] as const) if (s[k] !== undefined && typeof s[k] !== "boolean") delete s[k];
+  if (s.containerPorts !== undefined) s.containerPorts = sanitizePorts(s.containerPorts);
+  if (s.containerImage !== undefined && !sanitizeImage(s.containerImage)) delete s.containerImage;
   // `mode` đã lưu = "default" là dấu vết của phiên bản cũ: giao diện không bao giờ lưu lựa chọn chế độ (chọn ở thanh dưới ô nhập chỉ có hiệu lực trong
   // phiên), nhưng cài đặt cũ ghi nguyên bản mặc định lúc đó vào tệp và nó đè lên mặc định sản phẩm ("auto"). Coi như chưa đặt.
   if (r.mode === "default" && defaults.mode && defaults.mode !== "default") s.mode = defaults.mode;

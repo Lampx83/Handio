@@ -1,4 +1,5 @@
-import { spawn as nodeSpawn, spawnSync } from "node:child_process";
+import { spawn as nodeSpawn, spawnSync, type ChildProcessByStdio, type ChildProcessWithoutNullStreams } from "node:child_process";
+import type { Readable } from "node:stream";
 import { existsSync, readdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import dns from "node:dns/promises";
@@ -8,6 +9,7 @@ import { createHash } from "node:crypto";
 import os from "node:os";
 import type { DirEntry, Env, ExecResult, StatInfo } from "@neu/agent-core";
 import { expandVars, findPythonDirs, mergeWindowsPath, parseRegPath } from "./win-path";
+import { cacheVolumeName, checkMountSource, containerUser, containerWorkdir, dockerCliEnv, dockerRunArgs, ensureCacheVolume, ensureImage, killContainer, newContainerName, noteContainerStarted, passableEnv, type ContainerChoice } from "./docker";
 
 const MAX_OUTPUT = 1_000_000;
 
@@ -16,27 +18,99 @@ export class NodeEnv implements Env {
   readonly home = os.homedir();
   /** Ảnh dán và tệp đính kèm tạm nằm ở thư mục tạm của hệ điều hành (theo từng dự án), không nằm trong thư mục dự án. */
   readonly scratchDir: string;
-  readonly platform: string;
+  private hostPlatform: string;
 
   /** `allowExec=false`: không cấp công cụ chạy lệnh (tab Work cho người dùng văn phòng). */
-  /** Thông tin sandbox đang áp dụng cho `exec` (undefined = KHÔNG có sandbox hệ điều hành). */
-  sandbox?: { kind: "seatbelt"; network: boolean };
+  /** Sandbox hệ điều hành cho lệnh chạy trên máy (undefined = KHÔNG có). */
+  private hostSandbox?: { kind: "seatbelt"; network: boolean };
   private sandboxProfile?: string;
+  /** Lớp chạy lệnh cắm thêm: container Docker (docker.ts). Không đặt = như cũ (chạy trên máy, sandbox hệ điều hành nếu có). */
+  private container?: { decide: () => Promise<ContainerChoice>; required?: boolean };
+  /** Quyết định gần nhất (để báo `sandbox`/`platform` cho lời nhắc hệ thống, /status). */
+  private choice?: ContainerChoice;
+  private decidedAt = 0;
+  /** Đã báo "Docker không dùng được, chạy trên máy" trong đầu ra lệnh chưa (báo lại sau khi container chạy được rồi hỏng lần nữa). */
+  private warnedFallback = false;
+  /** Container chạy nền đang giữ các cổng xem trước (một container một lúc, tránh "port is already allocated"). */
+  private portHolder: string | null = null;
 
-  constructor(root: string, opts: { allowExec?: boolean; sandbox?: { network?: boolean; home?: string } | false } = {}) {
+  /**
+   * `container`: hàm quyết định (Desktop đọc cài đặt người dùng + chính sách + dò Docker) gọi trước MỖI lệnh; `required` = chính sách bắt buộc
+   * container (MCP qua stdio khi đó bị từ chối vì chưa chạy được trong container).
+   */
+  constructor(root: string, opts: { allowExec?: boolean; sandbox?: { network?: boolean; home?: string } | false; container?: { decide: () => Promise<ContainerChoice>; required?: boolean } } = {}) {
     this.root = root;
     // dạng THẬT của thư mục tạm (macOS: /var/folders là symlink tới /private/var/folders), để so đường dẫn sau realpath với thư mục dự án đúng
     const tmpReal = (() => { try { return realpathSync(os.tmpdir()); } catch { return os.tmpdir(); } })();
     this.scratchDir = path.join(tmpReal, "neu-agent-scratch", createHash("sha1").update(root).digest("hex").slice(0, 12));
     if (opts.sandbox !== false && opts.sandbox && process.platform === "darwin" && existsSync(SANDBOX_EXEC)) {
       const network = opts.sandbox.network !== false;
-      this.sandbox = { kind: "seatbelt", network };
+      this.hostSandbox = { kind: "seatbelt", network };
       this.sandboxProfile = seatbeltProfile(realpathSync(root), opts.sandbox.home ?? os.homedir(), network);
     }
     if (opts.allowExec === false) (this as { exec?: unknown }).exec = undefined;
     const soffice = findSoffice();
     if (soffice) this.convertToPdf = (input, output, o) => convertWithSoffice(soffice, input, output, o);
-    this.platform = `${os.platform()} ${os.release()} (${os.arch()}), shell: ${process.platform === "win32" ? "cmd" : process.env.SHELL || "sh"}`;
+    this.hostPlatform = `${os.platform()} ${os.release()} (${os.arch()}), shell: ${process.platform === "win32" ? "cmd" : process.env.SHELL || "sh"}`;
+    if (opts.container && opts.allowExec !== false) {
+      this.container = opts.container;
+      void this.decide(); // để lời nhắc đầu tiên đã đúng nơi chạy
+    }
+  }
+
+  /** Sandbox đang áp dụng cho `exec` (undefined = KHÔNG có). `note`: lý do quay về cách cũ/từ chối. */
+  get sandbox(): { kind: string; network: boolean; image?: string; ports?: number[]; note?: string } | undefined {
+    // lời nhắc hệ thống đọc giá trị này mỗi lần gọi mô hình: làm mới nền để công tắc vừa đổi có hiệu lực ngay cả khi chưa chạy lệnh nào
+    if (this.container && Date.now() - this.decidedAt > 3000) void this.decide();
+    const c = this.choice;
+    if (c?.mode === "docker") return { kind: "docker", network: c.network, image: c.image, ports: c.ports };
+    if (c?.mode === "refuse") return { kind: "refuse", network: false, note: c.reason };
+    if (c?.reason) return this.hostSandbox ? { ...this.hostSandbox, note: c.reason } : { kind: "none", network: true, note: c.reason };
+    return this.hostSandbox;
+  }
+  get platform(): string {
+    const c = this.choice;
+    return c?.mode === "docker" ? `Linux container (Docker, image ${c.image}) for shell commands, shell: sh; files are on the user's ${this.hostPlatform.split(",")[0]}` : this.hostPlatform;
+  }
+
+  /** Hỏi lại cách chạy (trước mỗi lệnh). Lỗi bất ngờ thì TỪ CHỐI (không tự hạ cấp). */
+  private async decide(): Promise<ContainerChoice | undefined> {
+    if (!this.container) return undefined;
+    this.decidedAt = Date.now();
+    try {
+      this.choice = await this.container.decide();
+    } catch {
+      this.choice = { mode: "refuse", wanted: true, required: !!this.container.required, image: "", network: false, ports: [], reason: "Không xác định được cách chạy lệnh an toàn (lỗi khi kiểm tra Docker)." };
+    }
+    if (this.choice.mode === "docker" && !this.choice.docker) this.choice = { ...this.choice, mode: "refuse", reason: "Không tìm thấy docker CLI." };
+    if (this.choice.mode === "docker") this.warnedFallback = false;
+    return this.choice;
+  }
+  private fallbackNote(c: ContainerChoice | undefined): string {
+    if (!c?.reason || c.mode !== "host" || this.warnedFallback) return "";
+    this.warnedFallback = true;
+    return `[${c.reason}]\n`;
+  }
+
+  /** Chuẩn bị `docker run` cho một lệnh: kiểm đường dẫn gắn, có ảnh, có volume cache. Lỗi = MountError/thông báo cho người dùng. */
+  private async dockerPlan(c: ContainerChoice, command: string, cwd: string, extra: Record<string, string> | undefined, background: boolean, signal?: AbortSignal): Promise<{ args: string[]; env: NodeJS.ProcessEnv; name: string; realRoot: string; ports: number[] }> {
+    const bin = c.docker!;
+    const realRoot = checkMountSource(this.root, this.home);
+    const workdir = containerWorkdir(realRoot, cwd);
+    const imgErr = await ensureImage(bin, c.image, signal);
+    if (imgErr) throw new Error(imgErr);
+    const user = containerUser();
+    const vol = c.cache === false ? undefined : cacheVolumeName(realRoot);
+    const cacheVolume = vol && (await ensureCacheVolume(bin, vol, c.image, user, signal)) ? vol : undefined;
+    const name = newContainerName();
+    let ports: number[] = [];
+    if (background && c.network && c.ports.length && !this.portHolder) {
+      this.portHolder = name;
+      ports = c.ports;
+    }
+    const pass = passableEnv(extra, realRoot, this.root);
+    const args = dockerRunArgs({ name, realRoot, workdir, image: c.image, command, network: c.network, ports, user, limits: c.limits, cacheVolume, passEnv: Object.keys(pass) });
+    return { args, env: { ...dockerCliEnv(), ...pass }, name, realRoot, ports };
   }
 
   async readBytes(path: string): Promise<Uint8Array> {
@@ -84,6 +158,52 @@ export class NodeEnv implements Env {
   checkPage?: Env["checkPage"];
 
   spawn(command: string, opts: { cwd: string; onData: (chunk: string) => void; onExit: (code: number) => void }): { stop(): void; readonly pid?: number } {
+    if (!this.container) return this.spawnHost(command, opts);
+    // có lớp container: quyết định (bất đồng bộ) rồi mới chạy; dừng trước khi kịp chạy thì không chạy
+    let stopped = false;
+    let inner: { stop(): void } | null = null;
+    let exited = false;
+    const exit = (code: number) => { if (!exited) { exited = true; opts.onExit(code); } };
+    void (async () => {
+      const c = await this.decide();
+      if (stopped) return exit(143);
+      if (!c || c.mode === "host") {
+        const note = this.fallbackNote(c);
+        if (note) opts.onData(note);
+        inner = this.spawnHost(command, { ...opts, onExit: exit });
+        return;
+      }
+      if (c.mode === "refuse") {
+        opts.onData(c.reason ?? "Không chạy lệnh.");
+        return exit(126);
+      }
+      let plan: Awaited<ReturnType<NodeEnv["dockerPlan"]>>;
+      try {
+        plan = await this.dockerPlan(c, command, opts.cwd, undefined, true);
+      } catch (e) {
+        opts.onData((e as Error).message);
+        return exit(126);
+      }
+      const release = () => { if (this.portHolder === plan.name) this.portHolder = null; };
+      if (stopped) { release(); return exit(143); }
+      if (plan.ports.length) opts.onData(`[Container: cổng xem trước ${plan.ports.map((p) => "http://localhost:" + p).join(", ")} (máy chủ phải nghe ở 0.0.0.0)]\n`);
+      noteContainerStarted();
+      const child = nodeSpawn(c.docker!, plan.args, { shell: false, cwd: plan.realRoot, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"], env: plan.env, windowsHide: true });
+      child.stdout.on("data", (b: Buffer) => opts.onData(b.toString("utf8")));
+      child.stderr.on("data", (b: Buffer) => opts.onData(b.toString("utf8")));
+      child.on("error", (e) => { opts.onData(String(e.message)); release(); exit(127); });
+      child.on("close", (code, sig) => { release(); exit(code ?? (sig ? 137 : 1)); });
+      inner = {
+        stop: () => {
+          killContainer(c.docker!, plan.name); // giết docker CLI không dừng container: xoá hẳn container theo tên
+          try { child.kill("SIGTERM"); } catch { /* đã thoát */ }
+        },
+      };
+    })();
+    return { stop: () => { stopped = true; inner?.stop(); } };
+  }
+
+  private spawnHost(command: string, opts: { cwd: string; onData: (chunk: string) => void; onExit: (code: number) => void }): { stop(): void; readonly pid?: number } {
     const sandboxed = !!this.sandboxProfile;
     const child = nodeSpawn(sandboxed ? SANDBOX_EXEC : command, sandboxed ? ["-p", this.sandboxProfile!, "/bin/sh", "-c", command] : [], {
       shell: !sandboxed, cwd: opts.cwd, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"], env: childEnv(),
@@ -106,6 +226,11 @@ export class NodeEnv implements Env {
   }
 
   spawnStdio(command: string, args: string[], opts: { cwd: string; env?: Record<string, string>; onLine: (line: string) => void; onStderr?: (text: string) => void; onExit: (code: number) => void }): { write(line: string): void; stop(): void } {
+    if (this.container?.required) {
+      // chính sách bắt buộc container: máy chủ MCP (chạy chương trình thật trên máy) chưa chạy được trong container nên bị từ chối, không hạ cấp
+      setTimeout(() => { opts.onStderr?.("Quản trị viên yêu cầu chạy lệnh trong container: máy chủ MCP qua stdio bị tắt."); opts.onExit(126); }, 0);
+      return { write: () => undefined, stop: () => undefined };
+    }
     const full = [command, ...args.map((a) => "'" + a.replace(/'/g, "'\\''") + "'")].join(" ");
     const sandboxed = !!this.sandboxProfile && process.platform === "darwin";
     const child = sandboxed
@@ -131,56 +256,35 @@ export class NodeEnv implements Env {
     };
   }
 
-  exec(command: string, opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; env?: Record<string, string> }): Promise<ExecResult> {
-    return new Promise((resolve) => {
-      const sandboxed = !!this.sandboxProfile;
-      const child = nodeSpawn(sandboxed ? SANDBOX_EXEC : command, sandboxed ? ["-p", this.sandboxProfile!, "/bin/sh", "-c", command] : [], {
-        shell: !sandboxed,
-        cwd: opts.cwd,
-        detached: process.platform !== "win32",
-        stdio: ["ignore", "pipe", "pipe"],
-        env: childEnv(process.env, opts.env),
-      });
-      const chunks: Buffer[] = [];
-      let size = 0;
-      let timedOut = false;
-      let done = false;
-      const onData = (b: Buffer) => {
-        if (size < MAX_OUTPUT) {
-          chunks.push(b);
-          size += b.length;
-        }
-      };
-      child.stdout.on("data", onData);
-      child.stderr.on("data", onData);
-      const kill = () => {
-        try {
-          if (process.platform === "win32") nodeSpawn("taskkill", ["/T", "/F", "/PID", String(child.pid)]);
-          else process.kill(-child.pid!, "SIGKILL");
-        } catch {
-          /* đã thoát */
-        }
-      };
-      const timer = setTimeout(() => {
-        timedOut = true;
-        kill();
-      }, opts.timeoutMs);
-      const onAbort = () => kill();
-      opts.signal?.addEventListener("abort", onAbort, { once: true });
-      const finish = (code: number) => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        opts.signal?.removeEventListener("abort", onAbort);
-        resolve({ code, output: Buffer.concat(chunks).toString("utf8"), timedOut });
-      };
-      child.on("error", (e) => {
-        chunks.push(Buffer.from(String(e.message)));
-        finish(127);
-      });
-      child.on("close", (code, sig) => finish(code ?? (sig ? 137 : 1)));
-      if (opts.signal?.aborted) kill();
-    });
+  async exec(command: string, opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; env?: Record<string, string> }): Promise<ExecResult> {
+    if (!this.container) return this.execHost(command, opts);
+    const c = await this.decide();
+    if (!c || c.mode === "host") {
+      const note = this.fallbackNote(c);
+      const r = await this.execHost(command, opts);
+      return note ? { ...r, output: note + r.output } : r;
+    }
+    if (c.mode === "refuse") return { code: 126, output: c.reason ?? "Không chạy lệnh.", timedOut: false };
+    let plan: Awaited<ReturnType<NodeEnv["dockerPlan"]>>;
+    try {
+      plan = await this.dockerPlan(c, command, opts.cwd, opts.env, false, opts.signal);
+    } catch (e) {
+      return { code: 126, output: (e as Error).message, timedOut: false };
+    }
+    if (opts.signal?.aborted) return { code: 130, output: "", timedOut: false };
+    noteContainerStarted();
+    return collect(() => nodeSpawn(c.docker!, plan.args, { shell: false, cwd: plan.realRoot, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"], env: plan.env, windowsHide: true }), opts, () => killContainer(c.docker!, plan.name));
+  }
+
+  private execHost(command: string, opts: { cwd: string; timeoutMs: number; signal?: AbortSignal; env?: Record<string, string> }): Promise<ExecResult> {
+    const sandboxed = !!this.sandboxProfile;
+    return collect(() => nodeSpawn(sandboxed ? SANDBOX_EXEC : command, sandboxed ? ["-p", this.sandboxProfile!, "/bin/sh", "-c", command] : [], {
+      shell: !sandboxed,
+      cwd: opts.cwd,
+      detached: process.platform !== "win32",
+      stdio: ["ignore", "pipe", "pipe"],
+      env: childEnv(process.env, opts.env),
+    }), opts);
   }
 
   async fetchUrl(url: string, opts: { maxChars: number; signal?: AbortSignal }): Promise<string> {
@@ -218,6 +322,53 @@ export class NodeEnv implements Env {
     }
     throw new Error("Chuyển hướng quá nhiều lần.");
   }
+}
+
+/** Chạy một tiến trình con, gom stdout+stderr (có giới hạn), giết cả nhóm khi hết giờ/huỷ (`onKill`: dọn thêm, vd xoá container). */
+function collect(start: () => ChildProcessWithoutNullStreams | ChildProcessByStdio<null, Readable, Readable>, opts: { timeoutMs: number; signal?: AbortSignal }, onKill?: () => void): Promise<ExecResult> {
+  return new Promise((resolve) => {
+    const child = start();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let timedOut = false;
+    let done = false;
+    const onData = (b: Buffer) => {
+      if (size < MAX_OUTPUT) {
+        chunks.push(b);
+        size += b.length;
+      }
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    const kill = () => {
+      try {
+        onKill?.();
+        if (process.platform === "win32") nodeSpawn("taskkill", ["/T", "/F", "/PID", String(child.pid)]);
+        else process.kill(-child.pid!, "SIGKILL");
+      } catch {
+        /* đã thoát */
+      }
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      kill();
+    }, opts.timeoutMs);
+    const onAbort = () => kill();
+    opts.signal?.addEventListener("abort", onAbort, { once: true });
+    const finish = (code: number) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      opts.signal?.removeEventListener("abort", onAbort);
+      resolve({ code, output: Buffer.concat(chunks).toString("utf8"), timedOut });
+    };
+    child.on("error", (e) => {
+      chunks.push(Buffer.from(String(e.message)));
+      finish(127);
+    });
+    child.on("close", (code, sig) => finish(code ?? (sig ? 137 : 1)));
+    if (opts.signal?.aborted) kill();
+  });
 }
 
 export function isPrivateAddress(ip: string): boolean {

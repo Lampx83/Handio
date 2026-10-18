@@ -126,6 +126,14 @@ export interface Settings {
   tasks?: import("./schedule").ScheduledTask[];
   /** Thông báo của hệ thống (Desktop) khi tác vụ định kỳ chạy xong/lỗi. Mặc định bật. */
   taskNotify?: boolean;
+  /** Tab Code (Desktop): chạy lệnh shell trong container Docker (container.ts). Mặc định tắt. */
+  container?: boolean;
+  /** Cho lệnh trong container ra mạng (mặc định tắt; chính sách `bashNetwork:false` luôn thắng). */
+  containerNetwork?: boolean;
+  /** Cổng xem trước của máy chủ dev trong container, mở trên 127.0.0.1 (chỉ khi có mạng). */
+  containerPorts?: number[];
+  /** Ảnh Docker. Chỉ sửa tay trong tệp cài đặt (không qua giao diện) hoặc do chính sách đặt. */
+  containerImage?: string;
 }
 
 /** Bản gửi cho giao diện: không chứa key. */
@@ -292,6 +300,8 @@ export interface AgentController {
   sharedChats?(): Promise<import("./share").SharedChatInfo[]>;
   unshareChat?(id: string): Promise<{ ok: boolean; message: string }>;
   diagnosticsStatus?(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }>;
+  /** Tab Code (Desktop): trạng thái container Docker cho lệnh shell (container.ts). */
+  sandboxStatus?(): Promise<import("./container").SandboxStatus | null>;
   diagnosticsPreview?(note: string): Promise<string | null>;
   diagnosticsSend?(): Promise<{ ok: boolean }>;
 }

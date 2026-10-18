@@ -4,8 +4,8 @@ import os from "node:os";
 import fs from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import path from "node:path";
-import { brandName, buildWorkSamples, cleanProjectName, createMultiProject, ID_RE, LocalController, newId, parsePolicy, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type Policy, type Profile, type RawPack, type ProjectHost, type TaskLock, type ProjectInfo, type ProjectsState, type SessionEvent } from "@neu/agent-core";
-import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, readPackDirs, type KeyCodec } from "@neu/agent-env-node";
+import { brandName, buildWorkSamples, cleanProjectName, containerImage, createMultiProject, decideContainer, ID_RE, LocalController, newId, parsePolicy, sanitizeImage, sanitizePorts, uniqueProjectName, PROFILE_ORDER, SAMPLE_DESIGN, SAMPLE_PROJECT, type ContainerSettings, type DockerProbe, type Policy, type Profile, type RawPack, type ProjectHost, type ProjectInfo, type ProjectsState, type SandboxStatus, type SessionEvent, type TaskLock } from "@neu/agent-core";
+import { cleanupContainers, cleanupContainersSync, containersStarted, findDocker, JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, probeDocker, readPackDirs, type ContainerChoice, type KeyCodec } from "@neu/agent-env-node";
 import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
 import { canInstallHere, launchInstaller } from "./installer";
@@ -183,8 +183,45 @@ const shrinkImage: NonNullable<NodeEnv["shrinkImage"]> = async (bytes, _mime, o)
     return null;
   }
 };
+// ---------------------------------------------------------------- container Docker cho lệnh của tab Code (tuỳ chọn; docs/SECURITY.md)
+let dockerBin: string | null | undefined;
+let dockerCache: { at: number; image: string; probe: DockerProbe } | null = null;
+/** Dò Docker (có nhớ tạm: dùng được thì 60 giây, không dùng được thì 10 giây). `force` = dò lại ngay (mở Cài đặt). */
+async function dockerProbe(image: string, force = false): Promise<DockerProbe> {
+  const ttl = dockerCache?.probe.ok ? 60_000 : 10_000;
+  if (!force && dockerCache && dockerCache.image === image && Date.now() - dockerCache.at < ttl) return dockerCache.probe;
+  if (!dockerBin || force) dockerBin = findDocker();
+  const probe = await probeDocker(dockerBin, image);
+  dockerCache = { at: Date.now(), image, probe };
+  return probe;
+}
+/** Phần container trong cài đặt NGƯỜI DÙNG (đọc thẳng tệp, không chạm kho khoá). Cấu hình trong thư mục dự án không bao giờ được đọc ở đây. */
+async function containerSettings(): Promise<ContainerSettings> {
+  try {
+    const r = JSON.parse(await fs.readFile(path.join(userData(), "settings.json"), "utf8")) as Record<string, unknown>;
+    return { container: r.container === true, containerNetwork: r.containerNetwork === true, containerPorts: sanitizePorts(r.containerPorts), containerImage: sanitizeImage(r.containerImage) };
+  } catch {
+    return {};
+  }
+}
+async function containerChoice(force = false): Promise<ContainerChoice & { probe: DockerProbe | null }> {
+  const s = await containerSettings();
+  const wanted = policy.requireContainer === true || s.container === true;
+  const probe = wanted || force ? await dockerProbe(containerImage(s, policy), force) : null;
+  return { ...decideContainer(s, policy, wanted ? probe : null), docker: dockerBin ?? undefined, probe };
+}
+async function sandboxStatus(): Promise<SandboxStatus> {
+  const { probe, docker: _bin, ...d } = await containerChoice(true);
+  return { ...d, docker: probe ?? { ok: false }, networkLocked: policy.bashNetwork === false };
+}
+
 const makeEnv = (profile: Profile, dir: string) => {
-  const env = new NodeEnv(dir, { allowExec: profile === "code", sandbox: process.platform === "darwin" ? { network: policy.bashNetwork !== false } : false });
+  const env = new NodeEnv(dir, {
+    allowExec: profile === "code",
+    sandbox: process.platform === "darwin" ? { network: policy.bashNetwork !== false } : false,
+    // tab Code: mỗi lệnh hỏi lại có chạy trong container không (đổi công tắc có hiệu lực ngay, Docker tắt giữa chừng thì báo rõ)
+    container: profile === "code" && !SMOKE ? { decide: () => containerChoice(), required: policy.requireContainer === true } : undefined,
+  });
   env.shrinkImage = shrinkImage;
   if (profile === "work") env.htmlToPdf = (html, o) => renderDesign(html, { format: "pdf", width: 794, footer: o.footer ?? "" });
   // tab Code: agent tự thấy lỗi console/trang trắng của ứng dụng web đang làm (trình duyệt ẩn, cách ly, chỉ localhost/tệp dự án)
@@ -386,6 +423,7 @@ async function buildController(profile: Profile): Promise<LocalController> {
     realFs: true,
     // tác vụ định kỳ: một bộ lập lịch cho cả tab chạy cả dự án chưa mở (khi ứng dụng đang mở và đã đăng nhập); cả ứng dụng chỉ một tác vụ mỗi lúc
     tasks: { enabled: !SMOKE, background: true, lock: taskLock, canRun: () => !auth || auth.status().signedIn },
+    sandbox: profile === "code" && !SMOKE ? { status: sandboxStatus } : undefined,
     packs: loadPacks,
     toolsBase: __DEFAULT_BASE_URL__.replace(/\/vllm\/v1\/?$/, "/"),
     projects: host,
@@ -793,6 +831,8 @@ app.whenReady().then(async () => {
   buildMenu();
   await createWindow();
   startUpdater();
+  // lần trước ứng dụng bị tắt ngang khi đang có container: dọn (chỉ khi đang dùng container, để không gọi docker vô cớ)
+  if (!SMOKE) void containerChoice().then((c) => { if (c.mode === "docker" && c.docker) return cleanupContainers(c.docker); }).catch(() => undefined);
   if (!SMOKE && app.isPackaged) {
     // làm tiếp việc dở sau cập nhật: đợi cửa sổ tải xong và (nếu cần) đã đăng nhập
     const go = () => setTimeout(() => void resumeAfterUpdate(), 2500);
@@ -835,6 +875,8 @@ app.on("will-quit", () => {
   } catch {
     /* không được làm kẹt việc thoát */
   }
+  // container chạy nền (máy chủ dev…) không tự dừng khi ứng dụng thoát: xoá các container mang nhãn của ứng dụng
+  if (dockerBin && containersStarted()) cleanupContainersSync(dockerBin);
 });
 app.on("window-all-closed", () => {
   mockServer?.close();

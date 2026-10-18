@@ -120,12 +120,15 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   revealWorkspace: (a) => a.length === 0,
   saveSettings: (a) => {
     if (a.length !== 1 || !isObj(a[0])) return false;
-    const allowed = new Set(["baseUrl", "model", "key", "thinking", "allowInsecureHttp", "diagnostics", "mode", "temperature", "maxOutputTokens", "maxSteps", "contextTokens"]);
+    // container (tab Code): chỉ công tắc bật/tắt, mạng, cổng xem trước; ẢNH Docker không bao giờ đặt được qua IPC (chỉ tệp cài đặt/chính sách)
+    const allowed = new Set(["baseUrl", "model", "key", "thinking", "allowInsecureHttp", "diagnostics", "mode", "temperature", "maxOutputTokens", "maxSteps", "contextTokens", "container", "containerNetwork", "containerPorts"]);
     const num = (v: unknown, min: number, max: number, int: boolean) => typeof v === "number" && Number.isFinite(v) && v >= min && v <= max && (!int || Number.isInteger(v));
     const ok: Record<string, (v: unknown) => boolean> = {
       thinking: (v) => typeof v === "boolean", allowInsecureHttp: (v) => typeof v === "boolean", diagnostics: (v) => typeof v === "boolean",
       mode: (v) => typeof v === "string" && MODES.includes(v) && v !== "bypass", /* chế độ mặc định được LƯU không bao giờ là “Toàn quyền” */ temperature: (v) => num(v, 0, 2, false),
       maxOutputTokens: (v) => num(v, 256, 16384, true), maxSteps: (v) => num(v, 1, 200, true), contextTokens: (v) => num(v, 4096, 131072, true),
+      container: (v) => typeof v === "boolean", containerNetwork: (v) => typeof v === "boolean",
+      containerPorts: (v) => Array.isArray(v) && v.length <= 5 && v.every((p, i, all) => num(p, 1024, 65535, true) && all.indexOf(p) === i),
     };
     return Object.entries(a[0]).every(([k, v]) => allowed.has(k) && (ok[k] ? ok[k](v) : str(v, 2000)));
   },
@@ -139,6 +142,7 @@ export const IPC_VALIDATORS: Record<string, Validator> = {
   unshareChat: (a) => a.length === 1 && typeof a[0] === "string" && /^[A-Za-z0-9_-]{22}$/.test(a[0]),
   sendFeedback: (a) => a.length === 1 && isObj(a[0]) && typeof a[0].kind === "string" && ["bug", "idea", "praise", "other"].includes(a[0].kind) && str(a[0].text, 3000) && typeof a[0].tech === "boolean" && Object.keys(a[0]).length === 3,
   diagnosticsStatus: (a) => a.length === 0,
+  sandboxStatus: (a) => a.length === 0,
   diagnosticsPreview: (a) => a.length === 1 && str(a[0], 500),
   diagnosticsSend: (a) => a.length === 0,
   resetPermissions: (a) => a.length === 0,

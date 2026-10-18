@@ -20,6 +20,7 @@ export * from "./samples-work";
 export * from "./learning-types";
 export * from "./sensitive";
 export * from "./policy";
+export * from "./container";
 export * from "./processes";
 export * from "./hooks";
 export * from "./mcp";

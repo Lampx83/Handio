@@ -457,6 +457,21 @@ export class Session {
     this.designMd = this.profile === "design" ? await loadDesignMd(this.o.env, this.ctx.root) : "";
   }
 
+  /** Dòng "Sandbox" trong lời nhắc hệ thống: theo đúng nơi lệnh đang chạy (sandbox hệ điều hành / container Docker / bị từ chối). */
+  private sandboxPrompt(): string {
+    const sb = this.o.env.sandbox;
+    if (!sb) return "";
+    if (sb.kind !== "seatbelt" && !this.tools.has("bash")) return ""; // seatbelt: giữ đúng lời nhắc cũ
+    const note = sb.note ? ` Note: ${sb.note}` : "";
+    if (sb.kind === "refuse") return `\n- Shell: commands are currently REFUSED (${sb.note ?? "sandbox required"}). Do not retry bash; tell the user to start Docker Desktop.`;
+    if (sb.kind === "docker") {
+      const ports = sb.ports?.length ? ` Web/dev servers started with background=true must listen on 0.0.0.0 and one of the preview ports ${sb.ports.join(", ")} (e.g. \`npx vite --host 0.0.0.0 --port ${sb.ports[0]}\`); the user opens http://localhost:<port>.` : " Dev servers inside the container are NOT reachable from the user's browser (no preview ports configured).";
+      return `\n- Sandbox: shell commands run inside a Linux Docker container (image ${sb.image ?? "?"}) as a non-root user. The project folder is mounted at /workspace (= the working directory, use relative paths; host absolute paths do not exist there). Nothing else from the user's computer is visible, programs installed on the user's computer are NOT available (only what the image provides), the filesystem outside /workspace and /tmp is read-only, and /tmp is wiped after each command${sb.network ? "" : ". There is NO network access (installing packages from the internet fails)"}. Install project dependencies inside the project (npm install, python -m venv .venv).${sb.network ? ports : ""} If a command fails because a tool is missing or a write is denied, explain that this is the container and suggest a safe alternative instead of trying to bypass it.`;
+    }
+    if (sb.kind === "seatbelt") return `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${sb.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.${note}`;
+    return note ? `\n- Shell:${note}` : "";
+  }
+
   systemPrompt(def: AgentDef | null, depth: number): string {
     const caps = [this.tools.has("bash") ? "bash (real shell)" : "no shell", this.tools.has("run_javascript") ? "run_javascript (sandbox)" : "", this.tools.has("web_fetch") ? "web_fetch" : ""].filter(Boolean).join(", ");
     let base = brandText(PROFILES[this.profile].systemBase);
@@ -464,7 +479,7 @@ export class Session {
     if (!this.tools.has("check_page")) base = base.replace(/but check_page can \(when available\):[\s\S]*?(?=Also run the build)/, "after starting the dev server (bash background=true) a dev server does NOT report missing imports or broken CSS until the page loads, so ALSO run the linter (npm run lint: no-undef / jsx-no-undef catch a component that is used but never imported) and the build, and fix every error. ").replace(/\bcheck_page\b/g, "a browser check");
     const parts = [base];
     if (def) parts.push(`\nYou are the subagent '${def.name}'. ${def.prompt}\nYou cannot see the main conversation; work only from the task you are given and finish with a compact report.`);
-    parts.push(`\nEnvironment:\n- Working directory: ${this.ctx.root} (give file paths RELATIVE to it, e.g. report.docx or notes/a.md; never type the full path)\n- Platform: ${this.o.env.platform}\n- Date: ${new Date().toISOString().slice(0, 10)}\n- Capabilities: ${caps}${this.o.env.sandbox ? `\n- Sandbox: shell commands run inside an OS sandbox: they can write ONLY inside the project folder and temp/cache folders, cannot read the user's secret stores (~/.ssh, keychains, browser data, shell history)${this.o.env.sandbox.network ? "" : ", and have NO network access"}. If a command fails with "Operation not permitted", explain that this is the sandbox and suggest a safe alternative instead of trying to bypass it.` : ""}`);
+    parts.push(`\nEnvironment:\n- Working directory: ${this.ctx.root} (give file paths RELATIVE to it, e.g. report.docx or notes/a.md; never type the full path)\n- Platform: ${this.o.env.platform}\n- Date: ${new Date().toISOString().slice(0, 10)}\n- Capabilities: ${caps}${this.sandboxPrompt()}`);
     if (this.snapshot && depth === 0) parts.push(`\nProject files at the start of this chat (top levels; use list_dir/glob for more, do not re-explore what is listed):\n${this.snapshot}`);
     if (this.perms.mode === "plan" && depth === 0)
       parts.push("\nYou are in PLAN MODE: only read and explore (read_file, grep, glob, list_dir, task 'explore'). Do NOT modify anything. When ready you MUST call the exit_plan_mode tool with a concrete plan in short markdown: (1) goal in one sentence, (2) the exact files to change and anything you will NOT touch, (3) numbered steps in a verifiable order, (4) how you will check each step (command, test or what to look at), (5) open questions or assumptions the user should confirm. Do not just print the plan and ask for confirmation in text: exit_plan_mode is how the user approves it.");
@@ -866,6 +881,15 @@ export class Session {
     return `${bar} ~${pct}% · ${used}/${limit} token\n` + rows.map(([n, v]) => `${n.padEnd(20)} ${v}`).join("\n") + `\nTổng: ${this.promptTokens} token vào / ${this.completionTokens} ra · ${this.calls} lần gọi`;
   }
 
+  private terminalStatus(): string {
+    const sb = this.o.env.sandbox;
+    if (!this.o.env.exec) return "";
+    if (!sb || sb.kind === "none") return " · không sandbox" + (sb?.note ? ` · ${sb.note}` : "");
+    if (sb.kind === "refuse") return ` · bị từ chối: ${sb.note ?? ""}`;
+    const what = sb.kind === "docker" ? `container Docker (${sb.image ?? "?"})` : `sandbox ${sb.kind}`;
+    return ` · ${what}${sb.network ? "" : ", không mạng"}${sb.ports?.length ? `, cổng xem trước ${sb.ports.join(", ")}` : ""}${sb.note ? ` · ${sb.note}` : ""}`;
+  }
+
   /** /status: tình trạng phiên (kiểu Codex). */
   private async statusReport(): Promise<string> {
     const s = this.o.getSettings();
@@ -874,7 +898,7 @@ export class Session {
     return [
       `Mô hình: ${s.model} · Chế độ: ${this.mode}`,
       `Thư mục: ${this.ctx.root}`,
-      `Terminal: ${this.o.env.exec ? "có" : "không"}${this.o.env.sandbox ? ` · sandbox ${this.o.env.sandbox.kind}${this.o.env.sandbox.network ? "" : ", không mạng"}` : this.o.env.exec ? " · không sandbox" : ""}`,
+      `Terminal: ${this.o.env.exec ? "có" : "không"}${this.terminalStatus()}`,
       `Ngữ cảnh ~${this.contextPct()}% · ${this.calls} lần gọi · ${this.main.messages.length} tin nhắn`,
       ...(this.profile === "code" ? [`Đã thay đổi ${ch} tệp · ${procs} tiến trình nền`] : []),
       `Hướng dẫn dự án: ${this.memory.map((m) => m.name).join(", ") || "(chưa có)"}`,

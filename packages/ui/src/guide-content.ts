@@ -183,7 +183,7 @@ export const GUIDE: Record<GuideTab, GuideSection[]> = {
     {
       id: "meo", title: "Mẹo & thủ thuật", icon: "✨",
       items: [
-        { t: "🎯 Chỉ vào để sửa", d: "Bấm nút 🎯 trên khung xem trước, bấm vào tiêu đề/nút/khối cần đổi, rồi chọn “To hơn / Đổi màu / Căn giữa…” hoặc gõ vài chữ. Không phải mô tả “cái nút thứ hai bên trái”." },
+        { t: "🎯 Chỉ vào để sửa", d: "Bấm nút 🎯 trên khung xem trước, bấm vào tiêu đề/nút/khối cần đổi, rồi chọn “To hơn / Đổi màu / Căn giữa…” hoặc gõ vài chữ. Không phải mô tả “cái nút thứ hai bên trái”. Sửa nhiều chỗ: bấm “+ Ghi chú” sau mỗi phần rồi Gửi một lần." },
         { t: "Nói bằng cảm xúc và màu", d: "“Trẻ trung, tông cam – xanh”, “trang trọng, vàng đồng” giúp agent chọn đúng phong cách." },
         { t: "Dán ý chính, để agent viết lời", d: "Cho 3–5 gạch đầu dòng; nó viết nội dung hoàn chỉnh, ngắn gọn, đúng giọng." },
         { t: "Tạo biến thể", d: "Gõ /bienthe để có phiên bản khác (màu, bố cục) thành tệp mới, không mất bản cũ.", tryIt: "/bienthe đổi sang tông xanh lá" },

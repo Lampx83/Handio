@@ -276,7 +276,7 @@ class App {
         this.meterBtn,
         this.codeTools.modelEl, this.sendBtn)));
     const main = h("main", { class: "main" }, this.bannerHost, this.feed, composer);
-    this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path), (text) => void this.submit(text));
+    this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path), (text) => void this.submit(text), (path) => void this.openFile(path));
     this.pvHost.append(this.pv.el);
     // cột phải: danh sách tệp, hoặc khung xem của tab (Work: tài liệu, Design: xem trước, Code: thay đổi)
     this.filesView.append(

@@ -63,6 +63,7 @@ class IpcController implements AgentController {
   diagnosticsStatus = () => this.call<any>("diagnosticsStatus");
   diagnosticsPreview = (n: string) => this.call<string | null>("diagnosticsPreview", n);
   diagnosticsSend = () => this.call<any>("diagnosticsSend");
+  sandboxStatus = () => this.call<any>("sandboxStatus").catch(() => null);
   resetPermissions = () => this.call<void>("resetPermissions");
   trustProject = (t: boolean) => this.call<void>("trustProject", t);
   openFolder = () => this.call<void>("openFolder");

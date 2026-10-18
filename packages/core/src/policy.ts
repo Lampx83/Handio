@@ -1,3 +1,4 @@
+import { sanitizeImage } from "./container";
 import { MODES, type Mode } from "./permissions";
 
 /**
@@ -15,6 +16,10 @@ export interface Policy {
   bashNetwork?: boolean;
   /** true = tab Code không có công cụ chạy lệnh. */
   disableBash?: boolean;
+  /** true = lệnh shell của tab Code BẮT BUỘC chạy trong container Docker (người dùng không tắt được); Docker không chạy thì từ chối lệnh, không hạ cấp. */
+  requireContainer?: boolean;
+  /** Ảnh Docker cho container (ghi đè cài đặt người dùng). Chỉ đặt được ở đây hoặc trong cài đặt người dùng, không bao giờ từ thư mục dự án. */
+  containerImage?: string;
   /** Lời nhắn hiển thị cho người dùng (vd liên hệ hỗ trợ). */
   notice?: string;
   /** false = tắt hẳn chẩn đoán/báo lỗi ẩn danh (người dùng không bật lại được). Xem docs/DIAGNOSTICS.md. */
@@ -30,6 +35,9 @@ export function parsePolicy(raw: unknown): Policy {
   if (typeof r.allowBypass === "boolean") p.allowBypass = r.allowBypass;
   if (typeof r.bashNetwork === "boolean") p.bashNetwork = r.bashNetwork;
   if (typeof r.disableBash === "boolean") p.disableBash = r.disableBash;
+  if (typeof r.requireContainer === "boolean") p.requireContainer = r.requireContainer;
+  const image = sanitizeImage(r.containerImage);
+  if (image) p.containerImage = image;
   if (typeof r.notice === "string") p.notice = r.notice.slice(0, 500);
   if (typeof r.diagnostics === "boolean") p.diagnostics = r.diagnostics;
   return p;
