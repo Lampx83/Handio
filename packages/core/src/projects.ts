@@ -93,7 +93,11 @@ export const isInternalUser = (t: string): boolean => /^\[(Tôi vừa tự chạ
 /** Tiêu đề cuộc trò chuyện = câu hỏi đầu tiên của người dùng. */
 export function chatTitle(messages: ChatMessage[]): string {
   const first = messages.find((m) => m.role === "user" && m.content && !isInternalUser(m.content));
-  const t = (first?.content ?? "").replace(/\s+/g, " ").trim();
+  const raw = first?.content ?? "";
+  // ảnh dán: tham chiếu @dan/<tên>.png không phải là tiêu đề (giao diện hiện ảnh); chỉ có ảnh thì đặt tên theo ảnh
+  const noRef = raw.replace(/(^|\s)@(?:dan|\.neuagent\/pasted)\/[^\s]+?\.(?:png|jpe?g|webp|gif)(?=\s|$)/gi, "$1");
+  const t = noRef.replace(/\s+/g, " ").trim();
+  if (!t && noRef !== raw) return "Ảnh đính kèm";
   return t ? (t.length > 60 ? t.slice(0, 58) + "…" : t) : "Cuộc trò chuyện mới";
 }
 
