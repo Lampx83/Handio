@@ -10,6 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { guideCss, styleTag } from "./guide-css.mjs";
 
 export const VERSION_RE = /^(\d{1,4})\.(\d{1,4})\.(\d{1,4})(?:-([0-9A-Za-z.]{1,16}))?$/;
 export const UNRELEASED = "Chưa phát hành";
@@ -85,11 +86,50 @@ const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const inline = (t) => esc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
 
 /** Trang HTML tĩnh (không script, không tài nguyên ngoài) của nhật ký thay đổi, để phục vụ công khai cạnh trang hướng dẫn. */
-export function changelogHtml(data, { title = "Nhật ký thay đổi NEU Agent", back = "./" } = {}) {
+export function changelogHtml(data, { title = "Nhật ký thay đổi NEU Agent", back = "./", css = guideCss() } = {}) {
+  const id = (v) => "v" + String(v).replace(/[^0-9A-Za-z]+/g, "-");
   const body = data
-    .map((r) => `<section><h2>Phiên bản ${esc(r.version)}${r.date ? ` <small>${esc(r.date)}</small>` : ""}</h2>${r.sections.map((s) => `<h3>${esc(s.title)}</h3><ul>${s.items.map((i) => `<li>${inline(i)}</li>`).join("")}</ul>`).join("")}</section>`)
+    .map((r) => `<section class="rel" id="${id(r.version)}"><h2>Phiên bản ${esc(r.version)}${r.date ? ` <small>${esc(r.date)}</small>` : ""}</h2>${r.sections.map((s) => `<h3>${esc(s.title)}</h3><ul>${s.items.map((i) => `<li>${inline(i)}</li>`).join("")}</ul>`).join("")}</section>`)
     .join("\n");
-  return `<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>:root{color-scheme:light dark;--bg:#fff;--fg:#1f2328;--mut:#6b7078;--line:#dedcd3;--acc:#0b4a9e}@media (prefers-color-scheme:dark){:root{--bg:#17181a;--fg:#e8e6e1;--mut:#9a9ea6;--line:#34363b;--acc:#5b9bff}}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,"Segoe UI",Roboto,Arial,sans-serif}main{max-width:760px;margin:0 auto;padding:24px 18px 60px}a{color:var(--acc)}h1{font-size:26px}h2{border-bottom:1px solid var(--line);padding-bottom:4px;margin-top:34px}h2 small{color:var(--mut);font-weight:400;font-size:14px;margin-left:8px}h3{font-size:15px;color:var(--mut);margin:16px 0 4px}li{margin:4px 0}code{background:rgba(127,127,127,.15);border-radius:4px;padding:0 4px}</style></head><body><main><p><a href="${esc(back)}">← Hướng dẫn</a></p><h1>${esc(title)}</h1><p style="color:var(--mut)">Mỗi phiên bản sửa gì, thêm gì đều được ghi ở đây.</p>${body}</main></body></html>`;
+  const toc = data.map((r) => `<li><a href="#${id(r.version)}">${esc(r.version)}${r.date ? ` <small>${esc(r.date)}</small>` : ""}</a></li>`).join("");
+  const nav = `<a href="${esc(back)}">Giới thiệu</a><a href="help.html">Hướng dẫn</a><a href="changelog.html" aria-current="page">Có gì mới</a><a href="privacy.html">Quyền riêng tư</a>`;
+  const logo = `<img src="img/handio-mark.svg" width="28" height="28" alt="">NEU Agent`;
+  const desc = "Mỗi phiên bản NEU Agent sửa gì, thêm gì.";
+  // Khung (thanh trên, mục lục, chân trang) giống help.html/privacy.html; kiểu lấy từ deploy/220/guide-site.css (scripts/guide-css.mjs)
+  return `<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}">
+<meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="vi_VN">
+<meta property="og:site_name" content="NEU Agent">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(desc)}">
+<meta property="og:url" content="https://ai.neu.edu.vn/agent/guide/changelog.html">
+<link rel="icon" href="img/handio-mark.svg" type="image/svg+xml">
+${styleTag(css)}
+</head>
+<body>
+<a class="skip" href="#noi-dung">Tới nội dung chính</a>
+<header class="site-head"><div class="wrap"><a class="brand" href="${esc(back)}">${logo}</a><nav class="site-nav" aria-label="Chính">${nav}</nav><div class="head-cta"><a class="btn btn-primary" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></div><details class="menu"><summary aria-label="Mở menu"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary><nav class="menu-panel" aria-label="Menu">${nav}</nav></details></div></header>
+<main id="noi-dung">
+<div class="doc-hero"><div class="wrap"><p class="kicker">Có gì mới</p><h1>${esc(title)}</h1><p class="lead">Mỗi phiên bản sửa gì, thêm gì đều được ghi ở đây.</p></div></div>
+<div class="wrap doc">
+<nav class="toc toc-wide" aria-label="Các phiên bản"><span class="toc-t">Phiên bản</span><ol>${toc}</ol></nav>
+<div class="prose">
+${body}
+</div>
+</div>
+</main>
+<footer class="site-foot"><div class="wrap"><div><a class="brand" href="${esc(back)}">${logo}</a><p>Khoa Công nghệ thông tin · Trường Đại học Kinh tế Quốc dân</p></div><nav aria-label="Chân trang"><a href="${esc(back)}">Giới thiệu</a><a href="help.html">Hướng dẫn sử dụng</a><a href="privacy.html">Quyền riêng tư</a><a href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập</a></nav></div></footer>
+</body>
+</html>
+`;
 }
 
 function repoRoot() {
