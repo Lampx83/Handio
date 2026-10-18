@@ -100,3 +100,18 @@ describe("mô tả edit_file", () => {
     expect(d).toMatch(/short/);
   });
 });
+
+describe("edit_file khi tệp đã có sẵn nội dung mới", () => {
+  it("old_string không còn mà new_string đã có: báo không cần sửa (không phải lỗi), không ghi tệp", async () => {
+    const done = JS.replace("x.price", "x.cost");
+    const { res, file } = await edit(done, { old_string: "for (const x of items) sum += x.price;", new_string: "for (const x of items) sum += x.cost;" });
+    expect(res.ok).toBe(true);
+    expect(res.output).toMatch(/Không cần sửa/);
+    expect(file).toBe(done);
+  });
+  it("new_string quá ngắn hoặc không có trong tệp: vẫn là lỗi không khớp như cũ", async () => {
+    const { res } = await edit(JS, { old_string: "KHONG CO DONG NAY", new_string: "cũng không có ở đâu cả nhé" });
+    expect(res.ok).toBe(false);
+    expect(res.kind ?? "").toMatch(/no_match|^$/);
+  });
+});

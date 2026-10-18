@@ -22,6 +22,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Số liệu quản trị đúng hơn**: bản web nay báo số phiên bản thật (trước đây luôn ghi 0.1.0 nên không phân biệt được các bản), tỷ lệ "đã cập nhật" và cảnh báo "máy chạy bản cũ" chỉ tính máy Desktop (web luôn mới nhất), và bảng «Công việc người dùng làm» phân loại thêm tin nối tiếp ("ok", "làm tiếp đi") và câu hỏi để ít bị xếp vào "khác".
 
 ### Sửa
+- **Agent không còn sửa đi sửa lại một chỗ đã sửa xong**: khi đoạn cần thay không còn nhưng tệp đã có sẵn nội dung mới, agent được báo "không cần sửa" thay vì lỗi rồi thử lại.
 - **Agent không còn "quên" sau khi tóm tắt ngữ cảnh** (cuộc trò chuyện dài): ngoài bản tóm tắt, agent luôn được nhắc lại nguyên văn yêu cầu gần nhất của bạn, các tệp đã tạo/sửa, danh sách việc và máy chủ đang chạy, nên không làm lại từ đầu hay bật lại máy chủ.
 - **Agent không còn bật đi bật lại máy chủ web**: lệnh chạy máy chủ (`npm run dev`, `streamlit run`…) tự chạy nền; máy chủ đang chạy mà chưa có tệp nào đổi thì giữ nguyên thay vì tắt rồi bật lại (vòng lặp hay gặp nhất trong số liệu).
 - **Agent nhận ra mình đang giậm chân tại chỗ sớm hơn**: làm lại đúng một thao tác mà ra đúng kết quả cũ (kể cả xen giữa các thao tác khác) thì được nhắc ở lần 3 và dừng ở lần 4; 6 thao tác lỗi liên tiếp thì dừng để hỏi bạn thay vì thử mãi. Sửa tệp giữa các lần chạy thì không tính.
