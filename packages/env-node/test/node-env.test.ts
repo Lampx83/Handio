@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { LocalController, resolveSafe, ToolError, type ToolContext } from "@neu/agent-core";
-import { JsonSettingsStore, JsonTrustStore, NodeEnv, assertPublicHost, htmlToText, isPrivateAddress } from "../src";
+import { JsonChatStore, JsonSettingsStore, JsonTrustStore, NodeEnv, assertPublicHost, htmlToText, isPrivateAddress } from "../src";
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "neu-env-")));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -347,5 +347,16 @@ describe("ảnh dán trong thư mục tạm là symlink (macOS: /var → /privat
       if (old === undefined) delete process.env.TMPDIR;
       else process.env.TMPDIR = old;
     }
+  });
+});
+
+describe("JsonChatStore", () => {
+  it("giữ dấu 'lần chạy tác vụ định kỳ' trong danh sách; bỏ giá trị lạ", async () => {
+    const st = new JsonChatStore(path.join(tmp, "chats"));
+    await st.save("p1", { id: "c1", title: "⏰ Báo cáo", updated: 2, turns: 1, task: "t1", messages: [] });
+    await st.save("p1", { id: "c2", title: "x", updated: 1, turns: 1, task: "../x", messages: [] });
+    const list = (await st.list("p1")).sort((a, b) => a.id.localeCompare(b.id));
+    expect(list[0]).toMatchObject({ id: "c1", task: "t1" });
+    expect(list[1].task).toBeUndefined();
   });
 });

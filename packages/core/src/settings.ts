@@ -50,6 +50,7 @@ export function normalizeSettings(raw: Partial<Settings> | null | undefined, def
   s.hooks = sanitizeHooks(r.hooks);
   s.mcpServers = sanitizeMcpServers(r.mcpServers);
   if (r.tasks !== undefined) s.tasks = sanitizeTasks(r.tasks);
+  if (r.taskNotify !== undefined) s.taskNotify = r.taskNotify !== false;
   // `mode` đã lưu = "default" là dấu vết của phiên bản cũ: giao diện không bao giờ lưu lựa chọn chế độ (chọn ở thanh dưới ô nhập chỉ có hiệu lực trong
   // phiên), nhưng cài đặt cũ ghi nguyên bản mặc định lúc đó vào tệp và nó đè lên mặc định sản phẩm ("auto"). Coi như chưa đặt.
   if (r.mode === "default" && defaults.mode && defaults.mode !== "default") s.mode = defaults.mode;

@@ -28,6 +28,8 @@ export interface ProjectsState {
 export interface ProjectHost {
   list(): Promise<ProjectsState>;
   open(id: string): Promise<Env>;
+  /** Môi trường của dự án mà KHÔNG đổi "dự án đang mở" (bộ lập lịch tác vụ định kỳ chạy dự án chưa mở). Không có = chỉ chạy tác vụ của dự án đã mở. */
+  peek?(id: string): Promise<Env>;
   create(spec: { name: string }): Promise<{ info: ProjectInfo; env: Env }>;
   /** Chọn một thư mục có sẵn làm dự án (hộp thoại hệ điều hành). null nếu huỷ. */
   pick?(): Promise<{ info: ProjectInfo; env: Env } | null>;
@@ -46,6 +48,8 @@ export interface ChatMeta {
   unfinished?: boolean;
   /** Agent đang làm việc trong cuộc trò chuyện này (không lưu). */
   running?: boolean;
+  /** Lần chạy tự động của tác vụ định kỳ có mã này (schedule.ts). */
+  task?: string;
 }
 export interface SavedChat extends ChatMeta {
   messages: ChatMessage[];

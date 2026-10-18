@@ -9,7 +9,7 @@ import type { ChangeDiff, ChangeFile, RevertResult } from "./changes";
 import type { RunSuggestion } from "./run-detect";
 import type { DocView } from "./office/locate";
 import type { Procedure } from "./work-ctl";
-import type { Every, ScheduledTask } from "./schedule";
+import type { Every, TaskView } from "./schedule";
 
 /** Một điểm có thể "quay lại" (/rewind): trước một yêu cầu của người dùng. */
 export interface RewindPoint {
@@ -92,7 +92,9 @@ export type SessionEvent =
   /** Tổng quan các dự án chạy NỀN (không phải dự án đang mở): bao nhiêu đang làm việc, bao nhiêu đã xong mà bạn chưa xem. */
   | { type: "projects"; running: number; finished: number }
   /** Sau khi cập nhật/khởi động lại: giao diện mở lại cuộc trò chuyện `chatId` rồi gửi `text` để agent làm tiếp việc đang dở. */
-  | { type: "resume"; chatId: string; text: string };
+  | { type: "resume"; chatId: string; text: string }
+  /** Một lần chạy tác vụ định kỳ vừa xong (kể cả ở dự án chưa mở). Không chứa kết quả: chỉ tên tác vụ (người dùng đặt) và trạng thái. `notify`: nên hiện thông báo hệ thống. */
+  | { type: "task_done"; taskId: string; projectId: string; name: string; status: "ok" | "error" | "skipped"; notify: boolean };
 
 export interface SlashCommandInfo {
   name: string;
@@ -121,7 +123,9 @@ export interface Settings {
   /** Mã ngẫu nhiên của máy cài (không phải danh tính), do bộ chẩn đoán tự tạo. */
   diagId?: string;
   /** Tác vụ định kỳ (schedule.ts). Chỉ sửa qua taskAdd/taskSet/taskRemove, không qua saveSettings của giao diện. */
-  tasks?: ScheduledTask[];
+  tasks?: import("./schedule").ScheduledTask[];
+  /** Thông báo của hệ thống (Desktop) khi tác vụ định kỳ chạy xong/lỗi. Mặc định bật. */
+  taskNotify?: boolean;
 }
 
 /** Bản gửi cho giao diện: không chứa key. */
@@ -263,12 +267,18 @@ export interface AgentController {
   procedureSave?(name: string, description?: string): Promise<{ ok: true; name: string } | { error: string }>;
   procedureRemove?(name: string): Promise<void>;
   /** Tác vụ định kỳ của dự án đang mở (chạy khi ứng dụng mở, quyền chặt: chỉ sửa tệp trong dự án). */
-  taskList?(): Promise<ScheduledTask[]>;
+  taskList?(): Promise<TaskView[]>;
   taskAdd?(spec: { name: string; prompt: string; every: Every }): Promise<{ ok: true; id: string } | { error: string }>;
   taskSet?(id: string, enabled: boolean): Promise<void>;
   taskRemove?(id: string): Promise<void>;
   /** Chạy một tác vụ ngay (vẫn tính vào giới hạn mỗi ngày). Trả về kết quả lần chạy. */
   taskRunNow?(id: string): Promise<{ status: "ok" | "error" | "skipped"; summary: string } | { error: string }>;
+  /** Dừng tác vụ định kỳ đang chạy trong dự án này. */
+  taskStop?(): Promise<void>;
+  /** Đưa các tệp lần chạy gần nhất của tác vụ đã sửa về như trước (tệp người dùng đã sửa lại sau đó thì giữ nguyên). */
+  taskUndo?(id: string): Promise<RevertResult | { error: string }>;
+  /** Thông báo hệ thống khi tác vụ xong/lỗi: không tham số = đọc, có = đặt. */
+  taskNotify?(on?: boolean): Promise<boolean>;
   /** Chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md): trạng thái; xem trước gói “Báo lỗi” (JSON đúng như sẽ gửi, null nếu bị cấm); gửi chính gói đó. */
   /** Ghi một việc người dùng làm trong giao diện (mã trong DIAG_UI_ACTS), cho chẩn đoán không chứa nội dung. Không có = bỏ qua. */
   track?(act: string): void;

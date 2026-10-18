@@ -275,6 +275,20 @@ describe("IPC: tác vụ định kỳ", () => {
     expect(ok("taskList")).toBe(true);
     expect(ok("taskList", 1)).toBe(false);
   });
+  it("lịch một lần, Dừng, Hoàn tác lần chạy, bật/tắt thông báo: chỉ nhận đúng hình dạng", () => {
+    for (const m of ["taskStop", "taskUndo", "taskNotify"]) expect(IPC_METHODS.has(m), m).toBe(true);
+    expect(ok("taskAdd", { ...good, every: { kind: "once", date: "2026-10-20", at: "09:00" } })).toBe(true);
+    for (const bad of [{ kind: "once", date: "20/10/2026", at: "09:00" }, { kind: "once", date: "2026-10-20T09:00", at: "09:00" }, { kind: "once", date: 20261020, at: "09:00" }, { kind: "once", date: "2026-10-20", at: "09:00", ts: 1 }])
+      expect(ok("taskAdd", { ...good, every: bad }), JSON.stringify(bad)).toBe(false);
+    expect(ok("taskStop")).toBe(true);
+    expect(ok("taskStop", "x")).toBe(false);
+    expect(ok("taskUndo", "abc123")).toBe(true);
+    for (const bad of ["../x", "A", "", 1]) expect(ok("taskUndo", bad), String(bad)).toBe(false);
+    expect(ok("taskUndo")).toBe(false);
+    expect(ok("taskNotify")).toBe(true);
+    expect(ok("taskNotify", false)).toBe(true);
+    for (const bad of [["yes"], [1], [true, true], [null]]) expect(ok("taskNotify", ...bad), JSON.stringify(bad)).toBe(false);
+  });
 });
 
 describe("cổng đăng nhập SSO", () => {

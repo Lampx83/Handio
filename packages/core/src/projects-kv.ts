@@ -1,5 +1,5 @@
 import type { Env } from "./env";
-import { cleanProjectName, newId, type ChatMeta, type ChatStore, type ProjectHost, type ProjectInfo, type ProjectsState, type SavedChat } from "./projects";
+import { cleanProjectName, ID_RE, newId, type ChatMeta, type ChatStore, type ProjectHost, type ProjectInfo, type ProjectsState, type SavedChat } from "./projects";
 
 /** Kho khoá–giá trị chuỗi (localStorage ở bản web; Map trong test). */
 export interface KeyValue {
@@ -36,7 +36,7 @@ export class KvChatStore implements ChatStore {
     this.kv.set(this.key(projectId), json);
   }
   async list(projectId: string): Promise<ChatMeta[]> {
-    return this.all(projectId).map(({ id, title, updated, turns, unfinished }) => ({ id, title, updated, turns, ...(unfinished ? { unfinished: true } : {}) }));
+    return this.all(projectId).map(({ id, title, updated, turns, unfinished, task }) => ({ id, title, updated, turns, ...(unfinished ? { unfinished: true } : {}), ...(typeof task === "string" && ID_RE.test(task) ? { task } : {}) }));
   }
   async load(projectId: string, id: string): Promise<SavedChat | null> {
     return this.all(projectId).find((c) => c.id === id) ?? null;
@@ -95,6 +95,18 @@ export class KvProjectHost implements ProjectHost {
     info.lastUsed = Date.now();
     r.active = id;
     this.save(r);
+    return env;
+  }
+
+  /** Môi trường của một dự án mà KHÔNG đổi dự án đang mở (bộ lập lịch tác vụ định kỳ). */
+  async peek(id: string): Promise<Env> {
+    const info = this.load().projects.find((p) => p.id === id);
+    if (!info) throw new Error("Không có dự án này.");
+    let env = this.envs.get(id);
+    if (!env) {
+      env = await this.makeEnv(info);
+      this.envs.set(id, env);
+    }
     return env;
   }
 
