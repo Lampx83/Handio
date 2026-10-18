@@ -655,8 +655,16 @@ def cmd_restore(args):
             return 0
 
         active = [u for u in units if is_active(u)]
-        safety = os.path.join(P(OUT), "before-restore-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
-        os.makedirs(safety, mode=0o700)
+        # tên theo giây có thể trùng (hai lần khôi phục trong cùng một giây): thêm số thay vì sập trước khi kịp giữ dữ liệu cũ
+        base = os.path.join(P(OUT), "before-restore-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+        safety, k = base, 1
+        while True:
+            try:
+                os.makedirs(safety, mode=0o700)
+                break
+            except FileExistsError:
+                k += 1
+                safety = "%s-%d" % (base, k)
         existed = {}
         for u in active:
             systemctl("stop", u + ".service")

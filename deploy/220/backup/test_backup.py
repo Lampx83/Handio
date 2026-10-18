@@ -447,6 +447,26 @@ class Restore(Base):
         self.assertEqual(B.read_bytes(os.path.join(safety, "quota/usage.db-wal")), b"wal cu con sot")
         self.assertEqual(os.stat(safety).st_mode & 0o777, 0o700)
 
+    def test_two_restores_in_same_second(self):
+        """Hai lần khôi phục trong cùng một giây (tên thư mục giữ lại theo giây trùng nhau): lần sau không được sập trước khi giữ dữ liệu cũ."""
+        import datetime as _dt
+        fixed = _dt.datetime(2026, 10, 18, 9, 28, 8)
+
+        class _Clock(_dt.datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return fixed
+
+        real = B.datetime.datetime
+        B.datetime.datetime = _Clock
+        self.addCleanup(setattr, B.datetime, "datetime", real)
+        rc1, out1 = self.run_cmd("restore", self.pkg, "--yes")
+        rc2, out2 = self.run_cmd("restore", self.pkg, "--yes")
+        self.assertEqual((rc1, rc2), (0, 0), out1 + out2)
+        s1, s2 = re.search(r"giữ ở (\S+)", out1).group(1), re.search(r"giữ ở (\S+)", out2).group(1)
+        self.assertNotEqual(s1, s2)
+        self.assertTrue(s2.endswith("-2"), s2)
+
     def test_only(self):
         rc, out = self.run_cmd("restore", self.pkg, "--only", "diag/users-seen.json", "--yes")
         self.assertEqual(rc, 0, out)
