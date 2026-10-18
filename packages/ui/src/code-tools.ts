@@ -1,5 +1,6 @@
 import type { AgentController, ChangeFile, DiffLine, HistoryItem, RewindPoint, RunSuggestion, SessionEvent, UiState } from "@neu/agent-core";
 import { clear, h } from "./dom";
+import { icon } from "./icons";
 
 /** Những gì CodeTools cần từ khung chat (App) — tránh phụ thuộc vòng. */
 export interface CodeToolsHost {
@@ -32,8 +33,8 @@ export class CodeTools {
   readonly buttons: HTMLElement[];
   readonly panel = h("aside", { class: "ch-host", hidden: true, "aria-label": "Thay đổi" });
   private chBtn = h("button", { class: "iconbtn chbtn", type: "button", hidden: true, "aria-label": "Thay đổi", title: "Các tệp agent đã đổi (/diff)", onclick: () => (this.ctl.track?.("changes_open"), this.togglePanel()) });
-  private rwBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Quay lại", title: "Quay lại một lượt trước (/rewind, Esc hai lần)", onclick: () => void this.openRewind() }, "↶");
-  private runBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Chạy", title: "Chạy / kiểm thử dự án", onclick: () => void this.toggleRun() }, "▶");
+  private rwBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Quay lại", title: "Quay lại một lượt trước (/rewind, Esc hai lần)", onclick: () => void this.openRewind() }, icon("undo"));
+  private runBtn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Chạy", title: "Chạy / kiểm thử dự án", onclick: () => void this.toggleRun() }, icon("play"));
   private modelBtn = h("button", { class: "iconbtn modelbtn", type: "button", hidden: true, "aria-label": "Mô hình", "aria-haspopup": "menu", title: "Đổi mô hình", onclick: () => void this.toggleModels() });
   private wrap = h("span", { class: "ct-wrap", style: { position: "relative", display: "inline-flex", gap: "6px" } });
   /** Nút chọn mô hình: đặt dưới ô nhập prompt (do app.ts gắn), menu mở lên phía trên. */
@@ -119,7 +120,7 @@ export class CodeTools {
       return;
     }
     clear(this.chBtn);
-    this.chBtn.append("±");
+    this.chBtn.append(icon("diff"));
     if (this.files.length) this.chBtn.append(h("span", { class: "ch-n" }, String(this.files.length)));
     this.chBtn.classList.toggle("has", this.files.length > 0);
     if (!this.panel.hidden) this.paintPanel();
@@ -134,7 +135,7 @@ export class CodeTools {
   private paintPanel(): void {
     clear(this.panel);
     const revertAll = h("button", { class: "btn sm danger", type: "button", disabled: !this.files.length, title: "Hoàn tác mọi thay đổi của agent trong cuộc trò chuyện này", onclick: () => void this.revert() }, "↩ Hết");
-    this.panel.append(h("div", { class: "ch-h" }, h("b", {}, "Thay đổi"), h("span", { class: "ch-mut" }, String(this.files.length)), h("span", { class: "grow" }), revertAll, h("button", { class: "iconbtn", type: "button", "aria-label": "Đóng", onclick: () => this.togglePanel(false) }, "✕")));
+    this.panel.append(h("div", { class: "ch-h" }, h("b", {}, "Thay đổi"), h("span", { class: "ch-mut" }, String(this.files.length)), h("span", { class: "grow" }), revertAll, h("button", { class: "iconbtn", type: "button", "aria-label": "Đóng", onclick: () => this.togglePanel(false) }, icon("x"))));
     if (!this.files.length) return void this.panel.append(h("div", { class: "ch-empty" }, "Chưa có thay đổi"));
     const list = h("div", { class: "ch-list" });
     for (const f of this.files) {
