@@ -13,6 +13,7 @@
     return e;
   }
   function msg(text, kind) {
+    if (!kind && /^Đã /.test(text || "")) kind = "ok";   // thông báo thành công ("Đã lưu…", "Đã xoá…") hiện màu xanh
     var s = $("status");
     s.textContent = "";
     if (!text) return;
@@ -73,7 +74,7 @@
       tr.appendChild(el("td", OPS[a.op] || a.op));
       tr.appendChild(el("td", a.name || "—", "mono"));
       var ok = el("td");
-      ok.appendChild(el("span", a.ok ? "Thành công" : "Thất bại", "tag" + (a.ok ? "" : " bad")));
+      ok.appendChild(el("span", a.ok ? "Thành công" : "Thất bại", "tag" + (a.ok ? " ok" : " bad")));
       tr.appendChild(ok);
       ab.appendChild(tr);
     });
@@ -125,7 +126,7 @@
       tr.appendChild(td);
       tr.appendChild(el("td", when(r.first)));
       tr.appendChild(el("td", when(r.last)));
-      tr.appendChild(el("td", String(r.turns)));
+      tr.appendChild(el("td", String(r.turns), "num"));
       var act = el("td");
       if (/^[0-9a-f]{8}$/.test(r.uid8 || "")) {
         var link = el("a", "Xem");

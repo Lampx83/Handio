@@ -713,7 +713,7 @@ def read_health(path, t):
 
 def range_nav(cur):
     """Hàng nút chọn khoảng thời gian (liên kết tới trang đã tạo sẵn của từng khoảng)."""
-    return '<span class="rng">Khoảng thời gian:' + "".join('<a href="%s" title="%s"%s>%s</a>' % (range_page(k), _e(range_info(k)["long"]), ' class="on" aria-current="page"' if k == cur else "", _e(RANGES[k][3])) for k in RANGES) + "</span>"
+    return '<span class="rng" role="group" aria-label="Khoảng thời gian">' + "".join('<a href="%s" title="%s"%s>%s</a>' % (range_page(k), _e(range_info(k)["long"]), ' class="on" aria-current="page"' if k == cur else "", _e(RANGES[k][3])) for k in RANGES) + "</span>"
 
 
 def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts=None):
@@ -747,20 +747,21 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
     info = info or {"linked": set(), "days": set(), "reports": []}
     dl = ["d-%s.html" % d if d in info["days"] else None for d in lab]
     if ok is None:
-        hs = '<span class="bad">chưa có dữ liệu kiểm tra sức khoẻ</span>'
+        hs = '<span class="status bad">Hệ thống: chưa có dữ liệu kiểm tra sức khoẻ</span>'
     elif ok:
-        hs = '<span class="ok">hoạt động tốt</span> (kiểm tra %d phút trước)' % max(age // 60, 0)
         warn = [nm for nm, v in checks.items() if v.get("warn")]
+        hs = '<span class="status good">Hệ thống: hoạt động tốt · kiểm tra %d phút trước</span>' % max(age // 60, 0)
         if warn:
-            hs += ' · <span class="bad">cảnh báo: %s</span>' % _e(", ".join(warn))
+            hs += ' <span class="status bad">cảnh báo: %s</span>' % _e(", ".join(warn))
     else:
-        hs = '<span class="bad">có sự cố: %s</span>' % _e(", ".join(failed) or "kiểm tra đã cũ")
+        hs = '<span class="status bad">Hệ thống: có sự cố: %s</span>' % _e(", ".join(failed) or "kiểm tra đã cũ")
     ret, e7, p = k["returning_7d"], k["error_rate_7d"], k["prev"]
     dur_all = [x["dur_p95"] for x in (ser if hourly else ser[-7:]) if x["dur_p95"] is not None]
-    o = ['<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị NEU Agent</title><style>%s</style></head><body data-refresh="600"><main>' % CSS]
-    o.append('<h1>Quản trị NEU Agent</h1><p class="sub">Cập nhật %s (giờ Việt Nam), tự làm mới mỗi 10 phút. Người dùng chỉ hiện dưới <b>mã giả danh</b>; không có email hay nội dung hội thoại. Đang xem <b>%s</b> (<a href="series-%s.csv">tải CSV</a>); các thẻ số đầu trang luôn theo cửa sổ cố định (24 giờ, 7 ngày, 30 ngày).</p>' % (_e(S["generated"]), _e(rg["long"]), _e(rg["key"])))
-    o.append('<nav class="top"><b>NEU Agent</b><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a><a href="#he-thong">Hệ thống</a>'
-             '<span style="flex:1"></span><span>Hệ thống: %s</span><a href="accounts">Tài khoản</a><a href="quota">Hạn mức</a><a href="feedback">Góp ý</a><a href="shares">Chia sẻ</a><a href="data.html">Dữ liệu &amp; CSV</a><a href="latest.html">Báo cáo chất lượng</a><a href="stats.json">JSON</a>%s</nav>' % (hs, range_nav(rg["key"])))
+    o = ['<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quản trị NEU Agent</title><style>%s</style></head><body data-refresh="600">%s<main>' % (CSS, R.appbar("index"))]
+    o.append('<div class="page-head"><div><h1>Quản trị NEU Agent</h1><p class="sub">Cập nhật %s (giờ Việt Nam), tự làm mới mỗi 10 phút. Người dùng chỉ hiện dưới <b>mã giả danh</b>; không có email hay nội dung hội thoại. Đang xem <b>%s</b>; các thẻ số đầu trang luôn theo cửa sổ cố định (24 giờ, 7 ngày, 30 ngày).</p></div>'
+             '<div class="actions">%s</div></div>' % (_e(S["generated"]), _e(rg["long"]), hs))
+    o.append('<div class="actions" style="justify-content:space-between;margin-bottom:8px">%s<span class="actions"><a class="btn sm" href="series-%s.csv">Tải CSV</a><a class="btn sm" href="stats.json">JSON</a></span></div>' % (range_nav(rg["key"]), _e(rg["key"])))
+    o.append('<nav class="sec" aria-label="Mục trên trang"><a href="#tong-quan">Tổng quan</a><a href="#tang-truong">Tăng trưởng &amp; giữ chân</a><a href="#chat-luong">Chất lượng</a><a href="#su-dung">Cách sử dụng</a><a href="#han-muc">Hạn mức token</a><a href="#nguoi-dung">Người dùng</a><a href="#he-thong">Hệ thống</a></nav>')
 
     # ---- tổng quan
     o.append('<h2 id="tong-quan">Tổng quan</h2>')
@@ -812,7 +813,7 @@ def render(S, health, report_links, nginx_note, info=None, sysinfo=None, cohorts
     if cohorts:
         wmax = max(len(c["ret"]) for c in cohorts)
         o.append("<h3>Giữ chân theo tuần</h3><p class=\"note\">Mỗi hàng là nhóm người dùng lần đầu xuất hiện trong tuần đó (thứ Hai đầu tuần). Mỗi cột là % số người của nhóm còn dùng ở tuần +0, +1, …</p>")
-        heat = lambda v: '<span style="display:block;margin:-5px -8px;padding:5px 8px;text-align:right;background:rgba(74,123,208,%.2f)">%s%%</span>' % (min(max(v, 0), 100) / 100 * .75, v)
+        heat = lambda v: '<span style="display:block;margin:-8px -12px;padding:8px 12px;text-align:right;background:color-mix(in srgb,var(--c1) %.0f%%,transparent)">%s%%</span>' % (min(max(v, 0), 100) * .6, v)
         o.append(table(["Tuần", "Người"] + ["+%d" % k for k in range(wmax)], [[c["week"], c["n"]] + [heat(v) for v in c["ret"]] + [""] * (wmax - len(c["ret"])) for c in cohorts], raw=tuple(range(2, 2 + wmax))))
 
     # ---- chất lượng

@@ -575,23 +575,92 @@ def _fmtnum(x, what=""):
     return ("%.3g" % x) if isinstance(x, float) else str(x)
 
 
-CSS = """:root{--bg:#fff;--fg:#1c2330;--mut:#5b6678;--card:#f4f6fa;--line:#dde2ea;--hi:#c0362c;--mid:#b7791f;--lo:#2b6cb0;--bar:#4a7bd0}
-@media (prefers-color-scheme:dark){:root{--bg:#10141b;--fg:#e4e8ef;--mut:#9aa6b8;--card:#1a212c;--line:#2a3342;--hi:#ff7b72;--mid:#e3b341;--lo:#79b8ff;--bar:#5b8def}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-main{max-width:980px;margin:0 auto;padding:20px 16px 60px}h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:28px 0 8px}p.sub{color:var(--mut);margin:0 0 16px}
-.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}.kpi div{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-.kpi b{display:block;font-size:22px}.kpi span{color:var(--mut);font-size:12px}
-.f{border:1px solid var(--line);border-left-width:5px;border-radius:8px;background:var(--card);padding:10px 12px;margin:8px 0}.f.cao{border-left-color:var(--hi)}.f.tb{border-left-color:var(--mid)}.f.thap{border-left-color:var(--lo)}
-.f h3{margin:0 0 4px;font-size:15px}.f p{margin:2px 0;color:var(--mut)}.f p b{color:var(--fg)}
-table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:600}.wrap{overflow-x:auto}
-.bar{display:inline-block;height:8px;background:var(--bar);border-radius:4px;vertical-align:middle}pre{white-space:pre-wrap;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px}"""
+# Hệ thiết kế chung của mọi trang quản trị (báo cáo tĩnh + accounts/quota/feedback/shares.html). CSP chỉ cho style nhúng (không tệp .css),
+# nên các trang .html tĩnh chép nguyên khối này giữa hai dấu "theme"; test_theme.py bắt lệch. Màu theo hệ thiết kế chung của NEU Agent.
+THEME_CSS = """:root{color-scheme:light;--bg:#f7f8fa;--panel:#fff;--panel2:#f1f3f6;--text:#111827;--muted:#5b6472;--border:#e3e6eb;--grid:#eef0f3;
+--accent:#0b4a9e;--accent-hover:#093d83;--accent-soft:#eaf1fb;--accent-fg:#fff;--ok:#157f4a;--warn:#9a6700;--err:#c0302b;--ok-soft:#e7f4ec;--warn-soft:#fbf3dd;--err-soft:#fbeceb;
+--r1:6px;--r2:10px;--r3:14px;--sh1:0 1px 2px rgb(16 24 40/.06);--sh2:0 4px 12px rgb(16 24 40/.08);--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+--line:var(--border);--fg:var(--text);--mut:var(--muted);--card:var(--panel);--soft:var(--accent-soft);--lo:var(--accent)}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1115;--panel:#161a20;--panel2:#1d222a;--text:#e6e9ef;--muted:#9aa3b2;--border:#2a3039;--grid:#20252d;
+--accent:#5b9bff;--accent-hover:#7db0ff;--accent-soft:#16253d;--accent-fg:#0b1220;--ok:#4cc38a;--warn:#e3b341;--err:#ff7b72;--ok-soft:#11281d;--warn-soft:#2b2410;--err-soft:#341a1a;
+--sh1:0 1px 2px rgb(0 0 0/.3);--sh2:0 4px 12px rgb(0 0 0/.35)}}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:110px}
+body{margin:0;background:var(--bg);color:var(--text);font:14.5px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:1200px;margin:0 auto;padding:22px 24px 64px}
+a{color:var(--accent);text-underline-offset:2px}a:hover{color:var(--accent-hover)}
+h1{font-size:22px;line-height:1.25;margin:0 0 4px;letter-spacing:-.01em}h2{font-size:16px;margin:28px 0 10px}h3{font-size:14px;margin:0 0 6px}h4{font-size:13.5px;margin:16px 0 6px}
+p.sub,.muted,small,.note{color:var(--muted)}p.sub{margin:0 0 14px}small,.note{font-size:12.5px}
+code,.mono{font-family:var(--mono);font-size:.92em}b,strong{font-weight:600}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.appbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:20px;height:52px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--border);box-shadow:var(--sh1)}
+.brand{display:flex;align-items:center;gap:8px;color:var(--text);text-decoration:none;white-space:nowrap;flex:none}.brand:hover{color:var(--text)}
+.brand svg{width:26px;height:26px;display:block}.brand b{font-size:15px}.brand span{color:var(--muted);font-size:13px;padding-left:8px;border-left:1px solid var(--border)}
+.appnav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;min-width:0;height:100%;align-items:stretch}.appnav::-webkit-scrollbar{display:none}
+.appnav a{display:flex;align-items:center;padding:0 11px;color:var(--muted);text-decoration:none;font-size:13.5px;font-weight:500;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
+.appnav a:hover{color:var(--text)}.appnav a[aria-current=page]{color:var(--accent);border-bottom-color:var(--accent)}
+.page-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:10px 20px;margin:4px 0 16px}.page-head>div{min-width:0;flex:1 1 420px}.page-head p.sub{margin:4px 0 0;max-width:860px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--sh1);padding:16px;margin:14px 0;min-width:0}
+.card>h2:first-child,.card-head h2{margin-top:0}
+.card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;margin:0 0 10px}.card-head h2{margin:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input,select,textarea{font:inherit;font-size:14px;padding:7px 10px;border-radius:var(--r1);border:1px solid var(--border);background:var(--panel);color:var(--text);min-width:0;transition:border-color .12s,box-shadow .12s}
+input:hover,select:hover,textarea:hover{border-color:color-mix(in srgb,var(--border) 50%,var(--muted))}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+input[type=checkbox],input[type=radio]{accent-color:var(--accent);padding:0}
+button,.btn{font:inherit;font-size:13.5px;font-weight:500;line-height:1.2;padding:8px 14px;border-radius:var(--r1);border:1px solid var(--border);background:var(--panel);color:var(--text);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;box-shadow:var(--sh1);transition:background .12s,border-color .12s}
+button:hover,.btn:hover{background:var(--panel2);color:var(--text)}
+button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}button.primary:hover,.btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+button.danger{color:var(--err);border-color:color-mix(in srgb,var(--err) 45%,var(--border))}button.danger:hover{background:var(--err-soft)}
+button.sm,.btn.sm{padding:5px 10px;font-size:13px}
+button[disabled]{opacity:.5;cursor:default}
+.msg{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:var(--r1);margin:10px 0;border:1px solid color-mix(in srgb,var(--accent) 25%,var(--border));background:var(--accent-soft);color:var(--text)}
+.msg::before{content:"i";flex:none;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--accent);color:var(--accent-fg);margin-top:1px}
+.msg.ok{background:var(--ok-soft);border-color:color-mix(in srgb,var(--ok) 35%,var(--border))}.msg.ok::before{content:"✓";background:var(--ok)}
+.msg.warn{background:var(--warn-soft);border-color:color-mix(in srgb,var(--warn) 35%,var(--border))}.msg.warn::before{content:"!";background:var(--warn)}
+.msg.err{background:var(--err-soft);border-color:color-mix(in srgb,var(--err) 40%,var(--border));color:var(--text)}.msg.err::before{content:"!";background:var(--err)}
+.msg.ok::before,.msg.warn::before,.msg.err::before{color:var(--panel)}
+.tag{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;font-weight:500;background:var(--panel2);color:var(--text);border:1px solid transparent;white-space:nowrap}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}.tag.near{background:var(--warn-soft);color:var(--warn)}.tag.bad,.tag.over{background:var(--err-soft);color:var(--err)}
+.wrap,.scroll{overflow:auto;max-height:min(72vh,760px);border:1px solid var(--border);border-radius:var(--r2);background:var(--panel)}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px}
+th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+th{position:sticky;top:0;z-index:1;background:var(--panel2);color:var(--muted);font-weight:600;font-size:12px;white-space:nowrap}
+tbody tr:nth-child(even)>td{background:color-mix(in srgb,var(--panel2) 45%,var(--panel))}
+tbody tr:hover>td{background:var(--accent-soft)}tbody tr:last-child>td{border-bottom:0}
+td.num,th.num,.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}td>a,td>code{white-space:nowrap}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:13.5px}td.empty{background:var(--panel)!important}
+.stats,.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:0 0 16px}
+.tile,.kpi>div{background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--sh1);padding:14px 16px;min-width:0}
+.tile span,.kpi span{display:block;color:var(--muted);font-size:12.5px}.tile b,.kpi b{display:block;font-size:26px;line-height:1.15;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.01em;margin:2px 0}
+.tile .sub{font-size:12.5px;color:var(--text)}
+@media (max-width:640px){main{padding:16px 16px 48px}.appbar{padding:0 12px;gap:10px}.brand span{display:none}.card{padding:14px}h1{font-size:20px}}"""
+
+# Thanh điều hướng chung giữa các trang quản trị: (đường dẫn tương đối, khoá trang, nhãn). Đường dẫn tương đối nên đúng ở /agent/admin/ và khi chạy thử.
+NAV = (("./", "index", "Tổng quan"), ("accounts", "accounts", "Tài khoản"), ("quota", "quota", "Hạn mức"), ("feedback", "feedback", "Góp ý"), ("shares", "shares", "Chia sẻ"),
+       ("data.html", "data", "Dữ liệu &amp; CSV"), ("latest.html", "latest", "Báo cáo chất lượng"))
+MARK = ('<svg viewBox="64 64 896 896" aria-hidden="true"><defs><linearGradient id="nm-g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1665d8"/><stop offset="1" stop-color="#0a2f6e"/></linearGradient></defs>'
+        '<rect x="64" y="64" width="896" height="896" rx="200" fill="url(#nm-g)"/><path d="M312 706V318h74l214 258V318h74v388h-74L386 448v258z" fill="#fff"/><rect x="312" y="770" width="400" height="26" rx="13" fill="#f2b134"/></svg>')
+
+
+def appbar(cur=""):
+    """Thanh trên cùng (thương hiệu + điều hướng) dùng chung; trang .html tĩnh chép nguyên kết quả này (test_theme.py kiểm tra)."""
+    links = "".join('<a href="%s"%s>%s</a>' % (href, ' aria-current="page"' if key == cur else "", label) for href, key, label in NAV)
+    return '<header class="appbar"><a class="brand" href="./">%s<b>NEU Agent</b><span>Quản trị</span></a><nav class="appnav" aria-label="Trang quản trị">%s</nav></header>' % (MARK, links)
+
+
+CSS = THEME_CSS + """
+.f{border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:var(--r2);background:var(--panel);box-shadow:var(--sh1);padding:12px 14px;margin:10px 0}.f.cao{border-left-color:var(--err)}.f.tb{border-left-color:var(--warn)}.f.thap{border-left-color:var(--accent)}
+.f h3{margin:0 0 4px;font-size:14.5px}.f p{margin:2px 0;color:var(--muted)}.f p b{color:var(--text)}
+.bar{display:inline-block;height:8px;background:var(--accent);border-radius:4px;vertical-align:middle}pre{white-space:pre-wrap;background:var(--panel);border:1px solid var(--border);border-radius:var(--r2);padding:12px;font-size:13px}"""
 
 
 def render_html(day, W, B, fs, an, llm_text, llm_err, links):
     e = html.escape
     sevc = {"cao": "cao", "trung bình": "tb", "thấp": "thap"}
-    o = ["<!doctype html><html lang=\"vi\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Báo cáo chất lượng NEU Agent %s</title><style>%s</style></head><body><main>" % (e(day), CSS)]
-    o.append("<h1>Báo cáo chất lượng NEU Agent — %s</h1><p class=\"sub\">24 giờ gần nhất, so với 7 ngày trước đó. Số liệu giả danh, không chứa nội dung người dùng.</p>" % e(day))
+    o = ["<!doctype html><html lang=\"vi\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Báo cáo chất lượng NEU Agent %s</title><style>%s</style></head><body>%s<main>" % (e(day), CSS, appbar("latest"))]
+    o.append("<div class=\"page-head\"><div><h1>Báo cáo chất lượng — %s</h1><p class=\"sub\">24 giờ gần nhất, so với 7 ngày trước đó. Số liệu giả danh, không chứa nội dung người dùng.</p></div></div>" % e(day))
     v = W["nginx"]["vllm"]
     kp = [(W["turns"], "lượt làm việc"), (W["users"], "người dùng (giả danh)"), (_p(W["rates"]["error"]), "lượt kết thúc bằng lỗi"), (_p(W["rates"]["step_limit"] + W["rates"]["loop"]), "chạm giới hạn/lặp"), (v["n"], "lệnh gọi mô hình (nginx)"), (_p(v["rate_5xx"]), "5xx của cổng mô hình"), (fmt(v["rt_s"]["p95"], " s", 0), "p95 /vllm"), (W["reports"], "báo lỗi thủ công")]
     o.append("<div class=\"kpi\">" + "".join("<div><b>%s</b><span>%s</span></div>" % (e(str(a)), e(b)) for a, b in kp) + "</div>")
@@ -607,7 +676,7 @@ def render_html(day, W, B, fs, an, llm_text, llm_err, links):
     o.append("<h2>Bất thường so với 7 ngày trước</h2>")
     o.append("<ul>" + "".join("<li>%s <b>%s</b>: %s (mốc: %s)</li>" % (e(a["kind"]), e(a["what"]), e(_fmtnum(a["window"], a["what"])), e(_fmtnum(a["baseline"], a["what"]))) for a in an) + "</ul>" if an else "<p>Không có.</p>")
     for title, cols, rows in tables(W):
-        o.append("<h2>%s</h2><div class=\"wrap\"><table><tr>%s</tr>%s</table></div>" % (e(title), "".join("<th>%s</th>" % e(c) for c in cols), "".join("<tr>%s</tr>" % "".join("<td>%s</td>" % e(str(c)) for c in r) for r in rows)))
+        o.append("<h2>%s</h2><div class=\"wrap\"><table><thead><tr>%s</tr></thead><tbody>%s</tbody></table></div>" % (e(title), "".join("<th>%s</th>" % e(c) for c in cols), "".join("<tr>%s</tr>" % "".join("<td%s>%s</td>" % (" class=\"num\"" if isinstance(c, (int, float)) else "", e(str(c))) for c in r) for r in rows)))
     if links:
         o.append("<h2>Báo cáo các ngày trước</h2><ul>" + "".join("<li><a href=\"%s\">%s</a></li>" % (e(x), e(x)) for x in links) + "</ul>")
     o.append("</main></body></html>")

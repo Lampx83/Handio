@@ -17,6 +17,7 @@
     return e;
   }
   function msg(text, kind) {
+    if (!kind && /^Đã /.test(text || "")) kind = "ok";   // thông báo thành công ("Đã lưu…", "Đã xoá…") hiện màu xanh
     var s = $("status");
     s.textContent = "";
     if (text) s.appendChild(el("div", text, "msg" + (kind ? " " + kind : "")));
@@ -96,7 +97,7 @@
         if (r.ok) { it.status = st.value; it.note = note.value; msg("Đã lưu góp ý #" + it.id + "."); } else msg(r.message || "Không lưu được.", "err");
       });
     });
-    var del = el("button", "Xoá", "sm");
+    var del = el("button", "Xoá", "sm danger");
     del.type = "button";
     del.addEventListener("click", function () {
       if (!window.confirm("Xoá hẳn góp ý #" + it.id + "? Không khôi phục được.")) return;
