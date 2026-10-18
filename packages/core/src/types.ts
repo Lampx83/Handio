@@ -142,6 +142,8 @@ export interface QuotaInfo {
   /** Thời điểm làm mới (giây epoch). */
   resetAt: number;
   tier?: string;
+  /** Các tab nhóm của người dùng được dùng (máy chủ quyết định; thiếu = không giới hạn / máy chủ không có phân quyền). */
+  tabs?: string[];
 }
 
 export interface UiState {

@@ -6,13 +6,14 @@
 
 Tin chỉ có số liệu tổng hợp: không nội dung hội thoại, không mã người dùng, không email, không đường dẫn.
 URL webhook là bí mật: nằm ở /etc/neu-agent/alert-webhook (0600, root), nạp qua LoadCredential, không bao giờ vào kho hay nhật ký.
-Mỗi cảnh báo chỉ nhắc lại sau 6 giờ nếu vẫn còn; trạng thái ở /var/lib/neu-agent/alerts/state.json.
+Mỗi cảnh báo chỉ nhắc lại sau 6 giờ nếu vẫn còn (cảnh báo sắp hết hạn chứng chỉ/secret: mỗi ngày một lần); trạng thái ở /var/lib/neu-agent/alerts/state.json.
 
   python3 alerts.py [--stats F] [--health F] [--state F] [--webhook-file F] [--dry-run] [--now epoch]
 """
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -52,11 +53,53 @@ def evaluate(stats, health, now, health_age=None, stats_age=None):
     if stats_age is not None and stats_age > TH["stats_stale_s"]:
         out.append({"key": "stats_stale", "sev": "trung bình", "text": "Trang quản trị không được làm mới trong %d phút (timer thống kê có thể đã dừng)." % (stats_age // 60)})
     if isinstance(health, dict):
-        bad = [str(x)[:24] for x in (health.get("failed") or [])][:6]
-        if health.get("ok") is False or bad:
-            out.append({"key": "health", "sev": "cao", "text": "Kiểm tra sức khoẻ hệ thống có lỗi: %s." % (", ".join(bad) or "không rõ thành phần")})
+        out += _health_alerts(health)
     if health_age is not None and health_age > TH["health_stale_s"]:
         out.append({"key": "health_stale", "sev": "trung bình", "text": "Dữ liệu kiểm tra sức khoẻ đã cũ (%d phút): dịch vụ healthz có thể đã dừng." % (health_age // 60)})
+    return out
+
+
+# Hạn chứng chỉ HTTPS / client secret Entra (healthz.py: còn < 30 ngày = "warn", hết hạn = lỗi). Tin chỉ có số ngày, không tên miền/IP.
+EXPIRY = {
+    "tls": ("chứng chỉ HTTPS của tên miền công khai", "người dùng sẽ không vào được trang", "gia hạn chứng chỉ trên máy 222"),
+    "entra_secret": ("client secret Entra (đăng nhập Microsoft)", "không ai đăng nhập bằng tài khoản @neu.edu.vn được",
+                     "tạo secret mới trong Entra, chạy lại auth/install-auth.sh và sửa ngày trong /etc/neu-agent/entra-secret-expires"),
+}
+DAILY = 24 * 3600
+
+
+def _safe_detail(d):
+    """Chi tiết ngắn do healthz tự tạo (mã HTTP, tên lỗi, số ms); có dấu / . : @ % (đường dẫn, tên miền, IP) thì bỏ."""
+    d = str(d or "")
+    return d if re.fullmatch(r"[\w ><()-]{1,60}", d) else ""
+
+
+def _health_alerts(health):
+    checks = health.get("checks") if isinstance(health.get("checks"), dict) else {}
+    out, bad = [], []
+    for name, c in checks.items():
+        if not isinstance(c, dict):
+            continue
+        days = c.get("days") if isinstance(c.get("days"), int) else None
+        if name in EXPIRY:
+            what, impact, fix = EXPIRY[name]
+            if c.get("ok") is False and days is not None:
+                out.append({"key": name + "_expired", "sev": "cao", "text": "%s đã hết hạn: %s. Cần %s." % (what[0].upper() + what[1:], impact, fix)})
+                continue
+            if c.get("ok") and c.get("warn") and days is not None:
+                out.append({"key": name + "_expiring", "sev": "trung bình", "every": DAILY, "text": "%s còn %d ngày là hết hạn (khi hết: %s). Cần %s." % (what[0].upper() + what[1:], days, impact, fix)})
+                continue
+        if c.get("ok") and c.get("warn"):
+            txt = {"tls": "Không kiểm được hạn chứng chỉ HTTPS của tên miền công khai từ máy 220 (%s).",
+                   "entra_secret": "Không đọc được ngày hết hạn client secret Entra (%s).",
+                   "chat": "Chưa kiểm được chat thật qua cổng mô hình (%s)."}.get(name, "Kiểm tra sức khoẻ \"" + name[:24] + "\" có cảnh báo (%s).")
+            out.append({"key": name[:24] + "_unchecked", "sev": "trung bình", "every": DAILY, "text": txt % (_safe_detail(c.get("detail")) or "xem health.json")})
+        elif c.get("ok") is False:
+            d = _safe_detail(c.get("detail"))
+            bad.append(name[:24] + (" (%s)" % d if d and name != "disk" else ""))
+    bad += [str(x)[:24] for x in (health.get("failed") or [])][:6] if not checks else []
+    if bad or (health.get("ok") is False and not out):
+        out.append({"key": "health", "sev": "cao", "text": "Kiểm tra sức khoẻ hệ thống có lỗi: %s." % (", ".join(bad[:6]) or "không rõ thành phần")})
     return out
 
 
@@ -69,7 +112,7 @@ def decide(alerts, state, now, cooldown=COOLDOWN_S):
         if prev is None:
             new[a["key"]] = {"since": now, "notified": now}
             fire.append(a)
-        elif now - prev.get("notified", 0) >= cooldown:
+        elif now - prev.get("notified", 0) >= a.get("every", cooldown):
             new[a["key"]] = {"since": prev.get("since", now), "notified": now}
             fire.append(a)
         else:

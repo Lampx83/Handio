@@ -188,7 +188,7 @@ const makeEnv = (profile: Profile, dir: string) => {
   env.shrinkImage = shrinkImage;
   if (profile === "work") env.htmlToPdf = (html, o) => renderDesign(html, { format: "pdf", width: 794, footer: o.footer ?? "" });
   // tab Code: agent tự thấy lỗi console/trang trắng của ứng dụng web đang làm (trình duyệt ẩn, cách ly, chỉ localhost/tệp dự án)
-  if (profile === "code") env.checkPage = (url, o) => checkPage(url, { waitMs: o.waitMs, root: dir, signal: o.signal });
+  if (profile === "code") env.checkPage = (url, o) => checkPage(url, { waitMs: o.waitMs, steps: o.steps, root: dir, signal: o.signal });
   return env;
 };
 
