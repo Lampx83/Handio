@@ -1,5 +1,6 @@
 import { CITATION_RE, type AgentController, type Procedure, type SessionEvent, type UiState } from "@neu/agent-core";
 import { h } from "./dom";
+import { icon } from "./icons";
 
 /** Những gì WorkTools cần từ khung chat (App). */
 export interface WorkToolsHost {
@@ -19,7 +20,7 @@ const slug = (s: string): string => s.normalize("NFD").replace(/[̀-ͯ]/g, "").r
  */
 export class WorkTools {
   readonly buttons: HTMLElement[];
-  private btn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Quy trình của tôi", "aria-haspopup": "menu", title: "Quy trình của tôi", onclick: () => void this.toggle() }, "⚡");
+  private btn = h("button", { class: "iconbtn", type: "button", hidden: true, "aria-label": "Quy trình của tôi", "aria-haspopup": "menu", title: "Quy trình của tôi", onclick: () => void this.toggle() }, icon("zap"));
   private wrap = h("span", { class: "wt-wrap", style: { position: "relative", display: "inline-flex" } });
   private pop: HTMLElement | null = null;
   private on = false;
@@ -112,7 +113,7 @@ export class WorkTools {
   // ------------------------------------------------------------------ Quy trình của tôi
   private offer(): void {
     this.bar?.remove();
-    this.bar = h("div", { class: "wt-offer" }, h("button", { class: "btn sm", type: "button", title: "Lưu việc vừa làm thành lệnh dùng lại", onclick: () => this.askName() }, "⚡ Lưu quy trình"));
+    this.bar = h("div", { class: "wt-offer" }, h("button", { class: "btn sm", type: "button", title: "Lưu việc vừa làm thành lệnh dùng lại", onclick: () => this.askName() }, icon("zap", 14), "Lưu quy trình"));
     this.host.append(this.bar);
   }
 
