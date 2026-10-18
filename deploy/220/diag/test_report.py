@@ -154,6 +154,17 @@ class PipelineTests(unittest.TestCase):
         names = [t[0] for t in R.tables(W)]
         self.assertIn("Công việc người dùng làm (chỉ mã, không nội dung)", names)
 
+    def test_old_versions_ignores_web(self):
+        """Bản web luôn mới nhất: không được tính vào 'máy chạy bản cũ' (trước đây 45 người dùng web ghi 0.1.0 làm báo động sai)."""
+        web = dict(APP, install="a" * 32, platform="web", version="0.1.0")
+        mac = dict(APP, install="b" * 32, platform="mac", version="0.8.20")
+        mac2 = dict(APP, install="c" * 32, platform="mac", version="0.8.19")
+        recs = [rec(T_NOW - 10 - i, turn_ev(), app=web) for i in range(6)] + [rec(T_NOW - 5, turn_ev(), app=mac), rec(T_NOW - 4, turn_ev(), app=mac2)]
+        S = R.summarize(recs, [])
+        self.assertEqual(set(S["versions_desktop"]), {"0.8.20", "0.8.19"})
+        self.assertIsNone(R.rule_old_versions(S, {"old_version_share": 0.9, "min_turns": 1}))   # 1/2 máy Desktop cũ: dưới ngưỡng 90%
+        self.assertEqual(R.rule_old_versions(S, {"old_version_share": 0.4, "min_turns": 1}), None)  # < 5 máy Desktop: chưa đủ để kết luận
+
     def test_healthy_day_has_no_findings(self):
         rnd = random.Random(2)
         recs = healthy_baseline(rnd, days=8, per_day=60)
