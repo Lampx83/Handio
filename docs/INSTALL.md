@@ -67,8 +67,13 @@ Tạo tệp `policy.json` (người dùng thường không sửa được) để
   "bashNetwork": true,
   "disableBash": false,
   "diagnostics": true,
+  "requireContainer": false,
+  "containerImage": "node:22-bookworm-slim",
   "notice": "Hỗ trợ: <liên hệ của đơn vị>"
 }
 ```
+
+- `requireContainer: true`: lệnh của tab Code **bắt buộc** chạy trong container Docker (người dùng không tắt được; Docker không chạy thì lệnh bị từ chối, máy chủ MCP qua stdio bị tắt). Máy phải cài Docker Desktop.
+- `containerImage`: ảnh Docker cho container (mặc định `node:22-bookworm-slim`; dự án Python có thể dùng `python:3.12-slim`). Ảnh chỉ đặt được ở đây hoặc trong tệp cài đặt của người dùng, không bao giờ từ thư mục dự án.
 
 Xem thêm `docs/SECURITY.md`.

@@ -63,6 +63,7 @@ class IpcController implements AgentController {
   diagnosticsStatus = () => this.call<any>("diagnosticsStatus");
   diagnosticsPreview = (n: string) => this.call<string | null>("diagnosticsPreview", n);
   diagnosticsSend = () => this.call<any>("diagnosticsSend");
+  sandboxStatus = () => this.call<any>("sandboxStatus").catch(() => null);
   resetPermissions = () => this.call<void>("resetPermissions");
   trustProject = (t: boolean) => this.call<void>("trustProject", t);
   openFolder = () => this.call<void>("openFolder");
@@ -104,6 +105,9 @@ class IpcController implements AgentController {
   taskSet = (id: string, on: boolean) => this.call<void>("taskSet", id, on);
   taskRemove = (id: string) => this.call<void>("taskRemove", id);
   taskRunNow = (id: string) => this.call<any>("taskRunNow", id);
+  taskStop = () => this.call<void>("taskStop");
+  taskUndo = (id: string) => this.call<any>("taskUndo", id);
+  taskNotify = (on?: boolean) => this.call<boolean>("taskNotify", ...(on === undefined ? [] : [on]));
   exportDesign = (p: string, f: "pdf" | "png", w: number, h?: number) => this.call<any>("exportDesign", ...(h === undefined ? [p, f, w] : [p, f, w, h]));
 }
 

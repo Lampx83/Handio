@@ -13,17 +13,18 @@ import { sniffImage } from "./vision";
 import type { Mode } from "./permissions";
 import { archiveForSave, chatTitle, cleanProjectName, countTurns, ID_RE, messagesToHistory, newId, trimForSave, type ChatMeta, type ChatStore, type HistoryItem, type ProjectHost, type ProjectsState } from "./projects";
 import { Session, type SessionOptions } from "./session";
-import { dueState, MAX_RUNS_PER_DAY, MAX_TASKS, newTask, RUN_TIMEOUT_MS, runsToday, withRun, type Every, type ScheduledTask } from "./schedule";
+import { dueState, MAX_RUNS_PER_DAY, MAX_TASK_CHATS, MAX_TASK_CHATS_PER_PROJECT, MAX_TASKS, newTask, nextRun, RUN_TIMEOUT_MS, runsToday, withRun, type Every, type ScheduledTask, type TaskLock, type TaskRun, type TaskView } from "./schedule";
 import { badCitations, docViewOf, listProcedures, removeProcedure, saveProcedure, type Procedure } from "./work-ctl";
 import type { DocView } from "./office/locate";
 import { DiagnosticsRecorder, newInstallId } from "./diagnostics";
 import { stackOf, type Stack, type UiLib } from "./task-profile";
 import { parsePacks, readProjectPacks, type LoadedPack, type RawPack } from "./packs";
 import type { HttpToolRuntime } from "./http-tools";
+import type { SandboxStatus } from "./container";
 import { feedbackProblem, type FeedbackInput, type FeedbackResult } from "./feedback";
 import { buildShareV2, type SharedChatInfo, type SharePayloadV2, type SharePreview, type ShareResult } from "./share";
 import { effectiveKey, normalizeSettings, sanitizeProjectSettings, toPublic, type BuiltinKey, type ProjectSettings } from "./settings";
-import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk } from "./tools";
+import { IGNORE_DIRS, relPath, resolveSafe, ToolError, walk, type UndoEntry } from "./tools";
 import type { AgentController, PermissionRequest, PermissionResponse, QuotaInfo, RewindPoint, SessionEvent, Settings, UiState } from "./types";
 
 export interface SettingsStore {
@@ -71,11 +72,31 @@ export interface ControllerOptions {
   fetchImpl?: typeof fetch;
   /** Địa chỉ gốc các dịch vụ của tổ chức cho công cụ HTTP của gói (tools.json), vd https://ai.neu.edu.vn/agent/. Không đặt = công cụ HTTP của gói không bật. */
   toolsBase?: string;
+  /**
+   * Tác vụ định kỳ (schedule.ts): `enabled` bật bộ hẹn giờ (Desktop/web); `now` để kiểm thử dùng đồng hồ giả. Không đặt `enabled` = chỉ quản lý được, không tự chạy.
+   * `background` (Desktop, cần ProjectHost.peek): bộ lập lịch của multi.ts chạy cả tác vụ của dự án chưa mở thay cho bộ hẹn giờ từng dự án.
+   * `canRun`: điều kiện để tự chạy (vd đã đăng nhập). `lock`: dùng chung giữa các tab để cả ứng dụng chỉ chạy một tác vụ tự động mỗi lúc.
+   * `undo`: (do multi.ts đặt) nhật ký hoàn tác lần chạy, dùng chung giữa các bộ điều khiển dự án.
+   */
+  tasks?: { enabled?: boolean; now?: () => number; tickMs?: number; background?: boolean; canRun?: () => boolean; lock?: TaskLock; undo?: Map<string, RunUndo> };
+  /** (multi.ts) Bộ điều khiển chỉ mở để chạy tác vụ định kỳ của dự án chưa mở: phiên nhàn rỗi không chạy hook/MCP/gói, không hỏi hạn mức. `wake()` khi người dùng mở dự án. */
+  headless?: boolean;
+  /** Mã dự án của bộ điều khiển này; mặc định là dự án đang mở của ProjectHost. */
+  projectId?: string;
   /** Tự chẩn đoán không chứa nội dung (docs/DIAGNOSTICS.md). Không đặt = không ghi, không gửi gì. Tắt được bằng Settings.diagnostics hoặc policy.diagnostics=false. */
-  /** Tác vụ định kỳ (schedule.ts): `enabled` bật bộ hẹn giờ (Desktop/web); `now` để kiểm thử dùng đồng hồ giả. Không đặt `enabled` = chỉ quản lý được, không tự chạy. */
-  tasks?: { enabled?: boolean; now?: () => number; tickMs?: number };
+  /** Desktop, tab Code: trạng thái chạy lệnh trong container Docker (dò lại Docker mỗi lần gọi). Không đặt = không có tuỳ chọn này. */
+  sandbox?: { status(): Promise<SandboxStatus> };
   diagnostics?: { endpoint: string; headers?(): Record<string, string>; enabled?(): boolean; version: string; build?: string; platform: string; fetch?: typeof fetch };
 }
+
+/** Nhật ký hoàn tác một lần chạy tác vụ định kỳ (chỉ trong bộ nhớ: đóng ứng dụng là mất). `after`: kích thước + giờ sửa của từng tệp ngay sau lần chạy (null = không còn tệp), để không đè lên chỗ người dùng sửa sau đó. */
+export interface RunUndo {
+  projectId: string;
+  entries: UndoEntry[];
+  after: Map<string, { size: number; mtimeMs: number } | null>;
+}
+/** Nội dung cũ tối đa giữ để hoàn tác một lần chạy (quá thì lần chạy đó không hoàn tác được). */
+const MAX_UNDO_BYTES = 20_000_000;
 
 const MAX_VIEW_BYTES = 200_000;
 const MAX_UPLOAD = 50 * 1024 * 1024;
@@ -116,6 +137,14 @@ export class LocalController implements AgentController {
   private diag?: DiagnosticsRecorder;
   private tasksTimer?: ReturnType<typeof setInterval>;
   private taskAbort: AbortController | null = null;
+  /** Mã tác vụ đang chạy trong dự án này. */
+  private runningTask: string | null = null;
+  /** Bộ điều khiển chỉ mở cho tác vụ định kỳ (xem ControllerOptions.headless). */
+  private headless = false;
+  private ownUndo = new Map<string, RunUndo>();
+  /** Tiêu đề giữ nguyên khi người dùng nhắn tiếp trong cuộc trò chuyện của một lần chạy tự động. */
+  private keptTitles = new Map<string, string>();
+  private lastTaskChatAt = 0;
   /** Hạn mức token trong ngày (do máy chủ đếm); null = chưa biết hoặc máy chủ không có hạn mức. */
   private quota: QuotaInfo | null = null;
 
@@ -130,23 +159,42 @@ export class LocalController implements AgentController {
       c.quota = q.tabs || !c.quota?.tabs ? q : { ...q, tabs: c.quota.tabs }; // tiêu đề phản hồi không có danh sách tab: giữ danh sách đã biết
       c.fire({ type: "quota", quota: q });
     };
-    // chỉ hỏi máy chủ mặc định của ứng dụng (không gửi thêm yêu cầu tới địa chỉ do người dùng tự đặt)
-    if (c.settings.baseUrl === normalizeSettings({}, o.defaults).baseUrl) void c.llm.quota().then((q) => q && c.llm.onQuota?.(q));
+    c.headless = !!o.headless;
+    if (!c.headless) c.askQuota();
     c.trusted = await o.trust.isTrusted(o.env.root);
     await c.loadProject();
-    c.session = await c.makeSession();
-    c.pendingNotices.push(...c.session.startupNotices);
+    c.session = await c.makeSession(c.headless ? c.idleOverride() : undefined);
+    if (!c.headless) c.pendingNotices.push(...c.session.startupNotices);
     c.initDiagnostics();
     if (o.projects) {
       const st = await o.projects.list();
-      c.projectId = st.active;
-      c.projectName = st.projects.find((p) => p.id === st.active)?.name ?? "";
+      const pid = o.projectId && st.projects.some((p) => p.id === o.projectId) ? o.projectId : st.active;
+      c.projectId = pid;
+      c.projectName = st.projects.find((p) => p.id === pid)?.name ?? "";
     }
     if (o.tasks?.enabled) {
       c.tasksTimer = setInterval(() => void c.tasksTick(), o.tasks.tickMs ?? 30_000);
       (c.tasksTimer as { unref?: () => void }).unref?.();
     }
     return c;
+  }
+
+  /** Hỏi hạn mức một lần (không tốn token). Chỉ hỏi máy chủ mặc định của ứng dụng (không gửi thêm yêu cầu tới địa chỉ do người dùng tự đặt). */
+  private askQuota(): void {
+    if (this.settings.baseUrl === normalizeSettings({}, this.o.defaults).baseUrl) void this.llm.quota().then((q) => q && this.llm.onQuota?.(q));
+  }
+
+  /** Phiên nhàn rỗi của bộ điều khiển chỉ mở cho tác vụ: không hook, không MCP, không gói, không cấu hình dự án (không có tác dụng phụ khi chưa ai mở dự án). */
+  private idleOverride(): Partial<SessionOptions> {
+    return { trustProject: false, project: { deny: this.project.deny, allow: [] }, packs: [], getSettings: () => ({ ...this.settings, hooks: {}, mcpServers: {} }) };
+  }
+
+  /** Người dùng mở dự án vốn chỉ được mở cho tác vụ định kỳ: dựng phiên đầy đủ như mở dự án bình thường. */
+  async wake(): Promise<void> {
+    if (!this.headless) return;
+    this.headless = false;
+    this.askQuota();
+    await this.rebuildSession();
   }
 
   private async loadProject(): Promise<void> {
@@ -256,6 +304,11 @@ export class LocalController implements AgentController {
     return this.busy;
   }
 
+  /** Mã tác vụ định kỳ đang chạy trong dự án này (null = không có). */
+  currentTaskId(): string | null {
+    return this.runningTask;
+  }
+
   /** Mã cuộc trò chuyện hiện tại. */
   currentChatId(): string {
     return this.chatId;
@@ -285,7 +338,7 @@ export class LocalController implements AgentController {
       commands: this.session.slashCommands(),
       todos: this.todos,
       busy: this.busy,
-      capabilities: { exec: !!env.exec, runJs: !!env.runJs, fetch: !!env.fetchUrl, openFolder: !!this.o.openFolder, realFs: this.o.realFs, openExternal: !!this.o.openExternally, revealWorkspace: !!this.o.revealWorkspace, pdf: !!env.convertToPdf, reset: !!this.o.resetWorkspace, sandbox: !!env.sandbox, projects: !!this.o.projects, pickFolder: !!this.o.projects?.pick, chats: !!this.o.chats, renderDesign: !!this.o.renderDesign },
+      capabilities: { exec: !!env.exec, runJs: !!env.runJs, fetch: !!env.fetchUrl, openFolder: !!this.o.openFolder, realFs: this.o.realFs, openExternal: !!this.o.openExternally, revealWorkspace: !!this.o.revealWorkspace, pdf: !!env.convertToPdf, reset: !!this.o.resetWorkspace, sandbox: !!env.sandbox && env.sandbox.kind !== "none" && env.sandbox.kind !== "refuse", projects: !!this.o.projects, pickFolder: !!this.o.projects?.pick, chats: !!this.o.chats, renderDesign: !!this.o.renderDesign },
       policy: { baseUrl: !!this.o.policy?.baseUrl, insecureHttp: this.o.policy?.allowInsecureHttp !== undefined, notice: this.o.policy?.notice },
       untrustedProject: !this.trusted && (this.project.allow.length > 0 || !!this.project.mode || Object.keys(this.project.hooks ?? {}).length > 0 || Object.keys(this.project.mcpServers ?? {}).length > 0),
       memoryFiles: this.session.memory.map((m) => m.name),
@@ -308,6 +361,10 @@ export class LocalController implements AgentController {
   async send(text: string): Promise<void> {
     if (this.tabDenied()) {
       this.fire({ type: "notice", level: "error", text: `Nhóm của bạn không được dùng tab ${PROFILES[this.o.profile ?? "code"].label}.` });
+      return;
+    }
+    if (this.taskAbort && !this.busy) {
+      this.fire({ type: "notice", level: "warn", text: "Tác vụ định kỳ đang chạy trong dự án này. Đợi xong hoặc bấm Dừng ở nút ⏰." });
       return;
     }
     if (this.busy) {
@@ -421,7 +478,7 @@ export class LocalController implements AgentController {
     const turns = countTurns(all);
     if (!turns) return;
     try {
-      await store.save(t.projectId, { id: t.chatId, title: chatTitle(all) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, ...(unfinished ? { unfinished: true } : {}), messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined, ...(old.length ? { archived: archiveForSave(old) } : {}) });
+      await store.save(t.projectId, { id: t.chatId, title: this.keptTitles.get(t.chatId) ?? chatTitle(all) + (this.branches.has(t.chatId) ? " (nhánh)" : ""), updated: Date.now(), turns, ...(unfinished ? { unfinished: true } : {}), messages: trimForSave(msgs), inputs: t.chatId === this.chatId ? [...this.rawInputs] : undefined, ...(old.length ? { archived: archiveForSave(old) } : {}) });
     } catch {
       /* không lưu được lịch sử (đầy bộ nhớ…): bỏ qua, không ảnh hưởng công việc */
     }
@@ -642,7 +699,7 @@ export class LocalController implements AgentController {
   dispose(): void {
     if (this.tasksTimer) clearInterval(this.tasksTimer);
     this.tasksTimer = undefined;
-    this.taskAbort?.abort();
+    this.taskAbort?.abort("stop");
     this.interrupt();
     this.session.dispose();
     this.procs?.stopAll();
@@ -856,6 +913,7 @@ export class LocalController implements AgentController {
     this.session.main.archived = saved.archived ?? [];
     this.chatId = saved.id;
     if (saved.title.endsWith(" (nhánh)")) this.branches.add(saved.id);
+    if (saved.task) this.keptTitles.set(saved.id, saved.title); // lần chạy tự động: nhắn tiếp thì thành cuộc trò chuyện thường (không bị dọn), giữ tiêu đề
     this.rawInputs = saved.inputs && saved.inputs.length === countTurns(saved.messages) ? [...saved.inputs] : [];
     return { id: saved.id, title: saved.title, history: messagesToHistory(saved.messages, saved.inputs) };
   }
@@ -1058,6 +1116,9 @@ export class LocalController implements AgentController {
     const p = this.o.policy;
     if (p?.baseUrl) delete (rest as Partial<Settings>).baseUrl; // bị chính sách khoá
     if (p?.allowInsecureHttp !== undefined) delete (rest as Partial<Settings>).allowInsecureHttp;
+    // ảnh Docker không đổi được từ giao diện (chỉ tệp cài đặt/chính sách); chính sách bắt buộc container thì không tắt được
+    delete (rest as Partial<Settings>).containerImage;
+    if (p?.requireContainer) delete (rest as Partial<Settings>).container;
     const next = normalizeSettings({ ...this.settings, ...rest }, this.o.defaults);
     next.key = key === undefined ? this.settings.key : key || undefined;
     this.settings = next;
@@ -1078,10 +1139,31 @@ export class LocalController implements AgentController {
     await this.syncSettings();
     return this.settings.tasks ?? [];
   }
-  /** Tác vụ của tab + dự án đang mở. */
-  async taskList(): Promise<ScheduledTask[]> {
+  /** Tác vụ của tab + dự án này (bản lưu). */
+  private async myTasks(): Promise<ScheduledTask[]> {
     const { profile, projectId } = this.scope;
     return (await this.allTasks()).filter((t) => t.profile === profile && t.projectId === projectId);
+  }
+  private undoStore(): Map<string, RunUndo> {
+    return this.o.tasks?.undo ?? this.ownUndo;
+  }
+  /** Tác vụ của tab + dự án đang mở, kèm lần chạy tới, đang chạy, hoàn tác được không. */
+  async taskList(): Promise<TaskView[]> {
+    const now = this.taskNow();
+    const undo = this.undoStore();
+    return (await this.myTasks()).map((t) => {
+      const v: TaskView = { ...t };
+      const next = nextRun(t, now);
+      if (next !== undefined) v.next = next;
+      if (this.runningTask === t.id) v.running = true;
+      if (undo.get(t.id)?.projectId === this.projectId) v.canUndo = true;
+      return v;
+    });
+  }
+  /** Mọi tác vụ của tab này (mọi dự án): cho bộ lập lịch của multi.ts. */
+  async tasksForProfile(): Promise<ScheduledTask[]> {
+    const profile = this.scope.profile;
+    return (await this.allTasks()).filter((t) => t.profile === profile);
   }
   /** Đọc lại cài đặt rồi sửa danh sách và lưu (nhiều bộ điều khiển dự án dùng chung một tệp cài đặt). */
   private async changeTasks(fn: (all: ScheduledTask[]) => ScheduledTask[]): Promise<void> {
@@ -1103,20 +1185,39 @@ export class LocalController implements AgentController {
   }
 
   async taskRemove(id: string): Promise<void> {
+    if (this.runningTask === id) this.taskAbort?.abort("stop");
     await this.changeTasks((all) => all.filter((t) => !(t.id === id && this.isMine(t))));
+    if (this.undoStore().get(id)?.projectId === this.projectId) this.undoStore().delete(id);
+  }
+
+  /** Bỏ mọi tác vụ của một dự án (dự án bị bỏ khỏi danh sách). */
+  async tasksDropProject(projectId: string): Promise<void> {
+    const profile = this.scope.profile;
+    if ((await this.allTasks()).some((t) => t.profile === profile && t.projectId === projectId)) await this.changeTasks((all) => all.filter((t) => !(t.profile === profile && t.projectId === projectId)));
   }
 
   private isMine(t: ScheduledTask): boolean {
     return t.profile === this.scope.profile && t.projectId === this.scope.projectId;
   }
 
+  async taskStop(): Promise<void> {
+    this.taskAbort?.abort("stop");
+  }
+
+  async taskNotify(on?: boolean): Promise<boolean> {
+    if (typeof on === "boolean") await this.saveSettings({ taskNotify: on });
+    else await this.syncSettings();
+    return this.settings.taskNotify !== false;
+  }
+
   /** Bộ hẹn giờ gọi mỗi ~30 giây: chạy tối đa MỘT tác vụ đến hạn, và chỉ khi agent đang rảnh (không giẫm lên việc người dùng đang làm). */
   async tasksTick(): Promise<void> {
     if (this.taskAbort || this.busy) return;
+    if (this.o.tasks?.canRun && !this.o.tasks.canRun()) return;
     const now = this.taskNow();
-    for (const t of await this.taskList()) {
+    for (const t of await this.myTasks()) {
       const due = dueState(t, now);
-      if (due === "missed") await this.recordTask(t.id, now, { status: "skipped", summary: "Bỏ lỡ giờ hẹn (ứng dụng đang đóng)." }, false);
+      if (due === "missed") await this.taskMarkMissed(t.id);
       else if (due === "run") {
         await this.taskRun(t.id, false);
         return;
@@ -1124,7 +1225,29 @@ export class LocalController implements AgentController {
     }
   }
 
-  private async recordTask(id: string, now: number, run: { status: "ok" | "error" | "skipped"; summary: string }, counts: boolean): Promise<void> {
+  /** Ghi "bỏ lỡ giờ hẹn" (ứng dụng đóng quá lâu qua giờ hẹn): không chạy bù. */
+  async taskMarkMissed(id: string): Promise<void> {
+    await this.recordTask(id, this.taskNow(), { status: "skipped", summary: "Bỏ lỡ giờ hẹn (ứng dụng đang đóng)." }, false);
+  }
+
+  /** Bộ lập lịch (multi.ts) gọi khi tác vụ `id` của dự án này đến hạn. "busy" = agent đang bận, thử lại lượt sau. */
+  async taskRunScheduled(id: string): Promise<"ran" | "busy" | "none"> {
+    if (this.taskAbort || this.busy) return "busy";
+    const t = (await this.myTasks()).find((x) => x.id === id);
+    if (!t || dueState(t, this.taskNow()) !== "run") return "none";
+    await this.taskRun(id, false);
+    return "ran";
+  }
+
+  /** Hạn mức đã biết (bộ điều khiển chỉ mở cho tác vụ lấy của dự án đang mở, khỏi hỏi lại máy chủ). */
+  quotaInfo(): QuotaInfo | null {
+    return this.quota;
+  }
+  adoptQuota(q: QuotaInfo | null): void {
+    if (q && !this.quota) this.quota = q;
+  }
+
+  private async recordTask(id: string, now: number, run: Omit<TaskRun, "at">, counts: boolean): Promise<void> {
     await this.changeTasks((all) => all.map((t) => (t.id === id ? withRun(t, now, run, counts) : t)));
   }
 
@@ -1139,23 +1262,30 @@ export class LocalController implements AgentController {
    * Chạy tác vụ trong MỘT PHIÊN RIÊNG, không có người ngồi trước. Quyền chặt hơn phiên thường:
    *  - chế độ acceptEdits (hoặc default nếu chính sách không cho): chỉ sửa tệp trong dự án; lệnh shell, mạng, tệp nhạy cảm, tệp cấu hình dự án luôn cần hỏi;
    *  - không ai trả lời nên MỌI yêu cầu hỏi bị từ chối (agent được báo để bỏ qua); không dùng quy tắc "luôn cho phép" đã lưu, không nạp cấu hình/hook/MCP của dự án;
-   *  - bỏ qua nếu hết hạn mức token, quá số lần mỗi ngày; cắt sau RUN_TIMEOUT_MS. Không ghi chẩn đoán, không lưu thành cuộc trò chuyện.
+   *  - bỏ qua nếu hết hạn mức token, tab không được dùng, quá số lần mỗi ngày; cắt sau RUN_TIMEOUT_MS. Không ghi chẩn đoán.
+   * Lần chạy được lưu thành một cuộc trò chuyện "⏰ tên" trong lịch sử dự án (giữ có giới hạn) và giữ nhật ký hoàn tác trong bộ nhớ.
    */
   private async taskRun(id: string, manual: boolean): Promise<{ status: "ok" | "error" | "skipped"; summary: string } | { error: string }> {
-    const task = (await this.taskList()).find((t) => t.id === id);
+    const task = (await this.myTasks()).find((t) => t.id === id);
     if (!task) return { error: "Không còn tác vụ này." };
     const now = this.taskNow();
+    const done = (status: "ok" | "error" | "skipped"): void =>
+      this.fire({ type: "task_done", taskId: task.id, projectId: this.projectId, name: task.name, status, notify: !manual && status !== "skipped" && this.settings.taskNotify !== false });
     const skip = async (summary: string) => {
       await this.recordTask(id, now, { status: "skipped", summary }, false);
+      done("skipped");
       return { status: "skipped" as const, summary };
     };
     if (runsToday(task, now) >= MAX_RUNS_PER_DAY) return skip(`Đã chạy ${MAX_RUNS_PER_DAY} lần hôm nay (giới hạn mỗi ngày).`);
     if (this.quota && (this.quota.state === "exceeded" || this.quota.state === "grace")) return skip("Hết hạn mức token hôm nay.");
+    if (this.tabDenied()) return skip(`Nhóm của bạn không được dùng tab ${PROFILES[this.o.profile ?? "code"].label}.`);
     const denied: string[] = [];
+    let deniedCount = 0;
     const settings = (): Settings => ({ ...this.settings, mode: "acceptEdits", permissions: { allow: [], deny: this.settings.permissions.deny } });
     const abort = new AbortController();
     this.taskAbort = abort;
-    const timer = setTimeout(() => abort.abort(), RUN_TIMEOUT_MS);
+    this.runningTask = id;
+    const timer = setTimeout(() => abort.abort("timeout"), RUN_TIMEOUT_MS);
     let run: { status: "ok" | "error"; summary: string };
     let sess: Session | undefined;
     try {
@@ -1167,6 +1297,7 @@ export class LocalController implements AgentController {
         project: { deny: this.project.deny, allow: [] },
         procs: undefined,
         askPermission: async (req) => {
+          deniedCount++;
           if (denied.length < 20) denied.push(req.tool);
           return { allow: false, note: "Tác vụ định kỳ chạy không có người duyệt: thao tác này bị từ chối. Bỏ qua nó và nêu trong báo cáo." };
         },
@@ -1178,19 +1309,96 @@ export class LocalController implements AgentController {
       }
       const guard = "[Tác vụ định kỳ, chạy tự động: không có người trả lời. Đừng hỏi lại. Thao tác bị từ chối thì bỏ qua và nói rõ trong báo cáo. Kết thúc bằng báo cáo ngắn gọn.]\n\n";
       const final = await sess.main.runTurn(guard + task.prompt, abort.signal);
-      const skipped = denied.length ? ` (${denied.length} thao tác bị từ chối vì không có người duyệt: ${[...new Set(denied)].join(", ")})` : "";
+      const skipped = denied.length ? ` (${deniedCount} thao tác bị từ chối vì không có người duyệt: ${[...new Set(denied)].join(", ")})` : "";
       run = { status: "ok", summary: (final.trim() || "(không có báo cáo)").slice(0, 600) + skipped };
     } catch (e) {
-      const m = e instanceof LlmError && e.kind === "abort" ? (abort.signal.aborted && this.taskAbort === abort ? "Chạy quá lâu hoặc bị dừng." : "Bị dừng.") : (e as Error).message;
+      const m = abort.signal.aborted ? (abort.signal.reason === "timeout" ? "Chạy quá lâu, đã cắt." : "Bị dừng.") : (e as Error).message;
       run = { status: "error", summary: m.slice(0, 300) };
     } finally {
       clearTimeout(timer);
       sess?.dispose();
       this.taskAbort = null;
+      this.runningTask = null;
     }
-    await this.recordTask(id, this.taskNow(), run, true);
+    const changed = sess ? await this.keepRunUndo(task.id, sess).catch(() => [] as string[]) : [];
+    const chatId = sess ? await this.saveTaskChat(task, sess) : undefined;
+    await this.recordTask(id, this.taskNow(), { ...run, ...(deniedCount ? { denied: deniedCount } : {}), ...(chatId ? { chatId } : {}) }, true);
+    if (changed.length) this.fire({ type: "files_changed", paths: changed });
     if (!manual) this.fire({ type: "notice", level: run.status === "ok" ? "info" : "warn", text: `Tác vụ định kỳ “${task.name}”: ${run.status === "ok" ? "đã chạy xong" : "lỗi"}. Xem ở nút ⏰.` });
+    done(run.status);
     return run;
+  }
+
+  /** Giữ nhật ký hoàn tác của lần chạy (thay lần trước của cùng tác vụ). Trả về các tệp đã đổi (đường dẫn tương đối). */
+  private async keepRunUndo(taskId: string, sess: Session): Promise<string[]> {
+    const ctx = sess.ctx;
+    const store = this.undoStore();
+    store.delete(taskId);
+    const entries = ctx.undoStack.filter((e) => isInside(ctx.root, e.path));
+    if (!entries.length) return [];
+    const paths = [...new Set(entries.map((e) => e.path))];
+    const bytes = entries.reduce((n, e) => n + (e.old === null ? 0 : typeof e.old === "string" ? e.old.length * 2 : e.old.length), 0);
+    if (bytes <= MAX_UNDO_BYTES) {
+      const after = new Map<string, { size: number; mtimeMs: number } | null>();
+      for (const p of paths) {
+        const st = await ctx.env.stat(p).catch(() => null);
+        after.set(p, st?.isFile ? { size: st.size, mtimeMs: st.mtimeMs } : null);
+      }
+      store.set(taskId, { projectId: this.projectId, entries, after });
+    }
+    return paths.map((p) => relPath(ctx, p));
+  }
+
+  /**
+   * "Hoàn tác lần chạy": đưa các tệp lần chạy gần nhất của tác vụ đã đổi về như trước. Tệp đã bị sửa lại sau lần chạy (người dùng hoặc agent)
+   * thì giữ nguyên và báo trong `skipped`; tệp nhạy cảm/ngoài dự án không đụng tới (revertChanges kiểm tra lại từng đường dẫn).
+   */
+  async taskUndo(id: string): Promise<RevertResult | { error: string }> {
+    const store = this.undoStore();
+    const u = store.get(id);
+    if (!u || u.projectId !== this.projectId) return { error: "Không còn gì để hoàn tác cho lần chạy này." };
+    if (this.busy || this.taskAbort) return { error: "Agent đang làm việc, hãy chờ hoặc bấm Dừng." };
+    const ctx = this.session.ctx;
+    const keep: UndoEntry[] = [];
+    const later: string[] = [];
+    for (const [p, a] of u.after) {
+      const st = await ctx.env.stat(p).catch(() => null);
+      const same = a === null ? !st : !!st?.isFile && st.size === a.size && st.mtimeMs === a.mtimeMs;
+      if (same) keep.push(...u.entries.filter((e) => e.path === p));
+      else later.push(relPath(ctx, p));
+    }
+    const r = await revertChanges({ ...ctx, undoStack: keep, readFiles: new Map() });
+    store.delete(id);
+    if (r.reverted.length) this.fire({ type: "files_changed", paths: r.reverted });
+    return { reverted: r.reverted, skipped: [...r.skipped, ...later] };
+  }
+
+  /** Lưu lần chạy thành cuộc trò chuyện "⏰ tên" trong lịch sử dự án; dọn bớt lần cũ (MAX_TASK_CHATS mỗi tác vụ, MAX_TASK_CHATS_PER_PROJECT cả dự án). */
+  private async saveTaskChat(task: ScheduledTask, sess: Session): Promise<string | undefined> {
+    const store = this.o.chats;
+    if (!store || !this.projectId) return undefined;
+    const msgs = sess.main.messages;
+    const old = sess.main.archived;
+    const all = old.length ? [...old, ...msgs] : msgs;
+    const turns = countTurns(all);
+    if (!turns) return undefined;
+    const id = newId();
+    this.lastTaskChatAt = Math.max(Date.now(), this.lastTaskChatAt + 1); // thứ tự chắc chắn để dọn đúng lần cũ nhất
+    try {
+      await store.save(this.projectId, { id, title: "⏰ " + task.name, updated: this.lastTaskChatAt, turns, task: task.id, messages: trimForSave(msgs), inputs: turns === 1 ? [task.prompt] : undefined, ...(old.length ? { archived: archiveForSave(old) } : {}) });
+      const list = (await store.list(this.projectId)).filter((m) => m.task).sort((a, b) => b.updated - a.updated);
+      const per = new Map<string, number>();
+      let kept = 0;
+      for (const m of list) {
+        const n = (per.get(m.task!) ?? 0) + 1;
+        per.set(m.task!, n);
+        if (n <= MAX_TASK_CHATS && kept < MAX_TASK_CHATS_PER_PROJECT) kept++;
+        else await store.remove(this.projectId, m.id);
+      }
+      return (await store.load(this.projectId, id)) ? id : undefined;
+    } catch {
+      return undefined; // không lưu được lịch sử: không ảnh hưởng tác vụ
+    }
   }
 
   // ---------------------------------------------------------------- chẩn đoán (không chứa nội dung)
@@ -1374,6 +1582,12 @@ export class LocalController implements AgentController {
     const r = await this.shareCall("share/revoke", { method: "POST", body: { id } });
     if (r?.status === 200 && r.json?.ok) return { ok: true, message: "Đã thu hồi: liên kết không còn dùng được." };
     return { ok: false, message: r?.json?.message || "Chưa thu hồi được. Hãy thử lại sau." };
+  }
+
+  /** Tab Code (Desktop): đang chạy lệnh trong container hay không, Docker có chạy không. null = nơi chạy này không có tuỳ chọn container. */
+  async sandboxStatus(): Promise<SandboxStatus | null> {
+    if (!this.o.sandbox || (this.o.profile ?? "code") !== "code") return null;
+    return this.o.sandbox.status();
   }
 
   async diagnosticsStatus(): Promise<{ available: boolean; enabled: boolean; lockedByPolicy: boolean }> {

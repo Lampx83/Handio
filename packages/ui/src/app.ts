@@ -241,7 +241,7 @@ class App {
       this.learnBtn,
       this.newBtn,
       this.filesBtn,
-      ...(this.ctl.taskList ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Tác vụ định kỳ", title: "Tác vụ định kỳ: hẹn giờ để agent tự làm lại một việc", onclick: () => openTasks(this.ctl, { desktop: this.state.capabilities.realFs }) }, "⏰")] : []),
+      ...(this.ctl.taskList ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Tác vụ định kỳ", title: "Tác vụ định kỳ: hẹn giờ để agent tự làm lại một việc", onclick: () => openTasks(this.ctl, { desktop: this.state.capabilities.realFs, onOpenChat: this.ctl.chatOpen && this.state.capabilities.chats ? (id) => void this.openChat(id) : undefined }) }, "⏰")] : []),
       ...(this.ctl.shareChat ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Chia sẻ cuộc trò chuyện", title: "Chia sẻ cuộc trò chuyện này bằng một liên kết", onclick: () => openShare(this.ctl, { track: (a) => this.t(a) }) }, "🔗")] : []),
       ...(this.ctl.sendFeedback ? [h("button", { class: "iconbtn", type: "button", "aria-label": "Góp ý", title: "Góp ý / báo lỗi cho nhóm phát triển", onclick: () => openFeedback(this.ctl, { track: (a) => this.t(a) }) }, "💬")] : []),
       h("button", { class: "iconbtn", type: "button", "aria-label": "Hướng dẫn", title: "Hướng dẫn: mẹo, thủ thuật, tình huống mẫu", onclick: () => this.openGuideDlg() }, "💡"),
@@ -276,7 +276,7 @@ class App {
         this.meterBtn,
         this.codeTools.modelEl, this.sendBtn)));
     const main = h("main", { class: "main" }, this.bannerHost, this.feed, composer);
-    this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path), (text) => void this.submit(text));
+    this.pv = new DesignPreview(this.ctl, () => this.state, (path) => void this.download(path), (text) => void this.submit(text), (path) => void this.openFile(path));
     this.pvHost.append(this.pv.el);
     // cột phải: danh sách tệp, hoặc khung xem của tab (Work: tài liệu, Design: xem trước, Code: thay đổi)
     this.filesView.append(
@@ -601,6 +601,9 @@ class App {
       case "projects":
         this.state.background = { running: e.running, finished: e.finished };
         this.paintProject();
+        break;
+      case "task_done":
+        if (e.projectId === this.state?.projectId) void this.paintChats(); // lần chạy vừa được lưu vào lịch sử dự án này
         break;
       case "mode":
         this.state.mode = e.mode;

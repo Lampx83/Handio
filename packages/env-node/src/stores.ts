@@ -90,7 +90,7 @@ export class JsonChatStore implements ChatStore {
       if (!n.endsWith(".json")) continue;
       try {
         const c = JSON.parse(await fs.readFile(path.join(this.folder(projectId), n), "utf8")) as SavedChat;
-        out.push({ id: c.id, title: String(c.title ?? ""), updated: Number(c.updated) || 0, turns: Number(c.turns) || 0, ...(c.unfinished ? { unfinished: true } : {}) });
+        out.push({ id: c.id, title: String(c.title ?? ""), updated: Number(c.updated) || 0, turns: Number(c.turns) || 0, ...(c.unfinished ? { unfinished: true } : {}), ...(typeof c.task === "string" && ID_RE.test(c.task) ? { task: c.task } : {}) });
       } catch {
         /* tệp hỏng: bỏ qua */
       }

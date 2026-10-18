@@ -6,9 +6,14 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Nút DESIGN.md trên khung xem trước Design**: có tệp thì mở để xem, sửa; chưa có thì nhờ agent tạo (như gõ `/designmd`).
+- **Chỉ vào để sửa nhiều chỗ một lần**: chọn một phần, gõ yêu cầu, bấm **+ Ghi chú**, chọn tiếp phần khác… rồi **Gửi** một lần. Mỗi ghi chú có số thứ tự trên bản xem trước, bỏ từng cái được; tối đa 8 ghi chú mỗi lần.
+- **Tab Code: chạy lệnh trong container Docker** (Desktop, tuỳ chọn): bật ở Cài đặt → Quyền → "Chạy lệnh trong container Docker". Lệnh của agent chỉ thấy thư mục dự án, không thấy phần còn lại của máy, không chạy bằng quyền quản trị, mặc định không ra mạng. Bật "Cho ra mạng" để cài gói (npm/pip, có cache riêng cho từng dự án) và đặt "Cổng xem trước" (ví dụ 5173) để mở web đang chạy trong container. Cần Docker Desktop; Docker không chạy thì lệnh chạy như cũ và ứng dụng báo rõ. Quản trị viên có thể bắt buộc dùng container (`requireContainer` trong `policy.json`).
+- **Tác vụ định kỳ làm được nhiều hơn** (nút ⏰): thêm lịch **một lần** vào ngày giờ định sẵn; bản Desktop chạy được cả dự án chưa mở; mỗi lần chạy được lưu thành cuộc trò chuyện "⏰ tên" để xem lại hoặc nhắn tiếp; thông báo của hệ thống khi xong/lỗi (tắt được); xem lần tới/lần trước, dừng giữa chừng và hoàn tác một lần chạy.
 - **Nhóm người dùng tuỳ tạo** (quản trị viên): gán email hoặc tài khoản vào nhóm như một lớp học hay nhóm giảng viên, rồi đặt riêng cho nhóm hạn mức token/ngày, tab được dùng, mô hình được dùng và hạn mức token riêng cho từng tab. Sửa ngay trên trang quản trị *Hạn mức* (dán cả danh sách email) hoặc bằng `quota.sh group`, có hiệu lực từ yêu cầu kế tiếp. Trang này cũng hiện cấu hình theo bậc, và trang quản trị đếm số yêu cầu bị từ chối theo lý do. Chưa tạo nhóm nào thì mọi thứ như cũ.
 
 ### Thay đổi
+- **Chỉ vào để sửa riêng tư hơn**: phần trích từ thiết kế gửi cho agent nay tự che giá trị ô nhập (kể cả mật khẩu), chữ trong ô nhập nhiều dòng, dữ liệu nhúng dài, chú thích ẩn và token/mật khẩu trong đường dẫn.
 - **Thông báo rõ khi nhóm của bạn không được dùng mô hình đang chọn** hoặc đã hết hạn mức riêng của một tab (các tab khác vẫn dùng được), thay vì báo lỗi key chung chung.
 
 ## [0.8.21] - 2026-10-18

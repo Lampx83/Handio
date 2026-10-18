@@ -10,6 +10,9 @@ export class FakeLlm {
   async models() {
     return ["fake-model"];
   }
+  async quota() {
+    return null;
+  }
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<ChatResult> {
     this.calls.push({ messages: JSON.parse(JSON.stringify(messages)), opts });
     if (opts.signal?.aborted) throw Object.assign(new Error("abort"), { kind: "abort" });

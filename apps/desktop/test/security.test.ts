@@ -106,6 +106,20 @@ describe("kiểm tra yêu cầu IPC", () => {
     expect(ok("saveSettings", { thinking: "yes" })).toBe(false);
     expect(ok("saveSettings", { baseUrl: "x".repeat(5000) })).toBe(false);
   });
+  it("container Docker: chỉ bật/tắt, mạng, cổng xem trước; KHÔNG đặt được ảnh hay cờ docker qua IPC", () => {
+    expect(ok("sandboxStatus")).toBe(true);
+    expect(ok("sandboxStatus", "x")).toBe(false);
+    expect(ok("saveSettings", { container: true, containerNetwork: false, containerPorts: [5173, 3000] })).toBe(true);
+    expect(ok("saveSettings", { container: "yes" })).toBe(false);
+    expect(ok("saveSettings", { containerImage: "node:22-bookworm-slim" })).toBe(false);
+    expect(ok("saveSettings", { containerImage: "--privileged" })).toBe(false);
+    expect(ok("saveSettings", { containerArgs: ["-v", "/:/host"] })).toBe(false);
+    expect(ok("saveSettings", { containerPorts: [22] })).toBe(false); // cổng hệ thống
+    expect(ok("saveSettings", { containerPorts: [5173, 5173] })).toBe(false);
+    expect(ok("saveSettings", { containerPorts: [1, 2, 3, 4, 5, 6].map((x) => 5000 + x) })).toBe(false);
+    expect(ok("saveSettings", { containerPorts: ["5173:22"] })).toBe(false);
+    expect(ok("saveSettings", { containerPorts: [5173.5] })).toBe(false);
+  });
   it("tải tệp lên: giới hạn số lượng, kích thước, kiểu", () => {
     const f = (name: string, n: number) => ({ name, data: new Uint8Array(n) });
     expect(ok("writeTextFile", "AGENTS.md", "nội dung")).toBe(true);
@@ -274,6 +288,20 @@ describe("IPC: tác vụ định kỳ", () => {
     for (const m of ["taskRemove", "taskRunNow"]) for (const bad of ["../x", "A", "a b", "a\0"]) expect(ok(m, bad), m + bad).toBe(false);
     expect(ok("taskList")).toBe(true);
     expect(ok("taskList", 1)).toBe(false);
+  });
+  it("lịch một lần, Dừng, Hoàn tác lần chạy, bật/tắt thông báo: chỉ nhận đúng hình dạng", () => {
+    for (const m of ["taskStop", "taskUndo", "taskNotify"]) expect(IPC_METHODS.has(m), m).toBe(true);
+    expect(ok("taskAdd", { ...good, every: { kind: "once", date: "2026-10-20", at: "09:00" } })).toBe(true);
+    for (const bad of [{ kind: "once", date: "20/10/2026", at: "09:00" }, { kind: "once", date: "2026-10-20T09:00", at: "09:00" }, { kind: "once", date: 20261020, at: "09:00" }, { kind: "once", date: "2026-10-20", at: "09:00", ts: 1 }])
+      expect(ok("taskAdd", { ...good, every: bad }), JSON.stringify(bad)).toBe(false);
+    expect(ok("taskStop")).toBe(true);
+    expect(ok("taskStop", "x")).toBe(false);
+    expect(ok("taskUndo", "abc123")).toBe(true);
+    for (const bad of ["../x", "A", "", 1]) expect(ok("taskUndo", bad), String(bad)).toBe(false);
+    expect(ok("taskUndo")).toBe(false);
+    expect(ok("taskNotify")).toBe(true);
+    expect(ok("taskNotify", false)).toBe(true);
+    for (const bad of [["yes"], [1], [true, true], [null]]) expect(ok("taskNotify", ...bad), JSON.stringify(bad)).toBe(false);
   });
 });
 

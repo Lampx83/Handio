@@ -443,13 +443,26 @@ dialog.rewind { width: min(560px, 94vw); }
 .cite-src { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 1px 9px 1px 3px; border: 1px solid var(--border); border-radius: 999px; background: var(--panel); font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cite-src b { display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: 11px; }
 .cite-src:hover { border-color: var(--accent); color: var(--text); }
-dialog.tasks { width: min(560px, 96vw); }
-dialog.tasks .tk-row { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--border); }
-dialog.tasks .tk-main { min-width: 0; overflow-wrap: anywhere; }
-dialog.tasks .tk-last { font-size: 12.5px; color: var(--muted); max-height: 4.5em; overflow: auto; } dialog.tasks .tk-last.bad { color: var(--err); }
-dialog.tasks .tk-acts { display: flex; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+dialog.tasks { width: min(600px, 96vw); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) dialog.tasks { color-scheme: dark; } }
+:root[data-theme="dark"] dialog.tasks { color-scheme: dark; }
+dialog.tasks input, dialog.tasks textarea, dialog.tasks select { border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; padding: 6px 9px; font: inherit; min-width: 0; }
+dialog.tasks input[type=checkbox] { padding: 0; }
+dialog.tasks textarea { resize: vertical; width: 100%; }
+dialog.tasks .tk-row { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; padding: 9px 0; border-top: 1px solid var(--border); }
+dialog.tasks .tk-row.off .tk-title b { color: var(--muted); }
+dialog.tasks .tk-main { min-width: 0; flex: 1; overflow-wrap: anywhere; display: flex; flex-direction: column; gap: 2px; }
+dialog.tasks .tk-title { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+dialog.tasks .tk-when { font-size: 12.5px; color: var(--muted); }
+dialog.tasks .tk-chip { font-size: 11.5px; padding: 0 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+dialog.tasks .tk-chip.run { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+dialog.tasks .tk-meta { font-size: 12.5px; color: var(--muted); } dialog.tasks .tk-meta.bad { color: var(--err); }
+dialog.tasks .tk-sum { font-size: 12.5px; color: var(--text); background: var(--panel2); border-radius: 6px; padding: 4px 8px; margin-top: 2px; max-height: 4.8em; overflow: auto; white-space: pre-wrap; } dialog.tasks .tk-sum.bad { color: var(--err); background: var(--err-soft); }
+dialog.tasks .tk-acts { display: flex; gap: 6px; flex: none; flex-wrap: wrap; justify-content: flex-end; max-width: 46%; }
 dialog.tasks .tk-new { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
-dialog.tasks .tk-when { display: flex; gap: 8px; flex-wrap: wrap; }
+dialog.tasks .tk-sched { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+dialog.tasks .tk-sched input[type=number] { width: 90px; }
+@media (max-width: 560px) { dialog.tasks .tk-row { flex-direction: column; } dialog.tasks .tk-acts { justify-content: flex-start; max-width: none; } dialog.tasks .tk-sched > * { flex: 1 1 40%; } }
 .wt-offer { margin: 4px 0 2px; }
 .wt-pop { left: auto; right: 0; bottom: auto; top: calc(100% + 6px); min-width: 200px; max-height: 320px; }
 .wt-pop .it[aria-disabled="true"] { opacity: .5; }
@@ -543,6 +556,12 @@ dialog.wt-dlg input { flex: 1; min-width: 0; }
 .pv-pick .pk-sel { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .pv-pick .pk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .pv-pick .pk-row { display: flex; gap: 6px; }
+.pv-pick .pk-notes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; max-height: 140px; overflow-y: auto; }
+.pv-pick .pk-notes li { display: flex; align-items: baseline; gap: 6px; }
+/* màu cố định: khớp số thứ tự vẽ trong khung xem trước (preview.ts), giống nhau ở cả sáng/tối */
+.pv-pick .pk-n { flex: none; min-width: 18px; height: 18px; border-radius: 9px; background: #c05621; color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.pv-pick .pk-what { color: var(--muted); flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pv-pick .pk-note { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .pv-pick .pk-row input { flex: 1; min-width: 0; border: 1px solid var(--border); background: var(--bg); color: inherit; border-radius: 8px; padding: 6px 10px; font: inherit; }
 .ver-link { margin: 6px 10px 10px; padding: 2px 6px; border: 0; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; text-align: left; border-radius: 6px; }
 .ver-link:hover { background: var(--panel2); color: inherit; }

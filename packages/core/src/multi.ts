@@ -1,7 +1,8 @@
 // Nhiều dự án chạy CÙNG LÚC trong một tab: mỗi dự án có một LocalController riêng (phiên, tiến trình nền, lịch sử riêng).
 // Chuyển dự án chỉ đổi "dự án đang xem": dự án cũ vẫn tiếp tục làm việc nền; sự kiện của nó được giữ lại (xin quyền, tiến trình)
 // và đưa ra lại khi bạn quay về. Giao diện chỉ thấy MỘT dự án (đúng như một LocalController), nên UI/IPC không phải đổi hợp đồng.
-import { LocalController, type ControllerOptions } from "./controller";
+import { LocalController, type ControllerOptions, type RunUndo } from "./controller";
+import { dueState } from "./schedule";
 import { join } from "./path";
 import { cleanProjectName, ID_RE, type ProjectHost, type ProjectsState } from "./projects";
 import type { SessionEvent } from "./types";
@@ -14,6 +15,12 @@ type ProcEv = Extract<SessionEvent, { type: "proc" }>;
 
 export async function createMultiProject(o: ControllerOptions & { projects: ProjectHost; /** Gọi sau khi tạo mỗi phiên dự án (dùng cho kiểm thử: thay mô hình giả). */ onChild?: (c: LocalController, projectId: string) => void }): Promise<LocalController> {
   const host = o.projects;
+  // Tác vụ định kỳ: nhật ký hoàn tác dùng chung giữa các dự án; ở chế độ `background` (Desktop) MỘT bộ lập lịch cho cả tab thay cho bộ hẹn giờ từng dự án
+  const undo = new Map<string, RunUndo>();
+  const schedAll = !!(o.tasks?.enabled && o.tasks.background && host.peek);
+  const co: ControllerOptions = { ...o, tasks: o.tasks ? { ...o.tasks, undo, enabled: !!o.tasks.enabled && !schedAll } : undefined };
+  /** Bộ điều khiển chỉ mở để chạy tác vụ của dự án chưa mở: đóng lại sau khi xong (trừ khi người dùng đã mở dự án đó). */
+  const temps = new Set<string>();
   const children = new Map<string, LocalController>();
   const listeners = new Set<Listener>();
   const finished = new Set<string>();
@@ -51,14 +58,14 @@ export async function createMultiProject(o: ControllerOptions & { projects: Proj
       else if (e.type === "turn_end") {
         if (!e.interrupted) finished.add(id);
         announce();
-      } else if (e.type === "quota") fire(e);
+      } else if (e.type === "quota" || e.type === "task_done") fire(e);
     });
   };
 
   const childFor = async (id: string, env?: ControllerOptions["env"]): Promise<LocalController> => {
     let c = children.get(id);
     if (!c) {
-      c = await LocalController.create({ ...o, env: env ?? (await host.open(id)) });
+      c = await LocalController.create({ ...co, env: env ?? (await host.open(id)), projectId: id });
       children.set(id, c);
       wire(id, c);
       o.onChild?.(c, id);
@@ -66,7 +73,9 @@ export async function createMultiProject(o: ControllerOptions & { projects: Proj
     return c;
   };
 
-  const activate = (id: string, c: LocalController): void => {
+  const activate = async (id: string, c: LocalController): Promise<void> => {
+    temps.delete(id); // người dùng mở dự án: không còn là bộ điều khiển tạm của tác vụ
+    await c.wake();
     activeId = id;
     active = c;
     finished.delete(id);
@@ -79,7 +88,7 @@ export async function createMultiProject(o: ControllerOptions & { projects: Proj
   // dự án đang mở lúc khởi động
   const st0 = await host.list();
   activeId = st0.active;
-  active = await LocalController.create(o);
+  active = await LocalController.create({ ...co, projectId: activeId });
   children.set(activeId, active);
   wire(activeId, active);
   o.onChild?.(active, activeId);
@@ -112,7 +121,7 @@ export async function createMultiProject(o: ControllerOptions & { projects: Proj
       const had = children.has(id);
       const c = await childFor(id);
       if (had) await host.open(id); // ghi nhớ "dự án đang mở" và giờ dùng gần nhất
-      activate(id, c);
+      await activate(id, c);
     },
     async projectCreate(spec: { name: string; instructions?: string }) {
       const name = cleanProjectName(spec.name ?? "");
@@ -121,7 +130,7 @@ export async function createMultiProject(o: ControllerOptions & { projects: Proj
         const { info, env } = await host.create({ name });
         const text = (spec.instructions ?? "").trim();
         if (text) await env.writeText(join(env.root, "AGENTS.md"), text.slice(0, 20000) + "\n");
-        activate(info.id, await childFor(info.id, env));
+        await activate(info.id, await childFor(info.id, env));
         return { ok: true };
       } catch (e) {
         return { error: (e as Error).message };
@@ -132,7 +141,7 @@ export async function createMultiProject(o: ControllerOptions & { projects: Proj
       try {
         const r = await host.pick();
         if (!r) return { ok: false };
-        activate(r.info.id, children.get(r.info.id) ?? (await childFor(r.info.id, r.env)));
+        await activate(r.info.id, children.get(r.info.id) ?? (await childFor(r.info.id, r.env)));
         return { ok: true };
       } catch (e) {
         return { error: (e as Error).message };
@@ -150,11 +159,13 @@ export async function createMultiProject(o: ControllerOptions & { projects: Proj
       finished.delete(id);
       heldPerms.delete(id);
       heldProcs.delete(id);
+      temps.delete(id);
       await host.remove(id);
+      await active.tasksDropProject(id).catch(() => undefined); // tác vụ của dự án bị bỏ không còn chạy
       for (const m of (await o.chats?.list(id).catch(() => [])) ?? []) await o.chats?.remove(id, m.id);
       if (id === activeId) {
         const next = (await host.list()).projects[0];
-        activate(next.id, await childFor(next.id));
+        await activate(next.id, await childFor(next.id));
       }
       return { ok: true };
     },
@@ -194,9 +205,68 @@ export async function createMultiProject(o: ControllerOptions & { projects: Proj
       return active.resumeAfterRestart(at, text);
     },
     dispose() {
+      if (timer) clearInterval(timer);
+      timer = undefined;
       for (const c of children.values()) c.dispose();
     },
+    tasksTick: () => schedTick(),
   };
+
+  // ---------------------------------------------------------------- bộ lập lịch tác vụ định kỳ cho cả tab (Desktop)
+  // Duyệt mọi tác vụ của tab trong cài đặt; đến hạn thì chạy trong bộ điều khiển của dự án đó (mở tạm nếu chưa mở, đóng lại sau khi xong).
+  // Quyền vẫn do LocalController.taskRun quyết định (phiên riêng, acceptEdits, mọi yêu cầu xin phép bị từ chối).
+  let ticking = false;
+  const schedTick = async (): Promise<void> => {
+    if (!schedAll) return active.tasksTick();
+    if (ticking || (o.tasks?.canRun && !o.tasks.canRun())) return;
+    ticking = true;
+    try {
+      const now = (o.tasks?.now ?? Date.now)();
+      const ids = new Set((await host.list()).projects.map((p) => p.id));
+      for (const t of await active.tasksForProfile()) {
+        if (!ids.has(t.projectId)) continue;
+        const due = dueState(t, now);
+        if (due === "missed") await active.taskMarkMissed(t.id);
+        if (due !== "run") continue;
+        const c0 = children.get(t.projectId);
+        if (c0 && (c0.isBusy() || c0.currentTaskId())) continue; // người dùng đang làm việc ở dự án đó: lượt sau
+        if ([...children.values()].filter((c) => c.isBusy() || c.currentTaskId()).length >= MAX_PARALLEL_PROJECTS) return;
+        const lock = o.tasks?.lock;
+        if (lock?.held) return;
+        if (lock) lock.held = true;
+        try {
+          let c = c0;
+          if (!c) {
+            c = await LocalController.create({ ...co, env: await host.peek!(t.projectId), projectId: t.projectId, headless: true });
+            children.set(t.projectId, c);
+            temps.add(t.projectId);
+            wire(t.projectId, c);
+            o.onChild?.(c, t.projectId);
+          }
+          c.adoptQuota(active.quotaInfo());
+          await c.taskRunScheduled(t.id);
+        } catch {
+          /* thư mục dự án không còn…: bỏ qua lượt này */
+        } finally {
+          if (lock) lock.held = false;
+          const c = children.get(t.projectId);
+          if (temps.has(t.projectId) && t.projectId !== activeId && c && !c.isBusy() && !c.currentTaskId()) {
+            c.dispose();
+            children.delete(t.projectId);
+            temps.delete(t.projectId);
+          }
+        }
+        return; // mỗi lượt tối đa một tác vụ
+      }
+    } finally {
+      ticking = false;
+    }
+  };
+  let timer: ReturnType<typeof setInterval> | undefined;
+  if (schedAll) {
+    timer = setInterval(() => void schedTick().catch(() => undefined), o.tasks?.tickMs ?? 30_000);
+    (timer as { unref?: () => void }).unref?.();
+  }
 
   return new Proxy({} as LocalController, {
     get(_t, prop: string) {
