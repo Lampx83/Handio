@@ -5,13 +5,16 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 
 ## [Chưa phát hành]
 
+### Thêm
+- **Tác vụ định kỳ làm được nhiều hơn** (nút ⏰): thêm lịch **một lần** vào ngày giờ định sẵn; bản Desktop chạy được cả dự án chưa mở; mỗi lần chạy được lưu thành cuộc trò chuyện "⏰ tên" để xem lại hoặc nhắn tiếp; thông báo của hệ thống khi xong/lỗi (tắt được); xem lần tới/lần trước, dừng giữa chừng và hoàn tác một lần chạy.
+
 ## [0.8.21] - 2026-10-18
 
 ### Thêm
 - **Mục "Tải về" trên trang giới thiệu**: chọn bản macOS (chip Apple/Intel), Windows hoặc bản web, kèm cách mở khi hệ điều hành cảnh báo lần đầu và cách kiểm tra mã SHA-256. Hỏi đáp có link tới chính sách quyền riêng tư.
 - **DESIGN.md cho từng dự án Design**: ghi màu, phông, khoảng cách và giọng điệu vào `DESIGN.md` ở thư mục dự án, agent đọc và làm theo ở mọi thiết kế. Sửa tệp lúc nào cũng được, có hiệu lực từ tin nhắn kế tiếp. Chưa có thì gõ `/designmd` để agent tạo bản mẫu (hoặc rút từ thiết kế đang có).
 - **Phân quyền tab theo nhóm người dùng**: quản trị viên có thể chỉ cho một nhóm (theo miền email, ví dụ sinh viên `@st.neu.edu.vn` hoặc giảng viên/cán bộ `@neu.edu.vn`) dùng một số tab Work/Code/Design. Tab không được dùng sẽ ẩn, và máy chủ từ chối yêu cầu của tab đó kèm thông báo rõ. Mặc định chưa cấu hình thì mọi người vẫn dùng cả ba tab như trước.
-- **Tác vụ định kỳ** (nút ⏰): hẹn giờ để agent tự làm lại một việc, mỗi N phút (từ 30 phút), hằng ngày, hằng tuần hoặc **một lần** vào ngày giờ định trước (chạy xong tự tắt). Bản Desktop chạy cả tác vụ của dự án chưa mở, miễn là ứng dụng đang mở; bản web chỉ chạy khi tab đang mở. Mỗi lần chạy được lưu thành cuộc trò chuyện “⏰ tên” trong lịch sử dự án (giữ 5 lần gần nhất mỗi tác vụ) để xem lại; nút "Hoàn tác" đưa các tệp lần chạy vừa sửa về như cũ (tệp bạn đã sửa lại sau đó thì giữ nguyên; chỉ dùng được khi chưa đóng ứng dụng). Danh sách hiện lần tới, lần trước, số thao tác bị từ chối; đang chạy thì có nút Dừng. Desktop báo bằng thông báo hệ thống khi xong/lỗi (chỉ tên tác vụ, tắt được). Lỡ giờ hẹn quá 6 giờ thì bỏ qua. Vì không có người ngồi trước, tác vụ chỉ được sửa tệp trong dự án: lệnh, mạng, tệp nhạy cảm bị từ chối. Tối đa 12 lần/ngày mỗi tác vụ và dừng khi hết hạn mức token.
+- **Tác vụ định kỳ** (nút ⏰): hẹn giờ để agent tự làm lại một việc, mỗi N phút (từ 30 phút), hằng ngày hoặc hằng tuần; xem danh sách, bật/tắt, xoá, "Chạy ngay" và xem kết quả lần chạy gần nhất. Chỉ chạy khi ứng dụng (hoặc tab web) đang mở; lỡ giờ hẹn quá 6 giờ thì bỏ qua. Vì không có người ngồi trước, tác vụ chỉ được sửa tệp trong dự án: lệnh, mạng, tệp nhạy cảm bị từ chối. Tối đa 12 lần/ngày mỗi tác vụ và dừng khi hết hạn mức token.
 - **Tải bản cài macOS và Windows ngay trên trang giới thiệu**: đầu trang có nút tải bản mới nhất cho macOS (chip Apple hoặc Intel) và Windows, kèm mã SHA-256, không cần đăng nhập trước. Mở ứng dụng vẫn cần đăng nhập tài khoản trường.
 - **Trang chính sách quyền riêng tư** (`/agent/guide/privacy.html`, tiếng Việt và tiếng Anh): ứng dụng dùng dữ liệu nào, gửi đi đâu, giữ bao lâu, cách tắt hoặc yêu cầu xoá. Có link ở chân trang giới thiệu và trang hướng dẫn.
 - **Chuẩn bị bản Windows trên Microsoft Store**: cài từ Store sẽ không còn cảnh báo "nhà phát hành không xác định", và Store tự cập nhật ứng dụng (bản cài từ Store ẩn mục "Kiểm tra bản cập nhật" trong menu Tệp).
