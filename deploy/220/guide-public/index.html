@@ -97,6 +97,11 @@ section h2{margin:0 0 8px;font-size:clamp(26px,3.4vw,38px);line-height:1.2;lette
 .cap .ic svg{width:28px;height:28px}
 .cap h3{margin:0 0 4px;font-size:17px}
 .cap p{margin:0;color:#51607f;font-size:14.5px;line-height:1.5}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:rgba(120,160,255,.14);border-radius:5px;padding:1px 5px;white-space:nowrap}
+.cap .row{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 10px}
+.cap .btn.alt{background:#eef3fc;color:#0b1630;box-shadow:none;border:1px solid #d9e2f4}
+.cap .hint{font-size:13.5px;color:#51607f;margin:8px 0 0;padding-top:8px;border-top:1px dashed #d9e2f4}
+.cap .soon{display:inline-block;font-size:12px;font-weight:700;color:#0b4a9e;background:#e8f0fb;border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:2px}
 /* ---- demo trình chiếu thuần CSS ---- */
 .demo input{position:absolute;opacity:0;pointer-events:none}
 .demo .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
@@ -161,7 +166,7 @@ footer a{color:var(--ice)}
         <h1>Cánh tay AI, <span>làm mọi việc thay bạn.</span></h1>
         <p class="sub">Từ thao tác máy tính, lập trình, thuyết trình đến thiết kế: bạn nói mục tiêu, NEU Agent làm đủ việc và tự kiểm tra trước khi báo xong.</p>
         <div class="cta"><a class="btn" href="/agent/oauth2/sign_in?rd=/agent/">Đăng nhập để dùng</a><a class="btn ghost" href="#demo">Xem demo</a></div>
-        <div class="dl" id="tai-ve"><span>Tải bản cài:</span><a href="/agent/download/latest/NEU-Agent-mac-arm64.dmg">macOS · chip Apple</a><a href="/agent/download/latest/NEU-Agent-mac-x64.dmg">macOS · Intel</a><a href="https://apps.microsoft.com/detail/9NCW18C30ZNM" rel="noopener">Windows · Microsoft Store</a></div>
+        <div class="dl"><span>Tải bản cài:</span><a href="/agent/download/latest/NEU-Agent-mac-arm64.dmg">macOS · chip Apple</a><a href="/agent/download/latest/NEU-Agent-mac-x64.dmg">macOS · Intel</a><a href="https://apps.microsoft.com/detail/9NCW18C30ZNM" rel="noopener">Windows · Microsoft Store</a><a href="#tai-ve">Cách cài</a></div>
         <small>Tài khoản @neu.edu.vn hoặc @st.neu.edu.vn · <a href="/agent/download/latest/SHA256SUMS.txt">Mã SHA-256</a></small>
         <ul class="pillars">
           <li><a href="#work"><svg aria-hidden="true"><use href="#i-pc"/></svg>Thao tác<br>máy tính</a></li>
@@ -242,6 +247,34 @@ footer a{color:var(--ice)}
   </div>
 </section>
 
+<section class="light" id="tai-ve">
+  <div class="wrap">
+    <h2>Tải về</h2>
+    <p class="lead">Bản cài làm việc trực tiếp với thư mục trên máy và tự cập nhật. Bản nào cũng cần đăng nhập tài khoản của trường.</p>
+    <div class="caps">
+      <div class="cap">
+        <h3>macOS</h3>
+        <p>Chọn đúng chip: menu Apple → Giới thiệu về máy Mac.</p>
+        <div class="row"><a class="btn sm" href="/agent/download/latest/NEU-Agent-mac-arm64.dmg">Chip Apple (M1–M4)</a><a class="btn sm alt" href="/agent/download/latest/NEU-Agent-mac-x64.dmg">Chip Intel</a></div>
+        <p class="hint">Lần đầu mở, nếu macOS báo không xác minh được nhà phát triển: vào Cài đặt hệ thống → Quyền riêng tư &amp; Bảo mật → <b>Vẫn mở</b>.</p>
+      </div>
+      <div class="cap">
+        <h3>Windows 10/11</h3>
+        <p>Cài từ Microsoft Store: không cảnh báo, Store tự cập nhật.</p>
+        <div class="row"><a class="btn sm" href="https://apps.microsoft.com/detail/9NCW18C30ZNM" rel="noopener">Mở Microsoft Store</a><a class="btn sm alt" href="/agent/download/latest/NEU-Agent-win-x64.exe">Tệp .exe</a></div>
+        <p class="hint">Dùng tệp .exe mà hiện “Windows đã bảo vệ máy tính của bạn”: bấm <b>Thông tin thêm</b> → <b>Vẫn chạy</b>.</p>
+      </div>
+      <div class="cap">
+        <h3>Bản web</h3>
+        <p>Không cần cài: đăng nhập là dùng, chạy được cả trên điện thoại.</p>
+        <div class="row"><a class="btn sm" href="/agent/oauth2/sign_in?rd=/agent/">Mở bản web</a></div>
+        <p class="hint">Trên Chrome hoặc Edge: đăng nhập, bấm <b>Tải ứng dụng</b> → <b>Cài từ trình duyệt</b> để dùng như ứng dụng, không có cảnh báo.</p>
+      </div>
+    </div>
+    <p class="lead" style="margin:18px 0 0;font-size:14.5px">Kiểm tra tệp trước khi mở: so với <a href="/agent/download/latest/SHA256SUMS.txt">mã SHA-256</a> (macOS: <code>shasum -a 256 &lt;tệp&gt;</code>, Windows: <code>Get-FileHash &lt;tệp&gt;</code>).</p>
+  </div>
+</section>
+
 <section class="light" id="hoi-dap">
   <div class="wrap">
     <div class="two" style="align-items:start">
@@ -255,9 +288,9 @@ footer a{color:var(--ice)}
       </div>
       <div>
         <h2>Hỏi nhanh đáp gọn</h2>
-        <details><summary>Dữ liệu của tôi có bị gửi đi đâu không?</summary><p>Nội dung trao đổi được gửi tới máy chủ mô hình của trường để trả lời; tệp chỉ được đọc khi cần cho yêu cầu của bạn.</p></details>
-        <details><summary>Nên dùng bản web hay bản cài?</summary><p>Bản web mở là dùng. Bản cài (macOS, Windows) làm việc trực tiếp với thư mục trên máy và tự cập nhật; tải ngay ở đầu trang này, kèm mã băm SHA-256. Mở ứng dụng vẫn cần đăng nhập.</p></details>
-        <details><summary>Gặp cảnh báo “nhà phát hành không xác định” khi cài?</summary><p>Windows: cài từ Microsoft Store thì không có cảnh báo, Store cũng tự cập nhật. macOS: bản cài chưa được Apple xác nhận nên cảnh báo lần đầu mở; so mã băm SHA-256 trên trang tải với tệp vừa tải rồi mới mở.</p></details>
+        <details><summary>Dữ liệu của tôi có bị gửi đi đâu không?</summary><p>Nội dung trao đổi được gửi tới máy chủ mô hình của trường để trả lời; tệp chỉ được đọc khi cần cho yêu cầu của bạn. Chi tiết ở <a href="/agent/guide/privacy.html">chính sách quyền riêng tư</a>.</p></details>
+        <details><summary>Nên dùng bản web hay bản cài?</summary><p>Bản web mở là dùng. Bản cài (macOS, Windows) làm việc trực tiếp với thư mục trên máy và tự cập nhật; tải ở mục <a href="#tai-ve">Tải về</a>, kèm mã băm SHA-256. Mở ứng dụng vẫn cần đăng nhập.</p></details>
+        <details><summary>Gặp cảnh báo “nhà phát hành không xác định” khi cài?</summary><p>Bản cài chưa được Apple, Microsoft xác nhận nên lần đầu mở sẽ có cảnh báo; cách mở ở mục <a href="#tai-ve">Tải về</a>. Nên so mã băm SHA-256 trước khi mở. Bản Windows cài từ Microsoft Store thì không cảnh báo.</p></details>
         <details><summary>Báo hết hạn mức thì sao?</summary><p>Hạn mức tính lại mỗi ngày; thanh trạng thái cho biết bạn đã dùng bao nhiêu.</p></details>
       </div>
     </div>

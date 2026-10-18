@@ -13,7 +13,13 @@ export interface LlmConfig {
   allowInsecure?: boolean;
   /** Tiêu đề đăng nhập (Authorization: Bearer… hoặc Cookie phiên) cho máy chủ yêu cầu đăng nhập; chỉ được gọi khi địa chỉ API nằm trong danh sách máy chủ tin cậy của ứng dụng. */
   authHeaders?: () => Promise<Record<string, string> | null>;
+  /** Tab đang dùng (work|code|design), khai báo cho cổng của máy chủ NEU để kiểm tra phân quyền theo nhóm. Chỉ gửi tới địa chỉ dạng …/vllm/v1. */
+  tab?: string;
 }
+
+/** Địa chỉ API của gateway NEU (…/vllm/v1): nơi có cổng hạn mức + phân quyền tab. */
+const isNeuGateway = (baseUrl: string): boolean => /\/vllm\/v1\/?$/.test(baseUrl);
+const TAB_NAMES = ["work", "code", "design"];
 
 export interface ToolCallMsg {
   id: string;
@@ -88,6 +94,17 @@ function friendly(status: number, text: string): LlmError {
     } catch {
       return new LlmError("Bạn đã dùng hết hạn mức token hôm nay. Hạn mức làm mới lúc 00:00 ngày mai.", status, "quota", "quota_exceeded");
     }
+  }
+  if (status === 403 && (low.includes("tab_not_allowed") || low.includes("tab_required"))) {
+    const code = low.includes("tab_not_allowed") ? "tab_not_allowed" : "tab_required";
+    let msg = code === "tab_not_allowed" ? "Nhóm của bạn không được dùng tab này." : "Phiên bản ứng dụng này chưa khai báo tab. Hãy cập nhật ứng dụng hoặc tải lại trang.";
+    try {
+      const j = JSON.parse(text) as { message?: string };
+      if (typeof j.message === "string" && j.message) msg = j.message.slice(0, 300);
+    } catch {
+      /* giữ thông báo mặc định */
+    }
+    return new LlmError(msg, status, "auth", code);
   }
   if (status === 401 && low.includes("login_required")) return new LlmError("Chưa đăng nhập hoặc phiên đăng nhập đã hết hạn.", status, "auth", "login_required");
   if (status === 401) return new LlmError("Key sai hoặc chưa nhập. Vào Cài đặt để nhập lại.", status, "auth");
@@ -194,6 +211,8 @@ export class LlmClient {
     // chỉ nhận đúng hai tiêu đề đăng nhập; không để phần chủ ghi đè Content-Type, Accept, …
     if (extra?.Authorization) h.Authorization = extra.Authorization;
     if (extra?.Cookie) h.Cookie = extra.Cookie;
+    // khai tab cho cổng của máy chủ NEU (máy chủ tự kiểm tra); không gửi tiêu đề lạ tới máy chủ khác (tránh lỗi CORS và rò thông tin)
+    if (c.tab && TAB_NAMES.includes(c.tab) && isNeuGateway(c.baseUrl)) h["X-Neu-Tab"] = c.tab;
     return h;
   }
 
@@ -214,7 +233,8 @@ export class LlmClient {
       const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : 0);
       const state = typeof j.state === "string" && QUOTA_STATES.includes(j.state) ? (j.state as QuotaInfo["state"]) : null;
       if (!state) return null;
-      return { limit: num(j.limit), used: num(j.used), remaining: typeof j.remaining === "number" ? j.remaining : null, pct: typeof j.pct === "number" ? j.pct : null, state, resetAt: num(j.reset_at), tier: typeof j.tier === "string" ? j.tier : undefined };
+      const tabs = Array.isArray(j.tabs) ? TAB_NAMES.filter((t) => (j.tabs as unknown[]).includes(t)) : undefined;
+      return { limit: num(j.limit), used: num(j.used), remaining: typeof j.remaining === "number" ? j.remaining : null, pct: typeof j.pct === "number" ? j.pct : null, state, resetAt: num(j.reset_at), tier: typeof j.tier === "string" ? j.tier : undefined, ...(tabs ? { tabs } : {}) };
     } catch {
       return null;
     }

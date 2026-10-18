@@ -254,6 +254,29 @@ describe("IPC: Work — xem tài liệu và quy trình của tôi", () => {
   });
 });
 
+describe("IPC: tác vụ định kỳ", () => {
+  const ok = (m: string, ...a: unknown[]) => IPC_VALIDATORS[m](a);
+  const good = { name: "Báo cáo", prompt: "Tổng hợp", every: { kind: "weekly", day: 1, at: "08:00" } };
+  it("có trong danh sách; taskAdd nhận đúng hình dạng, từ chối khoá lạ và kiểu sai", () => {
+    for (const m of ["taskList", "taskAdd", "taskSet", "taskRemove", "taskRunNow"]) expect(IPC_METHODS.has(m), m).toBe(true);
+    expect(ok("taskAdd", good)).toBe(true);
+    expect(ok("taskAdd", { ...good, every: { kind: "minutes", n: 60 } })).toBe(true);
+    for (const bad of [{ ...good, enabled: true }, { ...good, name: "" + "x".repeat(61) }, { ...good, prompt: "x".repeat(2001) }, { ...good, every: { kind: "cron", at: "08:00" } }, { ...good, every: { kind: "daily", at: "8h" } }, { ...good, every: { kind: "weekly", day: 9, at: "08:00" } }, { ...good, every: { kind: "minutes", n: 0.5 } }, { ...good, every: { kind: "daily", at: "08:00", cmd: "rm" } }, { ...good, every: "daily" }, { name: "a", prompt: "b" }, "x", null])
+      expect(ok("taskAdd", bad), JSON.stringify(bad)).toBe(false);
+    expect(ok("taskAdd")).toBe(false);
+    expect(ok("taskAdd", good, good)).toBe(false);
+  });
+  it("taskSet/taskRemove/taskRunNow chỉ nhận mã dạng slug", () => {
+    expect(ok("taskSet", "abc123", false)).toBe(true);
+    expect(ok("taskRemove", "abc123")).toBe(true);
+    expect(ok("taskRunNow", "abc123")).toBe(true);
+    for (const bad of [["../x", true], ["a/b", true], ["", true], ["a", "yes"], ["a"]]) expect(ok("taskSet", ...(bad as unknown[])), JSON.stringify(bad)).toBe(false);
+    for (const m of ["taskRemove", "taskRunNow"]) for (const bad of ["../x", "A", "a b", "a\0"]) expect(ok(m, bad), m + bad).toBe(false);
+    expect(ok("taskList")).toBe(true);
+    expect(ok("taskList", 1)).toBe(false);
+  });
+});
+
 describe("cổng đăng nhập SSO", () => {
   it("SSO bật mà chưa đăng nhập thì chặn mọi lệnh; đã đăng nhập hoặc SSO tắt thì cho qua", () => {
     expect(authBlocks(true, false)).toBe(true);
