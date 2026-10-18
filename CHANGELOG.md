@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Mục "Tải về" trên trang giới thiệu**: chọn bản macOS (chip Apple/Intel), Windows hoặc bản web, kèm cách mở khi hệ điều hành cảnh báo lần đầu và cách kiểm tra mã SHA-256. Hỏi đáp có link tới chính sách quyền riêng tư.
 - **DESIGN.md cho từng dự án Design**: ghi màu, phông, khoảng cách và giọng điệu vào `DESIGN.md` ở thư mục dự án, agent đọc và làm theo ở mọi thiết kế. Sửa tệp lúc nào cũng được, có hiệu lực từ tin nhắn kế tiếp. Chưa có thì gõ `/designmd` để agent tạo bản mẫu (hoặc rút từ thiết kế đang có).
 - **Phân quyền tab theo nhóm người dùng**: quản trị viên có thể chỉ cho một nhóm (theo miền email, ví dụ sinh viên `@st.neu.edu.vn` hoặc giảng viên/cán bộ `@neu.edu.vn`) dùng một số tab Work/Code/Design. Tab không được dùng sẽ ẩn, và máy chủ từ chối yêu cầu của tab đó kèm thông báo rõ. Mặc định chưa cấu hình thì mọi người vẫn dùng cả ba tab như trước.
 - **Tác vụ định kỳ** (nút ⏰): hẹn giờ để agent tự làm lại một việc, mỗi N phút (từ 30 phút), hằng ngày hoặc hằng tuần; xem danh sách, bật/tắt, xoá, "Chạy ngay" và xem kết quả lần chạy gần nhất. Chỉ chạy khi ứng dụng (hoặc tab web) đang mở; lỡ giờ hẹn quá 6 giờ thì bỏ qua. Vì không có người ngồi trước, tác vụ chỉ được sửa tệp trong dự án: lệnh, mạng, tệp nhạy cảm bị từ chối. Tối đa 12 lần/ngày mỗi tác vụ và dừng khi hết hạn mức token.
