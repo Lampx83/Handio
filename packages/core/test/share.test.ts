@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildSharePayload, redactForShare, type HistoryItem } from "../src";
-import { makeController } from "./helpers";
+import { buildSharePayload, MemoryEnv, redactForShare, type HistoryItem } from "../src";
+import { makeController, type Step } from "./helpers";
 
 describe("che thông tin nhạy cảm trước khi chia sẻ", () => {
   it("che khoá/mật khẩu/token và dữ liệu cá nhân, đếm số chỗ che", () => {
@@ -76,7 +76,7 @@ describe("chia sẻ cuộc trò chuyện qua controller", () => {
     const sent = JSON.parse(calls[0].init.body as string);
     expect(calls[0].url).toBe("https://ai.test/agent/share");
     expect((calls[0].init.headers as Record<string, string>).Authorization).toBe("Bearer T");
-    expect(sent).toMatchObject({ v: 1, title: "Bảng điểm của tôi", profile: "work", version: "0.7.0" });
+    expect(sent).toMatchObject({ v: 2, title: "Bảng điểm của tôi", profile: "work", version: "0.7.0" });
     expect(JSON.stringify(sent)).not.toContain("Matkhau12345");
 
     const mine = await c.sharedChats();
@@ -99,5 +99,56 @@ describe("chia sẻ cuộc trò chuyện qua controller", () => {
     const none = await makeController([{ text: "ok" }], {});
     await none.c.send("xin chào bạn");
     expect((await none.c.shareChat({})).message).toMatch(/chưa nối/);
+  });
+});
+
+describe("chia sẻ đủ thông tin để cải tiến (bản v2)", () => {
+  const sentOf = async (steps: Step[], after?: (c: any) => Promise<void>) => {
+    const env = new MemoryEnv("/ws", {});
+    (env as any).exec = async () => ({ output: "OK", code: 0, timedOut: false });
+    const calls: RequestInit[] = [];
+    const f = (async (url: string, init: RequestInit) => {
+      calls.push(init);
+      return url.endsWith("/share") ? json({ ok: true, id: "AbCdEfGhIjKlMnOpQrStUv" }) : json({}, 404);
+    }) as never;
+    const { c } = await makeController(steps, { profile: "code", diagnostics: diag(f), env, settings: { mode: "auto" } });
+    await c.send("Làm ứng dụng trắc nghiệm Toán lớp 6");
+    if (after) await after(c);
+    const pv = await c.sharePreview();
+    const r = await c.shareChat({});
+    return { pv, r, sent: calls.length ? JSON.parse(calls[0].body as string) : null };
+  };
+
+  it("sau khi tóm tắt ngữ cảnh vẫn chia sẻ được, còn đủ câu hỏi gốc (trước đây báo 'chưa có nội dung')", async () => {
+    const { pv, sent } = await sentOf(
+      [{ calls: [{ name: "write_file", args: { path: "app.js", content: "console.log(1)" } }] }, { text: "Xong." }, { text: "Người dùng muốn app trắc nghiệm; đã tạo app.js." }],
+      async (c) => void (await c.send("/compact")),
+    );
+    expect(pv.ok).toBe(true);
+    const users = sent.items.filter((i: any) => i.k === "user").map((i: any) => i.t);
+    expect(users).toContain("Làm ứng dụng trắc nghiệm Toán lớp 6");
+    expect(sent.items.some((i: any) => i.k === "summary" && /trắc nghiệm/.test(i.t))).toBe(true);
+  });
+
+  it("kèm đối số và kết quả công cụ (đánh dấu lỗi), lời nhắc hệ thống, mô hình và chế độ; vẫn che bí mật", async () => {
+    const { sent } = await sentOf([
+      { calls: [{ name: "read_file", args: { path: "khong-co.js" } }] },
+      { calls: [{ name: "write_file", args: { path: "app.js", content: "const token = 'sk-abcdefghijklmnop1234567890';\nconsole.log(1)" } }] },
+      { text: "Xong rồi!" },
+      { calls: [{ name: "bash", args: { command: "node app.js" } }] },
+      { text: "Đã chạy." },
+    ]);
+    expect(sent).toMatchObject({ v: 2, profile: "code", version: "0.7.0", mode: "auto" });
+    expect(typeof sent.model).toBe("string");
+    const tools = sent.items.filter((i: any) => i.k === "tool");
+    const read = tools.find((i: any) => i.n === "read_file");
+    expect(read.t).toContain("khong-co.js");
+    expect(read.e).toBe(true);
+    expect(read.r).toMatch(/^Lỗi/);
+    const write = tools.find((i: any) => i.n === "write_file");
+    expect(write.t).toContain("console.log(1)");
+    expect(write.e).toBeFalsy();
+    expect(JSON.stringify(sent)).not.toContain("sk-abcdefghijklmnop");
+    expect(sent.items.some((i: any) => i.k === "system" && /chạy thử|kiểm/i.test(i.t))).toBe(true);
   });
 });
