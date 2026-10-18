@@ -64,6 +64,12 @@ export function fileVersion(name: string): string | undefined {
   return /-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+?)?)-(?:mac|win)/i.exec(name)?.[1];
 }
 
+/** Trang ứng dụng trên Microsoft Store do latest.json khai (`store.win`); chỉ nhận https://apps.microsoft.com/detail/<Store ID>. */
+export function storeWinUrl(j: { store?: { win?: unknown } }): string | undefined {
+  const u = j.store?.win;
+  return typeof u === "string" && /^https:\/\/apps\.microsoft\.com\/detail\/[0-9A-Za-z]{12}$/.test(u) ? u : undefined;
+}
+
 const mb = (n: number): string => (n >= 1e8 ? Math.round(n / 1e6) : (n / 1e6).toFixed(1)) + " MB";
 
 function parseSums(text: string): Map<string, string> {
@@ -97,10 +103,12 @@ export async function openDownload(base: string, install?: { available(): boolea
   let signed: { mac?: boolean; win?: boolean } = {};
   let signer: { mac?: string; win?: string } = {};
   let latestInfo: { version?: string; released?: string } = {};
+  let storeWin: string | undefined;
   try {
     const r = await fetch(new URL("latest.json", base).href, { cache: "no-store" });
     if (r.ok && !/html/i.test(r.headers.get("content-type") ?? "")) {
-      const j = (await r.json()) as { version?: string; released?: string; signed?: { mac?: boolean; win?: boolean }; signer?: { mac?: string; win?: string } };
+      const j = (await r.json()) as { version?: string; released?: string; signed?: { mac?: boolean; win?: boolean }; signer?: { mac?: string; win?: string }; store?: { win?: unknown } };
+      storeWin = storeWinUrl(j);
       signed = j.signed ?? {};
       signer = j.signer ?? {};
       latestInfo = { version: j.version, released: j.released };
@@ -125,6 +133,8 @@ export async function openDownload(base: string, install?: { available(): boolea
     return "Phiên bản " + v + d;
   };
   const dlBtn = (f: { it: Item; name: string }, label: string, big = false) => h("a", { class: "btn primary" + (big ? " lg" : ""), href: url(f.name), download: f.name, rel: "noopener" }, label);
+  // Windows: có trang Microsoft Store thì đưa tới Store (Microsoft ký, không cảnh báo SmartScreen, Store tự cập nhật); tệp .exe để phương án phụ
+  const storeBtn = (big = false) => h("a", { class: "btn primary" + (big ? " lg" : ""), href: storeWin!, target: "_blank", rel: "noopener" }, big ? "Mở Microsoft Store" : "Store");
 
   const yes = files.filter((f) => fit(f.it.os, me) === "yes");
   const maybe = files.filter((f) => fit(f.it.os, me) === "maybe");
@@ -134,7 +144,11 @@ export async function openDownload(base: string, install?: { available(): boolea
   const hero = h("div", { class: "dl-hero" });
   if (me.os === "mobile") hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, "💻"), h("h3", {}, "Ứng dụng dành cho máy tính"), h("p", { class: "muted" }, "Hãy mở trang này trên máy tính macOS hoặc Windows. Trên điện thoại, bạn dùng ngay bản web."));
   else if (me.os === "linux") hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, "🐧"), h("h3", {}, "Chưa có bản cho Linux"), h("p", { class: "muted" }, "Bạn vẫn dùng được bản web ngay trên trang này, hoặc tải bản Windows/macOS về máy khác."));
-  else if (yes.length) {
+  else if (yes.length && yes[0].it.os === "win" && storeWin) {
+    const f = yes[0];
+    hero.append(h("div", { class: "dl-big", "aria-hidden": "true" }, "🪟"), h("h3", {}, "Cài từ Microsoft Store"), h("p", { class: "muted" }, "Không cảnh báo khi cài · Store tự cập nhật"), storeBtn(true),
+      h("p", { class: "muted" }, "Hoặc ", h("a", { href: url(f.name), download: f.name, rel: "noopener" }, "tải tệp cài đặt .exe"), " (Windows sẽ cảnh báo lần đầu mở)."));
+  } else if (yes.length) {
     const f = yes[0];
     const size = h("span", {});
     sizeOf(f.name, size);
@@ -150,7 +164,7 @@ export async function openDownload(base: string, install?: { available(): boolea
   const rest = me.os === "mobile" || me.os === "linux" || !(yes.length || maybe.length) ? files : others;
   if (rest.length)
     body.append(h("details", { class: "dl-more" }, h("summary", {}, "Bản cho máy khác"),
-      ...rest.map((f) => { const size = h("span", { class: "muted" }); sizeOf(f.name, size); return h("div", { class: "dl-row2" }, h("span", {}, SHORT[f.it.os], fileVersion(f.name) ? " · v" + fileVersion(f.name) : "", " ", size), dlBtn(f, "Tải")); })));
+      ...rest.map((f) => { const size = h("span", { class: "muted" }); sizeOf(f.name, size); return h("div", { class: "dl-row2" }, h("span", {}, SHORT[f.it.os], fileVersion(f.name) ? " · v" + fileVersion(f.name) : "", " ", size), f.it.os === "win" && storeWin ? storeBtn() : dlBtn(f, "Tải")); })));
 
   const verify = me.os === "win" ? "Get-FileHash .\\NEU-Agent-*-win-x64.exe -Algorithm SHA256" : "shasum -a 256 NEU-Agent-*.dmg";
   body.append(

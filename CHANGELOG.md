@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Bản Windows cài từ Microsoft Store**: nút Windows trên trang giới thiệu và hộp "Tải ứng dụng" (trên máy Windows) đưa tới Microsoft Store, cài không còn cảnh báo "nhà phát hành không xác định" và Store tự cập nhật. Tệp .exe vẫn tải được trong hộp "Tải ứng dụng".
 - **Tải bản cài macOS và Windows ngay trên trang giới thiệu**: đầu trang có nút tải bản mới nhất cho macOS (chip Apple hoặc Intel) và Windows, kèm mã SHA-256, không cần đăng nhập trước. Mở ứng dụng vẫn cần đăng nhập tài khoản trường.
 
 ### Thay đổi
