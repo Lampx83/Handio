@@ -131,6 +131,69 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: win, path: "apps/desktop/release/*.exe\napps/desktop/release/signing.json" }
 
+  # Bản Windows qua Microsoft Store (không cảnh báo SmartScreen): dựng MSIX rồi nộp bản cập nhật bằng msstore CLI. Độc lập với `publish`:
+  # lỗi ở đây không chặn bản cài trên máy chủ. Thiếu secret STORE_* thì chỉ dựng (tải gói ở Artifacts), không nộp. Xem docs/RELEASE-SIGNING.md.
+  store:
+    needs: [config, test]
+    if: ${{ !cancelled() && needs.config.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') && vars.STORE_IDENTITY_NAME != '' }}
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Đệm tệp tải của Electron/electron-builder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+      - name: Dựng gói MSIX
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          STORE_IDENTITY_NAME: ${{ vars.STORE_IDENTITY_NAME }}
+          STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.STORE_PUBLISHER_DISPLAY_NAME }}
+        run: node scripts/store.mjs
+      - uses: actions/upload-artifact@v4
+        with: { name: msix, path: apps/desktop/release/*.appx, if-no-files-found: error }
+      - name: Nộp lên Microsoft Store
+        id: can
+        shell: bash
+        env:
+          T: ${{ secrets.STORE_TENANT_ID }}
+          S: ${{ secrets.STORE_SELLER_ID }}
+          C: ${{ secrets.STORE_CLIENT_ID }}
+          K: ${{ secrets.STORE_CLIENT_SECRET }}
+          P: ${{ vars.STORE_PRODUCT_ID }}
+        # chạy tay mà bỏ chọn publish_to_server = chỉ dựng thử: không nộp
+        run: |
+          if [ "${{ format('{0}', inputs.publish_to_server) }}" = "false" ]; then echo "Chỉ dựng thử: không nộp lên Store."; echo "go=0" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ -z "$T" ] || [ -z "$S" ] || [ -z "$C" ] || [ -z "$K" ] || [ -z "$P" ]; then
+            echo "::notice::Chưa có secret STORE_TENANT_ID/STORE_SELLER_ID/STORE_CLIENT_ID/STORE_CLIENT_SECRET hoặc biến STORE_PRODUCT_ID: không nộp. Tải gói ở Artifacts rồi nộp tay."
+            echo "go=0" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "go=1" >> "$GITHUB_OUTPUT"
+      - uses: microsoft/setup-msstore-cli@v1
+        if: ${{ steps.can.outputs.go == '1' }}
+      - name: msstore publish
+        if: ${{ steps.can.outputs.go == '1' }}
+        shell: bash
+        env:
+          T: ${{ secrets.STORE_TENANT_ID }}
+          S: ${{ secrets.STORE_SELLER_ID }}
+          C: ${{ secrets.STORE_CLIENT_ID }}
+          K: ${{ secrets.STORE_CLIENT_SECRET }}
+          P: ${{ vars.STORE_PRODUCT_ID }}
+        # tạo bài nộp mới từ bản đã phát hành gần nhất, thay gói, gửi kiểm duyệt (giữ mô tả/ảnh của lần trước)
+        run: |
+          msstore reconfigure --tenantId "$T" --sellerId "$S" --clientId "$C" --clientSecret "$K"
+          msstore publish "$(ls apps/desktop/release/*.appx | head -1)" --appId "$P"
+
   publish:
     name: Gom, phát hành lên máy chủ và GitHub
     needs: [mac, win]

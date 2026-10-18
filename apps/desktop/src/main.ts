@@ -10,7 +10,7 @@ import { Auth, type AuthConfig } from "./auth";
 import { dropPristineSamples } from "./samples";
 import { canInstallHere, launchInstaller } from "./installer";
 import { checkPage } from "./page-check";
-import { Updater, UPDATE_METHODS } from "./updater";
+import { selfUpdateAllowed, Updater, UPDATE_METHODS } from "./updater";
 import { APP_ORIGIN, AUTH_METHODS, authArgsOk, authBlocks, IPC_METHODS, IPC_VALIDATORS, isLocalPreviewUrl, isSafeExternalUrl, isTooBroadFolder, isTrustedSenderUrl, mimeOf, RateLimiter, resolveAppAsset, RISKY_EXT, SECURITY_HEADERS } from "./security";
 
 // Hằng số lúc build (xem build.mjs): bản phát hành KHÔNG chứa mã kiểm thử/giả lập và KHÔNG chứa key.
@@ -427,6 +427,7 @@ async function pickFolder(profile: Profile): Promise<void> {
 // ---------------------------------------------------------------- cập nhật (docs/RELEASE.md): tự kiểm tra, chỉ tải khi người dùng bấm, kiểm tra mã băm, không tự cài
 function startUpdater(): void {
   if (SMOKE || !app.isPackaged) return; // bản dev/kiểm thử không kiểm tra bản mới
+  if (!selfUpdateAllowed(process)) return; // bản Microsoft Store: Store tự cập nhật
   const base = __DEFAULT_BASE_URL__.replace(/vllm\/v1\/?$/, "download/");
   if (!/^https:\/\/[^/]+\/.*\/$/.test(base)) return; // chỉ khi máy chủ chính là https
   const file = path.join(userData(), "update.json");
@@ -685,8 +686,10 @@ function buildMenu(): void {
       { label: "Nạp thiết kế mẫu cho Design (tuỳ chọn)", click: async () => { await seed("design", await folderFor("design")); send("design", { type: "files_changed", paths: [] }); } },
       { type: "separator" },
       { label: "Mở thư mục cài đặt", click: () => void shell.openPath(userData()) },
-      { label: "Kiểm tra bản cập nhật…", click: () => void manualUpdateCheck() },
-      { label: "Tự động cập nhật (cài khi đóng ứng dụng)", type: "checkbox" as const, checked: autoUpdate, click: (item) => { autoUpdate = item.checked; void saveUpdatePrefs({ auto: autoUpdate }).catch(() => undefined); if (autoUpdate) void updater?.check(); } },
+      ...(selfUpdateAllowed(process) ? [
+        { label: "Kiểm tra bản cập nhật…", click: () => void manualUpdateCheck() },
+        { label: "Tự động cập nhật (cài khi đóng ứng dụng)", type: "checkbox" as const, checked: autoUpdate, click: (item: Electron.MenuItem) => { autoUpdate = item.checked; void saveUpdatePrefs({ auto: autoUpdate }).catch(() => undefined); if (autoUpdate) void updater?.check(); } },
+      ] : []),
       mac ? { role: "close" as const } : { role: "quit" as const },
     ] },
     { role: "editMenu" },
