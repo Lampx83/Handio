@@ -23,6 +23,9 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Chỉ hiện mô hình bạn được dùng**: danh sách mô hình ở Cài đặt và nút chọn mô hình chỉ còn mô hình nhóm của bạn được phép. Không còn mô hình nào thì nút **Kiểm tra** báo rõ để liên hệ quản trị viên. Chưa giới hạn mô hình thì như cũ.
 - **Trang quản trị mới gọn hơn** (quản trị viên): thanh trên cùng chuyển nhanh giữa Tổng quan, Tài khoản, Hạn mức, Góp ý, Chia sẻ, Dữ liệu và Báo cáo chất lượng; thẻ số đầu trang; chọn khoảng 1/3/7/30/90 ngày bằng nhóm nút; bảng có tiêu đề cố định khi cuộn, số căn phải, báo rõ khi trống; thông báo thành công/lỗi có màu riêng; biểu đồ cùng bảng màu, sáng/tối theo máy. Ô lọc bảng người dùng ở trang Tổng quan nay hiện ra (trước bị ẩn).
 
+### Sửa
+- **Tạo Word, PowerPoint và tệp dài ít bị lỗi "tham số không phải JSON" hơn**: khi mô hình viết nội dung dài mà xuống dòng thật trong chuỗi, thừa dấu phẩy hoặc bọc trong khối mã, ứng dụng tự sửa rồi chạy luôn thay vì bắt agent gọi lại cả lượt. Nội dung bị cắt giữa chừng thì vẫn nhắc agent chia nhỏ.
+
 ## [0.8.21] - 2026-10-18
 
 ### Thêm

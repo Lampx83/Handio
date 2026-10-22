@@ -1,4 +1,5 @@
 import { TOOL_GROUPS, groupOfTool, groupsFor, matchGroups } from "./tool-groups";
+import { parseToolArgs } from "./json-args";
 import { pageTools, parsePageSteps } from "./page-check";
 import { brandText } from "./brand";
 import type { Env, PageStep } from "./env";
@@ -1616,9 +1617,8 @@ export class Agent {
     const allowed = new Set(s.toolsFor(this.def, this.depth).map((t) => t.name));
     let args: Record<string, unknown>;
     try {
-      const parsed = tc.arguments.trim() ? JSON.parse(tc.arguments) : {};
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("tham số phải là object");
-      args = parsed;
+      // lỗi vặt (xuống dòng thật trong chuỗi, dấu phẩy thừa, bọc ```) được sửa tại chỗ; JSON bị cắt giữa chừng thì vẫn báo để chia nhỏ
+      args = parseToolArgs(tc.arguments).value;
     } catch (e) {
       s.emit({ type: "tool_start", id: tc.id, name, summary: "tham số không hợp lệ", args: {}, depth: this.depth });
       if (this.lastFinish === "length") s.emit({ type: "notice", level: "warn", text: "Lời gọi công cụ bị cắt vì nội dung quá dài so với độ dài đầu ra tối đa; agent sẽ được nhắc chia nhỏ." });
