@@ -1,6 +1,6 @@
 # Bài thử tab Code: 10 ứng dụng
 
-Đo khả năng code của Handio với **khung (framework) thật** — không chỉ HTML/CSS/JS thuần. Mỗi bài là một đề viết như sinh viên viết, kèm "bẫy" thường gặp và bộ chấm tự động (build, chạy, mở trang trong trình duyệt ẩn, bấm thử, kiểm lỗi console).
+Đo khả năng code của Handio với **khung (framework) thật** — không chỉ HTML/CSS/JS thuần. Muốn đo cả ba tab, nhiều lần mỗi bài và so sánh trước/sau một thay đổi thì dùng [`labs/agent-eval`](../agent-eval/README.md). Mỗi bài là một đề viết như sinh viên viết, kèm "bẫy" thường gặp và bộ chấm tự động (build, chạy, mở trang trong trình duyệt ẩn, bấm thử, kiểm lỗi console).
 
 | # | Bài | Khung | Bẫy |
 |---|---|---|---|

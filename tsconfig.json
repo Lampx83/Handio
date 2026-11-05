@@ -12,6 +12,7 @@
     "apps/web/src",
     "apps/desktop/src",
     "apps/desktop/renderer",
-    "apps/desktop/test"
+    "apps/desktop/test",
+    "labs/agent-eval"
   ]
 }

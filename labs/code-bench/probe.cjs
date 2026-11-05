@@ -74,10 +74,12 @@ app.whenReady().then(async () => {
     app.exit(0);
   };
   try {
+    wc.on("dom-ready", () => { wc.executeJavaScript("window.alert = () => {}; window.confirm = () => true; window.prompt = () => '';").catch(() => {}); });
     await wc.loadURL(cfg.url);
     out.loaded = true;
     await sleep(cfg.settleMs ?? 1500);
     for (const st of cfg.steps || []) {
+      const errBefore = out.errors.length;
       const rec = { label: st.label || (st.fill ? `nhập "${st.fill.placeholder || st.fill.label || st.fill.selector}"` : st.click ? `bấm "${st.click.text || st.click.selector}"` : st.wait ? `chờ ${st.wait}ms` : "kiểm tra"), ok: true };
       try {
         if (st.wait) await sleep(st.wait);
@@ -88,21 +90,25 @@ app.whenReady().then(async () => {
         }
         else if (st.eval) rec.ok = !!(await wc.executeJavaScript(`(async () => !!(${st.eval}))()`, true));
         if (!rec.ok && (st.fill || st.click)) rec.note = "không tìm thấy phần tử";
+        else if (!rec.ok && st.note) rec.note = st.note;
       } catch (e) {
         rec.ok = false;
         rec.note = String(e.message || e).slice(0, 200);
       }
-      out.steps.push(rec);
       await sleep(150);
+      rec.errors = out.errors.slice(errBefore); // lỗi nổ sau bước này (thường chỉ nổ lúc bấm nút)
+      out.steps.push(rec);
+      if (cfg.stopOnFail && !rec.ok) break; // như check_page của Desktop: dừng ở bước đầu tiên không làm được
     }
     const dom = await wc.executeJavaScript(`(() => {
       const t = ((document.body && document.body.innerText) || "").trim();
       const o = document.querySelector("vite-error-overlay");
-      return { title: document.title || "", text: t.replace(/\\s+/g, " ").slice(0, 400), textLen: t.length, overlay: o && o.shadowRoot ? o.shadowRoot.textContent.replace(/\\s+/g, " ").slice(0, 400) : "", shown: [...document.body.querySelectorAll("img,canvas,svg,input,button")].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1; }).length };
+      return { title: document.title || "", text: t.replace(/\\s+/g, " ").slice(0, 400), textLen: t.length, overlay: o && o.shadowRoot ? o.shadowRoot.textContent.replace(/\\s+/g, " ").slice(0, 400) : "", shown: [...document.body.querySelectorAll("img,canvas,svg,input,button")].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1; }).length, buttons: [...new Set([...document.querySelectorAll("button,[role=button],input[type=submit],input[type=button]")].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 1 && r.height > 1; }).map((e) => (e.textContent || e.value || "").replace(/\\s+/g, " ").trim().slice(0, 40)).filter(Boolean))].slice(0, 12) };
     })()`, true);
     out.blank = dom.textLen === 0 && dom.shown === 0;
     out.overlay = dom.overlay;
     out.title = dom.title;
+    out.buttons = dom.buttons;
     out.text = dom.text;
   } catch (e) {
     out.errors.push("không tải được: " + String(e.message || e).slice(0, 200));
