@@ -65,7 +65,7 @@ export interface Env {
    * trang trắng. Chỉ Desktop có (Chromium sẵn trong Electron). Dùng cho công cụ check_page của tab Code.
    * `steps`: bấm/gõ/chờ/kiểm chữ tuần tự sau khi trang tải xong (lỗi nhiều khi chỉ nổ lúc bấm nút), kết quả từng bước ở `PageReport.steps`.
    */
-  checkPage?(url: string, opts: { waitMs: number; steps?: PageStep[]; signal?: AbortSignal }): Promise<PageReport>;
+  checkPage?(url: string, opts: { waitMs: number; steps?: PageStep[]; screenshot?: boolean; signal?: AbortSignal }): Promise<PageReport>;
 }
 
 /** Một bước tương tác của check_page, chạy tuần tự sau khi trang tải xong. */
@@ -113,6 +113,8 @@ export interface PageReport {
   buttons?: string[];
   /** Kết quả từng bước khi gọi với `steps` (dừng ở bước đầu tiên không làm được). `errors` khi đó chỉ gồm lỗi lúc tải. */
   steps?: PageStepResult[];
+  /** Ảnh PNG của trang (sau bước cuối) khi gọi với `screenshot`. */
+  screenshot?: Uint8Array;
 }
 
 export class EnvError extends Error {}

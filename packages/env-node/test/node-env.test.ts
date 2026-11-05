@@ -208,6 +208,13 @@ describe("sandbox macOS (Seatbelt) cho lệnh của agent", () => {
   });
 });
 
+describe("môi trường lệnh", () => {
+  it("Python luôn in UTF-8 (print tiếng Việt trên Windows không còn UnicodeEncodeError)", async () => {
+    const r = await env.exec!(`node -p "[process.env.PYTHONUTF8, process.env.PYTHONIOENCODING].join('/')"`, { cwd: tmp, timeoutMs: 10000 });
+    expect(r.output).toContain("1/utf-8");
+  });
+});
+
 describe("tiến trình nền thật", () => {
   it("chạy máy chủ nền, đọc đầu ra, nhận diện URL localhost, dừng được cả nhóm tiến trình", async () => {
     const { ProcessManager } = await import("@neu/agent-core");
