@@ -164,8 +164,8 @@ function fillShape(sp: string, hex: string): string {
 }
 
 
-/** "Slide 9: Lợi ích" / "- Lợi ích" → "Lợi ích": nhãn do read_document thêm vào, không có trong slide. */
-const stripLabel = (t: string): string => String(t ?? "").replace(/^\s*(?:slide\s*\d+\s*[:：.\-–—]\s*)/i, "").replace(/^\s*[-•·▪]\s+/, "").trim();
+/** "## Slide 9: Lợi ích" / "[Ghi chú người trình bày] Lợi ích" / "- Lợi ích" → "Lợi ích": nhãn do read_document thêm vào, không có trong slide. */
+const stripLabel = (t: string): string => String(t ?? "").replace(/^\s*#{1,6}\s+/, "").replace(/^\s*(?:slide\s*\d+\s*[:：.\-–—]\s*)/i, "").replace(/^\s*\[Ghi chú người trình bày\]\s*/, "").replace(/^\s*[-•·▪]\s+/, "").trim();
 
 /** Gấp chữ để so khớp: bỏ dấu, không phân biệt hoa/thường, gộp khoảng trắng; `map[i]` = vị trí trong chuỗi gốc. */
 function fold(text: string): { s: string; map: number[] } {
@@ -210,6 +210,73 @@ function nearest(find: string, slides: { n: number; texts: string[] }[]): { slid
       if (score > 0) scored.push({ score, slide: sl.n, label: `Slide ${sl.n}: “${t.slice(0, 90)}${t.length > 90 ? "…" : ""}”` });
     }
   return scored.sort((a, b) => b.score - a.score).slice(0, 4).map((x) => ({ slide: x.slide, label: x.label }));
+}
+
+const TABLE_SEP = /^\|?[\s:|-]+\|?$/;
+const cellsOf = (line: string): string[] => line.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+const sameText = (a: string, b: string): boolean => fold(a).s.trim() === fold(b).s.trim();
+
+/**
+ * `find` chép từ read_document có thể trải qua nhiều khung chữ mà một lần so khớp không với tới: tiêu đề + gạch đầu dòng, hoặc nhiều ô của một dòng bảng.
+ * Tách theo dòng khi `replace` có cùng số dòng (và cùng số ô): khi đó biết chắc dòng nào thay bằng dòng nào. Không tách được thì trả null.
+ */
+function spanningPieces(find: string, replace: string): { find: string; replace: string; cells?: [string, string][] }[] | null {
+  const lines = (t: string) => t.split(/\r?\n/).map(stripLabel).filter((l) => l && !TABLE_SEP.test(l));
+  const f = lines(find);
+  const r = lines(replace);
+  if (f.length !== r.length || !f.length) return null;
+  if (f.length === 1 && !f[0].includes("|")) return null;
+  const out = [];
+  for (const [i, l] of f.entries()) {
+    if (!l.includes("|")) {
+      if (r[i].includes("|")) return null;
+      out.push({ find: l, replace: r[i] });
+      continue;
+    }
+    const fc = cellsOf(l);
+    const rc = cellsOf(r[i]);
+    if (fc.length !== rc.length || fc.length < 2) return null;
+    out.push({ find: l, replace: r[i], cells: fc.map((c, k): [string, string] => [c, rc[k]]) });
+  }
+  return out;
+}
+
+/** Thay các mảnh trên MỘT slide: mỗi mảnh phải khớp đúng một chỗ, nếu không thì không sửa gì (trả null). */
+function applyPieces(xml: string, pieces: NonNullable<ReturnType<typeof spanningPieces>>): string | null {
+  let cur = xml;
+  for (const p of pieces) {
+    let hits = 0;
+    if (p.cells) {
+      const cells = p.cells;
+      cur = cur.replace(/<a:tr\b[\s\S]*?<\/a:tr>/g, (tr) => {
+        const tcs = [...tr.matchAll(/<a:tc\b[\s\S]*?<\/a:tc>/g)].map((m) => m[0]);
+        const at = tcs.findIndex((_c, i) => i + cells.length <= tcs.length && cells.every(([old], k) => sameText(txText(tcs[i + k]), old)));
+        if (at < 0) return tr;
+        let idx = -1;
+        let ok = true;
+        const out = tr.replace(/<a:tc\b[\s\S]*?<\/a:tc>/g, (tc) => {
+          const cell = cells[++idx - at];
+          if (!cell || cell[0] === cell[1]) return tc;
+          const loc = [0];
+          const next = tc.replace(TX_RE, (tx) => replaceInTxBody(tx, [{ find: cell[0], replace: cell[1] }], loc, "loose").xml);
+          if (!loc[0]) ok = false; // ô trống: không có chữ để bám vào, để gợi ý set_body
+          return next;
+        });
+        if (!ok) return tr;
+        hits++;
+        return out;
+      });
+    } else {
+      cur = cur.replace(TX_RE, (tx) => {
+        const loc = [0];
+        const r = replaceInTxBody(tx, [{ find: p.find, replace: p.replace }], loc, "loose");
+        hits += loc[0];
+        return r.xml;
+      });
+    }
+    if (hits !== 1) return null;
+  }
+  return cur;
 }
 
 const shapesOf = (xml: string): string[] => [...xml.matchAll(/<p:sp>[\s\S]*?<\/p:sp>/g)].map((m) => m[0]);
@@ -400,6 +467,22 @@ export async function editPptx(bytes: Uint8Array, o: PptxEditOptions): Promise<P
       }
       if (xml !== orig) zip.file(file, xml);
       texts.push({ n, texts: [...xml.matchAll(TX_RE)].flatMap((tx) => txText(tx[0]).split("\n")).filter((t) => t.trim()) });
+    }
+    // bước 3: find trải qua nhiều khung chữ (chép nguyên từ read_document): thay từng dòng nếu biết chắc dòng nào ứng với dòng nào
+    for (const k of missing) {
+      if (counts[k] !== 0) continue;
+      const pieces = spanningPieces(reps[k].find, reps[k].replace);
+      if (!pieces) continue;
+      for (const [i, file] of order.entries()) {
+        const n = i + 1;
+        if (reps[k].slide !== undefined && reps[k].slide !== n) continue;
+        const next = applyPieces(await zip.file(file)!.async("string"), pieces);
+        if (next === null) continue;
+        zip.file(file, next);
+        counts[k] = pieces.length;
+        for (const p of pieces) if (p.find !== p.replace) note(`Slide ${n}: “${p.find.slice(0, 50)}” → “${p.replace.slice(0, 50)}”`);
+        break;
+      }
     }
     for (const k of missing)
       if (counts[k] === 0) {

@@ -23,6 +23,12 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Chỉ hiện mô hình bạn được dùng**: danh sách mô hình ở Cài đặt và nút chọn mô hình chỉ còn mô hình nhóm của bạn được phép. Không còn mô hình nào thì nút **Kiểm tra** báo rõ để liên hệ quản trị viên. Chưa giới hạn mô hình thì như cũ.
 - **Trang quản trị mới gọn hơn** (quản trị viên): thanh trên cùng chuyển nhanh giữa Tổng quan, Tài khoản, Hạn mức, Góp ý, Chia sẻ, Dữ liệu và Báo cáo chất lượng; thẻ số đầu trang; chọn khoảng 1/3/7/30/90 ngày bằng nhóm nút; bảng có tiêu đề cố định khi cuộn, số căn phải, báo rõ khi trống; thông báo thành công/lỗi có màu riêng; biểu đồ cùng bảng màu, sáng/tối theo máy. Ô lọc bảng người dùng ở trang Tổng quan nay hiện ra (trước bị ẩn).
 
+### Sửa
+- **Sửa PowerPoint ít báo "không tìm thấy" hơn**: agent chép cả tiêu đề kèm gạch đầu dòng, hoặc cả một dòng bảng, vẫn sửa đúng chỗ.
+- **Sửa PowerPoint không còn để sót nửa câu cũ** khi agent viết tắt câu dài bằng dấu "…".
+- **Tab Code bản web chạy thử được nhiều hơn**: có `assert`, đọc được tệp JSON và liệt kê tệp; khi vướng giới hạn, agent được chỉ đúng cách làm thay vì được khuyên dùng `bash` (bản web không có).
+- **Tệp nằm ngoài thư mục dự án**: agent chỉ ra tệp cùng tên trong dự án nếu có, nếu không thì nhờ bạn chép tệp vào thay vì thử đi thử lại.
+
 ## [0.8.21] - 2026-10-18
 
 ### Thêm
