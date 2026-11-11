@@ -1,5 +1,5 @@
 // Chạy MỘT lượt agent tab Code trên thư mục thật bằng mô hình thật (cấu hình qua biến môi trường). Dùng bởi run.mjs.
-import { LocalController, type SessionEvent, type Settings } from "@neu/agent-core";
+import { LocalController, type PageReport, type PageStep, type Profile, type SessionEvent, type Settings } from "@neu/agent-core";
 import { NodeEnv } from "@neu/agent-env-node";
 
 export interface AgentRun {
@@ -11,35 +11,43 @@ export interface AgentRun {
   calls: number;
   promptTokens: number;
   completionTokens: number;
+  /** Token lời nhắc máy chủ báo là dùng lại từ bộ nhớ đệm (0 nếu máy chủ không báo). */
+  cachedTokens: number;
+  /** Số lỗi theo "công cụ:loại lỗi" (vd "pptx_edit:no_match"). */
+  errKinds: Record<string, number>;
+  /** Số lần agent hỏi người dùng (`ask_user`); bài thử luôn trả lời "để agent tự quyết". */
+  asked: number;
   notices: string[];
   errors: string[];
   final: string;
   trace: string[];
 }
 
-export async function runAgent(o: { dir: string; prompt: string; baseUrl: string; model: string; key?: string; keyHeader?: string; maxSteps?: number; timeoutMs: number; /** Đăng nhập tên + mật khẩu: tiêu đề Cookie (gửi tới đúng máy chủ mô hình) */ authHeaders?: (() => Promise<Record<string, string> | null>) | null; /** Trình duyệt ẩn cho check_page (như bản Desktop). Không có = agent không có check_page (như bản web). */ checkPage?: (url: string, o: { waitMs: number; root: string }) => Promise<import("@neu/agent-core").PageReport> }): Promise<AgentRun> {
-  const env = new NodeEnv(o.dir, { allowExec: true, sandbox: process.platform === "darwin" ? { network: true } : false });
-  if (o.checkPage) {
+export async function runAgent(o: { dir: string; prompt: string; baseUrl: string; model: string; key?: string; keyHeader?: string; maxSteps?: number; timeoutMs: number; /** Đăng nhập tên + mật khẩu: tiêu đề Cookie (gửi tới đúng máy chủ mô hình) */ authHeaders?: (() => Promise<Record<string, string> | null>) | null; /** Trình duyệt ẩn cho check_page (như bản Desktop). Không có = agent không có check_page (như bản web). */ checkPage?: (url: string, o: { waitMs: number; steps?: PageStep[]; root: string }) => Promise<PageReport>; /** Tab chạy thử (mặc định code). Như bản Desktop: chỉ tab Code có bash và check_page. */ profile?: Profile; /** Gọi sau khi lượt kết thúc, TRƯỚC khi dừng các tiến trình nền: để chấm máy chủ agent đã bật. */ beforeDispose?: (run: AgentRun) => Promise<void> }): Promise<AgentRun> {
+  const profile = o.profile ?? "code";
+  const env = new NodeEnv(o.dir, { allowExec: profile === "code", sandbox: process.platform === "darwin" ? { network: true } : false });
+  if (o.checkPage && profile === "code") {
     const cp = o.checkPage;
-    env.checkPage = (url, opts) => cp(url, { waitMs: opts.waitMs, root: o.dir });
+    env.checkPage = (url, opts) => cp(url, { waitMs: opts.waitMs, steps: opts.steps, root: o.dir });
   }
   let saved: Partial<Settings> = {
     baseUrl: o.baseUrl, model: o.model, key: o.key, mode: "auto", allowInsecureHttp: o.baseUrl.startsWith("http://"),
     ...(o.keyHeader ? { keyHeader: o.keyHeader } : {}), ...(o.maxSteps ? { maxSteps: o.maxSteps } : {}),
   };
   const c = await LocalController.create({
-    env, profile: "code", realFs: true,
+    env, profile, realFs: true,
     ...(o.authHeaders ? { authHeaders: o.authHeaders, authHosts: [new URL(o.baseUrl).host] } : {}),
     store: { load: async () => saved, save: async (s) => void (saved = s) },
     trust: { isTrusted: async () => true, setTrusted: async () => {} },
   });
-  const run: AgentRun = { seconds: 0, endedBy: "done", steps: 0, toolErrors: 0, tools: {}, calls: 0, promptTokens: 0, completionTokens: 0, notices: [], errors: [], final: "", trace: [] };
+  const run: AgentRun = { seconds: 0, endedBy: "done", steps: 0, toolErrors: 0, tools: {}, calls: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0, errKinds: {}, asked: 0, notices: [], errors: [], final: "", trace: [] };
   const t0 = Date.now();
   let finish!: () => void;
   const done = new Promise<void>((r) => (finish = r));
   c.onEvent((e: SessionEvent) => {
     if (e.type === "permission") {
       // người dùng bấm "Để agent tự quyết"/đồng ý mọi thứ: bài thử đo khả năng code, không đo hội thoại
+      if (e.request.kind === "question") run.asked++;
       c.respondPermission(e.request.id, { allow: true });
     } else if (e.type === "tool_start" && e.depth === 0) {
       run.steps++;
@@ -48,6 +56,8 @@ export async function runAgent(o: { dir: string; prompt: string; baseUrl: string
     } else if (e.type === "tool_result" && e.depth === 0) {
       if (!e.ok) {
         run.toolErrors++;
+        const kind = `${e.name}:${e.errKind ?? "khac"}`;
+        run.errKinds[kind] = (run.errKinds[kind] ?? 0) + 1;
         run.errors.push(`${e.name}${e.errKind ? " [" + e.errKind + "]" : ""}: ${e.output.replace(/\s+/g, " ").slice(0, 200)}`);
         run.trace.push(`  ✗ ${e.output.replace(/\s+/g, " ").slice(0, 160)}`);
       }
@@ -55,6 +65,7 @@ export async function runAgent(o: { dir: string; prompt: string; baseUrl: string
       run.calls = e.calls;
       run.promptTokens = e.promptTokens;
       run.completionTokens = e.completionTokens;
+      run.cachedTokens = e.cachedTokens ?? 0;
     } else if (e.type === "notice") {
       run.notices.push(`${e.level}: ${e.text.slice(0, 200)}`);
     } else if (e.type === "turn_end") {
@@ -78,6 +89,11 @@ export async function runAgent(o: { dir: string; prompt: string; baseUrl: string
     run.seconds = Math.round((Date.now() - t0) / 1000);
     // lượt kết thúc mà không gọi được công cụ nào và có thông báo lỗi (sai địa chỉ, khoá, hạn mức…) = lỗi, không phải "xong"
     if (run.endedBy === "done" && run.steps === 0 && run.notices.some((n) => n.startsWith("error:"))) run.endedBy = "error";
+    try {
+      await o.beforeDispose?.(run);
+    } catch (e) {
+      run.errors.push(`chấm bài: ${(e as Error).message}`);
+    }
     try {
       c.dispose();
     } catch {

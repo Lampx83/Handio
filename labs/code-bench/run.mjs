@@ -10,11 +10,10 @@ import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import os from "node:os";
-import readline from "node:readline";
-import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { build } from "esbuild";
 import { TASKS } from "./tasks.mjs";
+import { connectModel, probeCheckPage, runProbe } from "./shared.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "../..");
@@ -75,34 +74,9 @@ async function waitPort(port, ms = 60_000) {
   return false;
 }
 
-const electronBin = (() => {
-  try { return createRequire(path.join(root, "apps/desktop/package.json"))("electron"); } catch { return ""; }
-})();
-
-function probe(cfg) {
-  return new Promise((resolve) => {
-    if (!electronBin) return resolve({ error: "không tìm thấy Electron (npm ci ở gốc kho)" });
-    const f = path.join(outDir, `.probe-${Date.now()}.json`);
-    fs.writeFileSync(f, JSON.stringify(cfg));
-    const p = spawn(electronBin, [path.join(here, "probe.cjs"), f], { env: { ...process.env, ELECTRON_ENABLE_LOGGING: "0" } });
-    let out = "";
-    p.stdout.on("data", (d) => (out += d));
-    const t = setTimeout(() => p.kill("SIGKILL"), 90_000);
-    p.on("close", () => {
-      clearTimeout(t);
-      fs.rmSync(f, { force: true });
-      const m = out.match(/PROBE_RESULT:(.*)/);
-      resolve(m ? JSON.parse(m[1]) : { error: "trình duyệt ẩn không trả kết quả" });
-    });
-  });
-}
-
-/** check_page cho agent trong lúc làm (như bản Desktop): cùng trình duyệt ẩn với bộ chấm. HANDIO_BENCH_NO_CHECK_PAGE=1 để mô phỏng bản web. */
-async function benchCheckPage(url, o) {
-  const r = await probe({ url, steps: [], settleMs: o.waitMs, root: o.root });
-  if (r.error) return { url, title: "", loaded: false, error: r.error, errors: [], failedRequests: [], text: "", blank: false };
-  return { url, title: r.title || "", loaded: r.loaded, errors: r.errors || [], failedRequests: r.failedRequests || [], text: r.text || "", blank: !!r.blank, overlay: r.overlay || undefined };
-}
+const probe = (cfg) => runProbe(cfg, { root, tmpDir: outDir });
+/** check_page cho agent trong lúc làm (như bản Desktop). HANDIO_BENCH_NO_CHECK_PAGE=1 để mô phỏng bản web. */
+const benchCheckPage = (url, o) => probeCheckPage(url, o, { root, tmpDir: outDir });
 
 /** Chấm một bài: trả [{name, ok, detail}] */
 async function grade(task, appDir) {
@@ -171,76 +145,9 @@ async function grade(task, appDir) {
 }
 
 let runAgent = null;
-let cookie = "", cookieAt = 0, authHeaders = null;
+let conn = null;
 if (!regrade) {
-  // biến môi trường còn sót chữ mẫu (export từ hướng dẫn cũ, giữ nguyên trong cửa sổ terminal): bỏ qua và hỏi lại / dùng mặc định
-  for (const n of ["HANDIO_BENCH_BASE_URL", "HANDIO_BENCH_KEY", "HANDIO_BENCH_USER", "HANDIO_BENCH_PASSWORD"]) {
-    if (process.env[n] && /[^\x20-\x7e]/.test(process.env[n])) {
-      console.log(`(Bỏ qua ${n}: còn là chữ mẫu, không phải giá trị thật.)`);
-      delete process.env[n];
-    }
-  }
-  // mặc định là máy chủ của Handio; chỉ cần đặt biến khi dùng máy chủ khác
-  const baseUrl = process.env.HANDIO_BENCH_BASE_URL || "https://ai.neu.edu.vn/agent/vllm/v1";
-  process.env.HANDIO_BENCH_BASE_URL = baseUrl;
-  const ask = (q, hidden) =>
-    new Promise((res) => {
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-      if (hidden) rl._writeToOutput = (t) => { if (t.includes(q)) process.stdout.write(t); }; // không hiện ký tự gõ
-      rl.question(q, (a) => { rl.close(); if (hidden) process.stdout.write("\n"); res(a.trim()); });
-    });
-  if (!process.env.HANDIO_BENCH_KEY && !process.env.HANDIO_BENCH_USER) {
-    if (!process.stdin.isTTY) {
-      console.error("Chưa có thông tin đăng nhập: đặt HANDIO_BENCH_USER + HANDIO_BENCH_PASSWORD hoặc HANDIO_BENCH_KEY (hoặc chạy trong terminal để được hỏi).");
-      process.exit(2);
-    }
-    console.log(`Máy chủ mô hình: ${baseUrl}\nĐăng nhập bằng: [1] tài khoản (tên + mật khẩu)   [2] khoá API`);
-    const how = await ask("Chọn 1 hoặc 2: ");
-    if (how === "2") process.env.HANDIO_BENCH_KEY = await ask("Khoá API (gõ không hiện): ", true);
-    else {
-      process.env.HANDIO_BENCH_USER = await ask("Tên tài khoản: ");
-      process.env.HANDIO_BENCH_PASSWORD = await ask("Mật khẩu (gõ không hiện): ", true);
-    }
-  }
-  // chữ mẫu trong hướng dẫn (ĐỊA-CHỈ…, …, KHOÁ-THẬT) mà chưa thay bằng giá trị thật → báo rõ, không để lỗi khó hiểu
-  for (const [name, v] of [["HANDIO_BENCH_BASE_URL", baseUrl], ["HANDIO_BENCH_KEY", process.env.HANDIO_BENCH_KEY], ["HANDIO_BENCH_USER", process.env.HANDIO_BENCH_USER], ["HANDIO_BENCH_PASSWORD", process.env.HANDIO_BENCH_PASSWORD]]) {
-    if (v && /[^\x20-\x7e]/.test(v)) {
-      console.error(`${name} có ký tự không hợp lệ (có vẻ vẫn là chữ mẫu trong hướng dẫn, chưa thay bằng giá trị thật).\nChạy lại và để chương trình tự hỏi: node labs/code-bench/run.mjs --only 03,04`);
-      process.exit(2);
-    }
-  }
-  // kiểm tra cấu hình TRƯỚC khi tốn thời gian: địa chỉ hợp lệ, máy chủ trả lời, khoá được nhận
-  let u;
-  try { u = new URL(baseUrl); } catch { /* bên dưới */ }
-  if (!u || !/^https?:$/.test(u.protocol) || /[…<>]|\.\.\./.test(baseUrl)) {
-    console.error(`HANDIO_BENCH_BASE_URL không hợp lệ: "${baseUrl}"\nĐặt địa chỉ THẬT của API (dạng https://máy-chủ/…/v1), không dùng dấu … làm ví dụ.`);
-    process.exit(2);
-  }
-  if (process.env.HANDIO_BENCH_USER) {
-    // như Handio Desktop: gửi form tên + mật khẩu một lần, giữ cookie phiên (mật khẩu chỉ nằm trong biến môi trường của bạn)
-    const signIn = baseUrl.replace(/\/vllm\/v1\/?$/, "/oauth2/sign_in");
-    const login = async () => {
-      const r = await fetch(signIn, { method: "POST", redirect: "manual", headers: { "content-type": "application/x-www-form-urlencoded", accept: "text/html" }, body: new URLSearchParams({ username: process.env.HANDIO_BENCH_USER, password: process.env.HANDIO_BENCH_PASSWORD || "", rd: "/" }).toString() });
-      const jar = (r.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).filter((c) => c.startsWith("_neuagent_sso") && c.split("=")[1]);
-      if (r.status === 429) throw new Error("đăng nhập thử quá nhiều lần, đợi một phút");
-      if (![302, 303].includes(r.status) || !jar.length) throw new Error("tên hoặc mật khẩu không đúng");
-      return jar.join("; ");
-    };
-    try { cookie = await login(); cookieAt = Date.now(); } catch (e) { console.error(`Đăng nhập thất bại (${new URL(signIn).host}): ${e.message}`); process.exit(2); }
-    authHeaders = async () => {
-      if (Date.now() - cookieAt > 20 * 60_000) { cookie = await login(); cookieAt = Date.now(); } // phiên làm mới định kỳ cho bài chạy lâu
-      return { Cookie: cookie };
-    };
-    console.log(`Đã đăng nhập bằng tài khoản ${process.env.HANDIO_BENCH_USER}`);
-  }
-  {
-    const h = cookie ? { Cookie: cookie } : {};
-    if (process.env.HANDIO_BENCH_KEY) h[process.env.HANDIO_BENCH_KEY_HEADER || "x-ollama-seckey"] = process.env.HANDIO_BENCH_KEY;
-    const r = await fetch(baseUrl.replace(/\/+$/, "") + "/models", { headers: h, signal: AbortSignal.timeout(20_000) }).catch((e) => ({ err: e }));
-    if (r.err) { console.error(`Không kết nối được ${u.host}: ${r.err.cause?.code || r.err.message}`); process.exit(2); }
-    if (r.status === 401 || r.status === 403) { console.error(`Máy chủ từ chối khoá (HTTP ${r.status}). Kiểm HANDIO_BENCH_KEY và HANDIO_BENCH_KEY_HEADER (ví dụ "Authorization" hoặc "x-ollama-seckey").`); process.exit(2); }
-    console.log(`Kết nối ${u.host}: HTTP ${r.status}, mô hình ${process.env.HANDIO_BENCH_MODEL || "(mặc định)"}`);
-  }
+  conn = await connectModel();
   const bundle = path.join(outDir, ".harness.mjs");
   await build({ entryPoints: [path.join(here, "harness.ts")], outfile: bundle, bundle: true, platform: "node", format: "esm", target: "node22", logLevel: "error", external: ["electron"], banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
   ({ runAgent } = await import(pathToFileURL(bundle).href));
@@ -259,7 +166,7 @@ for (const task of tasks) {
       fs.mkdirSync(path.dirname(path.join(appDir, f)), { recursive: true });
       fs.writeFileSync(path.join(appDir, f), text);
     }
-    agent = await runAgent({ dir: appDir, prompt: task.prompt, baseUrl: process.env.HANDIO_BENCH_BASE_URL, model: process.env.HANDIO_BENCH_MODEL || "qwen3.5-35b-a3b-int4", key: process.env.HANDIO_BENCH_KEY, keyHeader: process.env.HANDIO_BENCH_KEY_HEADER, authHeaders, timeoutMs, checkPage: process.env.HANDIO_BENCH_NO_CHECK_PAGE === "1" ? undefined : benchCheckPage });
+    agent = await runAgent({ dir: appDir, prompt: task.prompt, ...conn, timeoutMs, checkPage: process.env.HANDIO_BENCH_NO_CHECK_PAGE === "1" ? undefined : benchCheckPage });
     fs.writeFileSync(path.join(tdir, "agent.json"), JSON.stringify(agent, null, 2));
     fs.writeFileSync(path.join(tdir, "agent.log"), [`# ${task.id} · ${agent.endedBy} · ${agent.seconds}s · ${agent.steps} bước · ${agent.toolErrors} lỗi công cụ`, "", ...agent.trace, "", "## Lời cuối", agent.final, "", "## Thông báo", ...agent.notices].join("\n"));
     console.log(`  agent: ${agent.endedBy}, ${agent.seconds}s, ${agent.steps} bước, ${agent.toolErrors} lỗi công cụ, ${agent.calls} lượt gọi mô hình`);
