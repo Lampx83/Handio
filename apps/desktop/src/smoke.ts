@@ -297,6 +297,9 @@ export async function runSmoke(c: Ctx): Promise<number> {
       const port = (srv.address() as { port: number }).port;
       try {
         const ok = await checkPage(`http://127.0.0.1:${port}/`, { waitMs: 300, root: c.codeDir });
+        const shot = await checkPage(`http://127.0.0.1:${port}/`, { waitMs: 300, screenshot: true, root: c.codeDir });
+        // PNG thật, cửa sổ ẩn vẫn vẽ được (ảnh quá nhỏ = trang trắng/không vẽ)
+        check("check_page chụp được ảnh PNG từ cửa sổ ẩn", !!shot.screenshot && shot.screenshot[0] === 0x89 && shot.screenshot.length > 500, String(shot.screenshot?.length));
         const bad = await checkPage(`http://127.0.0.1:${port}/loi`, { waitMs: 300, root: c.codeDir });
         const out = await checkPage(`http://127.0.0.1:${port}/ngoai`, { waitMs: 300, root: c.codeDir });
         const none = await checkPage(`http://127.0.0.1:${port}/khong-co`, { waitMs: 100, root: c.codeDir });
