@@ -123,13 +123,20 @@ function findRange(flat: string, find: string, mode: "exact" | "loose"): { s: nu
   const nd = loose(stripMarkers(find)).s.trim();
   if (nd.length < 2) return null;
   const hay = loose(flat);
+  // mô hình hay rút gọn câu dài bằng "…": ý là CẢ câu, thay từ đó đến hết dòng (không để sót nửa câu cũ)
+  const toLineEnd = /(?:\.{3}|…)\s*$/.test(find);
   let from = 0;
   for (;;) {
     const at = hay.s.indexOf(nd, from);
     if (at < 0) return null;
     const okL = at === 0 || hay.s[at - 1] === " ";
     const okR = at + nd.length === hay.s.length || hay.s[at + nd.length] === " ";
-    if (okL && okR) return { s: hay.map[at], e: hay.map[at + nd.length - 1] + 1 };
+    if (okL && (okR || toLineEnd)) {
+      const e = hay.map[at + nd.length - 1] + 1;
+      if (!toLineEnd) return { s: hay.map[at], e };
+      const nl = flat.indexOf("\n", e);
+      return { s: hay.map[at], e: nl < 0 ? flat.length : nl };
+    }
     from = at + 1;
   }
 }

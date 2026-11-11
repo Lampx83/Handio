@@ -25,6 +25,10 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Trang quản trị mới gọn hơn** (quản trị viên): thanh trên cùng chuyển nhanh giữa Tổng quan, Tài khoản, Hạn mức, Góp ý, Chia sẻ, Dữ liệu và Báo cáo chất lượng; thẻ số đầu trang; chọn khoảng 1/3/7/30/90 ngày bằng nhóm nút; bảng có tiêu đề cố định khi cuộn, số căn phải, báo rõ khi trống; thông báo thành công/lỗi có màu riêng; biểu đồ cùng bảng màu, sáng/tối theo máy. Ô lọc bảng người dùng ở trang Tổng quan nay hiện ra (trước bị ẩn).
 
 ### Sửa
+- **Sửa PowerPoint ít báo "không tìm thấy" hơn**: agent chép cả tiêu đề kèm gạch đầu dòng, hoặc cả một dòng bảng, vẫn sửa đúng chỗ.
+- **Sửa PowerPoint không còn để sót nửa câu cũ** khi agent viết tắt câu dài bằng dấu "…".
+- **Tab Code bản web chạy thử được nhiều hơn**: có `assert`, đọc được tệp JSON và liệt kê tệp; khi vướng giới hạn, agent được chỉ đúng cách làm thay vì được khuyên dùng `bash` (bản web không có).
+- **Tệp nằm ngoài thư mục dự án**: agent chỉ ra tệp cùng tên trong dự án nếu có, nếu không thì nhờ bạn chép tệp vào thay vì thử đi thử lại.
 - **Tạo Word, PowerPoint và tệp dài ít bị lỗi "tham số không phải JSON" hơn**: khi mô hình viết nội dung dài mà xuống dòng thật trong chuỗi, thừa dấu phẩy hoặc bọc trong khối mã, ứng dụng tự sửa rồi chạy luôn thay vì bắt agent gọi lại cả lượt. Nội dung bị cắt giữa chừng thì vẫn nhắc agent chia nhỏ.
 - **Dự án có cả frontend và backend: bật cái này không còn làm chết cái kia.** Trước đây agent bật backend thì frontend tắt (và ngược lại), bạn gặp lỗi không kết nối được rồi agent bật lại mãi. Nay hai máy chủ chạy cùng lúc, agent biết cái nào đang chạy.
 - **Bản cài Windows: chương trình Python in tiếng Việt không còn lỗi mã hoá**, agent không mất nhiều bước đi tìm nguyên nhân sai.

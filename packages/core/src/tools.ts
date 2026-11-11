@@ -141,7 +141,37 @@ export async function resolveSafe(ctx: ToolContext, p: unknown): Promise<string>
       /* thư mục chưa có */
     }
   }
-  throw new ToolError(`Đường dẫn ${p} nằm ngoài thư mục dự án (${ctx.root}). Chỉ làm việc trong thư mục dự án: dùng đường dẫn tương đối so với thư mục đó (vd src/app.js).`, "outside_project");
+  throw new ToolError(`Đường dẫn ${p} nằm ngoài thư mục dự án (${ctx.root}). Chỉ làm việc trong thư mục dự án: dùng đường dẫn tương đối so với thư mục đó (vd src/app.js).${await outsideHint(ctx, abs)}`, "outside_project");
+}
+
+/** Bước tiếp theo cho mô hình khi đường dẫn nằm ngoài dự án. Chỉ GỢI Ý tệp trong dự án, không bao giờ tự đọc thay: tệp cùng tên chưa chắc là tệp người dùng nói tới. */
+async function outsideHint(ctx: ToolContext, abs: string): Promise<string> {
+  const stop = " Đừng thử đường dẫn khác: hãy nói người dùng chép tệp vào thư mục dự án rồi nhắc lại tên tệp.";
+  const base = basename(abs).toLowerCase();
+  if (!base) return stop;
+  const same: string[] = [];
+  try {
+    let n = 0;
+    for await (const f of walk(ctx, ctx.root)) {
+      if (++n > 3000 || same.length >= 3) break;
+      if (basename(f).toLowerCase() === base) same.push(relPath(ctx, f));
+    }
+  } catch {
+    /* không liệt kê được thư mục: vẫn trả lời bước tiếp theo */
+  }
+  return same.length ? ` Trong dự án có tệp cùng tên: ${same.join(", ")}. Nếu đúng tệp này thì dùng đường dẫn đó.` : stop;
+}
+
+/** Lỗi do chương trình đụng giới hạn của hộp cát `run_javascript`: lý do cho mô hình. Trả null nếu là lỗi của chính chương trình. */
+export function sandboxLimit(err: string): string | null {
+  if (/Cannot use import statement|Unexpected token 'export'|import\.meta|Cannot use 'import\.meta'/.test(err)) return "Hộp cát chỉ chạy CommonJS: dùng require(...) và module.exports thay cho import/export.";
+  if (/\.(?:writeFile|appendFile|mkdir|rm|rmdir|unlink|rename|copyFile)(?:Sync)? is not a function|\.createWriteStream is not a function|reading '(?:readFile|writeFile|mkdir)'/.test(err)) return "fs trong hộp cát chỉ đọc (readFileSync, existsSync, readdirSync, statSync). Ghi tệp bằng công cụ write_file.";
+  if (/\b(document|window|localStorage|sessionStorage|alert|location|HTMLElement) is not defined/.test(err)) return "Hộp cát không có DOM và trình duyệt: chỉ thử được phần logic thuần, không thử được giao diện.";
+  if (/\b(fetch|XMLHttpRequest|WebSocket)\b(?: is not defined| is not a function)/.test(err)) return "Hộp cát không có mạng.";
+  if (/\bBuffer is not defined/.test(err)) return "Hộp cát không có Buffer: dùng chuỗi, TextEncoder hoặc Uint8Array.";
+  if (/require is not defined/.test(err)) return "Hộp cát chỉ nạp được tệp của dự án và fs, path, assert.";
+  if (/Cannot find module '(?!\.{0,2}\/)[^']+'/.test(err)) return "Hộp cát chỉ có fs (chỉ đọc), path, assert và các tệp của dự án; không có thư viện ngoài.";
+  return null;
 }
 
 export const relPath = (ctx: ToolContext, abs: string): string => relative(ctx.root, abs) || ".";
@@ -618,7 +648,7 @@ export function builtinTools(env: Env): Tool[] {
   if (env.runJs) {
     tools.push({
       name: "run_javascript", kind: "exec", readonly: false,
-      description: "Run JavaScript in an isolated sandbox (no DOM, no network, no npm packages, no fs/path/os/child_process). CommonJS works on the project's own files: require('./src/grades') loads files/src/grades.js, process.exit(1) marks failure - so you can run the project's tests, e.g. require('./src/grades.test.js'). Project text files are also available as the object `files` (path -> content). console.log output and the return value are returned. If the program itself throws or a test fails you get the error text back: that is the program's result, read it and fix the project's code. To run real node programs or shell tools, use bash instead.",
+      description: `Run JavaScript in an isolated sandbox (no DOM, no network, no npm packages, no import/export). CommonJS works on the project's own files: require('./src/grades') loads files/src/grades.js, require('./data.json') loads JSON, process.exit(1) marks failure - so you can run the project's tests, e.g. require('./src/grades.test.js'). Also available: assert, path, and fs read-only (readFileSync, existsSync, readdirSync, statSync); write files with write_file. Project text files are also available as the object \`files\` (path -> content). console.log output and the return value are returned. If the program itself throws or a test fails you get the error text back: that is the program's result, read it and fix the project's code. ${env.exec ? "To run real node programs or shell tools, use bash instead." : "There is no shell here: code that needs npm packages or a browser cannot be run, so test its pure logic and tell the user what was not run."}`,
       parameters: { type: "object", properties: { code: S }, required: ["code"] },
       summarize: (a) => short(a.code ?? "", 110),
       async run(ctx, a) {
@@ -636,9 +666,10 @@ export function builtinTools(env: Env): Tool[] {
         const logs = clip(r.logs.join("\n"));
         if (!r.ok) {
           const err = r.error ?? "lỗi không rõ";
-          // dùng nhầm thứ sandbox không có (fs, mạng, DOM…): lỗi do cách gọi của agent, kèm gợi ý; còn lại là kết quả của CHƯƠNG TRÌNH (test không qua, ném lỗi)
-          if (/Cannot find module '(fs|path|os|child_process|http|https|net|crypto|readline|node:[a-z_/]+)'|require is not defined|\b(fetch|XMLHttpRequest|document|window|localStorage) is not defined/.test(err))
-            throw new ToolError((logs ? logs + "\n" : "") + err + "\n[Gợi ý] Sandbox không có fs/mạng/DOM. Đọc file dự án bằng `files['đường/dẫn']` hoặc require('./tệp'); cần chạy chương trình thật thì dùng bash (vd `node tệp.js`).", "sandbox");
+          // dùng nhầm thứ sandbox không có: lỗi do cách gọi của agent, kèm gợi ý đúng nơi đang chạy (bản web không có bash); còn lại là kết quả của CHƯƠNG TRÌNH (test không qua, ném lỗi)
+          const limit = sandboxLimit(err);
+          if (limit)
+            throw new ToolError((logs ? logs + "\n" : "") + err + `\n[Gợi ý] ${limit} Đọc tệp dự án bằng \`files['đường/dẫn']\` hoặc require('./tệp'). ${ctx.env.exec ? "Cần chạy chương trình thật thì dùng bash (vd `node tệp.js`)." : "Ở đây không có bash: phần cần thư viện ngoài hoặc trình duyệt không chạy được, hãy thử phần logic thuần và nói rõ với người dùng phần nào chưa chạy."}`, "sandbox");
           throw new ToolError((logs ? logs + "\n" : "") + err, /timeout|Hết thời gian|timed out/i.test(err) ? "timeout" : "program");
         }
         return (logs ? logs + "\n" : "") + (r.result !== undefined ? "[giá trị trả về] " + r.result : "(chạy xong)");

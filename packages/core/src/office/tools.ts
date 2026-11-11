@@ -463,7 +463,7 @@ export function officeTools(env: Env): Tool[] {
     },
     {
       name: "pptx_edit", kind: "edit", readonly: false, pathArg: "path", targetPath: (a) => a.save_as || a.path,
-      description: "Edit an EXISTING .pptx keeping its design (read_document it first). Slide numbers = the file BEFORE this call. replacements [{find, replace, slide?}]: matching ignores case, accents, bullets, quotes and spans lines; leave out the 'Slide N:' label. set_title [{slide, text}]. set_body [{slide, text}]: replace the WHOLE body of a slide, one point per line (2-space indent = sub-point); title, layout, theme, notes stay: prefer it over long replacements. add_slides {after: N|'end', content: Markdown as create_pptx}: new slides in the deck's own design (conclusion, thank-you...). delete_slides [n], duplicate_slides [n], move_slide {slide, to}. transform {case: upper|lower|capitalize, target: titles|all}. style [{target: titles|all|match, match?, slides?, color, size, bold, italic, underline, font, align, fill}]. background {color, slides?}. Edits in place; save_as only to keep the original.",
+      description: "Edit an EXISTING .pptx keeping its design (read_document it first). Slide numbers = the file BEFORE this call. replacements [{find, replace, slide?}]: one find = text in ONE box (a title, a body, a table cell), ignores case, accents, bullets, quotes. set_title [{slide, text}]. set_body [{slide, text}]: replace a slide's WHOLE body, one point per line (2-space indent = sub-point); prefer it over long replacements. add_slides {after: N|'end', content: Markdown as create_pptx}. delete_slides [n], duplicate_slides [n], move_slide {slide, to}. transform {case, target}. style [{target: titles|all|match, match?, slides?, color, size, bold, font, align, fill…}]. background {color, slides?}. save_as keeps the original. Examples: {path:'a.pptx', replacements:[{find:'quý 3', replace:'quý 4'}]}; {path:'a.pptx', set_title:[{slide:2, text:'Kết quả'}], set_body:[{slide:2, text:'Ý một\\nÝ hai'}]}",
       parameters: { type: "object", properties: {
         path: S, save_as: { type: "string", description: "new .pptx path; the original stays unchanged" },
         replacements: { type: "array", items: { type: "object", properties: { find: S, replace: S, slide: { type: "integer" } }, required: ["find", "replace"] } },
@@ -529,7 +529,9 @@ export function officeTools(env: Env): Tool[] {
         /** Gợi ý ngắn: slide có chữ gần giống và cách dùng set_body. */
         const hintFor = (i: number) => {
           const sl = res.suggestSlide[i];
-          return (res.suggestions[i]?.[0] ? `Gần giống: ${res.suggestions[i][0]}\n` : "") + `Dùng set_body {slide: ${sl ?? "N"}, text: "dòng 1\\ndòng 2"} để thay cả phần thân slide${sl ? ` ${sl}` : ""} (không cần chép đúng chữ), hoặc set_title.`;
+          const near = res.suggestions[i]?.[0] ? `Gần giống: ${res.suggestions[i][0]}\n` : "";
+          if (/\n|\|/.test(opts.replacements?.[i]?.find ?? "")) return near + `Mỗi find chỉ khớp trong một khung chữ: tiêu đề dùng set_title, thân slide dùng set_body {slide: ${sl ?? "N"}, text: "dòng 1\\ndòng 2"}, ô bảng thì mỗi ô một find.`;
+          return near + `Dùng set_body {slide: ${sl ?? "N"}, text: "dòng 1\\ndòng 2"} để thay cả phần thân slide${sl ? ` ${sl}` : ""} (không cần chép đúng chữ), hoặc set_title.`;
         };
         if (!res.changes.length && !structural) {
           if (!miss.length) throw new ToolError(`Không có gì thay đổi trong ${a.path}. Kiểm tra số slide và điều kiện (target/match).`, "no_match");
