@@ -23,6 +23,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Thông báo rõ khi nhóm của bạn không được dùng mô hình đang chọn** hoặc đã hết hạn mức riêng của một tab (các tab khác vẫn dùng được), thay vì báo lỗi key chung chung.
 - **Chỉ hiện mô hình bạn được dùng**: danh sách mô hình ở Cài đặt và nút chọn mô hình chỉ còn mô hình nhóm của bạn được phép. Không còn mô hình nào thì nút **Kiểm tra** báo rõ để liên hệ quản trị viên. Chưa giới hạn mô hình thì như cũ.
 - **Trang quản trị mới gọn hơn** (quản trị viên): thanh trên cùng chuyển nhanh giữa Tổng quan, Tài khoản, Hạn mức, Góp ý, Chia sẻ, Dữ liệu và Báo cáo chất lượng; thẻ số đầu trang; chọn khoảng 1/3/7/30/90 ngày bằng nhóm nút; bảng có tiêu đề cố định khi cuộn, số căn phải, báo rõ khi trống; thông báo thành công/lỗi có màu riêng; biểu đồ cùng bảng màu, sáng/tối theo máy. Ô lọc bảng người dùng ở trang Tổng quan nay hiện ra (trước bị ẩn).
+- **Một lượt làm việc không còn âm thầm ăn hết hạn mức token trong ngày**: lượt dùng tới 1/4 hạn mức thì bạn được báo và agent được nhắc làm cho xong phần chính; tới một nửa thì agent dừng, tóm tắt đã làm gì, còn gì, và bạn gõ "tiếp tục" nếu muốn làm tiếp.
 
 ### Sửa
 - **Sửa PowerPoint ít báo "không tìm thấy" hơn**: agent chép cả tiêu đề kèm gạch đầu dòng, hoặc cả một dòng bảng, vẫn sửa đúng chỗ.

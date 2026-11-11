@@ -267,6 +267,7 @@ export class LocalController implements AgentController {
       profile: this.o.profile ?? "code",
       policy: this.o.policy,
       getSettings: () => this.settings,
+      getQuota: () => this.quota,
       llm: this.llm,
       emit: (e) => {
         if (e.type === "todos") this.todos = e.todos;
