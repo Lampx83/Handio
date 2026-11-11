@@ -14,8 +14,42 @@ export type ProcEvent = { id: string; command: string; state: "start" | "data" |
 
 const MAX_LOG = 200_000;
 /** Lệnh khởi động máy chủ dev/web: một dự án chỉ cần MỘT cái chạy. */
-const DEV_SERVER = /(?:\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|preview)\b|\bvite\b|\bnext\s+(?:dev|start)\b|\bwebpack(?:-dev-server)?\s+serve\b|\bhttp\.server\b|\blive-server\b|\bstreamlit\s+run\b|\bflask\s+run\b|\buvicorn\b|\bnodemon\b)/i;
+const DEV_SERVER = /(?:\b(?:npm|pnpm|yarn|bun)\s+(?:(?:--prefix|--cwd|-C)[=\s]+\S+\s+)?(?:run\s+)?(?:dev|start|serve|preview)\b|\bvite\b|\bnext\s+(?:dev|start)\b|\bwebpack(?:-dev-server)?\s+serve\b|\bhttp\.server\b|\blive-server\b|\bstreamlit\s+run\b|\bflask\s+run\b|\buvicorn\b|\bgunicorn\b|\bhypercorn\b|\bfastapi\s+(?:dev|run)\b|\bmanage\.py\s+runserver\b|\bnodemon\b)/i;
 const norm = (c: string) => c.trim().replace(/\s+/g, " ");
+
+export interface ServerSlot {
+  /** Thư mục con mà lệnh tự chuyển vào (`cd fe && …`, `npm --prefix fe …`); "" = thư mục chạy lệnh. */
+  dir: string;
+  family: "js" | "py" | "static";
+  /** Cổng ghi rõ trong lệnh, nếu có. */
+  port?: string;
+}
+
+const cleanDir = (d: string) => d.replace(/^["']|["']$/g, "").replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/\/+$/, "").replace(/^\.$/, "");
+
+/**
+ * "Chỗ" của một máy chủ dev: hai lệnh cùng chỗ thì lệnh sau thay lệnh trước. Dự án có frontend và backend chạy từ cùng thư mục gốc
+ * (`cd fe && npm run dev` và `cd be && uvicorn …`) là HAI chỗ; coi là một thì bật cái này sẽ giết cái kia (đã gặp ở phiên thật).
+ */
+export function serverSlot(command: string): ServerSlot | undefined {
+  if (!DEV_SERVER.test(command)) return undefined;
+  const dirs: string[] = [];
+  let rest = command.trim();
+  for (let m; (m = /^(?:cd|pushd)\s+(?:\/d\s+)?("[^"]+"|'[^']+'|[^\s;&|]+)\s*(?:&&|;|&)\s*/i.exec(rest)); rest = rest.slice(m[0].length)) dirs.push(cleanDir(m[1]));
+  const opt = /(?:^|\s)(?:--prefix|--cwd|-C)[=\s]+("[^"]+"|'[^']+'|[^\s;&|]+)/.exec(rest);
+  if (opt) dirs.push(cleanDir(opt[1]));
+  const family: ServerSlot["family"] = /\bhttp\.server\b|\blive-server\b/i.test(rest) ? "static" : /\b(?:uvicorn|gunicorn|hypercorn|flask|streamlit|fastapi|manage\.py)\b/i.test(rest) ? "py" : "js";
+  const port = /(?:--(?:server\.)?port[=\s]+|\s-p\s+|\bhttp\.server\s+|\bPORT=|\brunserver\s+(?:[\d.]+:)?)(\d{2,5})\b/.exec(rest)?.[1];
+  return { dir: dirs.filter(Boolean).join("/"), family, ...(port ? { port } : {}) };
+}
+
+/** Cùng một máy chủ: đúng lệnh cũ, hoặc cùng chỗ (cùng thư mục con, cùng loại, không ghi rõ hai cổng khác nhau). */
+function sameServer(a: string, b: string): boolean {
+  if (norm(a) === norm(b)) return true;
+  const x = serverSlot(a);
+  const y = serverSlot(b);
+  return !!x && !!y && x.dir === y.dir && x.family === y.family && !(x.port && y.port && x.port !== y.port);
+}
 /** Lệnh chạy mãi (máy chủ dev/web) — không phải lệnh dựng/kiểm thử chạy một lần. */
 export function isLongRunning(command: string): boolean {
   return DEV_SERVER.test(command) && !/\b(build|test|lint|install|ci|run\s+build)\b/.test(command) && !/(^|[;&|]\s*)(kill|pkill|killall|lsof)\b/.test(command);
@@ -35,12 +69,12 @@ export class ProcessManager {
 
   start(command: string, cwd: string): ProcInfo {
     if (!this.env.spawn) throw new Error("Nơi chạy này không hỗ trợ chạy nền.");
-    // chạy lại đúng lệnh cũ (hoặc một máy chủ dev khác trong cùng thư mục): dừng cái cũ trước, nếu không hai máy chủ sẽ chiếm hai cổng
+    // chạy lại đúng lệnh cũ (hoặc máy chủ dev khác ở cùng chỗ, xem serverSlot): dừng cái cũ trước, nếu không hai máy chủ sẽ chiếm hai cổng
     // và trình duyệt cứ mở nhầm bản cũ (đã gặp: 4 máy chủ ở cổng 5173–5176)
     let replaced: string | undefined;
     for (const p of this.procs.values()) {
       if (!p.info.alive || p.cwd !== cwd) continue;
-      if (norm(p.info.command) === norm(command) || (DEV_SERVER.test(p.info.command) && DEV_SERVER.test(command))) {
+      if (sameServer(p.info.command, command)) {
         p.stop();
         p.info.alive = false;
         replaced = p.info.id;
@@ -72,11 +106,11 @@ export class ProcessManager {
     return info;
   }
 
-  /** Tiến trình còn sống chạy cùng lệnh (hoặc cùng là máy chủ dev) trong cùng thư mục. */
+  /** Tiến trình còn sống chạy cùng lệnh (hoặc máy chủ dev cùng chỗ) trong cùng thư mục. */
   findRunning(command: string, cwd: string): { info: ProcInfo; log: string } | undefined {
     for (const p of this.procs.values()) {
       if (!p.info.alive || p.cwd !== cwd) continue;
-      if (norm(p.info.command) === norm(command) || (DEV_SERVER.test(p.info.command) && DEV_SERVER.test(command))) return { info: p.info, log: p.log };
+      if (sameServer(p.info.command, command)) return { info: p.info, log: p.log };
     }
     return undefined;
   }

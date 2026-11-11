@@ -105,3 +105,44 @@ describe("máy chủ dev: tự chạy nền, không khởi động lại khi mã
     expect(isLongRunning("npm test")).toBe(false);
   });
 });
+
+describe("thăm dò cùng một địa chỉ bằng lệnh viết lại (lỗi thật: hàng chục lệnh curl | findstr đổi mẫu tìm, không sửa gì)", () => {
+  const probes = ["alpha", "beta", "gamma", "delta", "input", "name=", "type=", "label", "value", "class", "div", "span", "form", "button"];
+  const script = (edit?: number) => (_m: unknown, n: number) => {
+    if (n >= probes.length + 2) return { text: "Xong." };
+    if (edit === n) return { calls: [{ name: "write_file", args: { path: "index.html", content: "<h1>" + n + "</h1>" } }] };
+    return { calls: [{ name: "bash", args: { command: `curl -s http://127.0.0.1:8080/ > temp.html && findstr /C:"${probes[n % probes.length]}" temp.html` } }] };
+  };
+  const mkEnv = () => {
+    const env = new MemoryEnv("/ws", { "index.html": "<h1>x</h1>" });
+    let i = 0;
+    env.exec = async () => ({ code: 0, output: `dong ${"x".repeat(++i)}\n[mã thoát 0]`, timedOut: false }); // kết quả khác nhau mỗi lần: khoá (thao tác, kết quả) không bắt được
+    return env;
+  };
+
+  it("nhắc ở lần 4 (chỉ cách dùng check_page steps), dừng ở lần 8", async () => {
+    const { c, llm, events } = await makeController(script(), { profile: "code", env: mkEnv(), settings: { mode: "bypass" } });
+    await c.send("kiểm tra giao diện");
+    expect(seen(llm)).toMatch(/thăm dò[\s\S]*check_page/);
+    expect(notices(events).some((t) => /thăm dò cùng một địa chỉ/.test(t))).toBe(true);
+    expect(llm.calls.length).toBeLessThan(11);
+  });
+
+  it("có sửa tệp giữa chừng thì đếm lại từ đầu: chưa bị dừng ở lần 8", async () => {
+    const { events } = await (async () => {
+      const r = await makeController((m, n) => (n >= 8 ? { text: "Xong." } : script(4)(m, n)), { profile: "code", env: mkEnv(), settings: { mode: "bypass" } });
+      await r.c.send("sửa rồi kiểm tra");
+      return r;
+    })();
+    expect(notices(events).some((t) => /thăm dò cùng một địa chỉ/.test(t))).toBe(false);
+  });
+
+  it("probeKey: cùng URL là một nhóm dù lệnh viết khác; lệnh không thăm dò thì không tính", async () => {
+    const { probeKey } = await import("../src/repeat");
+    expect(probeKey('curl -s http://127.0.0.1:8080/ > t.html && findstr /C:"a" t.html')).toBe("http://127.0.0.1:8080/");
+    expect(probeKey('curl "http://localhost:8000/items/35/list" | python -c "import sys"')).toBe("http://localhost:8000/items/#/list");
+    expect(probeKey('powershell -Command "Invoke-WebRequest -Uri http://localhost:5173/ -UseBasicParsing"')).toBe("http://localhost:5173/");
+    expect(probeKey("npm test")).toBeUndefined();
+    expect(probeKey("curl https://example.com/data.zip -o d.zip")).toBeUndefined(); // tải tệp từ Internet không phải thăm dò máy chủ cục bộ
+  });
+});

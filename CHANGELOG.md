@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Tab Code: agent nhìn được giao diện thật**: khi kiểm tra trang, agent có thể chụp ảnh sau khi bấm thử và xem ảnh đó (bản cài máy tính), không cần bạn chụp màn hình gửi.
 - **Nút DESIGN.md trên khung xem trước Design**: có tệp thì mở để xem, sửa; chưa có thì nhờ agent tạo (như gõ `/designmd`).
 - **Chỉ vào để sửa nhiều chỗ một lần**: chọn một phần, gõ yêu cầu, bấm **+ Ghi chú**, chọn tiếp phần khác… rồi **Gửi** một lần. Mỗi ghi chú có số thứ tự trên bản xem trước, bỏ từng cái được; tối đa 8 ghi chú mỗi lần.
 - **Tab Code: chạy lệnh trong container Docker** (Desktop, tuỳ chọn): bật ở Cài đặt → Quyền → "Chạy lệnh trong container Docker". Lệnh của agent chỉ thấy thư mục dự án, không thấy phần còn lại của máy, không chạy bằng quyền quản trị, mặc định không ra mạng. Bật "Cho ra mạng" để cài gói (npm/pip, có cache riêng cho từng dự án) và đặt "Cổng xem trước" (ví dụ 5173) để mở web đang chạy trong container. Cần Docker Desktop; Docker không chạy thì lệnh chạy như cũ và ứng dụng báo rõ. Quản trị viên có thể bắt buộc dùng container (`requireContainer` trong `policy.json`).
@@ -22,6 +23,11 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Thông báo rõ khi nhóm của bạn không được dùng mô hình đang chọn** hoặc đã hết hạn mức riêng của một tab (các tab khác vẫn dùng được), thay vì báo lỗi key chung chung.
 - **Chỉ hiện mô hình bạn được dùng**: danh sách mô hình ở Cài đặt và nút chọn mô hình chỉ còn mô hình nhóm của bạn được phép. Không còn mô hình nào thì nút **Kiểm tra** báo rõ để liên hệ quản trị viên. Chưa giới hạn mô hình thì như cũ.
 - **Trang quản trị mới gọn hơn** (quản trị viên): thanh trên cùng chuyển nhanh giữa Tổng quan, Tài khoản, Hạn mức, Góp ý, Chia sẻ, Dữ liệu và Báo cáo chất lượng; thẻ số đầu trang; chọn khoảng 1/3/7/30/90 ngày bằng nhóm nút; bảng có tiêu đề cố định khi cuộn, số căn phải, báo rõ khi trống; thông báo thành công/lỗi có màu riêng; biểu đồ cùng bảng màu, sáng/tối theo máy. Ô lọc bảng người dùng ở trang Tổng quan nay hiện ra (trước bị ẩn).
+
+### Sửa
+- **Dự án có cả frontend và backend: bật cái này không còn làm chết cái kia.** Trước đây agent bật backend thì frontend tắt (và ngược lại), bạn gặp lỗi không kết nối được rồi agent bật lại mãi. Nay hai máy chủ chạy cùng lúc, agent biết cái nào đang chạy.
+- **Bản cài Windows: chương trình Python in tiếng Việt không còn lỗi mã hoá**, agent không mất nhiều bước đi tìm nguyên nhân sai.
+- **Agent không còn thử đi thử lại cùng một địa chỉ mãi mà không sửa gì**: sau vài lần sẽ đổi cách kiểm tra, hoặc dừng và nói rõ phần nào chưa kiểm được.
 
 ## [0.8.21] - 2026-10-18
 

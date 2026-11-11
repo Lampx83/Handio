@@ -494,7 +494,7 @@ export function childEnv(base: NodeJS.ProcessEnv = process.env, extra: Record<st
     const merged = [userPath(), out[pathKey], ...extraDirs].filter(Boolean).join(":");
     out[pathKey] = [...new Set(merged.split(":"))].filter(Boolean).join(":");
   }
-  return { ...out, PAGER: "cat", GIT_PAGER: "cat", TERM: "dumb", PYTHONUNBUFFERED: "1", NO_COLOR: "1", CI: "1", GIT_TERMINAL_PROMPT: "0", NPM_CONFIG_UPDATE_NOTIFIER: "false", ...extra };
+  return { ...out, PAGER: "cat", GIT_PAGER: "cat", TERM: "dumb", PYTHONUNBUFFERED: "1", PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8", NO_COLOR: "1", CI: "1", GIT_TERMINAL_PROMPT: "0", NPM_CONFIG_UPDATE_NOTIFIER: "false", ...extra };
 }
 
 // ---------------------------------------------------------------- sandbox macOS (Seatbelt)

@@ -129,7 +129,7 @@ export function stepScript(st: PageStep): string {
 })()`;
 }
 
-export async function checkPage(url: string, o: { waitMs: number; steps?: PageStep[]; root?: string; signal?: AbortSignal }): Promise<PageReport> {
+export async function checkPage(url: string, o: { waitMs: number; steps?: PageStep[]; screenshot?: boolean; root?: string; signal?: AbortSignal }): Promise<PageReport> {
   const rep: PageReport = { url, title: "", loaded: false, errors: [], failedRequests: [], text: "", blank: false };
   if (!allowedUrl(url, o.root)) return { ...rep, error: "Chỉ mở được trang trên máy này (localhost) hoặc tệp trong dự án." };
 
@@ -263,6 +263,10 @@ export async function checkPage(url: string, o: { waitMs: number; steps?: PageSt
       if (Array.isArray(dom.buttons) && dom.buttons.length) rep.buttons = dom.buttons.map((b) => shorten(String(b), 40));
     }
     if (blocked.size) rep.failedRequests.push(`đã chặn yêu cầu ra ngoài máy: ${[...blocked].slice(0, 4).join(", ")}`);
+    if (o.screenshot) {
+      const png = await w.webContents.capturePage().then((img) => img.toPNG()).catch(() => null);
+      if (png?.length) rep.screenshot = png;
+    }
     return rep;
   } finally {
     clearTimeout(hard);

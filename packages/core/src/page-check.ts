@@ -18,6 +18,10 @@ const str = (v: unknown, max: number): string | undefined => (typeof v === "stri
  * Đọc tham số `steps` của mô hình thành danh sách bước hợp lệ. Nhận cả dạng gọn mà mô hình hay viết ({click: "Bắt đầu"}, {wait: 500},
  * {type: "#ten", value: "An"}) và mảng bị mã hoá thành chuỗi JSON. Sai thì ném lỗi nói rõ cách viết đúng.
  */
+/** Ảnh chụp mới nhất của check_page (ghi đè, không để rác nhiều ảnh trong dự án). */
+const SHOT_DIR = ".neuagent";
+const SHOT_PATH = `${SHOT_DIR}/page-check.png`;
+
 export function parsePageSteps(raw: unknown): PageStep[] {
   if (raw === undefined || raw === null || raw === "") return [];
   let v = raw;
@@ -123,6 +127,7 @@ export function pageTools(env: Env): Tool[] {
         properties: {
           url: { type: "string", description: "http://localhost:5173/ or a project-relative .html path" },
           wait_ms: { type: "integer", description: "extra time to let the page run, default 1500, max 8000" },
+          screenshot: { type: "boolean", description: "also save a PNG of the page (after the last step) so you can LOOK at the real layout with read_image; use it when the question is how the page looks (layout, missing controls, CSS)" },
           steps: {
             type: "array",
             maxItems: MAX_PAGE_STEPS,
@@ -158,8 +163,14 @@ export function pageTools(env: Env): Tool[] {
           throw new ToolError("check_page chỉ mở trang trên máy này (localhost / 127.0.0.1) hoặc tệp trong dự án.", "bad_args");
         }
         const waitMs = Math.max(0, Math.min(Math.floor(Number(a.wait_ms) || 1500), 8000));
-        const r = await check(target, steps.length ? { waitMs, steps, signal: ctx.signal } : { waitMs, signal: ctx.signal });
-        return formatPageReport(r);
+        const shot = a.screenshot === true;
+        const r = await check(target, { waitMs, ...(steps.length ? { steps } : {}), ...(shot ? { screenshot: true } : {}), signal: ctx.signal });
+        const report = formatPageReport(r);
+        if (!shot) return report;
+        if (!r.screenshot?.length) return report + "\nKhông chụp được ảnh trang.";
+        await ctx.env.mkdirp(await resolveSafe(ctx, SHOT_DIR));
+        await ctx.env.writeBytes(await resolveSafe(ctx, SHOT_PATH), r.screenshot);
+        return report + `\nẢnh chụp trang: ${SHOT_PATH}. Dùng read_image với tệp này để xem giao diện thật.`;
       },
     },
   ];

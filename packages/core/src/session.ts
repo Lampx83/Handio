@@ -23,7 +23,7 @@ import { HookRunner, mergeHooks, countHooks } from "./hooks";
 import { McpManager, type McpServerSpec } from "./mcp";
 import { mergePackParts, packsFor, type LoadedPack } from "./packs";
 import { buildHttpTools, type HttpToolRuntime } from "./http-tools";
-import { findRepetition } from "./repeat";
+import { findRepetition, probeKey } from "./repeat";
 import { visionTool } from "./vision";
 import { ASK_LIMITS, cleanAnswers, formatAnswers, parseAskQuestions } from "./ask";
 import { DEFAULT_CONTAINER_IMAGE, DEFAULT_IMAGE_INFO, imageToolsHint } from "./container";
@@ -950,6 +950,8 @@ export class Agent {
   private stopMsg = "";
   /** (thao tác, kết quả) đã gặp kể từ lần đổi tệp gần nhất → số lần; và mốc undoStack để biết có tệp đổi. */
   private obsSeen = new Map<string, number>();
+  /** Số lần thăm dò từng địa chỉ cục bộ từ lần sửa tệp gần nhất (xem probeKey). */
+  private probes = new Map<string, number>();
   private undoMark = 0;
   /** Số lần công cụ lỗi liên tiếp (mọi công cụ; trừ chương trình người dùng chạy hỏng và bị từ chối quyền). */
   private mistakes = 0;
@@ -1450,6 +1452,18 @@ export class Agent {
     if (this.s.ctx.undoStack.length !== this.undoMark) {
       this.undoMark = this.s.ctx.undoStack.length;
       this.obsSeen.clear();
+      this.probes.clear();
+    }
+    // cùng địa chỉ cục bộ, lệnh viết lại mỗi lần (đổi mẫu findstr/grep) nên hai khoá trên không bắt được: dữ liệu thật thấy hàng chục lệnh như vậy, không sửa gì
+    const probe = name === "bash" ? probeKey(key) : undefined;
+    if (probe) {
+      const seen = (this.probes.get(probe) ?? 0) + 1;
+      this.probes.set(probe, seen);
+      if (seen === 4) warn += `\n[Cảnh báo] Lần thứ 4 bạn thăm dò ${probe} mà chưa sửa gì. curl chỉ thấy HTML tĩnh, không thấy phần JavaScript vẽ ra hay giao diện thật. Muốn kiểm tra giao diện: dùng check_page với steps (bấm, nhập, đọc chữ trên trang) và screenshot=true rồi read_image để nhìn ảnh. Không kiểm được thì DỪNG: nói rõ đã sửa gì, phần nào chưa kiểm được, nhờ người dùng thử.`;
+      if (seen >= 8) {
+        this.repeatN = Math.max(this.repeatN, 5);
+        this.stopMsg = "Agent thăm dò cùng một địa chỉ nhiều lần mà không sửa gì nên đã dừng để hỏi bạn.";
+      }
     }
     if (!OBS_SKIP.has(name)) {
       const obs = result.replace(/\x1b\[[0-9;]*m/g, "").replace(/\d+/g, "#").replace(/\s+/g, " ").slice(0, 4000);
