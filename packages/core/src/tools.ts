@@ -606,7 +606,9 @@ export function builtinTools(env: Env): Tool[] {
           }
           await ctx.procs.settle(info.id, 6000);
           const p = ctx.procs.get(info.id)!;
-          return `${note}Đã chạy nền (id=${info.id}).${info.replaced ? ` Đã dừng ${info.replaced} (cùng loại) để không chiếm hai cổng.` : ""} ${p.info.alive ? "Đang chạy." : `Đã thoát với mã ${p.info.code}.`}${p.info.url ? ` Địa chỉ: ${p.info.url} (người dùng có thể bấm “Mở” để xem).` : ""}\n--- đầu ra ---\n${clip(p.log.trim() || "(chưa có đầu ra)")}${!p.info.alive && p.info.code ? (pythonMissingHint(p.log) ? "\n" + pythonMissingHint(p.log) : "") : ""}`;
+          // nói rõ cái nào vẫn đang chạy: mô hình hay tưởng bật máy chủ này làm chết máy chủ kia rồi bật lại mãi
+          const others = ctx.procs.list().filter((o) => o.alive && o.id !== info.id).map((o) => `${o.id}: ${short(o.command, 60)}${o.url ? " " + o.url : ""}`);
+          return `${note}Đã chạy nền (id=${info.id}).${others.length ? ` Vẫn đang chạy cùng lúc, KHÔNG cần bật lại: ${others.join("; ")}.` : ""}${info.replaced ? ` Đã dừng ${info.replaced} (cùng loại) để không chiếm hai cổng.` : ""} ${p.info.alive ? "Đang chạy." : `Đã thoát với mã ${p.info.code}.`}${p.info.url ? ` Địa chỉ: ${p.info.url} (người dùng có thể bấm “Mở” để xem).` : ""}\n--- đầu ra ---\n${clip(p.log.trim() || "(chưa có đầu ra)")}${!p.info.alive && p.info.code ? (pythonMissingHint(p.log) ? "\n" + pythonMissingHint(p.log) : "") : ""}`;
         }
         const timeout = Math.max(1, Math.min(Math.floor(Number(a.timeout) || 60), 300));
         const r = await ctx.env.exec!(a.command, { cwd: ctx.root, timeoutMs: timeout * 1000, signal: ctx.signal });

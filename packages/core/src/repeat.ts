@@ -27,3 +27,15 @@ export function findRepetition(text: string): { cut: number } | null {
   }
   return null;
 }
+
+/**
+ * Nhóm của một lệnh bash "thăm dò máy chủ cục bộ" (curl, wget, Invoke-WebRequest): cùng địa chỉ là cùng nhóm dù đổi mẫu tìm, đổi cách lọc
+ * (`curl URL | findstr a`, `curl URL > t.html && findstr b t.html`). Số trong đường dẫn gom lại, bỏ query. Không phải thăm dò thì undefined.
+ */
+export function probeKey(command: string): string | undefined {
+  if (!/\b(?:curl|wget|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)\b/i.test(command)) return undefined;
+  const m = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?([^\s"'<>|&;?\\]*)/i.exec(command);
+  if (!m) return undefined;
+  const path = m[1] || "/";
+  return m[0].slice(0, m[0].length - m[1].length) + path.replace(/\d+/g, "#");
+}
