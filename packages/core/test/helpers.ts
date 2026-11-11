@@ -1,6 +1,6 @@
 import { LocalController, MemoryEnv, normalizeSettings, type ChatMessage, type ChatOptions, type ChatResult, type LlmClient, type PermissionRequest, type PermissionResponse, type SessionEvent, type Settings } from "../src";
 
-export type Step = { text?: string; calls?: { name: string; args: unknown }[]; finish?: string; usage?: { prompt_tokens: number; completion_tokens: number } };
+export type Step = { text?: string; calls?: { name: string; args: unknown; /** chuỗi tham số THÔ (để mô phỏng JSON hỏng); mặc định là JSON.stringify(args) */ raw?: string }[]; finish?: string; usage?: { prompt_tokens: number; completion_tokens: number } };
 
 /** Mô hình giả: mỗi lần gọi chat() trả về bước tiếp theo trong kịch bản (hoặc tính từ hàm). */
 export class FakeLlm {
@@ -21,7 +21,7 @@ export class FakeLlm {
     return {
       content: step.text ?? "",
       reasoning: "",
-      toolCalls: (step.calls ?? []).map((c, k) => ({ id: `c${this.i}_${k}`, name: c.name, arguments: JSON.stringify(c.args) })),
+      toolCalls: (step.calls ?? []).map((c, k) => ({ id: `c${this.i}_${k}`, name: c.name, arguments: c.raw ?? JSON.stringify(c.args) })),
       usage: step.usage ?? { prompt_tokens: 100, completion_tokens: 20 },
       finish: step.finish ?? "stop",
     };
