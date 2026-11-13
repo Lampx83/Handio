@@ -28,7 +28,7 @@ import { findRepetition, probeKey } from "./repeat";
 import { visionTool } from "./vision";
 import { ASK_LIMITS, cleanAnswers, formatAnswers, parseAskQuestions } from "./ask";
 import { DEFAULT_CONTAINER_IMAGE, DEFAULT_IMAGE_INFO, imageToolsHint } from "./container";
-import type { AskQuestion, PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo } from "./types";
+import type { AskQuestion, PermissionRequest, PermissionResponse, RewindPoint, SessionEvent, Settings, SlashCommandInfo, QuotaInfo } from "./types";
 
 /** Công cụ Office có cấu trúc: kết quả đã liệt kê nội dung vừa ghi nên cổng "đọc lại" không cần thêm một lần đọc. */
 const SELF_REPORTING = new Set([
@@ -110,7 +110,19 @@ export interface SessionOptions {
   httpTools?: HttpToolRuntime;
   /** Hạn chờ trả lời câu hỏi của `ask_user` (ms); mặc định 15 phút. */
   questionTimeoutMs?: number;
+  /** Hạn mức token hôm nay máy chủ báo gần nhất (null = chưa biết): để một lượt không âm thầm ăn hết hạn mức. */
+  getQuota?: () => QuotaInfo | null;
 }
+
+/**
+ * Chốt token của MỘT lượt. Số liệu thật: lượt chạy 141–200 bước tốn 2–2,9 triệu token, quá nửa hạn mức ngày, người dùng hết hạn mức giữa buổi.
+ * Tới TURN_SOFT_SHARE hạn mức: báo người dùng và nhắc mô hình làm cho xong. Tới TURN_HARD_SHARE: dừng, tóm tắt, để người dùng quyết có làm tiếp.
+ * Không biết hạn mức (máy chủ khác, không giới hạn): chỉ nhắc khi quá TURN_SOFT_TOKENS, không dừng.
+ */
+export const TURN_SOFT_SHARE = 0.25;
+export const TURN_HARD_SHARE = 0.5;
+export const TURN_SOFT_TOKENS = 2_000_000;
+const millions = (n: number): string => (Math.round(n / 100_000) / 10).toLocaleString("vi-VN") + " triệu";
 
 /** Kết quả đặc biệt của `Session.ask` khi hết hạn chờ. `allow: true` để chẩn đoán không đếm là người dùng từ chối. */
 const QUESTION_TIMED_OUT: PermissionResponse = { allow: true };
@@ -1304,6 +1316,8 @@ export class Agent {
     this.lastPageProblem = "";
     this.repeats = 0;
     this.lastReminder = 0;
+    this.tokNudged = false;
+    const tok0 = s.promptTokens + s.completionTokens;
     const goal = userText.replace(/\s+/g, " ").trim().slice(0, 300);
     try {
       for (let step = 0; step < maxSteps; step++) {
@@ -1323,6 +1337,10 @@ export class Agent {
               content: `[Hệ thống] Nhắc việc chính người dùng giao: “${goal}”.${list}\nĐang xử lý việc phụ (lỗi, cài đặt…) thì chỉ làm mức tối thiểu để việc chính chạy tiếp (tối đa vài lần thử), rồi QUAY LẠI việc chính và làm cho xong. Nếu kẹt, nói rõ với người dùng thay vì sửa mãi.`,
             });
           }
+        }
+        if (this.depth === 0 && step > 0) {
+          const stop = this.tokenGuard(s.promptTokens + s.completionTokens - tok0);
+          if (stop) return (await this.wrapUp(signal, stop)) || final;
         }
         await this.manageContext();
         const resp = await this.callModel(signal);
@@ -1501,6 +1519,24 @@ export class Agent {
   }
 
   /** Một lượt cuối KHÔNG dùng công cụ để mô hình tóm tắt/giải thích. Chỉ ở lớp agent chính; lỗi (trừ ngắt) thì bỏ qua và dọn lời nhắc. */
+  private tokNudged = false;
+  /** Lượt đã tốn `spent` token: nhắc một lần ở mức mềm; trả về chỉ dẫn tóm tắt khi phải dừng ở mức cứng. */
+  private tokenGuard(spent: number): string | null {
+    const q = this.s.o.getQuota?.();
+    const limit = q && q.limit > 0 ? q.limit : 0;
+    const share = limit ? ` (${Math.round((100 * spent) / limit)}% hạn mức hôm nay)` : "";
+    if (limit && spent >= TURN_HARD_SHARE * limit) {
+      this.s.emit({ type: "notice", level: "warn", text: `Đã dừng lượt này vì đã dùng khoảng ${millions(spent)} token, một nửa hạn mức hôm nay. Gõ “tiếp tục” nếu muốn làm tiếp.` });
+      return "[Hệ thống] Lượt này đã dùng một nửa hạn mức token hôm nay của người dùng nên phải dừng tại đây. Không gọi công cụ nữa. Hãy tóm tắt ngắn: đã làm được gì, còn lại việc gì, và nói người dùng gõ “tiếp tục” nếu muốn làm tiếp.";
+    }
+    if (!this.tokNudged && spent >= (limit ? TURN_SOFT_SHARE * limit : TURN_SOFT_TOKENS)) {
+      this.tokNudged = true;
+      this.s.emit({ type: "notice", level: "warn", text: `Lượt này đã dùng khoảng ${millions(spent)} token${share}. Agent được nhắc làm cho xong phần chính rồi tóm tắt.` });
+      this.messages.push({ role: "user", content: `[Hệ thống] Lượt này đã dùng khoảng ${millions(spent)} token${share}. Làm cho xong phần quan trọng nhất trong ít bước nhất, đừng mở rộng hay thử thêm cách mới; rồi tóm tắt đã làm gì và còn gì.` });
+    }
+    return null;
+  }
+
   private async wrapUp(signal: AbortSignal | undefined, instruction: string): Promise<string> {
     if (this.depth !== 0 || signal?.aborted) return "";
     const mark = this.messages.length;

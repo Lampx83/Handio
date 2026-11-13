@@ -27,6 +27,7 @@ nginx (xác thực SSO, gắn X-User-Email) ─▶ cổng hạn mức 127.0.0.1:
 - Danh sách mô hình (`/agent/vllm/v1/models`) cũng qua cổng để lọc theo quyền mô hình (xem *Phân quyền mô hình*).
 - Cổng chết/lỗi: nginx **tự chuyển thẳng tới Kong** (người dùng vẫn dùng được, tạm không có hạn mức, danh sách mô hình không lọc); `/agent/healthz` và trang quản trị báo lỗi `quota`.
 - Phản hồi chat có tiêu đề `X-Quota-State/Used/Limit/Remaining/Reset`; `GET /agent/quota` trả hạn mức của chính người gọi. Mã lỗi khi hết: **HTTP 402** `{"error":"quota_exceeded",…}` (bản ứng dụng cũ hiện nguyên thông báo này).
+- Ứng dụng dùng hạn mức này để **chặn một lượt quá tốn** (`packages/core/src/session.ts`, `tokenGuard`): một lượt dùng tới 25% hạn mức ngày thì báo người dùng và nhắc mô hình làm cho xong; tới 50% thì dừng, tóm tắt, chờ người dùng gõ "tiếp tục". Không biết hạn mức hoặc không giới hạn: chỉ nhắc khi một lượt quá 2 triệu token. Đây là chốt phía máy khách cho đỡ phí, không thay cho hạn mức ở máy chủ.
 
 ## Quản trị (chạy trên máy 220)
 ```bash
