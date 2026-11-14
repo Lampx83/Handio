@@ -26,6 +26,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 - **Một lượt làm việc không còn âm thầm ăn hết hạn mức token trong ngày**: lượt dùng tới 1/4 hạn mức thì bạn được báo và agent được nhắc làm cho xong phần chính; tới một nửa thì agent dừng, tóm tắt đã làm gì, còn gì, và bạn gõ "tiếp tục" nếu muốn làm tiếp.
 
 ### Sửa
+- **Đọc nhiều tài liệu tiếng Việt dài không còn làm máy chủ từ chối giữa chừng** (rõ nhất ở tab Design): ứng dụng tính số token sát thực tế hơn, tự tóm tắt hội thoại trước khi đầy thay vì gửi đi rồi bị từ chối; nếu vẫn bị từ chối mà máy chủ cho biết số token thật thì gửi lại ngay, không phải tóm tắt.
 - **Sửa PowerPoint ít báo "không tìm thấy" hơn**: agent chép cả tiêu đề kèm gạch đầu dòng, hoặc cả một dòng bảng, vẫn sửa đúng chỗ.
 - **Sửa PowerPoint không còn để sót nửa câu cũ** khi agent viết tắt câu dài bằng dấu "…".
 - **Tab Code bản web chạy thử được nhiều hơn**: có `assert`, đọc được tệp JSON và liệt kê tệp; khi vướng giới hạn, agent được chỉ đúng cách làm thay vì được khuyên dùng `bash` (bản web không có).

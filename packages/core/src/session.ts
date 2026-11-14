@@ -530,6 +530,18 @@ export class Session {
   }
 
   cachedTokens = 0;
+  /**
+   * Ký tự/token của phần MỚI thêm vào giữa hai lần gọi (kết quả công cụ, tài liệu, câu trả lời). Đo từ dữ liệu thật: ~2,6–2,9, thấp hơn hẳn
+   * tỉ lệ trung bình cả lời nhắc (tiếng Anh + lược đồ công cụ) nên dùng tỉ lệ chung sẽ tính thiếu token và xin max_tokens quá tay → máy chủ từ chối.
+   * Bắt đầu thận trọng, hiệu chỉnh theo token thật của từng lần gọi.
+   */
+  deltaCharsPerToken = 2.5;
+  /** Giới hạn ngữ cảnh thật máy chủ báo trong lỗi 400 (0 = chưa biết); nhỏ hơn cài đặt thì dùng số này. */
+  serverCtx = 0;
+  ctxLimit(): number {
+    const c = this.o.getSettings().contextTokens || 32768;
+    return this.serverCtx > 0 && this.serverCtx < c ? this.serverCtx : c;
+  }
 
   track(usage: { prompt_tokens?: number; completion_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } }, chars: number): void {
     this.calls++;
@@ -876,7 +888,7 @@ export class Session {
 
   /** /context: ngữ cảnh đang dùng vào việc gì (ước lượng, hiệu chỉnh theo số token thật của lần gọi gần nhất). */
   private contextReport(): string {
-    const limit = this.o.getSettings().contextTokens;
+    const limit = this.ctxLimit();
     const sysAll = this.systemPrompt(null, 0).length;
     const base = brandText(PROFILES[this.profile].systemBase).length;
     const mem = this.memory.reduce((n, m) => n + m.text.length, 0);
@@ -920,11 +932,11 @@ export class Session {
   }
 
   contextPct(): number {
-    return Math.min(99, Math.floor((100 * this.main.estimateTokens()) / this.o.getSettings().contextTokens));
+    return Math.min(99, Math.floor((100 * this.main.estimateTokens()) / this.ctxLimit()));
   }
   /** Cửa sổ ngữ cảnh đang dùng vào việc gì (token ước lượng; tổng khớp thước ngữ cảnh, chia theo tỉ lệ ký tự). */
   contextBreakdown(): { used: number; limit: number; parts: { name: string; tokens: number }[] } {
-    const limit = this.o.getSettings().contextTokens;
+    const limit = this.ctxLimit();
     const used = this.main.estimateTokens();
     const mem = this.memory.reduce((n, m) => n + m.text.length, 0);
     const sysAll = this.systemPrompt(null, 0).length;
@@ -980,8 +992,11 @@ export class Agent {
   /** Neo ước lượng: số token THẬT của lần gọi gần nhất (usage.prompt_tokens) và số ký tự đã gửi lúc đó. */
   private anchor: { tokens: number; chars: number } | null = null;
 
+  /** Ký tự lược đồ công cụ của lần gọi gần nhất của tác tử này (tác tử phụ có bộ công cụ riêng). */
+  private toolChars = 0;
+
   private promptChars(): number {
-    const tools = this.depth === 0 ? this.s.toolsChars : 0;
+    const tools = this.depth === 0 ? this.s.toolsChars : this.toolChars;
     return this.s.systemPrompt(this.def, this.depth).length + JSON.stringify(this.messages).length + tools;
   }
 
@@ -991,11 +1006,20 @@ export class Agent {
    */
   estimateTokens(): number {
     const chars = this.promptChars();
-    if (this.depth === 0 && this.anchor) {
-      const est = this.anchor.tokens + (chars - this.anchor.chars) / this.s.charsPerToken;
+    if (this.anchor) {
+      const d = chars - this.anchor.chars;
+      // phần thêm vào quy đổi bằng tỉ lệ của nội dung mới; phần bớt đi (lược, tóm tắt) quy đổi thận trọng (bớt ít token hơn)
+      const est = this.anchor.tokens + d / (d >= 0 ? this.s.deltaCharsPerToken : Math.max(this.s.charsPerToken, this.s.deltaCharsPerToken));
       return Math.max(Math.floor(chars / (this.s.charsPerToken * 2)), Math.floor(est));
     }
     return Math.floor(chars / this.s.charsPerToken);
+  }
+
+  /** Biên sai số của ước lượng: 15% phần mới thêm từ lần gọi gần nhất (10% cả lời nhắc nếu chưa gọi lần nào). */
+  private estimateSlack(): number {
+    if (!this.anchor) return Math.ceil(0.1 * this.estimateTokens());
+    const d = this.promptChars() - this.anchor.chars;
+    return d > 0 ? Math.ceil((0.15 * d) / this.s.deltaCharsPerToken) : 0;
   }
 
   pruneToolResults(keepLast = 4): number {
@@ -1010,7 +1034,7 @@ export class Agent {
     for (const m of this.messages) for (const tc of m.role === "assistant" ? m.tool_calls ?? [] : []) { nameOf.set(tc.id, tc.function.name); argsOf.set(tc.id, tc.function.arguments); }
     const protectedIdx = new Set<number>();
     // ngân sách theo cửa sổ ngữ cảnh: tối đa ~1/4 cửa sổ dành cho tệp đang làm việc (còn lại cho lời nhắc, công cụ, lịch sử)
-    let budget = Math.min(READ_KEEP_CHARS, Math.floor(this.s.o.getSettings().contextTokens * this.s.charsPerToken * 0.25));
+    let budget = Math.min(READ_KEEP_CHARS, Math.floor(this.s.ctxLimit() * this.s.charsPerToken * 0.25));
     const seenPath = new Set<string>();
     for (const i of [...idx].reverse()) {
       const m = this.messages[i];
@@ -1194,14 +1218,14 @@ export class Agent {
   }
 
   private async manageContext(): Promise<void> {
-    const limit = this.s.o.getSettings().contextTokens;
+    const limit = this.s.ctxLimit();
     if (this.estimateTokens() > 0.45 * limit && this.pruneToolResults() && !this.pruneNoted) {
       this.pruneNoted = true; // một lần mỗi lượt: bài thử thật phát thông báo này ~20 lần liên tiếp
       this.s.emit({ type: "notice", level: "info", text: "Đã lược bớt kết quả công cụ cũ để tiết kiệm ngữ cảnh." });
     }
     const used = this.estimateTokens();
     // quá 75% cửa sổ, hoặc còn dưới ~3k token cho câu trả lời (lời gọi công cụ dài sẽ bị cắt giữa chừng): tóm tắt phần cũ trước
-    if (used > 0.75 * limit || limit - used - 600 < 3000) await this.compact("", true);
+    if (used > 0.75 * limit || limit - used - 600 - this.estimateSlack() < 3000) await this.compact("", true);
   }
 
   private transcript(maxChars = 14000): string {
@@ -1567,12 +1591,12 @@ export class Agent {
    */
   private outputBudget(system: string, tools: ToolSchema[]): number {
     const st = this.s.o.getSettings();
-    const ctx = st.contextTokens || 32768;
+    const ctx = this.s.ctxLimit();
     // cùng cách tính với thước ngữ cảnh (đã gồm lược đồ công cụ, neo theo token thật): trước đây cộng đôi phần công cụ nên "room" tụt
     // về âm ở ~22k token thật và ngân sách rơi xuống sàn 1024 → lời gọi tạo tệp dài luôn bị cắt giữa chừng
     void system; void tools;
     const used = this.estimateTokens();
-    const room = ctx - used - 600;
+    const room = ctx - used - 600 - this.estimateSlack();
     const want = st.maxOutputTokens && st.maxOutputTokens !== 4096 ? st.maxOutputTokens : 12288;
     return Math.max(Math.min(2048, want), Math.min(want, room, 16384)); // sàn 2048, trừ khi người dùng tự đặt nhỏ hơn
   }
@@ -1581,7 +1605,8 @@ export class Agent {
     const s = this.s;
     if (!noTools && this.depth === 0 && !this.def) s.refreshGroups(this.messages);
     const tools: ToolSchema[] = noTools ? [] : s.toolsFor(this.def, this.depth).map((t) => ({ type: "function", function: { name: t.name, description: t.description, parameters: t.parameters } }));
-    if (this.depth === 0 && !this.def) s.toolsChars = JSON.stringify(tools).length;
+    this.toolChars = JSON.stringify(tools).length;
+    if (this.depth === 0 && !this.def) s.toolsChars = this.toolChars;
     const system = s.systemPrompt(this.def, this.depth);
     const settings = s.o.getSettings();
     const notify = (text: string) => s.emit({ type: "notice", level: "warn", text });
@@ -1606,13 +1631,16 @@ export class Agent {
       }
     };
     try {
-    for (let attempt = 0; attempt < 2 && !resp; attempt++) {
+    let budgetFix = 0;
+    let fixed = false;
+    let compacted = false;
+    for (let attempt = 0; attempt < 3 && !resp; attempt++) {
       try {
         resp = await s.o.llm.chat([{ role: "system", content: system }, ...this.messages], {
           tools,
           signal: guard.signal,
           thinking: think,
-          maxTokens: this.outputBudget(system, tools),
+          maxTokens: budgetFix || this.outputBudget(system, tools),
           notify,
           onContent: (t) => {
             watchText(t);
@@ -1626,11 +1654,24 @@ export class Agent {
           resp = { content: streamed.slice(0, repeatCut).trim(), reasoning: "", toolCalls: [], usage: {}, finish: "repeat" } as ChatResult;
           break;
         }
-        if (e instanceof LlmError && e.kind === "context" && attempt === 0) {
-          s.emit({ type: "notice", level: "warn", text: "Ngữ cảnh đầy, đang rút gọn rồi thử lại…" });
-          this.pruneToolResults(1);
-          if (!(await this.compact("", this.messages[this.messages.length - 1]?.role === "tool"))) throw e;
-          continue;
+        if (e instanceof LlmError && e.kind === "context") {
+          const d = e.detail ?? {};
+          if (d.limit && d.limit < (settings.contextTokens || 32768)) s.serverCtx = d.limit;
+          if (d.prompt) this.anchor = { tokens: d.prompt, chars: this.promptChars() }; // số token thật: ước lượng lần sau khớp
+          // lời nhắc vẫn vừa, chỉ max_tokens xin quá tay: thử lại ngay với đúng phần còn trống, không cần tóm tắt (mất chi tiết)
+          if (!fixed && d.limit && d.prompt && d.limit - d.prompt - 64 >= 1024) {
+            fixed = true;
+            budgetFix = d.limit - d.prompt - 64;
+            continue;
+          }
+          if (!compacted) {
+            compacted = true;
+            budgetFix = 0;
+            s.emit({ type: "notice", level: "warn", text: "Ngữ cảnh đầy, đang rút gọn rồi thử lại…" });
+            this.pruneToolResults(1);
+            if (!(await this.compact("", this.messages[this.messages.length - 1]?.role === "tool"))) throw e;
+            continue;
+          }
         }
         throw e;
       }
@@ -1640,9 +1681,18 @@ export class Agent {
     }
     if (!resp) throw new LlmError("Không gọi được mô hình.");
     if (repeatCut >= 0 && resp.finish !== "repeat" && !signal?.aborted) resp = { ...resp, content: streamed.slice(0, repeatCut).trim(), toolCalls: [], finish: "repeat" };
-    const sentChars = system.length + JSON.stringify(this.messages).length + (this.depth === 0 ? s.toolsChars : 0);
+    const sentChars = system.length + JSON.stringify(this.messages).length + this.toolChars;
     s.track(resp.usage, sentChars);
-    if (this.depth === 0 && (resp.usage.prompt_tokens ?? 0) > 200) this.anchor = { tokens: resp.usage.prompt_tokens!, chars: sentChars };
+    const pt = resp.usage.prompt_tokens ?? 0;
+    if (pt > 200) {
+      // hiệu chỉnh tỉ lệ của phần mới: token thật tăng bao nhiêu so với lần trước, ứng với bao nhiêu ký tự thêm vào
+      if (this.anchor) {
+        const dc = sentChars - this.anchor.chars;
+        const dt = pt - this.anchor.tokens;
+        if (dc > 800 && dt > 150) s.deltaCharsPerToken = Math.max(1.6, Math.min(4, 0.6 * s.deltaCharsPerToken + (0.4 * dc) / dt));
+      }
+      this.anchor = { tokens: pt, chars: sentChars };
+    }
     if (this.depth === 0) s.emitUsage(); // sau MỖI lần gọi mô hình: thước ngữ cảnh cập nhật ngay và chẩn đoán biết đỉnh token của từng lượt
     s.emitUsage();
     return resp;
