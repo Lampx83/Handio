@@ -75,9 +75,20 @@ export interface ChatOptions {
 
 export type LlmErrorKind = "context" | "auth" | "rate" | "server" | "network" | "abort" | "insecure" | "quota" | "";
 export class LlmError extends Error {
-  constructor(message: string, public status = 0, public kind: LlmErrorKind = "", /** "login_required": máy chủ yêu cầu đăng nhập (chưa đăng nhập hoặc phiên hết hạn): giao diện hiện nút Đăng nhập lại. */ public code = "") {
+  constructor(message: string, public status = 0, public kind: LlmErrorKind = "", /** "login_required": máy chủ yêu cầu đăng nhập (chưa đăng nhập hoặc phiên hết hạn): giao diện hiện nút Đăng nhập lại. */ public code = "", /** Lỗi tràn ngữ cảnh: giới hạn thật và số token lời nhắc thật máy chủ báo (nếu đọc được). */ public detail: { limit?: number; prompt?: number } = {}) {
     super(message);
   }
+}
+
+/**
+ * Đọc giới hạn ngữ cảnh và số token lời nhắc THẬT từ thông báo lỗi 400 của vLLM (các phiên bản viết khác nhau).
+ * Biết hai số này thì sửa được max_tokens ngay, khỏi phải tóm tắt hội thoại. Không đọc được thì trả {} (không đoán).
+ */
+export function contextNumbers(text: string): { limit?: number; prompt?: number } {
+  const t = String(text ?? "");
+  const limit = /maximum context length is (\d+)/i.exec(t)?.[1];
+  const prompt = /(\d+) in the messages/i.exec(t)?.[1] ?? /request has (\d+) input tokens/i.exec(t)?.[1] ?? /prompt contains (?:at least )?(\d+) input tokens/i.exec(t)?.[1];
+  return { ...(limit ? { limit: Number(limit) } : {}), ...(prompt ? { prompt: Number(prompt) } : {}) };
 }
 
 export const NO_MODEL_ALLOWED = "Tài khoản của bạn chưa được dùng mô hình nào, liên hệ quản trị viên.";
@@ -87,7 +98,7 @@ const notModelServer = () => new LlmError("Địa chỉ API không trả về d�
 function friendly(status: number, text: string): LlmError {
   const low = (text || "").toLowerCase();
   if (status === 400 && (low.includes("context length") || low.includes("maximum context") || low.includes("too long")))
-    return new LlmError("Ngữ cảnh vượt giới hạn của mô hình.", status, "context");
+    return new LlmError("Ngữ cảnh vượt giới hạn của mô hình.", status, "context", "", contextNumbers(text));
   if (status === 402 && !low.includes("quota_exceeded")) return new LlmError("Hạn mức sử dụng đã hết hoặc tài khoản cần nạp thêm (máy chủ trả 402).", status, "quota");
   if (status === 402) {
     // tab_quota_exceeded: hết hạn mức riêng của tab đang dùng (các tab khác vẫn dùng được)

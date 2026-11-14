@@ -6,7 +6,7 @@ export type Step = { text?: string; calls?: { name: string; args: unknown; /** c
 export class FakeLlm {
   calls: { messages: ChatMessage[]; opts: ChatOptions }[] = [];
   private i = 0;
-  constructor(private script: Step[] | ((messages: ChatMessage[], n: number) => Step)) {}
+  constructor(private script: Step[] | ((messages: ChatMessage[], n: number, opts: ChatOptions) => Step)) {}
   async models() {
     return ["fake-model"];
   }
@@ -16,7 +16,7 @@ export class FakeLlm {
   async chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<ChatResult> {
     this.calls.push({ messages: JSON.parse(JSON.stringify(messages)), opts });
     if (opts.signal?.aborted) throw Object.assign(new Error("abort"), { kind: "abort" });
-    const step = typeof this.script === "function" ? this.script(messages, this.i++) : this.script[Math.min(this.i++, this.script.length - 1)];
+    const step = typeof this.script === "function" ? this.script(messages, this.i++, opts) : this.script[Math.min(this.i++, this.script.length - 1)];
     if (step.text) opts.onContent?.(step.text);
     return {
       content: step.text ?? "",
