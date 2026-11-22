@@ -539,7 +539,7 @@ def release_info(rel, versions, users30):
 
 DENY_CODE_RE = re.compile(r"^[a-z_]{1,32}$")
 DENY_VI = {"quota_exceeded": "Hết hạn mức ngày", "tab_quota_exceeded": "Hết hạn mức của tab", "tab_not_allowed": "Tab không được phép",
-           "tab_required": "Thiếu tab (ứng dụng cũ)", "model_not_allowed": "Mô hình không được phép", "busy": "Quá nhiều yêu cầu đồng thời"}
+           "tab_required": "Thiếu tab (ứng dụng cũ)", "client_outdated": "Ứng dụng bản cũ (đã báo cập nhật)", "model_not_allowed": "Mô hình không được phép", "busy": "Quá nhiều yêu cầu đồng thời"}
 
 
 def read_quota(db_path, now, ndays=DAYS):

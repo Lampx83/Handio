@@ -53,7 +53,7 @@ MAX_GROUPS = 200
 MAX_MEMBERS = 20000                                       # tổng số thành viên của mọi nhóm
 MAX_TOKENS = 10 ** 12
 # mã từ chối được đếm (bảng denials): danh sách cố định, không bao giờ ghi chuỗi tuỳ ý
-DENY_CODES = ("tab_not_allowed", "tab_required", "model_not_allowed", "quota_exceeded", "tab_quota_exceeded", "busy")
+DENY_CODES = ("tab_not_allowed", "tab_required", "model_not_allowed", "quota_exceeded", "tab_quota_exceeded", "busy", "client_outdated")
 CHAT_PATH = "/vllm/v1/chat/completions"
 MODELS_PATH = "/vllm/v1/models"
 MAX_MODELS_BODY = 1024 * 1024          # danh sách mô hình thật chỉ vài KB
@@ -73,6 +73,7 @@ DEFAULT_CONFIG = {
     "tabs": {},                             # {"bậc": ["work","code","design"]}: tab được dùng theo bậc; bậc không có mặt = mọi tab. [] = không tab nào
     "models": {},                           # {"bậc": ["tên mô hình"]}: mô hình được dùng; bậc không có mặt = mọi mô hình. [] = không mô hình nào
     "tab_limits": {},                       # {"bậc": {"code": 1000000}}: hạn mức token/ngày riêng của từng tab (ngoài hạn mức chung)
+    "block_old_clients": True,              # ứng dụng không gửi X-Neu-Tab (trước 0.8.21) → 426 kèm lời nhắn cập nhật; không áp cho quản trị viên, key riêng, chế độ observe
     # GHI LẠI NỘI DUNG hội thoại (yêu cầu gửi lên + lời mô hình trả) của CHÍNH các tài khoản liệt kê ở đây, để quản trị nghiên cứu.
     # Mặc định TẮT (danh sách rỗng). Chỉ dùng cho tài khoản thử nghiệm của nhóm phát triển; người dùng thật phải được báo trước.
     "capture": {"users": [], "keep_days": 90},
@@ -108,6 +109,8 @@ def load_config(path):
             for k in ("mode", "default_tier"):
                 if isinstance(raw.get(k), str):
                     cfg[k] = raw[k]
+            if isinstance(raw.get("block_old_clients"), bool):    # giá trị lạ: giữ mặc định (bật), không tắt nhầm
+                cfg["block_old_clients"] = raw["block_old_clients"]
             for k in ("grace_pct", "warn_pct", "max_concurrent"):
                 if isinstance(raw.get(k), (int, float)) and not isinstance(raw.get(k), bool) and raw[k] >= 0:
                     cfg[k] = raw[k]
@@ -313,6 +316,9 @@ def tab_limits_for(cfg, ident, admins, own_key=False, groups=None):
     if own_key or ident in admins:
         return {}
     return dict(_setting(cfg, ident, groups, "tab_limits") or {})
+
+
+OUTDATED_MSG = "Bản ứng dụng này đã quá cũ nên không dùng được nữa. Hãy tải bản mới tại https://ai.neu.edu.vn/agent/ (mục Tải về) rồi cài đè lên bản đang dùng."
 
 
 def tab_denial(cfg, tabs, declared, need_tab=False):
@@ -866,6 +872,11 @@ class Handler(BaseHTTPRequestHandler):
         day, uid = vn_day(now), q["uid"]
         enforce = cfg["mode"] == "enforce"
         tab = (self.headers.get("X-Neu-Tab") or "").strip().lower()
+        # bản ứng dụng cũ (không khai tab): báo cập nhật bằng 426 TRƯỚC mọi kiểm tra khác. Mã 426 + thân JSON để bản cũ hiện nguyên văn "Lỗi 426: {lời nhắn…}"
+        # (mã 403/402 sẽ bị bản cũ diễn giải sai thành "key không được dùng"/"hết hạn mức"). Lời nhắn đứng đầu thân vì bản cũ chỉ in 300 ký tự đầu.
+        if enforce and cfg["block_old_clients"] and not tab and not own and ident not in c.admins():
+            self._deny(c, day, "client_outdated")
+            return self._json(426, {"message": OUTDATED_MSG, "error": "client_outdated"})
         # phân quyền theo nhóm (tab, mô hình): chặn TRƯỚC khi tính đồng thời/hạn mức hay chuyển tiếp; chỉ đếm số lần theo mã lỗi (không mã người dùng, không email, không nội dung)
         deny = tab_denial(cfg, q["tabs"], tab, need_tab=enforce and bool(q["tab_quota"]))
         if deny:
