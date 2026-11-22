@@ -1,6 +1,6 @@
 import "@neu/agent-ui/style.css";
 import { brandName, buildWorkSamples, createMultiProject, KvChatStore, setBrandName, KvProjectHost, LocalController, MemoryEnv, SAMPLE_DESIGN, SAMPLE_PROJECT, type AgentController, type Env, type Profile, type ProjectInfo, type RawPack, type Settings, type SettingsStore, type TrustStore } from "@neu/agent-core";
-import { mountShell } from "@neu/agent-ui";
+import { mountShell, initFeedbackHub } from "@neu/agent-ui";
 import { autosave, restore, wipe } from "./persist";
 import { runJsSandbox } from "./sandbox";
 import { shrinkImageBrowser } from "./image";
@@ -206,6 +206,8 @@ async function main(): Promise<void> {
   ls.set("neu.nosample.v1", "1");
   mountShell(document.getElementById("root")!, controllers, { productName: brandName(), downloadsBase: new URL("download/", document.baseURI).href, account: await currentAccount(), install: { available: () => !!installEvent, run: () => void installEvent?.prompt() } });
   (window as unknown as { __neu: unknown }).__neu = { controllers };
+  // Feedback Hub (mặc định tắt, máy chủ quyết định): đủ thì nút "Góp ý" mở widget của hub, không thì hộp góp ý cũ.
+  if (location.protocol === "https:") void initFeedbackHub(new URL("feedback-token", document.baseURI).href, () => ({ platform: "web", version: typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "" }));
 }
 
 void main();

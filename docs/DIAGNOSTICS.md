@@ -152,7 +152,7 @@ Chẩn đoán KHÔNG chứa nội dung (ngoại lệ riêng, mặc định tắt
 | Ai xem | chỉ quản trị viên (`admins.txt`) ở `/agent/admin/feedback`: lọc theo trạng thái/loại, tìm chữ, ghi chú, đặt trạng thái (Mới/Đã xem/Sẽ làm/Đã xong/Không làm), xoá, tải CSV |
 | Lưu bao lâu | cho tới khi quản trị viên xoá (không tự xoá); sao lưu theo `/var/lib/neu-agent` |
 
-Mã: `deploy/220/diag/feedback.py` (kho + kiểm tra), route trong `collector.py`, trang `feedback.html`/`feedback.js`, kiểm thử `test_feedback.py`; phía ứng dụng `packages/core/src/feedback.ts`, `LocalController.sendFeedback`, `packages/ui/src/feedback-ui.ts`.
+Mã: `deploy/220/diag/feedback.py` (kho + kiểm tra), route trong `collector.py`, trang `feedback.html`/`feedback.js`, kiểm thử `test_feedback.py`; phía ứng dụng `packages/core/src/feedback.ts`, `LocalController.sendFeedback`, `packages/ui/src/feedback-ui.ts`. Dùng hộp góp ý dùng chung thay cho trang này (bản web, tuỳ chọn): [FEEDBACKHUB.md](FEEDBACKHUB.md).
 
 ## Hồ sơ công việc (0.8.16)
 

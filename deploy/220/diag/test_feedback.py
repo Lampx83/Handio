@@ -1,5 +1,7 @@
 """Kiểm thử kho góp ý (feedback.py) và các route của bộ thu (POST /feedback, /admin/api/feedback, trang /admin/feedback)."""
 import http.client
+import hashlib
+import hmac
 import json
 import os
 import shutil
@@ -166,3 +168,75 @@ class Routes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HubToken(unittest.TestCase):
+    """Feedback Hub: mặc định tắt; khi bật, máy chủ ký token HS256 ngắn hạn cho người đã đăng nhập, khoá ký không lộ ra ngoài."""
+    SECRET = "khoa-ky-thu-nghiem-0123456789"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(dir="/tmp")
+        d = cls.tmp
+        cls.admins = os.path.join(d, "admins.txt")
+        with open(cls.admins, "w") as f:
+            f.write("Admin@NEU.edu.vn\n")
+        cls.on = cls._serve(d, "on", hub=FB.hub_config("https://ai.test/feedbackhub/", "", cls.SECRET))
+        cls.off = cls._serve(d, "off", hub=None)
+
+    @classmethod
+    def _serve(cls, d, name, hub):
+        cfg = C.Config(diag_dir=os.path.join(d, name), secret=SECRET, reports_dir=os.path.join(d, "r"), admins_file=cls.admins,
+                       web_dir=d, feedback=FB.FeedbackDB(os.path.join(d, name + ".db")), hub=hub)
+        srv = C.make_server(cfg, "127.0.0.1", 0)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        return srv
+
+    @classmethod
+    def tearDownClass(cls):
+        for s in (cls.on, cls.off):
+            s.shutdown()
+            s.server_close()
+        shutil.rmtree(cls.tmp, True)
+
+    def get(self, srv, email=None):
+        c = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=15)
+        c.request("GET", "/feedback-token", headers={"X-User-Email": email} if email else {})
+        r = c.getresponse()
+        data = r.read()
+        c.close()
+        return r.status, r.getheader("Cache-Control"), data
+
+    @staticmethod
+    def claims(token):
+        import base64
+        pad = lambda x: x + "=" * (-len(x) % 4)  # noqa: E731
+        return json.loads(base64.urlsafe_b64decode(pad(token.split(".")[1])))
+
+    def test_off_by_default_and_needs_login(self):
+        self.assertEqual(self.get(self.off, "sv1@st.neu.edu.vn")[0], 404)
+        self.assertEqual(self.get(self.on)[0], 401)
+        self.assertIsNone(FB.hub_config("", "", self.SECRET))
+        self.assertIsNone(FB.hub_config("https://hub.test", "", ""))
+        self.assertIsNone(FB.hub_config("javascript:alert(1)", "", self.SECRET))
+        self.assertIsNone(FB.hub_config("https://u:p@hub.test", "", self.SECRET))
+        self.assertIsNone(FB.hub_config("https://hub.test", "Bad Slug!", self.SECRET))
+
+    def test_token_is_signed_short_lived_and_secret_never_returned(self):
+        st, cc, body = self.get(self.on, "SV1@st.neu.edu.vn")
+        self.assertEqual(st, 200, body)
+        self.assertEqual(cc, "no-store")
+        j = json.loads(body)
+        self.assertEqual((j["hub"], j["project"]), ("https://ai.test/feedbackhub", "handio"))
+        self.assertNotIn(self.SECRET, body.decode())
+        head, payload, sig = j["token"].split(".")
+        want = FB._b64(hmac.new(self.SECRET.encode(), ("%s.%s" % (head, payload)).encode(), hashlib.sha256).digest())
+        self.assertEqual(sig, want)
+        cl = self.claims(j["token"])
+        self.assertEqual((cl["prj"], cl["aud"], cl["role"], cl["uid"], cl["email"]), ("handio", "feedback-hub", "USER", "SV1@st.neu.edu.vn", "SV1@st.neu.edu.vn"))
+        self.assertEqual(cl["exp"] - cl["iat"], 600)
+
+    def test_admin_role_comes_from_admin_list_and_username_has_no_email(self):
+        self.assertEqual(self.claims(json.loads(self.get(self.on, "admin@neu.edu.vn")[2])["token"])["role"], "ADMIN")
+        cl = self.claims(json.loads(self.get(self.on, "khach01")[2])["token"])
+        self.assertEqual((cl["role"], cl["uid"], "email" in cl), ("USER", "khach01", False))

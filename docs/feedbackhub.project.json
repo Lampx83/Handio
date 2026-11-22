@@ -1,0 +1,27 @@
+{
+  "slug": "handio",
+  "name": "NEU Agent (Handio)",
+  "allowedOrigins": ["https://ai.neu.edu.vn"],
+  "submitRoles": [],
+  "adminRoles": ["ADMIN"],
+  "anonymousSubmit": false,
+  "mode": "collect",
+  "deliver": "branch",
+  "types": [
+    { "id": "bug", "label": "Báo lỗi", "kind": "bug" },
+    { "id": "feature", "label": "Đề xuất tính năng", "kind": "function" },
+    { "id": "praise", "label": "Điều bạn thấy hữu ích", "kind": "other" },
+    { "id": "other", "label": "Khác", "kind": "other" }
+  ],
+  "features": {
+    "scopePicker": false,
+    "elementPicker": false,
+    "voice": false,
+    "attachments": true,
+    "planApproval": false,
+    "successCriteria": false,
+    "screenshot": "off",
+    "models": []
+  },
+  "theme": { "primary": "#1665d8", "primaryText": "#ffffff", "position": "bottom-right", "label": "Góp ý", "locale": "vi" }
+}
