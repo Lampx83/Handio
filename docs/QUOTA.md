@@ -63,6 +63,15 @@ Cấu hình ở `/etc/neu-agent/quota.json`: `"tabs": {"student": ["work", "desi
 - **Chặn ở máy chủ:** ứng dụng khai tab đang dùng ở tiêu đề `X-Neu-Tab`; với bậc bị giới hạn, cổng trả **HTTP 403** (`tab_not_allowed`, hoặc `tab_required` nếu thiếu/sai tên tab — ví dụ ứng dụng bản cũ) **trước** khi tính hạn mức hay chuyển tới mô hình; không ghi gì về người dùng, chỉ tăng bộ đếm theo mã lỗi (xem dưới). Giao diện chỉ ẩn nút tab và báo sớm cho đỡ tốn một lượt gọi (`GET /agent/quota` có thêm `tabs`).
 - **Không áp cho:** quản trị viên (`admins.txt`), người tự dán key riêng, và chế độ `observe` (chỉ đếm, không chặn).
 - Bậc bị giới hạn mà dùng **ứng dụng bản cũ** (chưa gửi `X-Neu-Tab`) sẽ bị từ chối cho đến khi cập nhật: chỉ ảnh hưởng nhóm đã được cấu hình.
+
+### Cổng báo bản cũ (`block_old_clients`)
+
+Ứng dụng trước **0.8.21** không gửi `X-Neu-Tab`. Bản cũ như vậy dễ lỗi âm thầm (ví dụ bản Windows 0.1.0: đọc/sửa tệp hỏng, agent chạy lệnh vòng vòng đến chạm giới hạn bước, tốn token vô ích) và không tự biết mình cũ. Với yêu cầu chat **không có (hoặc để trống) `X-Neu-Tab`**, cổng trả **HTTP 426** trước mọi kiểm tra khác, thân là JSON có lời nhắn đứng đầu: *"Bản ứng dụng này đã quá cũ nên không dùng được nữa. Hãy tải bản mới tại https://ai.neu.edu.vn/agent/ …"*. Dùng 426 vì bản cũ hiện nguyên văn `Lỗi 426: {lời nhắn…}` (nó chỉ in 300 ký tự đầu), còn 403/402 sẽ bị nó diễn giải sai thành "key không được dùng"/"hết hạn mức".
+
+- **Mặc định BẬT** (`"block_old_clients": true`); tắt bằng `"block_old_clients": false` trong `/etc/neu-agent/quota.json` (giá trị khác kiểu boolean bị bỏ qua: giữ bật).
+- **Không áp cho:** quản trị viên (`admins.txt`, nên bộ đo/thử nghiệm của nhóm phát triển không bị chặn), người tự dán key riêng, chế độ `observe`. Chỉ chặn `POST …/chat/completions`; `/quota` và danh sách mô hình vẫn trả lời bản cũ.
+- Bị chặn thì **không tới mô hình, không tính hạn mức, không ghi gì về người dùng**; chỉ tăng bộ đếm `client_outdated`, trang quản trị hiện ở "Yêu cầu bị cổng từ chối theo lý do" ("Ứng dụng bản cũ"). Số này cho biết còn bao nhiêu lần gọi từ bản cũ.
+- **Hệ quả cần biết:** mức tối thiểu thực tế của cổng là 0.8.21 (bản đầu có `X-Neu-Tab`), cao hơn `NEU_MIN_VERSION` 0.8.10 của bộ cập nhật. Muốn so đúng số phiên bản, ứng dụng cần gửi thêm tiêu đề phiên bản (chưa làm).
 - **Giới hạn thật:** agent chạy ở phía máy khách, nên tab là do ứng dụng khai. Người am hiểu kỹ thuật có thể tự gửi tiêu đề khác để dùng tab ngoài danh sách. Đây là cơ chế **phân nhóm sử dụng** chứ không phải rào chắn chống kẻ tấn công; muốn chặn tuyệt đối cần cấp key mô hình riêng theo nhóm. Khi cổng hạn mức chết, nginx chuyển thẳng tới Kong nên phân quyền tab cũng tạm không áp dụng (giống hạn mức).
 
 ## Nhóm tuỳ tạo (lớp học, nhóm giảng viên…)
@@ -110,7 +119,7 @@ Hết hạn mức của tab (vẫn có vượt thêm `grace_pct`) thì yêu cầ
 
 ## Đếm số lần bị từ chối
 
-Mỗi lần cổng từ chối, bảng `denials` tăng một bộ đếm theo **(ngày, mã lỗi)**: `quota_exceeded`, `tab_quota_exceeded`, `tab_not_allowed`, `tab_required`, `model_not_allowed`, `busy`. **Không có mã người dùng, không có nhóm.** Trang quản trị (mục *Hạn mức token*) có bảng "Yêu cầu bị cổng từ chối theo lý do".
+Mỗi lần cổng từ chối, bảng `denials` tăng một bộ đếm theo **(ngày, mã lỗi)**: `quota_exceeded`, `tab_quota_exceeded`, `tab_not_allowed`, `tab_required`, `model_not_allowed`, `busy`, `client_outdated`. **Không có mã người dùng, không có nhóm.** Trang quản trị (mục *Hạn mức token*) có bảng "Yêu cầu bị cổng từ chối theo lý do".
 
 ## Trang quản trị: cấu hình theo bậc
 Trang `/agent/admin/quota` hiện cấu hình theo bậc (chỉ xem: hạn mức, tab, mô hình, hạn mức theo tab, miền email, chế độ). Cổng ghi bản xem này ra `/var/lib/neu-agent/quota/policy.json` mỗi lần nạp cấu hình (không có email; đặt riêng chỉ ghi số người). Đổi cấu hình theo bậc vẫn bằng `quota.sh` (tệp `/etc/neu-agent/quota.json` chỉ root đọc; trang quản trị không có quyền ghi hệ thống).

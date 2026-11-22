@@ -113,7 +113,7 @@ class GatewayCase(unittest.TestCase):
 
     def post(self, ident=SV, body=None, headers=None, path=Q.CHAT_PATH):
         c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
-        h = {"Content-Type": "application/json"}
+        h = {"Content-Type": "application/json", "X-Neu-Tab": "code"}   # ứng dụng hiện hành luôn khai tab; bản cũ truyền "X-Neu-Tab": ""
         if ident is not None:
             h["X-User-Email"] = ident
         h.update(headers or {})
@@ -269,9 +269,10 @@ class TabAccessTests(GatewayCase):
     """Phân quyền theo nhóm (bậc theo miền email): tab nào được dùng. Mặc định không cấu hình = mọi người dùng mọi tab."""
 
     def tab_post(self, ident, tab=None, **kw):
-        return self.post(ident, headers={"X-Neu-Tab": tab} if tab is not None else None, **kw)
+        return self.post(ident, headers={"X-Neu-Tab": tab if tab is not None else ""}, **kw)
 
-    def test_default_has_no_restriction_and_old_clients_without_header_still_work(self):
+    def test_default_has_no_restriction_and_old_clients_without_header_work_when_gate_is_off(self):
+        self.write_cfg({"tiers": {"student": 1_000_000, "staff": 10_000_000}, "block_old_clients": False})
         for who in (SV, GV, "khach01"):
             self.assertEqual(json.loads(self.get("/quota", ident=who)[1])["tabs"], ["work", "code", "design"])
             self.assertEqual(self.tab_post(who)[0], 200)                  # bản ứng dụng cũ không gửi X-Neu-Tab
@@ -302,6 +303,8 @@ class TabAccessTests(GatewayCase):
             if bad == "CODE ":     # chữ hoa/khoảng trắng thừa được chuẩn hoá, vẫn là tab được phép
                 self.assertEqual(st, 200)
                 n += 1
+            elif bad in (None, ""):   # không khai tab = bản ứng dụng cũ: cổng báo bản cũ chặn trước (426)
+                self.assertEqual((st, json.loads(out)["error"]), (426, "client_outdated"), bad)
             else:
                 self.assertEqual((st, json.loads(out)["error"]), (403, "tab_required"), bad)
         self.assertEqual(len(self.up.requests), n)
@@ -376,7 +379,7 @@ class GroupTests(GatewayCase):
         return json.loads(self.get("/quota", ident=ident, **kw)[1])
 
     def chat(self, ident=SV, tab="work", model="m", **kw):
-        h = {"X-Neu-Tab": tab} if tab is not None else {}
+        h = {"X-Neu-Tab": tab if tab is not None else ""}
         h.update(kw.pop("headers", {}))
         body = {"messages": [{"role": "user", "content": "chào"}], "stream": True}
         if model is not None:
@@ -390,7 +393,8 @@ class GroupTests(GatewayCase):
     def test_no_groups_file_keeps_old_behavior(self):
         j = self.q()
         self.assertEqual((j["limit"], j["group"], j["tabs"], j["models"], j["tab_quota"]), (1_000_000, None, ["work", "code", "design"], None, {}))
-        self.assertEqual(self.chat(tab=None, model="bat-ky")[0], 200)          # ứng dụng cũ, mô hình bất kỳ: như trước
+        self.write_cfg({"tiers": {"student": 1_000_000, "staff": 10_000_000}, "block_old_clients": False})
+        self.assertEqual(self.chat(tab=None, model="bat-ky")[0], 200)          # ứng dụng cũ (cổng báo bản cũ tắt), mô hình bất kỳ: như trước
         self.assertFalse(os.path.exists(self.groups_path))
 
     def test_group_overrides_tier_for_limit_tabs_and_models(self):
@@ -527,7 +531,7 @@ class GroupTests(GatewayCase):
         self.assertEqual(h["x-quota-state"], "ok")                            # hạn mức chung vẫn còn
         self.assertEqual(len(self.up.requests), n)
         self.assertEqual(self.chat(tab="work")[0], 200)                       # tab khác vẫn dùng được
-        self.assertEqual(json.loads(self.chat(tab=None)[1])["error"], "tab_required")   # có hạn mức theo tab: phải khai tab
+        self.assertEqual(json.loads(self.chat(tab="khac")[1])["error"], "tab_required")   # có hạn mức theo tab: phải khai tab đúng tên
         self.assertEqual(self.row("select blocked from usage")[0], 0)         # không tính là "hết hạn mức ngày"
         self.op("create", "lop-a")
         self.op("add", "lop-a", idents=[SV])
@@ -540,7 +544,7 @@ class GroupTests(GatewayCase):
         self.write_cfg({"tiers": {"student": 1_000_000}, "tabs": {"student": ["work"]}, "models": {"student": ["m"]}})
         self.chat(tab="code")
         self.chat(tab="code")
-        self.chat(tab=None)
+        self.chat(tab="khac")
         self.chat(model="khac")
         self.store.add(Q.vn_day(T0), self.uid(SV), "student", 1_000_000, 2_000_000, 0)
         self.chat()
@@ -929,6 +933,58 @@ class ModelListTests(GatewayCase):
         self.assertEqual(self.used(SV), 0)
         with self.store.lock:
             self.assertEqual(self.store.db.execute("select count(*) from denials").fetchone()[0], 0)
+
+
+class OldClientGateTests(GatewayCase):
+    """Cổng báo bản cũ: ứng dụng trước 0.8.21 không gửi X-Neu-Tab. Thay vì chạy lỗi âm thầm (đọc/sửa tệp hỏng trên Windows, hết hạn mức vô ích),
+    cổng trả 426 kèm lời nhắn tiếng Việt mà bản cũ hiện nguyên văn (nó in 300 ký tự đầu của thân phản hồi)."""
+
+    OLD = {"X-Neu-Tab": ""}
+
+    def denials(self):
+        with self.store.lock:
+            return dict(self.store.db.execute("select code, n from denials").fetchall())
+
+    def test_old_client_gets_readable_426_and_costs_nothing(self):
+        for h in (self.OLD, {"X-Neu-Tab": "   "}):
+            st, out, hd = self.post(SV, headers=h)
+            self.assertEqual(st, 426)
+            text = out.decode("utf-8")
+            self.assertLessEqual(len(text), 300)                         # bản cũ chỉ hiện 300 ký tự đầu
+            self.assertTrue(text.startswith('{"message":"'), text)       # lời nhắn đứng trước để đọc được ngay
+            j = json.loads(text)
+            self.assertEqual(j["error"], "client_outdated")
+            self.assertIn("quá cũ", j["message"])
+            self.assertIn("https://ai.neu.edu.vn/agent/", j["message"])
+        self.assertEqual(len(self.up.requests), 0)                       # không tới mô hình
+        self.assertEqual(self.used(SV), 0)
+        self.assertEqual(self.denials(), {"client_outdated": 2})
+        self.assertEqual(self.store.db.execute("select count(*) from usage").fetchone()[0], 0)   # không để lại dòng nào về người dùng
+
+    def test_current_client_unaffected(self):
+        for tab in ("work", "code", "design"):
+            self.assertEqual(self.post(SV, headers={"X-Neu-Tab": tab})[0], 200)
+        self.assertEqual(self.denials(), {})
+
+    def test_exempt_admin_own_key_observe_and_switch_off(self):
+        self.assertEqual(self.post("admin@neu.edu.vn", headers=self.OLD)[0], 200)             # quản trị viên (chạy bộ đo, thử nghiệm)
+        self.assertEqual(self.post(SV, headers={**self.OLD, "X-Neu-Own-Key": "1"})[0], 200)   # tự dán key riêng
+        self.write_cfg({"tiers": {"student": 1_000_000}, "mode": "observe"})
+        self.assertEqual(self.post(SV, headers=self.OLD)[0], 200)                             # chế độ chỉ đếm không chặn
+        self.write_cfg({"tiers": {"student": 1_000_000}, "block_old_clients": False})
+        self.assertEqual(self.post(SV, headers=self.OLD)[0], 200)
+        self.assertEqual(self.denials(), {})
+
+    def test_other_endpoints_still_answer_old_clients(self):
+        self.assertEqual(self.get("/quota")[0], 200)                                          # ứng dụng cũ vẫn lấy được hạn mức/danh sách mô hình
+        self.assertEqual(self.get(Q.MODELS_PATH)[0], 200)
+
+    def test_config_flag_defaults_on_and_parses_booleans_only(self):
+        self.assertIs(Q.load_config("/không/có")["block_old_clients"], True)
+        self.write_cfg({"block_old_clients": False})
+        self.assertIs(Q.load_config(self.cfg_path)["block_old_clients"], False)
+        self.write_cfg({"block_old_clients": "no"})                                           # giá trị lạ: giữ mặc định (bật), không tắt nhầm
+        self.assertIs(Q.load_config(self.cfg_path)["block_old_clients"], True)
 
 
 if __name__ == "__main__":
