@@ -1,5 +1,6 @@
 import { FEEDBACK_KINDS, FEEDBACK_LABEL, FEEDBACK_MAX, feedbackProblem, type AgentController, type FeedbackKind } from "@neu/agent-core";
 import { h } from "./dom";
+import { openHubFeedback } from "./feedback-hub";
 
 const HINT: Record<FeedbackKind, string> = {
   bug: "Việc bạn đang làm, điều xảy ra, điều bạn mong đợi. Càng cụ thể càng dễ sửa.",
@@ -11,6 +12,7 @@ const HINT: Record<FeedbackKind, string> = {
 /** Hộp "Góp ý / báo lỗi": người dùng tự viết, tự bấm gửi; lưu ở máy chủ cho quản trị viên đọc. */
 export function openFeedback(ctl: AgentController, opts: { track?: (a: string) => void; initial?: FeedbackKind } = {}): void {
   if (!ctl.sendFeedback) return;
+  if (openHubFeedback()) return;   // máy chủ bật Feedback Hub: dùng widget của hub
   let kind: FeedbackKind = opts.initial ?? "bug";
   const dlg = h("dialog", { class: "fbk" });
   const chips = h("div", { class: "fbk-kinds", role: "radiogroup", "aria-label": "Loại góp ý" });

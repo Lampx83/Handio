@@ -6,6 +6,7 @@ Mục "Chưa phát hành" là nơi ghi dần khi làm; `node scripts/version.mjs
 ## [Chưa phát hành]
 
 ### Thêm
+- **Góp ý qua Feedback Hub (bản web, tuỳ chọn)**: khi quản trị bật, nút **Góp ý** mở hộp góp ý dùng chung của hub để đội phát triển đọc, trả lời và theo dõi. Chưa bật thì giữ nguyên hộp góp ý hiện tại; bản máy tính chưa đổi.
 - **Tab Code: agent nhìn được giao diện thật**: khi kiểm tra trang, agent có thể chụp ảnh sau khi bấm thử và xem ảnh đó (bản cài máy tính), không cần bạn chụp màn hình gửi.
 - **Nút DESIGN.md trên khung xem trước Design**: có tệp thì mở để xem, sửa; chưa có thì nhờ agent tạo (như gõ `/designmd`).
 - **Chỉ vào để sửa nhiều chỗ một lần**: chọn một phần, gõ yêu cầu, bấm **+ Ghi chú**, chọn tiếp phần khác… rồi **Gửi** một lần. Mỗi ghi chú có số thứ tự trên bản xem trước, bỏ từng cái được; tối đa 8 ghi chú mỗi lần.

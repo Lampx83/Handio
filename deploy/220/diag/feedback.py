@@ -6,6 +6,9 @@ kèm tên đăng nhập (để liên hệ lại). Ứng dụng nói rõ điều 
 Bảng feedback: id, ts (giây UTC), ident (email/tên đăng nhập), kind (bug|idea|praise|other), text, version, platform, tab, model,
 status (new|seen|planned|done|wontfix), note (ghi chú của quản trị), updated, updated_by.
 """
+import base64
+import hashlib
+import hmac
 import json
 import re
 import sqlite3
@@ -139,3 +142,38 @@ class FeedbackDB:
 
 def to_json(obj):
     return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
+
+
+# -- Feedback Hub (https://github.com/Lampx83/FeedbackHub): hộp góp ý dùng chung. MẶC ĐỊNH TẮT.
+# Bật bằng biến môi trường của bộ thu (xem docs/FEEDBACKHUB.md): URL + khoá ký. Máy chủ chỉ ký token 10 phút cho người ĐÃ đăng nhập;
+# khoá ký không bao giờ xuống trình duyệt. Hub chỉ nhận danh tính trong token (email/tên đăng nhập do nginx xác thực).
+HUB_URL_RE = re.compile(r"^https?://[A-Za-z0-9.-]+(:\d{1,5})?(/[A-Za-z0-9._~/-]*)?$")
+HUB_PROJECT_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,39}$")
+HUB_TOKEN_TTL = 600
+
+
+def hub_config(url, project, secret):
+    """Trả về (url, project, secret) nếu đủ và hợp lệ, ngược lại None (= tắt)."""
+    url = (url or "").strip().rstrip("/")
+    project = (project or "").strip() or "handio"
+    secret = (secret or "").strip()
+    if not url or not secret or not HUB_URL_RE.match(url) or not HUB_PROJECT_RE.match(project):
+        return None
+    return url, project, secret
+
+
+def _b64(b):
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
+
+
+def sign_hub_token(secret, project, ident, admin, now):
+    """JWT HS256 (aud "feedback-hub", sống HUB_TOKEN_TTL giây) cho người dùng `ident` (email hoặc tên đăng nhập, đã được nginx xác thực)."""
+    iat = int(now)
+    claims = {"prj": project, "aud": "feedback-hub", "iat": iat, "exp": iat + HUB_TOKEN_TTL, "uid": ident, "name": ident,
+              "role": "ADMIN" if admin else "USER"}
+    if "@" in ident:
+        claims["email"] = ident
+    head = _b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    body = _b64(json.dumps(claims, separators=(",", ":"), ensure_ascii=False).encode())
+    sig = _b64(hmac.new(secret.encode(), ("%s.%s" % (head, body)).encode(), hashlib.sha256).digest())
+    return "%s.%s.%s" % (head, body, sig)

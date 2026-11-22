@@ -356,6 +356,7 @@ class Config:
         self.public_host = kw.get("public_host", "ai.neu.edu.vn")  # để kiểm tra Origin của POST quản trị
         self.registry = kw.get("registry")                        # sổ "ai đã dùng" (None = tắt)
         self.feedback = kw.get("feedback")                        # FeedbackDB (None = tắt góp ý)
+        self.hub = kw.get("hub")                                  # (url, project, secret) của Feedback Hub (None = tắt)
         self.shares = kw.get("shares")                            # ShareDB (None = tắt chia sẻ cuộc trò chuyện)
         self.feedback_hits = kw.get("feedback_hits") or {}
         self.quota_db = kw.get("quota_db", "")                    # CSDL đếm token của cổng hạn mức (rỗng = tắt trang quản lý hạn mức)
@@ -520,6 +521,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._admin(p)
         if (p == "/shares" or p.startswith("/share/")) and self._local():
             return self._share_get(p)
+        if p == "/feedback-token" and self._local():
+            return self._feedback_token()
         return self._send(404, {"ok": False})
 
     do_HEAD = do_GET
@@ -739,6 +742,18 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(200 if res.get("ok") else 400 if res.get("error") != "failed" else 500, res)
 
     # -- góp ý / báo lỗi của người dùng
+    def _feedback_token(self):
+        """GET /feedback-token: token Feedback Hub (10 phút) cho người ĐÃ đăng nhập (nginx gắn X-User-Email). Chưa cấu hình hub → 404."""
+        c = self.cfg
+        if not c.hub:
+            return self._send(404, {"ok": False, "error": "disabled"})
+        ident = self._ident()
+        if not ident:
+            return self._send(401, {"ok": False, "error": "no_identity"})
+        url, project, secret = c.hub
+        token = FB.sign_hub_token(secret, project, ident, ident.lower() in read_admins(c.admins_file), c.now())
+        return self._send(200, {"ok": True, "hub": url, "project": project, "token": token})
+
     def _feedback_submit(self):
         """POST /feedback: người dùng đã đăng nhập (nginx gắn X-User-Email) gửi góp ý. Nội dung do CHÍNH họ viết và chủ động gửi."""
         c = self.cfg
@@ -959,6 +974,7 @@ def main():
         groups_file=os.environ.get("NEU_QUOTA_GROUPS", "/var/lib/neu-agent/quota/groups.json"),
         policy_file=os.environ.get("NEU_QUOTA_POLICY", "/var/lib/neu-agent/quota/policy.json"),
     )
+    cfg.hub = FB.hub_config(os.environ.get("NEU_FEEDBACK_HUB_URL"), os.environ.get("NEU_FEEDBACK_HUB_PROJECT"), os.environ.get("NEU_FEEDBACK_HUB_SECRET"))
     fb_path = os.environ.get("NEU_FEEDBACK_DB", "/var/lib/neu-agent/feedback/feedback.db")
     try:
         if fb_path:
